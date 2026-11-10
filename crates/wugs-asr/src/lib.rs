@@ -8,7 +8,15 @@
 //! confidence each. The model files themselves are an optional download;
 //! nothing here ships with one.
 //!
-//! Edge crate: `tract-onnx`, `rubato` and `serde_json`.
+//! Two model families run here: [`Recognizer`] for models that take raw
+//! audio (wav2vec2; the `onnx-ctc-raw` runtime) and
+//! [`fbank_ctc::FbankRecognizer`] for models that take Kaldi filterbank
+//! features (ZIPA's Zipformer; the `onnx-ctc-fbank` runtime).
+//!
+//! Edge crate: `tract-onnx`, `rubato`, `realfft` and `serde_json`.
+
+pub mod fbank;
+pub mod fbank_ctc;
 
 use std::fs::File;
 use std::io::{BufReader, Seek, SeekFrom};
@@ -50,7 +58,7 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-fn model_err(e: impl std::fmt::Display) -> Error {
+pub(crate) fn model_err(e: impl std::fmt::Display) -> Error {
     Error::Model(e.to_string())
 }
 

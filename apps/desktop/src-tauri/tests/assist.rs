@@ -278,3 +278,25 @@ fn the_worker_survives_a_failing_model() {
     let ok = worker.hear("m", || Ok(Box::new(Fixed(Recognition { phones: vec![], confidence: 0.0 })) as Box<dyn Hearer>), std::env::current_exe().unwrap(), 0.0, 1.0);
     assert!(ok.is_ok(), "{ok:?}");
 }
+
+#[test]
+fn the_fbank_runtime_hears_through_the_catalogue_adapter() {
+    // A tiny random Zipformer (wugs-asr's fixture) installed under the
+    // ZIPA manifest: the adapter reads the manifest's [runtime] files.
+    let dir = TempDir::new();
+    let m = wugs_desktop::capability::manifest("zipa-cr-small").unwrap();
+    let models = dir.0.join("models").join(&m.id);
+    fs::create_dir_all(&models).unwrap();
+    let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../crates/wugs-asr/tests/fixtures");
+    fs::copy(fixtures.join("tiny-zipformer.int8.onnx"), models.join(m.param_file("onnx").unwrap())).unwrap();
+    let mut tokens = String::from("<blk> 0\n<sos/eos> 1\n<unk> 2\n▁ 3\n");
+    for i in 4..127 {
+        tokens.push_str(&format!("p{i} {i}\n"));
+    }
+    fs::write(models.join(m.param_file("tokens").unwrap()), tokens).unwrap();
+    let file = dir.0.join("rec.wav");
+    wav(&file, 2);
+    let mut h = assist::hearer(&dir.0, m).unwrap();
+    let heard = h.hear(&file, 200.0, 1700.0).unwrap();
+    assert!(heard.phones.iter().all(|p| p.end_ms <= 1500.0 + 1e-6));
+}

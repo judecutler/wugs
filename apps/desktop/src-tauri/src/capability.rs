@@ -54,12 +54,15 @@ impl Capability {
 
 /// The runtime adapters this build has. A manifest naming another one is
 /// listed but never used.
-pub const RUNTIMES: &[&str] = &["onnx-ctc-raw"];
+pub const RUNTIMES: &[&str] = &["onnx-ctc-raw", "onnx-ctc-fbank"];
 
 /// Praat, as a provider id. Not a package: the person's own program.
 pub const PRAAT: &str = "praat";
 
-const BUNDLED: &[&str] = &[include_str!("../../../../catalog/wav2vec2-espeak.toml")];
+/// In catalogue order, which is Automatic's last tie-break: ZIPA first, as
+/// the authors' benchmarks put it ahead (wugs's own scores will decide
+/// once the evaluation harness exists).
+const BUNDLED: &[&str] = &[include_str!("../../../../catalog/zipa-cr-small.toml"), include_str!("../../../../catalog/wav2vec2-espeak.toml")];
 
 /// The bundled catalogue (the remote index replaces it in item 37).
 pub fn catalogue() -> &'static [Manifest] {

@@ -1,0 +1,41 @@
+name: Real models
+
+# Runs the catalogued models themselves (too large for the repository) under
+# tract and checks them against onnxruntime, and prints each file's SHA-256
+# so the catalogue can pin it. On demand, and on PRs that touch the speech
+# runtime or the catalogue.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/wugs-asr/**"
+      - "catalog/**"
+      - ".github/workflows/real-models.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  zipa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install onnxruntime numpy
+      - name: Download ZIPA-CR small (the files catalog/zipa-cr-small.toml names)
+        run: |
+          mkdir -p "$RUNNER_TEMP/zipa"
+          for f in model.int8.onnx tokens.txt; do
+            url=$(grep -o "https://[^\"]*/$f\"" catalog/zipa-cr-small.toml | tr -d '"')
+            curl -fsSL -o "$RUNNER_TEMP/zipa/$f" "$url"
+          done
+          ls -l "$RUNNER_TEMP/zipa"
+          sha256sum "$RUNNER_TEMP/zipa"/*
+      - run: python3 -I crates/wugs-asr/tests/fixtures/real_zipa_reference.py "$RUNNER_TEMP/zipa"
+      - name: tract against onnxruntime
+        run: cargo test --release -p wugs-asr --test zipformer -- --ignored --nocapture the_real_zipa_release
+        env:
+          WUGS_ZIPA_DIR: ${{ runner.temp }}/zipa
