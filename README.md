@@ -4,7 +4,7 @@
 
 The platform core for a modular, local-first linguistics tool suite. One shared data engine; **kits** (preset tool environments) for fieldwork, corpus work and historical linguistics on top of it.
 
-**Status: pre-alpha.** The op-log data core is under construction; no UI yet.
+**Status: pre-alpha.** The data core is built and benchmarked. The desktop app runs the first kit, **Tongues** (fieldwork), with panels for recording and the waveform timeline, transcription, interlinear glossing, the lexicon, elicitation, search, sync between devices, conflict review and kits. Not ready for real field data yet. What's next is in `docs/ROADMAP.md`.
 
 ## Why
 
@@ -17,9 +17,9 @@ The source of truth is an **append-only log of linguistic operations** (JSONL, d
 ## Repo map
 
 - `docs/` — vision, PRD, decision log, data-model spec (**start here**)
-- `crates/` — the Rust engine (zero external dependencies; FFI to system SQLite)
-- `kits/` — kit manifests
-- `apps/` — UI shells (placeholder)
+- `crates/` — the Rust engine. The format-bearing core (`wugs-model`, `wugs-oplog`, `wugs-xml`) has no dependencies; edge crates use maintained libraries (bundled SQLite, Loro, rustls, tract…)
+- `kits/` — kit manifests (`kits/tongues/kit.toml`) and the data they bundle
+- `apps/desktop/` — the desktop app (Tauri 2 + TypeScript)
 
 ## Build
 
@@ -29,7 +29,15 @@ cargo test --workspace
 cargo run -p wugs-bench --release -- 500000   # op-log replay benchmark
 ```
 
-Requires Rust and a system `libsqlite3`. No crates are fetched.
+Requires Rust (stable). SQLite is bundled and built from source, so a C compiler is needed.
+
+The desktop app is its own workspace (on Linux it needs the WebKitGTK development packages Tauri lists):
+
+```
+cd apps/desktop
+npm install
+npm run tauri dev
+```
 
 ## Install a build
 

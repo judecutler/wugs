@@ -17,6 +17,7 @@ If docs/ and the claude.ai Project ever disagree, the claude.ai Project is newer
 - **All writes go through domain intents** (`wugs-core::Txn`), which emit primitive ops (`create`/`set`/`delete`/`restore`/`text-edit`) sharing a `txn` id.
 - **Validators never block local work** (warn-only locally; `hold` applies to incoming sync via SAVEPOINT quarantine).
 - **Restricted data must not cross scope boundaries** in sync. ACL enforcement belongs in the sync layer, not the UI.
+- **The repository is public** (since 2026-11-10; pre-release history in the private `judecutler/wugs-archive`). Never commit real field data, recordings, consent records, keys or personal paths; test data is synthetic or openly licensed. PR numbers up to #38 in the docs are archive PRs; link public PRs in full.
 - **Modular & swappable:** crates are decoupled; anything kit-specific stays out of the core crates. Tools = views over shared data; kits = manifests (`kits/*/kit.toml`).
 
 ## Prefer existing tools (owner guidance, 2026-11-08)
