@@ -46,7 +46,7 @@ export const transcribePanel: PanelDef = {
       suggestButton.disabled = true;
       suggestButton.textContent = "Listening…";
       try {
-        const r = await assistSuggest({ text: s.text.id, segment: sel.segmentId, source });
+        const r = await assistSuggest({ text: s.text.id, segment: sel.segmentId, source, expect: phones.effective });
         if (r.notes.length > 0) showToast({ tone: r.content === "" ? "info" : "warn", lines: r.notes });
         await refreshText();
       } catch (e) {

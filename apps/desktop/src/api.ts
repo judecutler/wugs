@@ -423,7 +423,10 @@ export const assistModels = () => invoke<AssistModel[]>("assist_models");
 export const assistDownload = (args: { id: string }) => invoke<void>("assist_download", args);
 export const assistCancel = (args: { id: string }) => invoke<void>("assist_cancel", args);
 export const assistDelete = (args: { id: string }) => invoke<void>("assist_delete", args);
-export const assistSuggest = (args: { text: string; segment: string; source: string }) => invoke<Suggested>("assist_suggest", args);
+/** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
+export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
+/** How assist_suggest says the model changed under the caller. */
+export const MODEL_CHANGED = "Phone transcription now uses ";
 
 // Capabilities: src-tauri/src/capability.rs (roadmap 53). Feature code asks for a
 // job; what powers it is chosen here (this computer's choice, the project's pin).

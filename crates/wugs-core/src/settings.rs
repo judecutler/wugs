@@ -3,7 +3,8 @@
 //! that set it at once get the ordinary conflict card. The entity's id is
 //! derived from its key, so a first write on two devices before they sync
 //! names the same entity. Today's keys are capability pins
-//! (`capability:<id>`, value `automatic` or a package id; docs/design/PACKAGES.md).
+//! (`capability:<id>`, value = the pinned provider's id, empty = not
+//! pinned; docs/design/PACKAGES.md).
 
 use wugs_model::Value;
 
@@ -131,7 +132,7 @@ mod tests {
             b.setting("capability:phone-transcription").unwrap()
         );
         assert_eq!(a.proj.open_conflict_count().unwrap(), 1);
-        a.set_setting("capability:phone-transcription", "automatic")
+        a.set_setting("capability:phone-transcription", "")
             .unwrap();
         b.ingest(theirs(&a)).unwrap();
         assert_eq!(a.proj.open_conflict_count().unwrap(), 0);
@@ -140,7 +141,7 @@ mod tests {
             b.setting("capability:phone-transcription")
                 .unwrap()
                 .as_deref(),
-            Some("automatic")
+            Some("")
         );
         std::fs::remove_dir_all(ra).ok();
         std::fs::remove_dir_all(rb).ok();
@@ -150,9 +151,9 @@ mod tests {
     fn the_same_first_value_on_two_devices_is_not_a_conflict() {
         let (ra, mut a) = open("prs_Ana");
         let (rb, mut b) = open("prs_Bo");
-        a.set_setting("capability:phone-transcription", "automatic")
+        a.set_setting("capability:phone-transcription", "wav2vec2-espeak")
             .unwrap();
-        b.set_setting("capability:phone-transcription", "automatic")
+        b.set_setting("capability:phone-transcription", "wav2vec2-espeak")
             .unwrap();
         a.ingest(theirs(&b)).unwrap();
         assert_eq!(a.proj.open_conflict_count().unwrap(), 0);

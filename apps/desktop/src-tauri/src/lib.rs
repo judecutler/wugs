@@ -675,8 +675,12 @@ fn assist_delete(dir: State<AppData>, downloads: State<assist::Downloads>, worke
 
 /// Hear one empty segment with whatever powers phone transcription here
 /// (the project's pin, else this computer's choice) and write what it heard.
+/// `expect` is the provider the caller showed (or started a batch with): if
+/// what powers phone transcription changed since (a pin arrived by sync, a
+/// choice changed, a better model finished downloading), nothing is written,
+/// so a run never switches models halfway.
 #[tauri::command(async)]
-fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<assist::Worker>, text: String, segment: String, source: String) -> Result<assist::Suggested, String> {
+fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<assist::Worker>, text: String, segment: String, source: String, expect: String) -> Result<assist::Suggested, String> {
     let cap = capability::Capability::PhoneTranscription;
     let (t, seg) = (text.clone(), segment.clone());
     let (target, pin) = s.run(move |s| {
@@ -687,10 +691,17 @@ fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<as
     let capability::Provider::Model(spec) = capability::resolve(cap, pin.as_deref(), &dir.0)? else {
         return Err("Phone transcription needs a model.".into());
     };
+    if spec.id != expect {
+        return Err(format!("{CHANGED}{}; nothing was written.", spec.name));
+    }
     let app_data = dir.0.clone();
     let heard = worker.hear(&spec.id, move || assist::hearer(&app_data, spec), target.wav, target.start_ms, target.end_ms)?;
     s.run(move |s| assist::commit(s, &text, &segment, spec, &heard))
 }
+
+/// The start of `assist_suggest`'s refusal when the model changed under a run.
+const CHANGED: &str = "Phone transcription now uses ";
+
 
 /// Every capability: what can power it here, this computer's choice, the
 /// open project's pin, and what runs now.
@@ -712,15 +723,21 @@ fn capabilities(s: State<SessionThread>, dir: State<AppData>) -> Result<Vec<capa
 #[tauri::command(async)]
 fn capability_choose(dir: State<AppData>, capability: String, choice: String) -> Result<(), String> {
     let cap = capability::Capability::parse(&capability)?;
-    capability::set_machine_choice(&dir.0, cap, &capability::Choice::parse(&choice))
+    let choice = capability::Choice::parse(&choice);
+    if let capability::Choice::Pick(id) = &choice {
+        if !capability::known(cap).contains(id) {
+            return Err(format!("{id:?} cannot do {}", cap.title().to_lowercase()));
+        }
+    }
+    capability::set_machine_choice(&dir.0, cap, &choice)
 }
 
 /// Pin a provider for everyone on the open project, or unpin with an empty id.
 #[tauri::command(async)]
 fn capability_pin(s: State<SessionThread>, capability: String, provider: String) -> Result<(), String> {
     let cap = capability::Capability::parse(&capability)?;
-    if !provider.is_empty() && provider != capability::PRAAT && capability::manifest(&provider).is_none() {
-        return Err(format!("no provider {provider:?}"));
+    if !provider.is_empty() && !capability::known(cap).contains(&provider) {
+        return Err(format!("{provider:?} cannot do {}", cap.title().to_lowercase()));
     }
     s.run(move |s| session::project(s)?.set_setting(&cap.setting_key(), &provider).map(|_| ()))
 }

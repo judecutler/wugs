@@ -64,7 +64,7 @@ Updates, adjusted for field conditions:
 
 ## 3. Evaluation is part of the design
 
-"Best" needs a number, and the demo-track paper (item 52) needs the same numbers, so they are one piece of work: a benchmark harness (phone error rate per language on public held-out data, plus speed and memory on a modest laptop) that runs over any `phone-transcription` package and writes the `[evaluation]` table. Scores in the index come from the harness run by the index's CI, not from authors' claims. Packages without scores are listed but never chosen by Automatic.
+"Best" needs a number, and the demo-track paper (item 52) needs the same numbers, so they are one piece of work: a benchmark harness (phone error rate per language on public held-out data, plus speed and memory on a modest laptop) that runs over any `phone-transcription` package and writes the `[evaluation]` table. Scores in the index come from the harness run by the index's CI, not from authors' claims. Packages without scores are listed and, once the harness scores the catalogue, never chosen by Automatic while a scored one is ready (until then they rank after scored ones, section 2).
 
 **Human in the loop.** Every time a linguist corrects a machine suggestion, the log already holds both sides: the machine write with its model and confidence (`x.asr:<op id>`) and the person's edit that replaced it. That makes corrections a by-product of ordinary work, not extra labour. With the project's consent, wugs can export those pairs (per language, per model) as a benchmark set or as fine-tuning data, so the models that power a capability get better for the languages people actually document. Nothing leaves the machine unless the project opts in, as with cloud AI.
 

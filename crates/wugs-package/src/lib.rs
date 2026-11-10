@@ -94,6 +94,21 @@ impl Manifest {
             .ok_or_else(|| format!("{}: [runtime] needs {key} (a string)", self.id))
     }
 
+    /// A runtime setting that names one of the package's own files. Anything
+    /// else (another path, an absolute one) is refused, so a manifest can
+    /// never point an adapter outside its install folder.
+    pub fn param_file(&self, key: &str) -> Result<&str, String> {
+        let name = self.param_str(key)?;
+        if self.files.iter().any(|f| f.path == name) {
+            Ok(name)
+        } else {
+            Err(format!(
+                "{}: [runtime] {key} = {name:?} is not one of the package's files",
+                self.id
+            ))
+        }
+    }
+
     pub fn param_bool(&self, key: &str) -> Option<bool> {
         self.model.params.get(key).and_then(|v| v.as_bool())
     }
@@ -237,7 +252,7 @@ pub fn parse(text: &str) -> Result<Manifest, String> {
                 "file path {:?} must be a plain file name (no folders, no leading dot)",
                 f.path
             ));
-        } else if !seen.insert(f.path.as_str()) {
+        } else if !seen.insert(f.path.to_ascii_lowercase()) {
             problems.push(format!("file {:?} is listed twice", f.path));
         }
         if !f.url.starts_with("https://") || f.url.len() > MAX_TEXT {
@@ -303,6 +318,19 @@ pub fn parse(text: &str) -> Result<Manifest, String> {
     })
 }
 
+/// A plain file name that means one file on every OS: no folders, no
+/// leading dot, no trailing dot or space (Windows drops them), not a name
+/// Windows reserves. Duplicates are compared without case (Windows and macOS).
+fn file_name_ok(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 128
+        && !s.starts_with('.')
+        && !s.ends_with('.')
+        && !windows_reserved(s)
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
+}
+
 /// 1 to 64 of a-z, 0-9 and `-`, not starting with `-`.
 pub fn slug(s: &str) -> bool {
     !s.is_empty()
@@ -335,13 +363,4 @@ fn source_ok(s: &str) -> bool {
                 .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
     };
     matches!(host, "hf" | "github") && part(owner) && part(repo)
-}
-
-fn file_name_ok(s: &str) -> bool {
-    !s.is_empty()
-        && s.len() <= 128
-        && !s.starts_with('.')
-        && !windows_reserved(s)
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.'))
 }

@@ -205,5 +205,7 @@ export async function refreshAll() {
     await reloadTexts();
     await refreshConflicts();
     await refreshText();
+    // Synced ops can carry a project pin.
+    await refreshCapabilities();
   });
 }

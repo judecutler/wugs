@@ -6,7 +6,7 @@
 import { conflictResolve, conflictsList, errorText, type ConflictView, type VersionView } from "../api";
 import { fieldsLabel, needsNumbers, typedRaw, versionMeta } from "../conflicts/logic";
 import { emptyState, h } from "../dom";
-import { dataGeneration, getState, refreshConflicts, refreshText, selectSegment, selectText, showToast, touchLexicon } from "../store";
+import { dataGeneration, getState, refreshCapabilities, refreshConflicts, refreshText, selectSegment, selectText, showToast, touchLexicon } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 const PAGE = 100;
@@ -68,6 +68,8 @@ export const conflictsPanel: PanelDef = {
         // count refresh below must not refetch the list we already have.
         touchLexicon();
         await refreshText();
+        // A settled conflict may be the project's pin.
+        void refreshCapabilities().catch(() => {});
         ownResolve = true;
         try {
           await refreshConflicts();

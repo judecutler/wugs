@@ -110,3 +110,36 @@ fn oversized_manifests_are_refused_before_parsing() {
     let big = format!("{BUNDLED}\n#{}", "x".repeat(wugs_package::MAX_BYTES));
     assert!(parse(&big).unwrap_err().contains("at most"));
 }
+
+#[test]
+fn names_that_collide_on_windows_or_macos_are_refused() {
+    assert!(
+        parse(&with("path = \"vocab.json\"", "path = \"MODEL.onnx\""))
+            .unwrap_err()
+            .contains("listed twice")
+    );
+    assert!(
+        parse(&with("path = \"vocab.json\"", "path = \"model.onnx.\""))
+            .unwrap_err()
+            .contains("plain file name")
+    );
+}
+
+#[test]
+fn runtime_files_must_be_the_packages_own() {
+    let m = parse(BUNDLED).unwrap();
+    assert_eq!(m.param_file("onnx").unwrap(), "model.onnx");
+    for evil in ["../../../../etc/passwd", "/etc/hostname", "other.onnx"] {
+        let m = parse(&with(
+            "onnx = \"model.onnx\"",
+            &format!("onnx = \"{evil}\""),
+        ))
+        .unwrap();
+        assert!(
+            m.param_file("onnx")
+                .unwrap_err()
+                .contains("not one of the package's files"),
+            "{evil}"
+        );
+    }
+}

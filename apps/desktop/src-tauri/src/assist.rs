@@ -217,8 +217,8 @@ pub fn hearer(app_data: &Path, m: &Manifest) -> Result<Box<dyn Hearer>, String> 
     match m.model.runtime.as_str() {
         "onnx-ctc-raw" => Ok(Box::new(OnnxCtcRaw {
             dir: model_dir(app_data, &m.id)?,
-            onnx: m.param_str("onnx")?.to_string(),
-            vocab: m.param_str("vocab")?.to_string(),
+            onnx: m.param_file("onnx")?.to_string(),
+            vocab: m.param_file("vocab")?.to_string(),
             normalize: m.param_bool("normalize").unwrap_or(false),
             loaded: None,
         })),

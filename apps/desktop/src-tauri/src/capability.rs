@@ -113,9 +113,20 @@ pub fn set_machine_choice(app_data: &Path, cap: Capability, choice: &Choice) -> 
     crate::praat::write_atomic(&path, &serde_json::to_vec_pretty(&saved).expect("serializable"))
 }
 
-/// A project's pin: a provider id, or None when it has none (an empty value unpins).
+/// A project's pin: a provider id, or None when it has none (an empty
+/// value unpins; `automatic` is read the same way, since pinning Automatic
+/// would pin nothing).
 pub fn project_pin(project: &wugs_core::Project, cap: Capability) -> Result<Option<String>, String> {
-    Ok(project.setting(&cap.setting_key())?.filter(|v| !v.is_empty()))
+    Ok(project.setting(&cap.setting_key())?.filter(|v| !v.is_empty() && v != "automatic"))
+}
+
+/// Every provider id that can serve `cap`, ready here or not.
+pub fn known(cap: Capability) -> Vec<String> {
+    let mut ids: Vec<String> = catalogue().iter().filter(|m| m.model.capability == cap.id()).map(|m| m.id.clone()).collect();
+    if cap == Capability::AcousticAnalysis {
+        ids.push(PRAAT.into());
+    }
+    ids
 }
 
 // ---------------------------------------------------------------- what can power a capability
@@ -136,19 +147,20 @@ pub struct ProviderRow {
     pub score: Option<f64>,
 }
 
-/// Facts about this computer the choice depends on, gathered once.
+/// Facts about this computer one capability's choice depends on.
 pub struct Here {
-    /// Model ids whose files are downloaded.
+    /// Ids of this capability's models whose files are downloaded.
     pub installed: Vec<String>,
-    /// Praat's path, or why there is none.
+    /// Praat's path, or why there is none (looked up only for acoustic
+    /// analysis: it runs `praat --version`).
     pub praat: Result<PathBuf, String>,
 }
 
 impl Here {
-    pub fn look(app_data: &Path) -> Here {
+    pub fn look(app_data: &Path, cap: Capability) -> Here {
         Here {
-            installed: catalogue().iter().filter(|m| crate::assist::installed(app_data, m).is_some()).map(|m| m.id.clone()).collect(),
-            praat: crate::praat::praat(app_data),
+            installed: catalogue().iter().filter(|m| m.model.capability == cap.id() && crate::assist::installed(app_data, m).is_some()).map(|m| m.id.clone()).collect(),
+            praat: if cap == Capability::AcousticAnalysis { crate::praat::praat(app_data) } else { Err("not needed".into()) },
         }
     }
 }
@@ -242,7 +254,7 @@ pub fn effective(cap: Capability, pin: Option<&str>, machine: &Choice, options: 
 
 /// Resolve to a runnable provider.
 pub fn resolve(cap: Capability, pin: Option<&str>, app_data: &Path) -> Result<Provider, String> {
-    let here = Here::look(app_data);
+    let here = Here::look(app_data, cap);
     let id = effective(cap, pin, &machine_choice(app_data, cap), &options(cap, &here))?;
     if id == PRAAT {
         return here.praat.map(Provider::Praat);
@@ -268,10 +280,10 @@ pub struct CapabilityView {
 }
 
 pub fn views(app_data: &Path, pins: &BTreeMap<&'static str, Option<String>>) -> Vec<CapabilityView> {
-    let here = Here::look(app_data);
     Capability::ALL
         .into_iter()
         .map(|cap| {
+            let here = Here::look(app_data, cap);
             let options = options(cap, &here);
             let machine = machine_choice(app_data, cap);
             let pin = pins.get(cap.id()).cloned().flatten();
@@ -331,6 +343,13 @@ mod tests {
         assert!(err.starts_with("You chose b"), "{err}");
         let err = effective(Capability::PhoneTranscription, Some("zipa"), &Choice::Automatic, &os).unwrap_err();
         assert!(err.contains("does not know"), "{err}");
+    }
+
+    #[test]
+    fn providers_are_known_only_for_their_own_capability() {
+        assert!(known(Capability::PhoneTranscription).contains(&"wav2vec2-espeak".to_string()));
+        assert!(!known(Capability::PhoneTranscription).contains(&PRAAT.to_string()));
+        assert_eq!(known(Capability::AcousticAnalysis), [PRAAT]);
     }
 
     #[test]

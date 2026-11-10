@@ -3,7 +3,7 @@
 // the project's pin), then fill empty segments with what it hears. Everything runs on this
 // computer; the recording never leaves it. Machine transcriptions stay
 // tinted until someone edits them (src/assist/logic.ts).
-import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, errorText, type AssistModel, type CapabilityView } from "../api";
+import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, errorText, MODEL_CHANGED, type AssistModel, type CapabilityView } from "../api";
 import { batchTargets, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
 import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
 import { emptyState, h } from "../dom";
@@ -22,8 +22,9 @@ export async function reloadModels() {
   await refreshCapabilities();
 }
 
-/** Fill one tier's empty segments one after another; each is its own write, so stopping keeps what was done. */
-async function runBatch(text: string, tier: string, source: string, rerender: () => void) {
+/** Fill one tier's empty segments one after another; each is its own write, so stopping keeps what was done.
+ * The model in effect at the start does the whole run: if it changes meanwhile, the run stops. */
+async function runBatch(text: string, tier: string, source: string, expect: string, modelName: string, rerender: () => void) {
   const s = getState();
   if (s.kind !== "open" || s.text === null || run !== null) return;
   const targets = batchTargets(s.text.segments, tier);
@@ -32,6 +33,7 @@ async function runBatch(text: string, tier: string, source: string, rerender: ()
   let moved = false;
   rerender();
   const failures: string[] = [];
+  let changed: string | null = null;
   for (const seg of targets) {
     if (run.stop) break;
     // The person opened another text or project: stop rather than keep writing out of sight.
@@ -41,12 +43,17 @@ async function runBatch(text: string, tier: string, source: string, rerender: ()
       break;
     }
     try {
-      const r = await assistSuggest({ text, segment: seg.id, source });
+      const r = await assistSuggest({ text, segment: seg.id, source, expect });
       if (r.content === "") run.skipped += 1;
       else run.filled += 1;
     } catch (e) {
+      const msg = errorText(e);
+      if (msg.startsWith(MODEL_CHANGED)) {
+        changed = msg;
+        break;
+      }
       run.skipped += 1;
-      if (failures.length < 3) failures.push(errorText(e));
+      if (failures.length < 3) failures.push(msg);
     }
     run.done += 1;
     await refreshText();
@@ -55,8 +62,13 @@ async function runBatch(text: string, tier: string, source: string, rerender: ()
   const r = run;
   run = null;
   showToast({
-    tone: failures.length > 0 ? "warn" : "info",
-    lines: [`Filled ${r.filled} of ${r.total} empty segments${r.stop ? " before stopping" : moved ? " before you switched texts" : ""}.`, ...(r.skipped > 0 ? [`${r.skipped} skipped (no speech heard, or an error).`] : []), ...failures],
+    tone: failures.length > 0 || changed !== null ? "warn" : "info",
+    lines: [
+      `Filled ${r.filled} of ${r.total} empty segments with ${modelName}${r.stop ? " before stopping" : moved ? " before you switched texts" : changed !== null ? " before the model changed" : ""}.`,
+      ...(changed !== null ? [`${changed} Start the run again to continue with it.`] : []),
+      ...(r.skipped > 0 ? [`${r.skipped} skipped (no speech heard, or an error).`] : []),
+      ...failures,
+    ],
   });
   rerender();
 }
@@ -144,14 +156,14 @@ export const assistPanel: PanelDef = {
       const picker = h(
         "select",
         {
-          disabled: v.pin !== null,
+          disabled: v.pin !== null || run !== null,
           title: v.pin !== null ? "This project is pinned; unpin it to choose for this computer." : "Automatic picks the best downloaded model.",
           onchange: () => void act(() => capabilityChoose({ capability: v.id, choice: picker.value })),
         },
         ...choiceOptions(v).map((o) => h("option", { value: o.value, textContent: o.label, selected: o.value === v.machine, disabled: o.disabled })),
       );
       const target = pinTarget(v);
-      const pinButton = !projectOpen
+      const pinButton = !projectOpen || run !== null
         ? null
         : v.pin !== null
           ? h("button", { type: "button", textContent: "Unpin", title: "Let each computer choose again.", onclick: () => void act(() => capabilityPin({ capability: v.id, provider: "" })) })
@@ -195,7 +207,7 @@ export const assistPanel: PanelDef = {
           textContent: count === 0 ? "No empty segments" : `Suggest for ${count} empty segment${count === 1 ? "" : "s"}`,
           disabled: count === 0,
           title: "Each segment takes a few seconds. You can stop at any time; what was filled stays.",
-          onclick: () => void runBatch(text.id, tierChoice!, source, draw),
+          onclick: () => void runBatch(text.id, tierChoice!, source, phones.effective!, phones.options.find((o) => o.id === phones.effective)?.name ?? phones.effective!, draw),
         }),
       );
     }
