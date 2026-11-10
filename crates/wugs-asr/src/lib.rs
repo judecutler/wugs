@@ -59,7 +59,8 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 pub(crate) fn model_err(e: impl std::fmt::Display) -> Error {
-    Error::Model(e.to_string())
+    // `{:#}` includes anyhow's cause chain, which names the failing node.
+    Error::Model(format!("{e:#}"))
 }
 
 /// One recognized phone: its symbol, where it sits in the segment, and the
@@ -229,7 +230,13 @@ impl Recognizer {
     /// and whose first output is `(1, frames, vocab)` logits. Half-precision
     /// models are widened to f32, which every CPU runs.
     pub fn load(onnx: &Path, vocab: Vocab, normalize: bool) -> Result<Recognizer, Error> {
-        let mut model = tract_onnx::onnx().model_for_path(onnx).map_err(model_err)?;
+        let mut proto = tract_onnx::onnx().proto_model_for_path(onnx).map_err(model_err)?;
+        // Exports record intermediate shapes with their own symbols
+        // (`batch, length`); they would contradict the `(1, N)` input below.
+        if let Some(g) = proto.graph.as_mut() {
+            g.value_info.clear();
+        }
+        let mut model = tract_onnx::onnx().model_for_proto_model(&proto).map_err(model_err)?;
         let n = model.symbols.sym("N");
         let dt = model.input_fact(0).map_err(model_err)?.datum_type;
         let input_dt = if dt == DatumType::F16.into() { DatumType::F16 } else { DatumType::F32 };

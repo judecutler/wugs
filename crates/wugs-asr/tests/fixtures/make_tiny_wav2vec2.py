@@ -56,3 +56,14 @@ with open("tiny-wav2vec2.vocab.json", "w", encoding="utf-8") as f:
 audio.astype("<f4").tofile("tiny-wav2vec2.audio.f32")
 np.savetxt("tiny-wav2vec2.logits.txt", logits, fmt="%.9g")
 print("frames", logits.shape)
+
+# A copy whose input is declared `(batch, length)` and whose intermediate
+# shapes are recorded with those symbols, as Hugging Face Optimum exports
+# are (the catalogued wav2vec2 model is one). Loading must ignore them.
+import onnx
+m = onnx.load("tiny-wav2vec2.onnx")
+dims = m.graph.input[0].type.tensor_type.shape.dim
+dims[0].ClearField("dim_value"); dims[0].dim_param = "batch"
+dims[1].dim_param = "length"
+m = onnx.shape_inference.infer_shapes(m)
+onnx.save(m, "tiny-wav2vec2.symbolic.onnx")
