@@ -19,6 +19,7 @@ If docs/ and the claude.ai Project ever disagree, the claude.ai Project is newer
 - **Restricted data must not cross scope boundaries** in sync. ACL enforcement belongs in the sync layer, not the UI.
 - **The repository is public** (since 2026-11-10; pre-release history in the private `judecutler/wugs-archive`). Never commit real field data, recordings, consent records, keys or personal paths; test data is synthetic or openly licensed. PR numbers up to #38 in the docs are archive PRs; link public PRs in full.
 - **Modular & swappable:** crates are decoupled; anything kit-specific stays out of the core crates. Tools = views over shared data; kits = manifests (`kits/*/kit.toml`).
+- **Features, not models** (owner, 2026-11-10; `docs/design/PACKAGES.md`): feature code asks for a capability (`phone-transcription`, `acoustic-analysis`, …), never a named model; what powers it is a package (manifest + runtime adapter) the person can switch. No feature may hard-code one model or one external program as the only way to do its job.
 
 ## Prefer existing tools (owner guidance, 2026-11-08)
 Where a maintained library, format or tool already does the job, use it rather than building our own — at the edges and in the app. The zero-dep core below is the one deliberate exception (archival longevity for the format-bearing crates); everything else should lean on the ecosystem (e.g. rustls/ed25519-dalek/cpace for auth, loro for text CRDTs, Tauri for the shell, existing parsers and viewers where they fit).

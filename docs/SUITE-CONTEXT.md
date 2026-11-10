@@ -66,7 +66,7 @@ Linguists can build, save and share their own kits.
 - **Two equal ways to edit it:**
   - **Kit Builder UI:** pick tools, arrange the workspace, set templates. No code needed.
   - **"View code":** opens the same manifest and scripts directly for advanced users. Both ways edit the same file, so switching between them loses nothing.
-- **Sharing:** a kit is a GitHub repo. The in-app **Kit Library** (online) is an index of those repos, with search, ratings and an "official" badge. Installed kits work offline.
+- **Sharing:** kits, models, datasets, integrations and (once sandboxed) plugins are **packages**, each hosted in its author's GitHub or Hugging Face repository. The in-app **marketplace** (online) is a small wugs-run index of those packages that pins every file's hash; people drag packages into their setup in the Packages panel, and installed packages work offline. Features name the job ("transcribe phones"), not the model, so better models slot in as packages. Design: `docs/design/PACKAGES.md`.
 - **Safety:** a manifest with no scripts is safe to install. Scripts and plugins run sandboxed (WASM), with a permission prompt listing what they can access (files, network, AI). Protecting community data is non-negotiable.
 
 ## Target users
