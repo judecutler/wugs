@@ -57,6 +57,17 @@ fn the_fp32_export_matches_pytorch() {
 }
 
 #[test]
+fn recorded_symbolic_shapes_do_not_stop_loading() {
+    // Optimum exports (the catalogued wav2vec2 model) name the input
+    // `(batch, length)` and record every intermediate shape with those
+    // symbols; tract refused them against our `(1, N)` input until the
+    // recorded shapes were dropped at load.
+    let (frames, worst, agree) = max_diff("tiny-wav2vec2.symbolic.onnx");
+    assert!(worst < 1e-3, "largest logit difference {worst}");
+    assert_eq!(agree, frames);
+}
+
+#[test]
 fn the_fp16_export_runs_widened_to_f32() {
     let (frames, worst, agree) = max_diff("tiny-wav2vec2.fp16.onnx");
     eprintln!("fp16: largest logit difference {worst}, {agree} of {frames} frames agree");
