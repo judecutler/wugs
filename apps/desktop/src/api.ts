@@ -422,3 +422,15 @@ export const assistCancel = (args: { id: string }) => invoke<void>("assist_cance
 export const assistDelete = (args: { id: string }) => invoke<void>("assist_delete", args);
 export const assistSuggest = (args: { text: string; segment: string; source: string; model: string }) => invoke<Suggested>("assist_suggest", args);
 export const onAssistDownload = (f: (e: DownloadEvent) => void): Promise<UnlistenFn> => listen<DownloadEvent>("assist-download", (ev) => f(ev.payload));
+
+// Praat handoff: src-tauri/src/praat.rs (roadmap item 46).
+export type PraatStatus = { path: string | null; version: string | null; chosen: boolean; problem: string | null };
+export type PraatReturn = { retimed: number; relabelled: number; added: number; removed: number; notBroughtBack: [string, number][] };
+export const praatStatus = () => invoke<PraatStatus>("praat_status");
+export const praatSetPath = (args: { path: string | null }) => invoke<PraatStatus>("praat_set_path", args);
+export const praatOpen = (args: { text: string; source: string; fromMs: number; toMs: number }) =>
+  invoke<{ script: string; notShown: number }>("praat_open", args);
+export const praatPending = (args: { text: string }) => invoke<boolean>("praat_pending", args);
+export const praatBringBack = (args: { text: string }) => invoke<PraatReturn>("praat_bring_back", args);
+export const praatApply = (args: { text: string }) => invoke<{ changes: number; findings: string[] }>("praat_apply", args);
+export const praatDiscard = (args: { text: string }) => invoke<void>("praat_discard", args);

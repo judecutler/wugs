@@ -198,6 +198,12 @@ export class TimelineView {
     return this.vpState;
   }
 
+  /** The stretch of recording on screen, and how long the recording is. */
+  visibleRange(): { startMs: number; endMs: number; durationMs: number } {
+    const v = this.vpState;
+    return { startMs: v.t0Ms, endMs: v.t0Ms + visibleSpanMs(v), durationMs: v.durationMs };
+  }
+
   private setVp(next: Viewport): void {
     this.vpState = clamp(next);
   }

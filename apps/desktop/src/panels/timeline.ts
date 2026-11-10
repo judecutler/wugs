@@ -5,7 +5,8 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { addTier, importMedia, listSources, peaksInfo, type SourceRow, type TierTemplate } from "../api";
 import { emptyState, h } from "../dom";
-import { attempt, dataGeneration, getState, refreshText } from "../store";
+import { praatControls } from "../praat/control";
+import { attempt, dataGeneration, getSelection, getState, refreshText } from "../store";
 import { RULER_H, TimelineView, WAVE_H, TIER_H } from "../timeline/view";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -27,7 +28,14 @@ export const timelinePanel: PanelDef = {
     sourcePicker.onchange = () => void loadSource(sourcePicker.value || null);
     const importButton = h("button", { textContent: "Import audio…", title: "Add a WAV recording to this project" });
     const perfButton = h("button", { textContent: "Perf", title: "Show frame times and strip-cache hits on the canvas" });
-    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, perfButton);
+    const praat = praatControls(() => {
+      const s = getState();
+      if (s.kind !== "open" || s.text === null || view === null) return null;
+      const sel = getSelection();
+      const seg = sel !== null && sel.textId === s.text.id ? s.text.segments.find((x) => x.id === sel.segmentId) ?? null : null;
+      return { textId: s.text.id, sourceId: selectedSource, selected: seg, visible: view.visibleRange() };
+    });
+    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, perfButton, praat.element);
     const gutter = h("div", { className: "tl-gutter" });
     const body = h("div", { className: "tl-body" });
     const main = h("div", { className: "tl-main" }, gutter, body);
@@ -82,6 +90,7 @@ export const timelinePanel: PanelDef = {
         view?.setMedia(await peaksInfo({ sourceId }), sourceId);
       });
       sourcePicker.value = sourceId;
+      praat.refresh();
     }
 
     function addTrackControl(): HTMLElement {
@@ -173,7 +182,7 @@ export const timelinePanel: PanelDef = {
       if (view === null) {
         view = new TimelineView();
         body.replaceChildren(view.element);
-        el.replaceChildren(toolbar, main);
+        el.replaceChildren(toolbar, praat.review, main);
         lastText = "";
         lastProject = "";
       }
@@ -195,6 +204,7 @@ export const timelinePanel: PanelDef = {
         drawGutter();
       }
       lastSlice = slice;
+      praat.refresh();
     };
 
     return {

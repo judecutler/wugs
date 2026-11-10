@@ -8,6 +8,7 @@ pub mod kits;
 pub mod layout;
 pub mod lexicon;
 pub mod listen;
+pub mod praat;
 pub mod session;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -421,6 +422,51 @@ fn domain_questions(s: State<SessionThread>, domain_id: String) -> Result<elicit
 #[tauri::command(async)]
 fn domain_collect(s: State<SessionThread>, domain_id: String, form: String, gloss: String) -> Result<elicit::DomainEdit, String> {
     s.run(move |s| elicit::domain_collect(s, &domain_id, &form, &gloss))
+}
+
+#[tauri::command(async)]
+fn praat_status(dir: State<AppData>) -> praat::Status {
+    praat::status(&dir.0)
+}
+
+#[tauri::command(async)]
+fn praat_set_path(dir: State<AppData>, path: Option<String>) -> Result<praat::Status, String> {
+    praat::set_path(&dir.0, path.as_deref())
+}
+
+/// Hand a text to Praat, zoomed to `from_ms`–`to_ms` of `source`'s recording.
+#[tauri::command(async)]
+fn praat_open(s: State<SessionThread>, dir: State<AppData>, text: String, source: String, from_ms: f64, to_ms: f64) -> Result<praat::Opened, String> {
+    let exe = praat::praat(&dir.0)?;
+    let opened = s.run(move |s| praat::prepare(s, &text, &source, from_ms, to_ms))?;
+    praat::open_in_praat(&exe, &opened)?;
+    Ok(opened)
+}
+
+#[tauri::command(async)]
+fn praat_pending(s: State<SessionThread>, text: String) -> Result<bool, String> {
+    s.run(move |s| praat::pending(s, &text))
+}
+
+/// Ask Praat to save the text's grid, then list what it would change.
+#[tauri::command(async)]
+fn praat_bring_back(s: State<SessionThread>, dir: State<AppData>, text: String) -> Result<praat::ReturnView, String> {
+    let exe = praat::praat(&dir.0)?;
+    let t = text.clone();
+    let (grid, script) = s.run(move |s| praat::save_request(s, &t))?;
+    // Waiting for Praat happens here, off the session thread.
+    praat::ask_praat_to_save(&exe, &grid, &script)?;
+    s.run(move |s| praat::review(s, &text))
+}
+
+#[tauri::command(async)]
+fn praat_apply(s: State<SessionThread>, text: String) -> Result<praat::Applied, String> {
+    s.run(move |s| praat::apply(s, &text))
+}
+
+#[tauri::command(async)]
+fn praat_discard(s: State<SessionThread>, text: String) -> Result<(), String> {
+    s.run(move |s| praat::discard(s, &text))
 }
 
 #[tauri::command(async)]
@@ -881,6 +927,13 @@ pub fn run() {
             domain_collect,
             conflict_count,
             conflicts_list,
+            praat_status,
+            praat_set_path,
+            praat_open,
+            praat_pending,
+            praat_bring_back,
+            praat_apply,
+            praat_discard,
             conflict_resolve,
             list_sources,
             import_media,

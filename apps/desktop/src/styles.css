@@ -394,3 +394,10 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .kit-layout { margin: 0; padding-left: 20px; color: var(--chrome-ink); }
 .kit-code { width: 100%; font: 12px/1.4 ui-monospace, Menlo, Consolas, monospace; resize: vertical; white-space: pre; tab-size: 2; }
 .kit-code-box { display: flex; flex-direction: column; gap: 4px; }
+
+/* Praat handoff (Timeline toolbar) */
+.praat-bar { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
+.praat-review { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 4px 8px; font-size: 12px; border-bottom: 1px solid var(--line); background: #f3efe4; }
+.praat-review[hidden] { display: none; }
+.praat-summary { font-weight: 600; }
+.praat-note { color: var(--muted); flex-basis: 100%; }

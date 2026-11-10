@@ -47,8 +47,9 @@ impl Counts {
     }
 }
 
-/// Decode a file's bytes: UTF-8 (with or without BOM) or BOM-marked UTF-16,
-/// which Praat writes whenever a TextGrid holds non-ASCII text.
+/// Decode a file's bytes: UTF-8 (with or without BOM), BOM-marked UTF-16,
+/// which Praat writes whenever a TextGrid holds non-ASCII text, or else
+/// ISO Latin-1.
 pub fn decode(bytes: &[u8]) -> Result<String, ImportError> {
     let utf16 = |be: bool| {
         let body = &bytes[2..];
@@ -64,10 +65,12 @@ pub fn decode(bytes: &[u8]) -> Result<String, ImportError> {
     match bytes {
         [0xFE, 0xFF, ..] => utf16(true),
         [0xFF, 0xFE, ..] => utf16(false),
-        _ => {
-            let s = std::str::from_utf8(bytes).map_err(|e| format_err(format!("not UTF-8: {e}")))?;
-            Ok(strip_bom(s).to_string())
-        }
+        // Praat's "try ISO Latin-1, then UTF-16" writing preference saves
+        // text that fits Latin-1 as single bytes, which are not UTF-8.
+        _ => match std::str::from_utf8(bytes) {
+            Ok(s) => Ok(strip_bom(s).to_string()),
+            Err(_) => Ok(bytes.iter().map(|&b| char::from(b)).collect()),
+        },
     }
 }
 

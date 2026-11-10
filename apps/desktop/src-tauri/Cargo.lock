@@ -6974,6 +6974,7 @@ dependencies = [
  "wugs-blob",
  "wugs-core",
  "wugs-kit",
+ "wugs-legacy",
  "wugs-model",
  "wugs-net",
  "wugs-peaks",
@@ -6988,6 +6989,14 @@ name = "wugs-kit"
 version = "0.0.1"
 dependencies = [
  "toml_edit 0.25.19+spec-1.1.0",
+]
+
+[[package]]
+name = "wugs-legacy"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-model",
 ]
 
 [[package]]
