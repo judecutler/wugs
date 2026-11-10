@@ -161,3 +161,36 @@ fn the_installed_praat_is_found_and_reads_what_we_write() {
     assert_ne!(fs::read(&grid).unwrap(), fs::read(folder.join("open.praat")).unwrap(), "Praat wrote the grid");
     assert!(fs::metadata(&grid).unwrap().len() > 0);
 }
+
+/// A stand-in for `praat --send`: a shell script that does what the save
+/// script asks, or nothing.
+#[cfg(unix)]
+fn fake_praat(dir: &Path, body: &str) -> PathBuf {
+    use std::os::unix::fs::PermissionsExt;
+    let p = dir.join("fake-praat");
+    fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+    fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
+    p
+}
+
+#[cfg(unix)]
+#[test]
+fn a_save_is_seen_by_the_file_appearing_and_a_missing_one_puts_the_old_grid_back() {
+    let dir = TempDir::new();
+    let grid = dir.0.join("grid.TextGrid");
+    let script = dir.0.join("save.praat");
+    fs::write(&script, "").unwrap();
+
+    // Praat saves the same bytes it was given (nothing edited): still seen.
+    fs::write(&grid, "same").unwrap();
+    let saves = fake_praat(&dir.0, &format!("printf same > '{}'", grid.display()));
+    praat::ask_praat_to_save(&saves, &grid, &script).unwrap();
+    assert_eq!(fs::read_to_string(&grid).unwrap(), "same");
+    assert!(!grid.with_extension("previous").exists(), "the set-aside copy is cleaned up");
+
+    let silent = fake_praat(&dir.0, "true");
+    let started = std::time::Instant::now();
+    assert!(praat::ask_praat_to_save(&silent, &grid, &script).unwrap_err().contains("did not save"));
+    assert!(started.elapsed() >= praat::SAVE_WAIT);
+    assert_eq!(fs::read_to_string(&grid).unwrap(), "same", "the old grid is back");
+}

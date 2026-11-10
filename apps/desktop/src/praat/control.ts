@@ -39,6 +39,23 @@ export function praatControls(context: () => PraatContext | null): { element: HT
 
   const fail = (e: unknown) => showToast({ tone: "error", lines: [errorText(e)] });
 
+  // A confirmation lasts five seconds and ends with any other action.
+  let disarmTimer: ReturnType<typeof setTimeout> | undefined;
+  function arm(which: "reopen" | "discard") {
+    armedReopen = which === "reopen";
+    armedDiscard = which === "discard";
+    clearTimeout(disarmTimer);
+    disarmTimer = setTimeout(() => {
+      disarm();
+      draw();
+    }, 5000);
+  }
+  function disarm() {
+    armedReopen = false;
+    armedDiscard = false;
+    clearTimeout(disarmTimer);
+  }
+
   async function run(action: () => Promise<void>) {
     if (busy) return;
     busy = true;
@@ -59,17 +76,23 @@ export function praatControls(context: () => PraatContext | null): { element: HT
     status = await praatSetPath({ path });
   }
 
-  function openInPraat(ctx: PraatContext) {
+  function openInPraat() {
+    const wasArmed = armedReopen;
+    disarm();
     void run(async () => {
-      if (ctx.sourceId === null) return;
+      // Read now, not when the toolbar was drawn: the selection may have moved.
+      const ctx = context();
+      if (ctx === null || ctx.sourceId === null) return;
       const r = praatRange(ctx.selected, ctx.visible, ctx.visible.durationMs);
-      if (pendingFor === ctx.textId && !armedReopen) {
-        // Opening again replaces what is waiting; say so once.
-        armedReopen = true;
-        showToast({ tone: "warn", lines: ["This text is already open in Praat. Bring back its changes first, or click Open in Praat again to start over without them."] });
+      // Asked fresh, so a slow or failed earlier check cannot hide a waiting handoff.
+      const waiting = await praatPending({ text: ctx.textId });
+      if (waiting && !wasArmed) {
+        // Opening again replaces what is waiting.
+        pendingFor = ctx.textId;
+        arm("reopen");
+        showToast({ tone: "warn", lines: ["This text is already open in Praat. Bring back its changes first, or click Open again: start over to drop them."] });
         return;
       }
-      armedReopen = false;
       const opened = await praatOpen({ text: ctx.textId, source: ctx.sourceId, fromMs: r.startMs, toMs: r.endMs });
       pendingFor = ctx.textId;
       review = null;
@@ -79,13 +102,15 @@ export function praatControls(context: () => PraatContext | null): { element: HT
     });
   }
 
-  function bringBack(ctx: PraatContext) {
+  function bringBack(text: string) {
+    disarm();
     void run(async () => {
-      review = { text: ctx.textId, view: await praatBringBack({ text: ctx.textId }) };
+      review = { text, view: await praatBringBack({ text }) };
     });
   }
 
   function apply(text: string) {
+    disarm();
     void run(async () => {
       const res = await praatApply({ text });
       review = null;
@@ -96,13 +121,13 @@ export function praatControls(context: () => PraatContext | null): { element: HT
 
   function discard(text: string) {
     if (!armedDiscard) {
-      armedDiscard = true;
+      arm("discard");
       draw();
       return;
     }
+    disarm();
     void run(async () => {
       await praatDiscard({ text });
-      armedDiscard = false;
       pendingFor = null;
       review = null;
     });
@@ -128,10 +153,11 @@ export function praatControls(context: () => PraatContext | null): { element: HT
       return;
     }
     const open = h("button", {
-      textContent: "Open in Praat",
+      className: armedReopen ? "danger" : "",
+      textContent: armedReopen ? "Open again: start over" : "Open in Praat",
       title: ctx.sourceId === null ? "Pick a recording first" : `Open this text and its recording in ${status.version ?? "Praat"}, at the selected segment or what is on screen`,
       disabled: busy || ctx.sourceId === null,
-      onclick: () => openInPraat(ctx),
+      onclick: () => openInPraat(),
     });
     const parts: Node[] = [open];
     if (pendingFor === ctx.textId) {
@@ -140,7 +166,7 @@ export function praatControls(context: () => PraatContext | null): { element: HT
           textContent: busy ? "Waiting for Praat…" : "Bring back from Praat",
           title: "Ask Praat to save this text's TextGrid, then show what changed before writing anything",
           disabled: busy,
-          onclick: () => bringBack(ctx),
+          onclick: () => bringBack(ctx.textId),
         }),
         h("button", {
           className: armedDiscard ? "danger" : "",
@@ -158,7 +184,7 @@ export function praatControls(context: () => PraatContext | null): { element: HT
       reviewRow.replaceChildren(
         h("span", { className: "praat-summary", textContent: summary === null ? "Praat changed nothing wugs takes back." : `From Praat: ${summary}.` }),
         ...(summary === null ? [] : [h("button", { className: "primary", textContent: "Apply", disabled: busy, onclick: () => apply(text) })]),
-        h("button", { textContent: summary === null ? "OK" : "Not now", disabled: busy, onclick: () => ((review = null), draw()) }),
+        h("button", { textContent: summary === null ? "OK" : "Not now", disabled: busy, onclick: () => ((review = null), disarm(), draw()) }),
         ...(notes.length > 0 ? [h("span", { className: "praat-note", textContent: `Not brought back: ${notes.join("; ")}.` })] : []),
       );
       reviewRow.hidden = false;
@@ -176,8 +202,7 @@ export function praatControls(context: () => PraatContext | null): { element: HT
     }
     if (ctx !== null && ctx.textId !== checkedText) {
       checkedText = ctx.textId;
-      armedDiscard = false;
-      armedReopen = false;
+      disarm();
       const asked = ctx.textId;
       praatPending({ text: asked }).then((p) => {
         if (context()?.textId === asked) pendingFor = p ? asked : null;

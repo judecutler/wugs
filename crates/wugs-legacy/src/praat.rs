@@ -9,12 +9,15 @@
 //! plan as one resolving txn, because every change is a person's edit.
 //!
 //! Matching needs no ids inside the file. Intervals tile their tier, so each
-//! edited interval belongs to the exported one it overlaps most (a label that
-//! did not change breaks ties), and each exported interval keeps the edited
-//! one that overlaps it most. Splitting an interval in Praat leaves the
+//! edited interval belongs to an exported one it overlaps (preferring a
+//! segment over a gap, then an unchanged label, then the most overlap), and
+//! each exported interval keeps the edited one that ranks best. Splitting an interval in Praat leaves the
 //! segment on the part that kept its label; merging two keeps the first and
-//! removes the second; clearing a label removes its segment, since an empty
-//! interval is Praat's only way to say "nothing here". Points match the nearest exported point within half a
+//! removes the second; clearing an interval's label removes its segment,
+//! since an empty interval is Praat's only way to say "nothing here" (a
+//! point can be deleted outright, so clearing its mark is a relabel). A
+//! segment always outranks a gap, so an edge dragged far into the gap
+//! beside it stays with its segment. Points match the nearest exported point within half a
 //! second. Tiers match by name; tiers added in Praat are reported and not
 //! brought back, and a tier missing from the edited file deletes nothing.
 
@@ -226,15 +229,24 @@ pub fn plan_return(project: &Project, text: &str, baseline: &str, manifest: &str
         }
         plan.after[ei].tier = map.tier.clone();
         let point = bt.class == Class::Text;
-        let (for_base, for_edit) = if point { match_points(&bt.items, &et.items) } else { match_intervals(&bt.items, &et.items) };
+        let (for_base, for_edit) = if point { match_points(&bt.items, &et.items) } else { match_intervals(&bt.items, &et.items, &map.items.iter().map(Option::is_some).collect::<Vec<_>>()) };
 
         for (i, b) in bt.items.iter().enumerate() {
             let kept = for_base[i];
             match (&map.items[i], kept.map(|j| &et.items[j])) {
-                (Some(seg), _) if !live_in(project, seg, text)? => plan.skipped.add("segment deleted in wugs since it went to Praat"),
+                (Some(seg), _) if !live_in(project, seg, text)? => {
+                    plan.skipped.add("segment deleted in wugs since it went to Praat");
+                    // Still in Praat's grid: keep it named in the next
+                    // baseline, or the next return would add it again.
+                    if let Some(j) = kept {
+                        plan.after[ei].items[j] = Slot::Seg(seg.clone());
+                    }
+                }
                 // An empty interval is how Praat says "nothing here", so a
                 // label cleared in Praat removes the segment.
-                (Some(seg), Some(e)) if e.label.is_empty() && !b.label.is_empty() => {
+                // Points can be deleted outright in Praat, so a cleared mark
+                // is only a relabel there.
+                (Some(seg), Some(e)) if !point && e.label.is_empty() && !b.label.is_empty() => {
                     plan.changes.push(Change::Remove { segment: seg.clone() })
                 }
                 (Some(seg), Some(e)) => {
@@ -301,47 +313,46 @@ fn live_in(project: &Project, seg: &str, text: &str) -> Result<bool, String> {
 /// the base item it chose (which may have kept another).
 type Matching = (Vec<Option<usize>>, Vec<Option<usize>>);
 
-fn match_intervals(base: &[Item], edited: &[Item]) -> Matching {
+/// `segment[i]`: whether base item i has a segment behind it (not a gap).
+fn match_intervals(base: &[Item], edited: &[Item], segment: &[bool]) -> Matching {
     // In whole ms, the unit wugs stores, so equal halves of a split tie
     // (2.3 - 2.0 and 2.6 - 2.3 differ in binary floating point).
     let overlap = |a: &Item, b: &Item| (a.end.secs.min(b.end.secs) - a.start.secs.max(b.start.secs)) * 1000.0;
     let overlap = |a: &Item, b: &Item| overlap(a, b).round();
-    // Ranks a candidate: more overlap, then an unchanged label, then the
-    // earlier item.
-    let better = |ov: f64, same: bool, best: Option<(f64, bool)>| match best {
-        None => true,
-        Some((bov, bsame)) => ov > bov || (ov == bov && same && !bsame),
-    };
+    // Ranks a pairing: a segment before a gap (an edge dragged far into the
+    // gap beside it still belongs to its segment), then an unchanged label
+    // (the shared boundary of two segments moved past the middle), then
+    // more overlap; the earlier item wins a full tie.
+    let rank = |i: usize, j: usize| (segment[i], base[i].label == edited[j].label, overlap(&base[i], &edited[j]));
+    let better = |r: (bool, bool, f64), best: Option<(bool, bool, f64)>| best.is_none_or(|b| r.partial_cmp(&b) == Some(std::cmp::Ordering::Greater));
     let mut chose = vec![None; edited.len()];
     let mut lo = 0;
     for (j, e) in edited.iter().enumerate() {
         while lo < base.len() && base[lo].end.secs <= e.start.secs {
             lo += 1;
         }
-        let mut best: Option<(usize, f64, bool)> = None;
+        let mut best: Option<(usize, (bool, bool, f64))> = None;
         for (i, b) in base.iter().enumerate().skip(lo) {
             if b.start.secs >= e.end.secs {
                 break;
             }
-            let ov = overlap(b, e);
-            let same = b.label == e.label;
-            if ov > 0.0 && better(ov, same, best.map(|(_, o, s)| (o, s))) {
-                best = Some((i, ov, same));
+            let r = rank(i, j);
+            if r.2 > 0.0 && better(r, best.map(|(_, r)| r)) {
+                best = Some((i, r));
             }
         }
-        chose[j] = best.map(|(i, _, _)| i);
+        chose[j] = best.map(|(i, _)| i);
     }
-    let mut kept: Vec<Option<(usize, f64, bool)>> = vec![None; base.len()];
+    let mut kept: Vec<Option<(usize, (bool, bool, f64))>> = vec![None; base.len()];
     for (j, c) in chose.iter().enumerate() {
         if let Some(i) = *c {
-            let ov = overlap(&base[i], &edited[j]);
-            let same = base[i].label == edited[j].label;
-            if better(ov, same, kept[i].map(|(_, o, s)| (o, s))) {
-                kept[i] = Some((j, ov, same));
+            let r = rank(i, j);
+            if better(r, kept[i].map(|(_, r)| r)) {
+                kept[i] = Some((j, r));
             }
         }
     }
-    (kept.into_iter().map(|k| k.map(|(j, _, _)| j)).collect(), chose)
+    (kept.into_iter().map(|k| k.map(|(j, _)| j)).collect(), chose)
 }
 
 fn match_points(base: &[Item], edited: &[Item]) -> Matching {

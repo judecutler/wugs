@@ -192,3 +192,72 @@ fn a_manifest_for_another_text_or_a_mismatched_grid_is_refused() {
     assert!(plan_return(&p, &b.text, &h.textgrid, "{not json", h.textgrid.as_bytes()).is_err());
     fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn an_edge_dragged_far_into_a_gap_stays_with_its_segment() {
+    let (root, mut p) = temp_project();
+    let b = text(&mut p);
+    let h = hand_out(&p, &b.text).unwrap();
+    // bir's end 1.2 -> 1.95: the edited interval overlaps the gap (0.75 s)
+    // more than bir itself (0.7 s).
+    assert_eq!(h.textgrid.matches("= 1.2 ").count(), 2);
+    let edited = h.textgrid.replace("= 1.2 ", "= 1.95 ");
+    let plan = plan_return(&p, &b.text, &h.textgrid, &h.manifest, edited.as_bytes()).unwrap();
+    assert_eq!(plan.changes, vec![Change::Retime { segment: b.bir.clone(), start_ms: None, end_ms: Some(1950.0) }]);
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn a_shared_boundary_moved_past_the_middle_keeps_both_segments() {
+    let (root, mut p) = temp_project();
+    let mut t = p.intent("create-tier");
+    let utt = t.create("tier", "tir", SCOPE_CONFIG, vec![("name", Value::str("utt"))]);
+    t.commit().unwrap();
+    let text = p.create_text("Two").unwrap();
+    let a = p.add_segment(&text, &utt, 0, Some(1000.0), Some(2000.0), "aaa").unwrap().0;
+    let bb = p.add_segment(&text, &utt, 1, Some(2000.0), Some(5000.0), "bbb").unwrap().0;
+    let h = hand_out(&p, &text).unwrap();
+    assert_eq!(h.textgrid.matches("= 2 ").count(), 2);
+    let edited = h.textgrid.replace("= 2 ", "= 4 ");
+    let mut changes = plan_return(&p, &text, &h.textgrid, &h.manifest, edited.as_bytes()).unwrap().changes;
+    changes.sort_by_key(|c| format!("{c:?}"));
+    let mut want = vec![
+        Change::Retime { segment: a, start_ms: None, end_ms: Some(4000.0) },
+        Change::Retime { segment: bb, start_ms: Some(4000.0), end_ms: None },
+    ];
+    want.sort_by_key(|c| format!("{c:?}"));
+    assert_eq!(changes, want);
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn a_segment_deleted_in_wugs_stays_deleted_across_returns() {
+    let (root, mut p) = temp_project();
+    let b = text(&mut p);
+    let h = hand_out(&p, &b.text).unwrap();
+    p.delete_segment(&b.text, &b.bir).unwrap();
+    let edited = h.textgrid.replace("\"iki\"", "\"ikí\"");
+    let plan = plan_return(&p, &b.text, &h.textgrid, &h.manifest, edited.as_bytes()).unwrap();
+    assert_eq!(plan.changes, vec![Change::Relabel { segment: b.iki.clone(), label: "ikí".into() }]);
+    let applied = apply_return(&mut p, &b.text, &plan).unwrap();
+    let (baseline, manifest) = plan.rebased(&applied).unwrap();
+    let again = plan_return(&p, &b.text, &baseline, &manifest, edited.as_bytes()).unwrap();
+    assert!(again.changes.is_empty(), "bir is not added back: {:?}", again.changes);
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn a_cleared_point_is_relabelled_not_removed_and_stays_put() {
+    let (root, mut p) = temp_project();
+    let b = text(&mut p);
+    let h = hand_out(&p, &b.text).unwrap();
+    let edited = h.textgrid.replace("mark = \"H\"", "mark = \"\"");
+    let plan = plan_return(&p, &b.text, &h.textgrid, &h.manifest, edited.as_bytes()).unwrap();
+    assert_eq!(plan.changes, vec![Change::Relabel { segment: b.high.clone(), label: String::new() }]);
+    let applied = apply_return(&mut p, &b.text, &plan).unwrap();
+    assert!(!p.proj.is_tombstoned(&b.high).unwrap());
+    let (baseline, manifest) = plan.rebased(&applied).unwrap();
+    let again = plan_return(&p, &b.text, &baseline, &manifest, edited.as_bytes()).unwrap();
+    assert!(again.changes.is_empty(), "{:?}", again.changes);
+    fs::remove_dir_all(root).ok();
+}

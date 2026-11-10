@@ -21,7 +21,7 @@ use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use wugs_legacy::praat::{apply_return, hand_out, plan_return, Plan};
@@ -31,7 +31,7 @@ use crate::session::{self, Session};
 /// `--send` runs scripts in a running Praat, which came with Praat 6.
 const MIN_MAJOR: u32 = 6;
 /// How long to wait for Praat to save after asking it to.
-const SAVE_WAIT: Duration = Duration::from_secs(10);
+pub const SAVE_WAIT: Duration = Duration::from_secs(10);
 
 // ---------------------------------------------------------------- finding
 
@@ -394,25 +394,38 @@ pub fn save_request(session: &mut Session, text: &str) -> Result<(PathBuf, PathB
     Ok((files.grid(), script))
 }
 
-/// Ask Praat to save, then wait until the working grid changes on disk (or
-/// the wait runs out: a grid the person saved by hand still counts).
+/// Ask Praat to save, then wait for the file. The working grid is moved
+/// aside first, so a save is seen by the file appearing (modification times
+/// are 2 s coarse on FAT sticks, and an unchanged grid saves the same
+/// bytes), and it is read until two reads agree, so a half-written file is
+/// never taken. If Praat never saves, the old grid is put back.
 pub fn ask_praat_to_save(praat: &Path, grid: &Path, script: &Path) -> Result<(), String> {
-    let before = modified(grid);
-    send(praat, script)?;
+    let aside = grid.with_extension("previous");
+    if grid.is_file() {
+        fs::rename(grid, &aside).map_err(|e| format!("could not set the old TextGrid aside: {e}"))?;
+    }
+    let restore = || {
+        if aside.is_file() && !grid.is_file() {
+            fs::rename(&aside, grid).ok();
+        }
+    };
+    if let Err(e) = send(praat, script) {
+        restore();
+        return Err(e);
+    }
     let started = std::time::Instant::now();
+    let mut last: Option<Vec<u8>> = None;
     while started.elapsed() < SAVE_WAIT {
-        if modified(grid) != before {
-            // Let Praat finish writing.
-            std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(150));
+        let now = fs::read(grid).ok().filter(|b| !b.is_empty());
+        if now.is_some() && now == last {
+            fs::remove_file(&aside).ok();
             return Ok(());
         }
-        std::thread::sleep(Duration::from_millis(100));
+        last = now;
     }
+    restore();
     Err("Praat did not save the TextGrid. If you closed it in Praat, its changes are not in wugs; if it is still open, try again.".into())
-}
-
-fn modified(path: &Path) -> Option<SystemTime> {
-    fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
 #[derive(Debug, Serialize)]
@@ -465,8 +478,9 @@ pub fn apply(session: &mut Session, text: &str) -> Result<Applied, String> {
     let applied = apply_return(p, text, &plan)?;
     let (baseline, manifest) = plan.rebased(&applied)?;
     // A crash after the commit and before this write leaves the old
-    // baseline; the next return finds its adds already in wugs and its other
-    // changes already made, so nothing is written twice.
+    // baseline. The next return then rewrites the same retimes and labels
+    // (same values) and skips adds already in wugs, unless Praat moved one
+    // of those again meanwhile, which is added a second time.
     files.write_state(&State { name: st.name, baseline, manifest })?;
     Ok(Applied {
         changes: plan.changes.len(),
@@ -475,13 +489,17 @@ pub fn apply(session: &mut Session, text: &str) -> Result<Applied, String> {
 }
 
 /// Forget a text's handoff. Changes already applied stay; the rest are
-/// given up.
+/// given up. The state file goes first, so the handoff is over even when
+/// Praat still holds the audio open (Windows refuses to delete it); the
+/// leftovers are cache, cleared on the next try or the next open.
 pub fn discard(session: &mut Session, text: &str) -> Result<(), String> {
     let p = session::project(session)?;
     let files = Files::of(&p.root, text)?;
-    match fs::remove_dir_all(&files.dir) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e.to_string()),
+    match fs::remove_file(files.state_file()) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.to_string()),
     }
+    fs::remove_dir_all(&files.dir).ok();
+    Ok(())
 }
