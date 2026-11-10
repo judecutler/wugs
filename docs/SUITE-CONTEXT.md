@@ -57,7 +57,7 @@ Tools specific to one kit: waveform canvas and elicitation (Tongues) · tokenize
 ## Offline vs. online
 Every feature is labelled **Offline** or **Online**.
 - **Offline (the core):** capture, annotation, glossing, lexicon, search, local and peer-to-peer sync, basic statistics and charts. Must run smoothly on a low-end laptop. Keep it lean.
-- **Online:** AI copilot, cloud compute, dataset connectors, hosted sync, browsing the kit library, and the extra "fun" features. **Cloud AI is off by default and opt-in per project: no language data reaches a cloud model without an explicit project-level decision.**
+- **Online:** AI copilot, cloud compute, dataset connectors, hosted sync, browsing the marketplace, and the extra "fun" features. **Cloud AI is off by default and opt-in per project: no language data reaches a cloud model without an explicit project-level decision.**
 - **Nuance:** some add-ons need a download but not a connection, e.g. a local phone recognizer for the field. Treat these as optional offline extensions. They are installed while online and work offline afterward, but are never bundled into the core.
 
 ## Custom kits
