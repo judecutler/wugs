@@ -19,8 +19,9 @@ env:
   CARGO_TERM_COLOR: always
   # PRiSM's repository at the commit whose scorer and set layout were read.
   PRISM_COMMIT: 85094ff9d05955932b99b8697dd582f66136472c
-  # How many utterances per set (all of them when empty).
-  LIMIT: "20"
+  # Every n-th utterance of each set (1 = all; the sets are ordered by
+  # language, so a stride keeps every language in the sample).
+  EVERY: "8"
 
 jobs:
   phones:
@@ -42,7 +43,7 @@ jobs:
         run: python3 -I scripts/eval/fetch_models.py catalog "$RUNNER_TEMP/models"
       - run: cargo build --release -p wugs-asr --bin wugs-asr-eval
       - name: Transcribe every set with every model
-        run: python3 -I scripts/eval/run.py "$RUNNER_TEMP/models" "$RUNNER_TEMP/sets" "$RUNNER_TEMP/out" ${LIMIT:+--limit $LIMIT}
+        run: python3 -I scripts/eval/run.py "$RUNNER_TEMP/models" "$RUNNER_TEMP/sets" "$RUNNER_TEMP/out" --every "$EVERY"
       - name: Score with PRiSM's scorer
         if: always()
         run: |
