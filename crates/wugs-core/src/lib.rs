@@ -23,6 +23,7 @@ pub mod conflicts;
 mod elicitation;
 mod gloss;
 mod lexicon;
+pub mod settings;
 pub use wugs_validate::{Finding, Severity};
 pub use gloss::{lcs_pairs, AppliedToUnanalysed, LexiconMatch, MorphSpec, Retokenized, Suggestion};
 pub use lexicon::{domain_id, DomainRow, ImportedDomains};

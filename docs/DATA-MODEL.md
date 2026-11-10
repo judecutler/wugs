@@ -107,6 +107,7 @@ Field types: `str`, `int`, `real`, `bool`, `ms` (milliseconds), `ref:<kind>`, `e
 | **WritingSystem** `ws` | name · script `str` · normalization (always NFC) · charset `str` (validator input) · sort `str` (alphabet units in order, whitespace-separated, variants joined by `/` — e.g. `a/A b/B ch/Ch/CH`; parsed by `wugs_model::sortkey::sort_units`; ICU tailorings are the future edge upgrade) · keyboard `blob?` · fonts `json` |
 | **Language** `lng` | name · glottocode · iso639-3 |
 | **Group** `grp` + **GroupMember** `gmb` | kind `enum(cognate-set, parallel-passage, …)` · member: group `ref` · target `ref:any` · role `str` — generic sets for Historical/Corpus kits |
+| **Setting** `stg` | key `str` · value `str` — one project setting per key, in the project config scope, so it syncs and two devices setting it at once get the ordinary conflict card; the id is derived from the key (`wugs_core::settings::setting_id`), so first writes on two devices name one entity; written only by a person's choice (a resolving write). Keys today: `capability:<capability id>` = the provider the project is pinned to (a package id, or `praat`), empty = not pinned (`docs/design/PACKAGES.md`) |
 | **FieldDef** `fld` | extension fields: entity-kind · name (namespaced `x.<kit>.<name>`) · type · origin kit — kits extend the model without touching core; unknown fields are preserved verbatim on replay (forward compatibility) |
 
 ## 4. Scopes & access control

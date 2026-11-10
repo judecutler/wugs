@@ -5,7 +5,7 @@ import { assistSuggest, editSegmentContent, errorText, type SegmentRow, type Tie
 import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
-import { getSelection, getState, installedModel, mediaSource, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
+import { capability, getSelection, getState, mediaSource, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
 import { IPA_GROUPS } from "../transcribe/ipa";
 import { createFieldController, type FieldController } from "../transcribe/field";
 import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, neighbor, renderWindow, tierSegments } from "../transcribe/logic";
@@ -30,23 +30,23 @@ export const transcribePanel: PanelDef = {
 
     const selTime = h("span", { className: "tx-time" });
     const selBadge = h("span", { className: "tx-unsaved", title: "The last save failed. Press Enter to retry." });
-    const suggestButton = h("button", { type: "button", className: "tx-suggest", textContent: "Suggest", title: "Fill this empty segment with what the speech model hears (Speech assist panel)." });
+    const suggestButton = h("button", { type: "button", className: "tx-suggest", textContent: "Suggest", title: "Fill this empty segment with the phones a speech model hears (choose the model in Speech assist)." });
     /** The selected segment's row. It stays in the list across redraws so the field is never detached mid-composition. */
     const selRow = h("div", { className: "tx-row selected" }, selTime, field, suggestButton, selBadge);
     let suggesting = false;
 
-    /** Ask the downloaded model for the selected empty segment. */
+    /** Ask whatever powers phone transcription for the selected empty segment. */
     async function suggest() {
       const s = getState();
       const sel = getSelection();
-      const model = installedModel();
+      const phones = capability("phone-transcription");
       const source = mediaSource();
-      if (suggesting || s.kind !== "open" || s.text === null || sel === null || model === null || source === null) return;
+      if (suggesting || s.kind !== "open" || s.text === null || sel === null || phones?.effective == null || source === null) return;
       suggesting = true;
       suggestButton.disabled = true;
       suggestButton.textContent = "Listening…";
       try {
-        const r = await assistSuggest({ text: s.text.id, segment: sel.segmentId, source, model: model.id });
+        const r = await assistSuggest({ text: s.text.id, segment: sel.segmentId, source, expect: phones.effective });
         if (r.notes.length > 0) showToast({ tone: r.content === "" ? "info" : "warn", lines: r.notes });
         await refreshText();
       } catch (e) {
@@ -237,8 +237,8 @@ export const transcribePanel: PanelDef = {
       const ordered = tierSegments(text.segments, tierId);
       const sel = getSelection();
       const selId = sel !== null && sel.textId === text.id ? (ordered.find((x) => x.id === sel.segmentId)?.id ?? null) : null;
-      const model = installedModel();
-      const next = `${tierId}|${selId}|${JSON.stringify(ordered)}|${playback.hasSource()}|${c.unsavedIds().join(",")}|${model?.id ?? ""}|${mediaSource() ?? ""}`;
+      const phones = capability("phone-transcription")?.effective ?? null;
+      const next = `${tierId}|${selId}|${JSON.stringify(ordered)}|${playback.hasSource()}|${c.unsavedIds().join(",")}|${phones ?? ""}|${mediaSource() ?? ""}`;
       const hadFocus = document.activeElement === field;
 
       if (selId === null) {
@@ -262,7 +262,7 @@ export const transcribePanel: PanelDef = {
         if (seg.id === selId) {
           selRow.className = (label.unsaved ? "tx-row selected unsaved" : "tx-row selected") + machine;
           selRow.title = seg.machine === null ? "" : tintTitle(seg.machine);
-          const offer = model !== null && mediaSource() !== null && suggestable(seg) && c.value.trim() === "";
+          const offer = phones !== null && mediaSource() !== null && suggestable(seg) && c.value.trim() === "";
           suggestButton.style.display = offer ? "" : "none";
           suggestButton.disabled = suggesting;
           selTime.textContent = formatRange(seg.startMs, seg.endMs);

@@ -6977,6 +6977,7 @@ dependencies = [
  "wugs-legacy",
  "wugs-model",
  "wugs-net",
+ "wugs-package",
  "wugs-peaks",
  "wugs-sync",
  "wugs-text",
@@ -7021,6 +7022,14 @@ name = "wugs-oplog"
 version = "0.0.1"
 dependencies = [
  "wugs-model",
+]
+
+[[package]]
+name = "wugs-package"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "toml 1.2.1+spec-1.1.0",
 ]
 
 [[package]]

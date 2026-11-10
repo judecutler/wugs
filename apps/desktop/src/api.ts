@@ -410,17 +410,41 @@ export type AssistModel = {
   license: string;
   attribution: string;
   homepage: string;
-  approxMb: number;
+  capability: string;
+  /** Whether this build has the model's runtime adapter. */
+  runsHere: boolean;
+  approxMb: number | null;
   installed: { files: InstalledFile[] } | null;
   download: { done: number; total: number; error: string | null } | null;
 };
-export type Suggested = { content: string; confidence: number; notes: string[] };
+export type Suggested = { content: string; model: string; confidence: number; notes: string[] };
 export type DownloadEvent = { id: string; done: number; total: number; finished: { Ok: null } | { Err: string } | null };
 export const assistModels = () => invoke<AssistModel[]>("assist_models");
 export const assistDownload = (args: { id: string }) => invoke<void>("assist_download", args);
 export const assistCancel = (args: { id: string }) => invoke<void>("assist_cancel", args);
 export const assistDelete = (args: { id: string }) => invoke<void>("assist_delete", args);
-export const assistSuggest = (args: { text: string; segment: string; source: string; model: string }) => invoke<Suggested>("assist_suggest", args);
+/** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
+export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
+/** How assist_suggest says the model changed under the caller. */
+export const MODEL_CHANGED = "Phone transcription now uses ";
+
+// Capabilities: src-tauri/src/capability.rs (roadmap 53). Feature code asks for a
+// job; what powers it is chosen here (this computer's choice, the project's pin).
+export type ProviderRow = { id: string; name: string; kind: "model" | "program"; ready: boolean; note: string; score: number | null };
+export type CapabilityView = {
+  id: string;
+  title: string;
+  /** This computer's choice: "automatic" or a provider id. */
+  machine: string;
+  /** The open project's pin. */
+  pin: string | null;
+  effective: string | null;
+  problem: string | null;
+  options: ProviderRow[];
+};
+export const capabilities = () => invoke<CapabilityView[]>("capabilities");
+export const capabilityChoose = (args: { capability: string; choice: string }) => invoke<void>("capability_choose", args);
+export const capabilityPin = (args: { capability: string; provider: string }) => invoke<void>("capability_pin", args);
 export const onAssistDownload = (f: (e: DownloadEvent) => void): Promise<UnlistenFn> => listen<DownloadEvent>("assist-download", (ev) => f(ev.payload));
 
 // Praat handoff: src-tauri/src/praat.rs (roadmap item 46).
@@ -434,5 +458,5 @@ export const praatPending = (args: { text: string }) => invoke<boolean>("praat_p
 export const praatBringBack = (args: { text: string }) => invoke<PraatReturn>("praat_bring_back", args);
 export const praatApply = (args: { text: string }) => invoke<{ changes: number; findings: string[] }>("praat_apply", args);
 export const praatDiscard = (args: { text: string }) => invoke<void>("praat_discard", args);
-export const praatAnalysis = (args: { source: string; chunks: number[] }) =>
-  invoke<import("./praat/analysis").Chunk[]>("praat_analysis", args);
+export const acousticAnalysis = (args: { source: string; chunks: number[] }) =>
+  invoke<import("./praat/analysis").Chunk[]>("acoustic_analysis", args);

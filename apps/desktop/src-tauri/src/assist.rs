@@ -19,56 +19,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use wugs_asr::{Recognition, Recognizer, Vocab};
 use wugs_model::ulid;
-
-/// One file of a model, as published.
-#[derive(Clone, Debug)]
-pub struct FileSpec {
-    pub name: &'static str,
-    pub url: String,
-    /// The published SHA-256, when the publisher gives one. Without it the
-    /// hash of the first download is recorded and shown.
-    pub sha256: Option<&'static str>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ModelSpec {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub about: &'static str,
-    pub license: &'static str,
-    pub attribution: &'static str,
-    pub homepage: &'static str,
-    /// Rough download size, for the person deciding to fetch it.
-    pub approx_mb: u32,
-    pub files: Vec<FileSpec>,
-    /// The ONNX file and the Hugging Face `vocab.json` among `files`.
-    pub onnx: &'static str,
-    pub vocab: &'static str,
-    /// Whether the model wants each clip normalized (wav2vec2 does).
-    pub normalize: bool,
-}
-
-/// The models this version knows how to run. Apache-2.0 weights only, so
-/// running them inside an MPL app raises no question.
-pub fn catalog() -> Vec<ModelSpec> {
-    let hf = |repo: &str, file: &str| format!("https://huggingface.co/{repo}/resolve/main/{file}");
-    vec![ModelSpec {
-        id: "wav2vec2-espeak",
-        name: "wav2vec 2.0 phones (espeak IPA)",
-        about: "Meta's wav2vec2-lv-60-espeak-cv-ft phone recognizer, exported to ONNX. Writes the phones it hears in any language as IPA. Strongest on sounds common in its Common Voice training languages; expect to correct rarer segments.",
-        license: "Apache-2.0",
-        attribution: "Model © Meta Platforms (Xu, Baevski & Auli 2022); ONNX export by sadda-speech",
-        homepage: "https://huggingface.co/sadda-speech/wav2vec2-espeak-ctc",
-        approx_mb: 640,
-        files: vec![
-            FileSpec { name: "model.onnx", url: hf("sadda-speech/wav2vec2-espeak-ctc", "model.onnx"), sha256: None },
-            FileSpec { name: "vocab.json", url: hf("sadda-speech/wav2vec2-espeak-ctc", "vocab.json"), sha256: None },
-        ],
-        onnx: "model.onnx",
-        vocab: "vocab.json",
-        normalize: true,
-    }]
-}
+use wugs_package::Manifest;
 
 /// A file larger than this is refused mid-download.
 const MAX_FILE_BYTES: u64 = 4 << 30;
@@ -112,10 +63,10 @@ pub struct InstalledFile {
 }
 
 /// The installed record, if the model finished downloading and its files are there.
-pub fn installed(app_data: &Path, spec: &ModelSpec) -> Option<Installed> {
-    let dir = model_dir(app_data, spec.id).ok()?;
+pub fn installed(app_data: &Path, spec: &Manifest) -> Option<Installed> {
+    let dir = model_dir(app_data, &spec.id).ok()?;
     let rec: Installed = serde_json::from_slice(&fs::read(dir.join("installed.json")).ok()?).ok()?;
-    let all_there = spec.files.iter().all(|f| rec.files.iter().any(|r| r.name == f.name) && dir.join(f.name).is_file());
+    let all_there = spec.files.iter().all(|f| rec.files.iter().any(|r| r.name == f.path) && dir.join(&f.path).is_file());
     all_there.then_some(rec)
 }
 
@@ -129,8 +80,8 @@ fn allowed_url(url: &str) -> bool {
 /// checked; `installed.json` is written last, so a model is installed only
 /// when all of it is. `progress(done, total)` counts bytes over all files
 /// (total is 0 while unknown).
-pub fn download(app_data: &Path, spec: &ModelSpec, cancel: &AtomicBool, progress: &dyn Fn(u64, u64)) -> Result<Installed, String> {
-    let dir = model_dir(app_data, spec.id)?;
+pub fn download(app_data: &Path, spec: &Manifest, cancel: &AtomicBool, progress: &dyn Fn(u64, u64)) -> Result<Installed, String> {
+    let dir = model_dir(app_data, &spec.id)?;
     fs::create_dir_all(&dir).map_err(|e| format!("create {}: {e}", dir.display()))?;
     sweep_parts(&dir);
     let mut done_bytes = 0u64;
@@ -141,15 +92,18 @@ pub fn download(app_data: &Path, spec: &ModelSpec, cancel: &AtomicBool, progress
             return Err(format!("refusing to download {} over an insecure connection", f.url));
         }
         let loopback = !f.url.starts_with("https://");
-        let mut resp = agent(loopback).get(&f.url).call().map_err(|e| format!("download {}: {e}", f.name))?;
+        let mut resp = agent(loopback).get(&f.url).call().map_err(|e| format!("download {}: {e}", f.path))?;
         let len = resp.headers().get("content-length").and_then(|v| v.to_str().ok()).and_then(|v| v.parse::<u64>().ok());
         if let Some(len) = len {
             if len > MAX_FILE_BYTES {
-                return Err(format!("{} is larger than {} GB", f.name, MAX_FILE_BYTES >> 30));
+                return Err(format!("{} is larger than {} GB", f.path, MAX_FILE_BYTES >> 30));
+            }
+            if f.bytes.is_some_and(|b| b != len) {
+                return Err(format!("{} is not the size its package publishes; nothing was installed", f.path));
             }
             total += len;
         }
-        let part = dir.join(format!(".{}.{}.part", f.name, ulid()));
+        let part = dir.join(format!(".{}.{}.part", f.path, ulid()));
         let result = (|| -> Result<(u64, String), String> {
             let mut out = fs::File::create(&part).map_err(|e| format!("write {}: {e}", part.display()))?;
             let mut reader = resp.body_mut().as_reader();
@@ -160,20 +114,23 @@ pub fn download(app_data: &Path, spec: &ModelSpec, cancel: &AtomicBool, progress
                 if cancel.load(Ordering::Relaxed) {
                     return Err("cancelled".into());
                 }
-                let n = reader.read(&mut buf).map_err(|e| format!("download {}: {e}", f.name))?;
+                let n = reader.read(&mut buf).map_err(|e| format!("download {}: {e}", f.path))?;
                 if n == 0 {
                     break;
                 }
                 bytes += n as u64;
                 if bytes > MAX_FILE_BYTES {
-                    return Err(format!("{} is larger than {} GB", f.name, MAX_FILE_BYTES >> 30));
+                    return Err(format!("{} is larger than {} GB", f.path, MAX_FILE_BYTES >> 30));
                 }
                 hasher.update(&buf[..n]);
                 out.write_all(&buf[..n]).map_err(|e| format!("write {}: {e}", part.display()))?;
                 progress(done_bytes + bytes, total.max(done_bytes + bytes));
             }
             if len.is_some_and(|l| l != bytes) {
-                return Err(format!("{} arrived incomplete ({bytes} of {} bytes)", f.name, len.unwrap_or(0)));
+                return Err(format!("{} arrived incomplete ({bytes} of {} bytes)", f.path, len.unwrap_or(0)));
+            }
+            if f.bytes.is_some_and(|b| b != bytes) {
+                return Err(format!("{} is not the size its package publishes; nothing was installed", f.path));
             }
             out.sync_all().map_err(|e| format!("write {}: {e}", part.display()))?;
             Ok((bytes, hex(&hasher.finalize())))
@@ -190,15 +147,15 @@ pub fn download(app_data: &Path, spec: &ModelSpec, cancel: &AtomicBool, progress
             let _ = fs::remove_file(&part);
             return Err("cancelled".into());
         }
-        if let Some(want) = f.sha256 {
+        if let Some(want) = &f.sha256 {
             if !want.eq_ignore_ascii_case(&sha) {
                 let _ = fs::remove_file(&part);
-                return Err(format!("{} does not match its published checksum; nothing was installed", f.name));
+                return Err(format!("{} does not match its published checksum; nothing was installed", f.path));
             }
         }
-        fs::rename(&part, dir.join(f.name)).map_err(|e| format!("save {}: {e}", f.name))?;
+        fs::rename(&part, dir.join(&f.path)).map_err(|e| format!("save {}: {e}", f.path))?;
         done_bytes += bytes;
-        files.push(InstalledFile { name: f.name.to_string(), bytes, sha256: sha, published: f.sha256.is_some() });
+        files.push(InstalledFile { name: f.path.clone(), bytes, sha256: sha, published: f.sha256.is_some() });
     }
     let rec = Installed { files };
     let tmp = dir.join(format!(".installed.{}.tmp", ulid()));
@@ -244,25 +201,37 @@ pub trait Hearer: Send {
     fn hear(&mut self, wav: &Path, start_ms: f64, end_ms: f64) -> Result<Recognition, String>;
 }
 
-/// A downloaded model, loaded on first use.
-pub struct ModelHearer {
+/// A downloaded `onnx-ctc-raw` model (wav2vec2-style: raw 16 kHz audio in,
+/// CTC logits out), loaded on first use. The runtime adapter for that
+/// family; its settings come from the manifest's `[runtime]` table.
+pub struct OnnxCtcRaw {
     dir: PathBuf,
-    spec: ModelSpec,
+    onnx: String,
+    vocab: String,
+    normalize: bool,
     loaded: Option<Recognizer>,
 }
 
-impl ModelHearer {
-    pub fn new(app_data: &Path, spec: ModelSpec) -> Result<ModelHearer, String> {
-        Ok(ModelHearer { dir: model_dir(app_data, spec.id)?, spec, loaded: None })
+/// The hearer for a model package, by its runtime adapter.
+pub fn hearer(app_data: &Path, m: &Manifest) -> Result<Box<dyn Hearer>, String> {
+    match m.model.runtime.as_str() {
+        "onnx-ctc-raw" => Ok(Box::new(OnnxCtcRaw {
+            dir: model_dir(app_data, &m.id)?,
+            onnx: m.param_file("onnx")?.to_string(),
+            vocab: m.param_file("vocab")?.to_string(),
+            normalize: m.param_bool("normalize").unwrap_or(false),
+            loaded: None,
+        })),
+        other => Err(format!("{} needs the {other} runtime, which this version of wugs does not have", m.name)),
     }
 }
 
-impl Hearer for ModelHearer {
+impl Hearer for OnnxCtcRaw {
     fn hear(&mut self, wav: &Path, start_ms: f64, end_ms: f64) -> Result<Recognition, String> {
         if self.loaded.is_none() {
-            let vocab_text = fs::read_to_string(self.dir.join(self.spec.vocab)).map_err(|e| format!("read the model's vocabulary: {e}"))?;
+            let vocab_text = fs::read_to_string(self.dir.join(&self.vocab)).map_err(|e| format!("read the model's vocabulary: {e}"))?;
             let vocab = Vocab::from_hf_json(&vocab_text).map_err(|e| e.to_string())?;
-            self.loaded = Some(Recognizer::load(&self.dir.join(self.spec.onnx), vocab, self.spec.normalize).map_err(|e| e.to_string())?);
+            self.loaded = Some(Recognizer::load(&self.dir.join(&self.onnx), vocab, self.normalize).map_err(|e| e.to_string())?);
         }
         let audio = wugs_asr::read_span(wav, start_ms, end_ms).map_err(|e| e.to_string())?;
         self.loaded.as_ref().expect("loaded above").recognize(&audio).map_err(|e| e.to_string())
@@ -350,25 +319,30 @@ pub struct ModelRow {
     pub license: String,
     pub attribution: String,
     pub homepage: String,
-    pub approx_mb: u32,
+    pub capability: String,
+    /// Whether this build has the model's runtime adapter.
+    pub runs_here: bool,
+    pub approx_mb: Option<u32>,
     pub installed: Option<Installed>,
     pub download: Option<DownloadState>,
 }
 
 pub fn rows(app_data: &Path, downloads: &Downloads) -> Vec<ModelRow> {
     let inflight = downloads.0.lock().expect("downloads lock");
-    catalog()
-        .into_iter()
-        .map(|s| ModelRow {
-            id: s.id.into(),
-            name: s.name.into(),
-            about: s.about.into(),
-            license: s.license.into(),
-            attribution: s.attribution.into(),
-            homepage: s.homepage.into(),
-            approx_mb: s.approx_mb,
-            installed: installed(app_data, &s),
-            download: inflight.get(s.id).map(|d| d.state.clone()),
+    crate::capability::catalogue()
+        .iter()
+        .map(|m| ModelRow {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            about: m.about.clone(),
+            license: m.license.clone(),
+            attribution: m.attribution.clone(),
+            homepage: m.homepage.clone(),
+            capability: m.model.capability.clone(),
+            runs_here: crate::capability::RUNTIMES.contains(&m.model.runtime.as_str()),
+            approx_mb: m.download_mb(),
+            installed: installed(app_data, m),
+            download: inflight.get(&m.id).map(|d| d.state.clone()),
         })
         .collect()
 }
@@ -410,23 +384,25 @@ pub fn target(session: &mut crate::session::Session, text: &str, segment: &str, 
 pub struct Suggested {
     /// What was written; empty when the model heard no speech (nothing is written then).
     pub content: String,
+    /// The model that heard it, by name.
+    pub model: String,
     pub confidence: f64,
     pub notes: Vec<String>,
 }
 
 /// Write what the model heard into the segment, as the machine.
-pub fn commit(session: &mut crate::session::Session, text: &str, segment: &str, model: &str, heard: &Recognition) -> Result<Suggested, String> {
+pub fn commit(session: &mut crate::session::Session, text: &str, segment: &str, model: &Manifest, heard: &Recognition) -> Result<Suggested, String> {
     let content = heard.text();
     if content.is_empty() {
-        return Ok(Suggested { content, confidence: 0.0, notes: vec!["The model heard no speech in this segment.".into()] });
+        return Ok(Suggested { content, model: model.name.clone(), confidence: 0.0, notes: vec!["The model heard no speech in this segment.".into()] });
     }
     let p = crate::session::project(session)?;
     let transcript = wugs_core::assist::MachineTranscript {
         text: content.clone(),
-        model: model.to_string(),
+        model: model.id.clone(),
         confidence: heard.confidence as f64,
         phones: heard.phones.iter().map(|ph| (ph.symbol.clone(), ph.confidence as f64)).collect(),
     };
     let res = p.machine_transcribe(text, segment, &transcript)?;
-    Ok(Suggested { content, confidence: heard.confidence as f64, notes: crate::session::finding_lines(&res) })
+    Ok(Suggested { content, model: model.name.clone(), confidence: heard.confidence as f64, notes: crate::session::finding_lines(&res) })
 }

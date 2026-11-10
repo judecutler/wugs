@@ -1,6 +1,6 @@
 // App state every panel reads, and the actions that change it. Panels
 // subscribe and re-render; only this module assigns `state`.
-import { conflictCount, errorText, getText, listTexts, type AssistModel, type KitsView, type ProjectInfo, type TextDetail, type TextRow } from "./api";
+import { capabilities, conflictCount, errorText, getText, listTexts, type AssistModel, type CapabilityView, type KitsView, type ProjectInfo, type TextDetail, type TextRow } from "./api";
 import type { Kit } from "./kits/logic";
 import { rememberProject } from "./last-project";
 
@@ -84,6 +84,8 @@ export async function enterProject(info: ProjectInfo) {
   selectSegment(null);
   rememberProject(localStorage, info.path);
   setState({ kind: "open", info, texts: await listTexts(), text: null });
+  // The project's pins change what runs; a failure here only leaves the old view.
+  void refreshCapabilities().catch(() => {});
 }
 
 /** The folder's relocation was resolved (accepted as a move, or given a fresh device id).
@@ -149,11 +151,22 @@ export function setMediaSource(id: string | null) {
 /** Speech-assist models and whether each is downloaded. */
 export const assistModelList = (): AssistModel[] => models;
 
-/** The model suggestions use: the first one downloaded. */
-export const installedModel = (): AssistModel | null => models.find((m) => m.installed !== null) ?? null;
-
 export function setAssistModels(next: AssistModel[]) {
   models = next;
+  for (const f of listeners) f();
+}
+
+let caps: CapabilityView[] = [];
+
+/** What powers each capability here (this computer's choice, the open project's pin). */
+export const capabilityList = (): CapabilityView[] => caps;
+
+/** One capability's view, if loaded. Feature code checks `effective` and never names a model. */
+export const capability = (id: string): CapabilityView | null => caps.find((c) => c.id === id) ?? null;
+
+/** Reload after anything that changes them: a download, a choice, a pin, another project. */
+export async function refreshCapabilities() {
+  caps = await capabilities();
   for (const f of listeners) f();
 }
 
@@ -192,5 +205,7 @@ export async function refreshAll() {
     await reloadTexts();
     await refreshConflicts();
     await refreshText();
+    // Synced ops can carry a project pin.
+    await refreshCapabilities();
   });
 }

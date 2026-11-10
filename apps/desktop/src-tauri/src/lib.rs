@@ -1,4 +1,5 @@
 pub mod assist;
+pub mod capability;
 pub mod capture;
 pub mod conflicts;
 pub mod elicit;
@@ -466,11 +467,18 @@ fn praat_apply(s: State<SessionThread>, text: String) -> Result<praat::Applied, 
 }
 
 /// Pitch, intensity and formants of `source`'s recording for the given
-/// 10 s chunks, computed by Praat (cached per chunk).
+/// 10 s chunks, from whatever powers acoustic analysis (Praat today;
+/// cached per chunk).
 #[tauri::command]
-async fn praat_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>, source: String, chunks: Vec<u32>) -> Result<Vec<praat_analysis::Chunk>, String> {
-    let exe = praat::praat(&dir.0)?;
-    let job = s.run(move |s| praat_analysis::job(s, &source))?;
+async fn acoustic_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>, source: String, chunks: Vec<u32>) -> Result<Vec<praat_analysis::Chunk>, String> {
+    let cap = capability::Capability::AcousticAnalysis;
+    let (job, pin) = s.run(move |s| {
+        let job = praat_analysis::job(s, &source)?;
+        Ok((job, capability::project_pin(session::project(s)?, cap)?))
+    })?;
+    let capability::Provider::Praat(exe) = capability::resolve(cap, pin.as_deref(), &dir.0)? else {
+        return Err("Acoustic analysis has no provider here.".into());
+    };
     // Praat can take seconds: on a blocking thread, not an async worker or
     // the session thread.
     tauri::async_runtime::spawn_blocking(move || praat_analysis::analyse(&exe, &job, &chunks)).await.map_err(|e| e.to_string())?
@@ -592,7 +600,7 @@ struct DownloadEvent {
 /// `assist-download` events.
 #[tauri::command(async)]
 fn assist_download(app: AppHandle, dir: State<AppData>, downloads: State<assist::Downloads>, id: String) -> Result<(), String> {
-    let spec = assist::catalog().into_iter().find(|s| s.id == id).ok_or_else(|| format!("no model {id:?}"))?;
+    let spec = capability::manifest(&id).ok_or_else(|| format!("no model {id:?}"))?;
     let cancel = Arc::new(AtomicBool::new(false));
     let token = wugs_model::ulid();
     {
@@ -613,36 +621,36 @@ fn assist_download(app: AppHandle, dir: State<AppData>, downloads: State<assist:
             *at = std::time::Instant::now();
             // Emitted under the lock, so a Cancel cannot land between the
             // token check and the event and leave a stale progress bar.
-            match app.state::<assist::Downloads>().0.lock().expect("downloads lock").get_mut(spec.id) {
+            match app.state::<assist::Downloads>().0.lock().expect("downloads lock").get_mut(&spec.id) {
                 Some(d) if d.token == token => {
                     d.state.done = done;
                     d.state.total = total;
-                    app.emit("assist-download", DownloadEvent { id: spec.id.into(), done, total, finished: None }).ok();
+                    app.emit("assist-download", DownloadEvent { id: spec.id.clone(), done, total, finished: None }).ok();
                 }
                 // Cancelled or replaced: this transfer reports nothing more.
                 _ => {}
             }
         };
-        let result = assist::download(&app_data, &spec, &cancel, &progress).map(|_| ());
+        let result = assist::download(&app_data, spec, &cancel, &progress).map(|_| ());
         let downloads = app.state::<assist::Downloads>();
         let mut inflight = downloads.0.lock().expect("downloads lock");
-        if !inflight.get(spec.id).is_some_and(|d| d.token == token) {
+        if !inflight.get(&spec.id).is_some_and(|d| d.token == token) {
             // Cancelled earlier: its slot is gone or belongs to a newer download.
             return;
         }
         match &result {
             Ok(()) => {
-                inflight.remove(spec.id);
+                inflight.remove(&spec.id);
             }
             Err(e) => {
-                if let Some(d) = inflight.get_mut(spec.id) {
+                if let Some(d) = inflight.get_mut(&spec.id) {
                     d.state.error = Some(e.clone());
                 }
             }
         }
         drop(inflight);
-        app.state::<assist::Worker>().forget(spec.id);
-        app.emit("assist-download", DownloadEvent { id: spec.id.into(), done: 0, total: 0, finished: Some(result) }).ok();
+        app.state::<assist::Worker>().forget(&spec.id);
+        app.emit("assist-download", DownloadEvent { id: spec.id.clone(), done: 0, total: 0, finished: Some(result) }).ok();
     });
     Ok(())
 }
@@ -665,20 +673,73 @@ fn assist_delete(dir: State<AppData>, downloads: State<assist::Downloads>, worke
     assist::delete(&dir.0, &id)
 }
 
-/// Hear one empty segment with an installed model and write what it heard.
+/// Hear one empty segment with whatever powers phone transcription here
+/// (the project's pin, else this computer's choice) and write what it heard.
+/// `expect` is the provider the caller showed (or started a batch with): if
+/// what powers phone transcription changed since (a pin arrived by sync, a
+/// choice changed, a better model finished downloading), nothing is written,
+/// so a run never switches models halfway.
 #[tauri::command(async)]
-fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<assist::Worker>, text: String, segment: String, source: String, model: String) -> Result<assist::Suggested, String> {
-    let spec = assist::catalog().into_iter().find(|m| m.id == model).ok_or_else(|| format!("no model {model:?}"))?;
-    if assist::installed(&dir.0, &spec).is_none() {
-        return Err("Download the model first (Speech assist panel).".into());
-    }
+fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<assist::Worker>, text: String, segment: String, source: String, expect: String) -> Result<assist::Suggested, String> {
+    let cap = capability::Capability::PhoneTranscription;
     let (t, seg) = (text.clone(), segment.clone());
-    let target = s.run(move |s| assist::target(s, &t, &seg, &source))?;
+    let (target, pin) = s.run(move |s| {
+        let target = assist::target(s, &t, &seg, &source)?;
+        let pin = capability::project_pin(session::project(s)?, cap)?;
+        Ok((target, pin))
+    })?;
+    let capability::Provider::Model(spec) = capability::resolve(cap, pin.as_deref(), &dir.0)? else {
+        return Err("Phone transcription needs a model.".into());
+    };
+    if spec.id != expect {
+        return Err(format!("{CHANGED}{}; nothing was written.", spec.name));
+    }
     let app_data = dir.0.clone();
-    let make_spec = spec.clone();
-    let heard = worker.hear(spec.id, move || Ok(Box::new(assist::ModelHearer::new(&app_data, make_spec)?) as Box<dyn assist::Hearer>), target.wav, target.start_ms, target.end_ms)?;
-    let id = spec.id;
-    s.run(move |s| assist::commit(s, &text, &segment, id, &heard))
+    let heard = worker.hear(&spec.id, move || assist::hearer(&app_data, spec), target.wav, target.start_ms, target.end_ms)?;
+    s.run(move |s| assist::commit(s, &text, &segment, spec, &heard))
+}
+
+/// The start of `assist_suggest`'s refusal when the model changed under a run.
+const CHANGED: &str = "Phone transcription now uses ";
+
+
+/// Every capability: what can power it here, this computer's choice, the
+/// open project's pin, and what runs now.
+#[tauri::command(async)]
+fn capabilities(s: State<SessionThread>, dir: State<AppData>) -> Result<Vec<capability::CapabilityView>, String> {
+    let pins = s.run(|s| {
+        let mut pins = std::collections::BTreeMap::new();
+        if let Ok(p) = session::project(s) {
+            for cap in capability::Capability::ALL {
+                pins.insert(cap.id(), capability::project_pin(p, cap)?);
+            }
+        }
+        Ok(pins)
+    })?;
+    Ok(capability::views(&dir.0, &pins))
+}
+
+/// This computer's choice for a capability: "automatic" or a provider id.
+#[tauri::command(async)]
+fn capability_choose(dir: State<AppData>, capability: String, choice: String) -> Result<(), String> {
+    let cap = capability::Capability::parse(&capability)?;
+    let choice = capability::Choice::parse(&choice);
+    if let capability::Choice::Pick(id) = &choice {
+        if !capability::known(cap).contains(id) {
+            return Err(format!("{id:?} cannot do {}", cap.title().to_lowercase()));
+        }
+    }
+    capability::set_machine_choice(&dir.0, cap, &choice)
+}
+
+/// Pin a provider for everyone on the open project, or unpin with an empty id.
+#[tauri::command(async)]
+fn capability_pin(s: State<SessionThread>, capability: String, provider: String) -> Result<(), String> {
+    let cap = capability::Capability::parse(&capability)?;
+    if !provider.is_empty() && !capability::known(cap).contains(&provider) {
+        return Err(format!("{provider:?} cannot do {}", cap.title().to_lowercase()));
+    }
+    s.run(move |s| session::project(s)?.set_setting(&cap.setting_key(), &provider).map(|_| ()))
 }
 
 #[tauri::command(async)]
@@ -891,6 +952,9 @@ pub fn run() {
             assist_cancel,
             assist_delete,
             assist_suggest,
+            capabilities,
+            capability_choose,
+            capability_pin,
             open_project,
             create_project,
             list_texts,
@@ -946,7 +1010,7 @@ pub fn run() {
             praat_bring_back,
             praat_apply,
             praat_discard,
-            praat_analysis,
+            acoustic_analysis,
             conflict_resolve,
             list_sources,
             import_media,
