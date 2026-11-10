@@ -71,3 +71,4 @@
 | 43 | Publishing layer: dictionaries, grammars, community apps | ⬜ | |
 | 44 | Mobile companion (evaluate Tauri 2 mobile first) | ⬜ | |
 | 45 | Hosted sync and cloud AI, opt-in per project | ⬜ | Paid hosted services; must be self-hostable from the public repo |
+| 55 | Optional accounts and wug points: credits earned for referrals that turn into real use, published packages that people keep using, donated corrections (human-in-the-loop data, with consent), translations and bug reports; spent only on hosted services (45) | ⬜ | Owner idea 2026-11-10, for later; proposed guardrails in DECISIONS. Waits on 45 and on the open legal-form decision |
