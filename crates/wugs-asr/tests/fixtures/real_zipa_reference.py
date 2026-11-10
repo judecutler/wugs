@@ -46,9 +46,11 @@ if os.path.exists(sample):
         return " ".join(out)
     T = feats.shape[0]
     plain = sess.run(None, {"x": feats[None], "x_lens": np.array([T], dtype=np.int64)})[0][0]
-    for B in (700, 1050):
-        x = np.concatenate([feats, np.repeat(feats[-1:], B - T, 0)])[None]
-        lp, ll = padded_sess.run(None, {"x": x, "x_lens": np.array([T], dtype=np.int64)})
-        lp = lp[0][: int(ll[0])]
-        print(f"ORT padded to {B}: {decode(lp)}")
+    for name, pad in (("last frame", None), ("lhotse LOG_EPSILON", np.log(1e-10)), ("zeros", 0.0)):
+        for B in (600, 700, 1050):
+            tail = np.repeat(feats[-1:], B - T, 0) if pad is None else np.full((B - T, 80), pad, np.float32)
+            x = np.concatenate([feats, tail]).astype(np.float32)[None]
+            lp, ll = padded_sess.run(None, {"x": x, "x_lens": np.array([T], dtype=np.int64)})
+            lp = lp[0][: int(ll[0])]
+            print(f"ORT padded to {B} with {name}: {decode(lp)}")
     print(f"ORT unpadded:     {decode(plain)}")

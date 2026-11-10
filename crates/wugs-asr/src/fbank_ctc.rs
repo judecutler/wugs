@@ -42,6 +42,9 @@ use crate::{ctc_greedy, model_err, Error, Recognition, Vocab, MAX_SECONDS, SAMPL
 /// again the work, and the last is exactly `MAX_SECONDS`.
 pub const BUCKETS: [usize; 8] = [200, 300, 450, 700, 1050, 1600, 2400, 3000];
 
+/// Feature value past the end of a padded input (lhotse's `LOG_EPSILON`).
+const LOG_EPSILON: f32 = -23.025_85;
+
 /// Plans kept at once: each holds its own packed copy of the weights.
 const PLANS: usize = 3;
 
@@ -140,13 +143,9 @@ impl FbankRecognizer {
         let bucket = *BUCKETS.iter().find(|&&b| b >= frames).ok_or_else(|| Error::Input(format!("the segment is longer than {MAX_SECONDS} s")))?;
         let bucket = if self.exact { frames } else { bucket };
         let plan = self.plan(bucket)?;
-        // Padding repeats the last real frame: the few frames before the
-        // end that the padding still reaches then see a continuation of the
-        // signal rather than an edge (smallest difference in the tests).
-        let last = feats[(frames - 1) * BINS..].to_vec();
-        while feats.len() < bucket * BINS {
-            feats.extend_from_slice(&last);
-        }
+        // lhotse pads batches with log(1e-10), so that is what the model
+        // saw past an utterance's end in training.
+        feats.resize(bucket * BINS, LOG_EPSILON);
         let x = tract_ndarray::Array3::from_shape_vec((1, bucket, BINS), feats).map_err(model_err)?.into_tensor();
         let lens = tract_ndarray::arr1(&[frames as i64]).into_tensor();
         let out = plan.run(tvec!(x.into(), lens.into())).map_err(model_err)?;
