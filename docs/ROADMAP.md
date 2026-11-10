@@ -42,7 +42,7 @@
 | 29 | Alpha with 5–10 field linguists and one community language worker | ⬜ | |
 | 30 | Complete one archive deposit end to end (ELAR/PARADISEC/AILLA) | ⬜ | `wugs_seal::seal` produces the package (PR #11); the deposit itself needs a real archive account |
 | 31 | Fix what the alpha surfaces; measure against PRD §9 metrics | ⬜ | |
-| 52 | Conference demo-track paper (ACL / EMNLP / NAACL System Demonstrations; ComputEL or LREC as fallbacks): a short system paper, screencast and live demo | ⬜ | Owner sub-priority, for later (advice from the owner's professor: a demo-track acceptance is the strongest route to adoption by linguists). Needs technical rigour above all on the ML side: a reproducible evaluation harness (phone error rate per language on public held-out data, baselines such as Allosaurus and ZIPA, item 51), latency and memory on a mid-2010s laptop, documented models and data licences, the replay/sync gates written up, and usage evidence from the alpha (29, 31). Build new ML features with that evaluation in mind from the start |
+
 
 ## Release and open up
 | # | Item | Status | Notes |
@@ -50,6 +50,9 @@
 | 32 | Package installers for Windows, macOS, Linux | 🟡 | CI builds unsigned installers on tag/dispatch (PR #27); signing + updater later |
 | 33 | Write user docs and the plugin/kit authoring guide | ⬜ | |
 | 35 | Ship Tongues 1.0 | ⬜ | |
+
+## Sub-Prioritiy
+| 52 | Conference demo-track paper (ACL / EMNLP / NAACL System Demonstrations; ComputEL or LREC as fallbacks): a short system paper, screencast and live demo | ⬜ | for later (advice from the owner's professor: a demo-track acceptance is the strongest route to adoption by linguists). Needs technical rigour above all on the ML side: a reproducible evaluation harness (phone error rate per language on public held-out data, baselines such as Allosaurus and ZIPA, item 51), optimized latency and memory, documented models and data licences, the replay/sync gates written up, and usage evidence from the alpha (29, 31), Human in the loop continuous improvement for WUGS AI, and data exporting. Build new ML features with that evaluation in mind from the start.
 
 ## Expand the suite
 | # | Item | Status | Notes |
