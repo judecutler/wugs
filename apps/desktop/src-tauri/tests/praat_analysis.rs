@@ -50,12 +50,21 @@ fn voice(path: &Path, seconds: f64, hz: f64) {
 
 #[test]
 fn chunks_parse_with_gaps_where_praat_finds_nothing() {
-    let text = "0.005\t--undefined--\t61.2\t512\t1490\t2510\n0.015\t149.8\t70.0\t700\t1200\t2600\nnot a line\n";
+    let text = "20.005\t--undefined--\t61.2\t512\t1490\t2510\n20.015\t149.8\t70.0\t700\t1200\t2600\nnot a line\n";
     let c = parse_chunk(2, text);
     assert_eq!(c.start_ms, 2.0 * f64::from(CHUNK_MS));
     assert_eq!(c.pitch, vec![None, Some(149.8)]);
     assert_eq!(c.intensity, vec![Some(61.2), Some(70.0)]);
     assert_eq!(c.f3, vec![Some(2510.0), Some(2600.0)]);
+}
+
+#[test]
+fn frames_go_where_their_time_says() {
+    // A damaged middle line, a comma decimal, a frame outside the chunk.
+    let text = "20.005\t100.0\t60.0\t500\t1500\t2500\nbroken\n20.025\t120,5\t61.0\t500\t1500\t2500\n35.000\t1\t1\t1\t1\t1\n";
+    let c = parse_chunk(2, text);
+    assert_eq!(c.pitch, vec![Some(100.0), None, Some(120.5)], "the frame at 20.015 is a gap, not a shift");
+    assert_eq!(c.f1.len(), 3);
 }
 
 #[test]
@@ -100,6 +109,15 @@ fn the_installed_praat_analyses_a_recording_in_cached_chunks() {
     assert_eq!(again[0], chunks[1]);
     assert_eq!(again[1], chunks[0]);
     assert!(praat_analysis::analyse(&exe, &job, &[0; MAX_CHUNKS + 1]).is_err());
+    // A failed run keeps the chunks it finished, and leaves no scratch behind.
+    let fresh = praat_analysis::job(&mut s, &source).unwrap();
+    let cache = dir.0.join("p").join("cache").join("praat-analysis");
+    let leftover = std::fs::read_dir(&cache).unwrap().next().unwrap().unwrap().path();
+    let settings = std::fs::read_dir(&leftover).unwrap().next().unwrap().unwrap().path();
+    std::fs::create_dir_all(settings.join("run-stale")).unwrap();
+    assert!(praat_analysis::analyse(&exe, &fresh, &[0, 1]).is_ok());
+    assert!(!settings.join("run-stale").exists(), "a killed run's scratch is cleared");
+
     // A chunk past the end is empty, not an error.
     assert!(praat_analysis::analyse(&exe, &job, &[5]).unwrap()[0].pitch.is_empty());
 }

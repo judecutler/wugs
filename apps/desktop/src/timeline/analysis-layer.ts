@@ -6,26 +6,33 @@ import { errorText, praatAnalysis } from "../api";
 import { chunksFor, frameMs, RANGES, yFor, type Chunk, type Kind } from "../praat/analysis";
 import type { Viewport } from "./viewport";
 
+/** About ten minutes of analysis kept in memory. */
+const KEEP_CHUNKS = 60;
+
 const COLORS: Record<Kind, string> = { pitch: "#1f5fbf", intensity: "#c9a400", formants: "#c0392b" };
 
 export class AnalysisLayer {
   private source: string | null = null;
   private on = new Set<Kind>();
   private chunks = new Map<number, Chunk>();
-  private asked = new Set<number>();
+  /** One request at a time; the next draw asks for what is still missing. */
+  private inflight = false;
   private problem: string | null = null;
+  /** Told when the layer turns itself off (a failure), so toggles redraw. */
+  onChange: () => void = () => {};
   private timer: ReturnType<typeof setTimeout> | undefined;
   /** The chunks the pending timer will ask for; draw runs every frame, so
    * the timer restarts only when this changes (the view moved). */
   private pendingKey = "";
   /** Bumped on every source change, so a late answer for the old one is dropped. */
   private generation = 0;
+  private width = 0;
 
   setSource(source: string | null): void {
     if (source === this.source) return;
     this.source = source;
     this.chunks.clear();
-    this.asked.clear();
+    this.inflight = false;
     this.problem = null;
     this.generation++;
     clearTimeout(this.timer);
@@ -45,15 +52,12 @@ export class AnalysisLayer {
     if (this.on.has(kind)) this.on.delete(kind);
     else this.on.add(kind);
     // Turning a kind on is the way to try again after a failure.
-    if (this.on.size > 0 && this.problem !== null) {
-      this.problem = null;
-      this.asked.clear();
-    }
+    if (this.on.size > 0 && this.problem !== null) this.problem = null;
   }
 
   private request(wanted: number[]): void {
-    const missing = wanted.filter((n) => !this.chunks.has(n) && !this.asked.has(n));
-    if (missing.length === 0 || this.source === null) return;
+    const missing = wanted.filter((n) => !this.chunks.has(n));
+    if (missing.length === 0 || this.source === null || this.inflight) return;
     const key = missing.join(",");
     if (key === this.pendingKey) return;
     this.pendingKey = key;
@@ -64,17 +68,24 @@ export class AnalysisLayer {
       const source = this.source;
       const gen = this.generation;
       if (source === null) return;
-      for (const n of missing) this.asked.add(n);
+      this.inflight = true;
       praatAnalysis({ source, chunks: missing }).then(
         (got) => {
           if (gen !== this.generation) return;
+          this.inflight = false;
           for (const c of got) this.chunks.set(c.index, c);
+          // Keep the newest chunks; the backend cache makes refetching cheap.
+          for (const old of this.chunks.keys()) {
+            if (this.chunks.size <= KEEP_CHUNKS) break;
+            this.chunks.delete(old);
+          }
         },
         (e: unknown) => {
           if (gen !== this.generation) return;
-          for (const n of missing) this.asked.delete(n);
+          this.inflight = false;
           this.problem = errorText(e);
           this.on.clear();
+          this.onChange();
         },
       );
     }, 150);
@@ -93,6 +104,7 @@ export class AnalysisLayer {
       this.note(ctx, v, top, "Zoom in to a minute or less to see Praat's analysis.");
       return;
     }
+    this.width = v.widthPx;
     this.request(wanted);
     const xOf = (ms: number) => ((ms - v.t0Ms) * v.pxPerSec) / 1000;
     let waiting = false;
@@ -112,12 +124,19 @@ export class AnalysisLayer {
 
   private dots(ctx: CanvasRenderingContext2D, c: Chunk, values: (number | null)[], kind: Kind, xOf: (ms: number) => number, top: number, height: number, r: number): void {
     ctx.fillStyle = COLORS[kind];
+    // One dot per pixel column is all the eye sees; off-screen frames are skipped.
+    let lastCol = Number.NaN;
     for (let i = 0; i < values.length; i++) {
       const val = values[i];
       if (val === null || val === undefined) continue;
+      const x = xOf(frameMs(c, i));
+      if (x < -r || x > this.width + r) continue;
+      const col = Math.round(x);
+      if (col === lastCol) continue;
       const y = yFor(kind, val, top, height);
       if (y === null) continue;
-      ctx.fillRect(xOf(frameMs(c, i)) - r / 2, y - r / 2, r, r);
+      lastCol = col;
+      ctx.fillRect(x - r / 2, y - r / 2, r, r);
     }
   }
 
@@ -134,6 +153,10 @@ export class AnalysisLayer {
         continue;
       }
       const x = xOf(frameMs(c, i));
+      if (x < -2 || x > this.width + 2) {
+        pen = false;
+        continue;
+      }
       if (pen) ctx.lineTo(x, y);
       else ctx.moveTo(x, y);
       pen = true;

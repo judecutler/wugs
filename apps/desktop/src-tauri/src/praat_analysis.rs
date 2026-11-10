@@ -15,6 +15,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -30,6 +31,9 @@ const SETTINGS: &str = "v1-p75-600-i75-f5500";
 /// At most this many chunks per request (a minute of audio).
 pub const MAX_CHUNKS: usize = 6;
 const DEADLINE: Duration = Duration::from_secs(180);
+/// One analysis at a time: a linguist panning through a long recording
+/// must not start a Praat per pan.
+static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
 
 /// One chunk's frames, every `STEP_MS` from `start_ms + STEP_MS / 2`.
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -110,7 +114,8 @@ pub fn analysis_script(wav: &Path, dir: &Path, chunks: &[u32]) -> String {
     s
 }
 
-/// Read one chunk's cache file.
+/// Read one chunk's cache file. Each frame goes where its time column says
+/// (a damaged line shifts nothing), and a comma decimal is read too.
 pub fn parse_chunk(index: u32, text: &str) -> Chunk {
     let mut c = Chunk {
         index,
@@ -122,17 +127,27 @@ pub fn parse_chunk(index: u32, text: &str) -> Chunk {
         f2: Vec::new(),
         f3: Vec::new(),
     };
-    let num = |s: &str| s.trim().parse::<f32>().ok().filter(|v| v.is_finite());
+    let num = |s: &str| s.trim().replace(',', ".").parse::<f32>().ok().filter(|v| v.is_finite());
+    let per_chunk = (CHUNK_MS / STEP_MS) as usize;
+    let mut rows: Vec<(usize, [Option<f32>; 5])> = Vec::new();
     for line in text.lines() {
         let cols: Vec<&str> = line.split('\t').collect();
+        let Some(t) = cols.first().and_then(|t| num(t)) else { continue };
         if cols.len() != 6 {
             continue;
         }
-        c.pitch.push(num(cols[1]));
-        c.intensity.push(num(cols[2]));
-        c.f1.push(num(cols[3]));
-        c.f2.push(num(cols[4]));
-        c.f3.push(num(cols[5]));
+        let at = (f64::from(t) * 1000.0 - c.start_ms - c.step_ms / 2.0) / c.step_ms;
+        if !(-0.5..per_chunk as f64 - 0.5).contains(&at) {
+            continue;
+        }
+        rows.push((at.round() as usize, [num(cols[1]), num(cols[2]), num(cols[3]), num(cols[4]), num(cols[5])]));
+    }
+    let len = rows.iter().map(|(i, _)| i + 1).max().unwrap_or(0);
+    for v in [&mut c.pitch, &mut c.intensity, &mut c.f1, &mut c.f2, &mut c.f3] {
+        v.resize(len, None);
+    }
+    for (i, [p, db, f1, f2, f3]) in rows {
+        (c.pitch[i], c.intensity[i], c.f1[i], c.f2[i], c.f3[i]) = (p, db, f1, f2, f3);
     }
     c
 }
@@ -141,6 +156,16 @@ pub fn parse_chunk(index: u32, text: &str) -> Chunk {
 pub fn analyse(praat: &Path, job: &Job, chunks: &[u32]) -> Result<Vec<Chunk>, String> {
     if chunks.len() > MAX_CHUNKS {
         return Err(format!("at most {MAX_CHUNKS} chunks at a time"));
+    }
+    let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|p| p.into_inner());
+    // Runs never overlap (the lock above), so a scratch folder here is a run
+    // the app did not finish (killed or crashed).
+    if let Ok(entries) = fs::read_dir(&job.dir) {
+        for e in entries.flatten() {
+            if e.file_name().to_string_lossy().starts_with("run-") {
+                fs::remove_dir_all(e.path()).ok();
+            }
+        }
     }
     let missing: Vec<u32> = chunks.iter().copied().filter(|&n| !chunk_file(&job.dir, n).is_file()).collect();
     if !missing.is_empty() {
@@ -152,12 +177,12 @@ pub fn analyse(praat: &Path, job: &Job, chunks: &[u32]) -> Result<Vec<Chunk>, St
         let script = scratch.join("analyse.praat");
         let ran = write_atomic(&script, analysis_script(&job.wav, &scratch, &missing).as_bytes())
             .and_then(|()| run_quietly(Command::new(praat).arg("--run").arg(&script), DEADLINE).map_err(|e| format!("Praat could not analyse the recording: {e}")));
-        if ran.is_ok() {
-            for &n in &missing {
-                let done = chunk_file(&scratch, n);
-                if done.is_file() {
-                    fs::rename(&done, chunk_file(&job.dir, n)).ok();
-                }
+        // writeFile writes a chunk's file once, whole, so every file there is
+        // complete even when a later chunk failed: keep them.
+        for &n in &missing {
+            let done = chunk_file(&scratch, n);
+            if done.is_file() {
+                fs::rename(&done, chunk_file(&job.dir, n)).ok();
             }
         }
         fs::remove_dir_all(&scratch).ok();

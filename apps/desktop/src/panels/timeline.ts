@@ -181,6 +181,7 @@ export const timelinePanel: PanelDef = {
       }
       if (view === null) {
         view = new TimelineView();
+        view.analysis.onChange = () => praat.refresh();
         body.replaceChildren(view.element);
         el.replaceChildren(toolbar, praat.review, main);
         lastText = "";
