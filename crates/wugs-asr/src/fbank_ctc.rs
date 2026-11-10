@@ -20,8 +20,11 @@
 //!   Inputs are never padded: the export does not mask padding at batch
 //!   one, and the real model's transcript of ZIPA's sample changed by a
 //!   third with as little as 14 padded frames (any padding value), while
-//!   unpadded runs reproduce ZIPA's own script exactly. Building a plan
-//!   takes seconds for the real model, so the last few are kept.
+//!   unpadded runs reproduce ZIPA's own script exactly. Plans skip tract's
+//!   optimizer: for the real model on a CI runner, an optimized plan took
+//!   8–11 s to build and 0.16–2 s to run (5 s and 30 s of audio), a
+//!   decluttered one 2.7–8 s and 1–5 s, and almost every segment has its
+//!   own length. The last few plans are kept.
 
 use std::collections::VecDeque;
 use std::path::Path;
@@ -42,8 +45,6 @@ pub struct FbankRecognizer {
     vocab: Vocab,
     fbank: Fbank,
     plans: Mutex<VecDeque<(usize, Arc<TypedSimplePlan>)>>,
-    /// Whether plans run tract's full optimizer (slower to build, faster to run).
-    optimize: bool,
 }
 
 impl Vocab {
@@ -86,13 +87,7 @@ impl FbankRecognizer {
         // The exported shapes name a symbolic batch; ours is always 1.
         graph.value_info.clear();
         let model = tract_onnx::onnx().model_for_proto_model(&proto).map_err(model_err)?;
-        Ok(FbankRecognizer { model, vocab, fbank: Fbank::new(), plans: Mutex::new(VecDeque::new()), optimize: true })
-    }
-
-    /// Build plans without tract's optimizer: quicker to build, slower to run.
-    pub fn without_optimizing(mut self) -> Self {
-        self.optimize = false;
-        self
+        Ok(FbankRecognizer { model, vocab, fbank: Fbank::new(), plans: Mutex::new(VecDeque::new()) })
     }
 
     fn plan(&self, frames: usize) -> Result<Arc<TypedSimplePlan>, Error> {
@@ -110,8 +105,7 @@ impl FbankRecognizer {
         model.set_input_fact(1, InferenceFact::from(tract_ndarray::arr1(&[frames as i64]).into_tensor())).map_err(model_err)?;
         let x = model.node(model.input_outlets().map_err(model_err)?[0].node).name.clone();
         let model = model.with_input_names([x]).map_err(model_err)?.into_typed().map_err(model_err)?;
-        let model = if self.optimize { model.into_optimized() } else { model.into_decluttered() }.map_err(model_err)?;
-        let plan = model.into_runnable().map_err(model_err)?;
+        let plan = model.into_decluttered().map_err(model_err)?.into_runnable().map_err(model_err)?;
         let mut plans = self.plans.lock().expect("plans lock");
         plans.retain(|(n, _)| *n != frames);
         plans.push_front((frames, plan.clone()));

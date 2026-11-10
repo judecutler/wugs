@@ -81,15 +81,6 @@ fn tract_runs_the_zipformer_as_onnxruntime_does() {
 }
 
 #[test]
-fn an_unoptimized_plan_gives_the_same_answer() {
-    let r = FbankRecognizer::load(&fixture("tiny-zipformer.onnx"), tokens()).unwrap().without_optimizing();
-    let (_, _, got) = r.log_probs_for_features(173, feats(173)).unwrap();
-    let want = f32s("tiny-zipformer.173.out.f32");
-    let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
-    assert!(worst < 1e-4, "largest difference from onnxruntime: {worst}");
-}
-
-#[test]
 fn recognizing_audio_runs_end_to_end() {
     let r = FbankRecognizer::load(&fixture("tiny-zipformer.onnx"), tokens()).unwrap();
     let audio = f32s("fbank.audio.f32");
@@ -122,9 +113,8 @@ fn the_int8_release_format_runs_too() {
 fn the_real_zipa_release_matches_onnxruntime() {
     let dir = PathBuf::from(std::env::var("WUGS_ZIPA_DIR").expect("set WUGS_ZIPA_DIR"));
     let vocab = Vocab::from_tokens_txt(&std::fs::read_to_string(dir.join("tokens.txt")).unwrap()).unwrap();
-    for optimize in [true, false] {
-        let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab.clone()).unwrap();
-        let r = if optimize { r } else { r.without_optimizing() };
+    {
+        let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab).unwrap();
         for t in [500usize, 3000] {
             let t0 = std::time::Instant::now();
             let (frames, v, got) = r.log_probs_for_features(t, feats(t)).unwrap();
@@ -132,7 +122,7 @@ fn the_real_zipa_release_matches_onnxruntime() {
             let t0 = std::time::Instant::now();
             r.log_probs_for_features(t, feats(t)).unwrap();
             let peak = std::fs::read_to_string("/proc/self/status").ok().and_then(|s| s.lines().find(|l| l.starts_with("VmHWM")).map(str::to_string)).unwrap_or_default();
-            eprintln!("optimize={optimize}: {t} input frames, first run {first:?} (plan built), again {:?}; {peak}", t0.elapsed());
+            eprintln!("{t} input frames, first run {first:?} (plan built), again {:?}; {peak}", t0.elapsed());
             let want: Vec<f32> = std::fs::read(dir.join(format!("ref.{t}.out.f32"))).unwrap().chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
             assert_eq!(got.len(), want.len());
             let agree = got.chunks(v).zip(want.chunks(v)).filter(|(a, b)| best(a) == best(b)).count();
