@@ -1,0 +1,56 @@
+\_sh v3.0  400  MDF 4.0
+\_DateStampHasFourDigitYear
+
+\lx köpek
+\ps n
+\ge dog
+\de a domesticated canine
+\gn chien
+\xv Köpek havladı.
+\xe The dog barked.
+\va köpük
+\dt 12/Mar/2004
+
+\lx yüz
+\hm 1
+\ps n
+\ge face
+\nt body part;
+continues on a second line
+\dt 01/Jan/2005
+
+\lx yüz
+\hm 2
+\ps num
+\ge hundred
+\cf yüzlerce
+\dt 01/Jan/2005
+
+\lx gel
+\lc gelmek
+\ps v
+\sn 1
+\ge come
+\xv Geldi.
+\xe He came.
+\sn 2
+\ge arrive
+\de to reach a place
+\ge reach
+\ps adv
+\sn 3
+\ge arrivingly
+\va gäl
+\dt 02/Feb/2006
+
+\lx şey
+\ge
+\de
+\nt
+\dt 03/Mar/2006
+
+\lx bank
+\ge riverside
+
+\lx bank
+\ge 🏦 money place

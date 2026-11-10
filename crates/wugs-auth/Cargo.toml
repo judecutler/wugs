@@ -1,0 +1,33 @@
+[package]
+name = "wugs-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+# Edge crate: every dependency here is an audited or widely reviewed crypto
+# library; wugs-auth composes them and implements no primitive itself.
+[dependencies]
+wugs-model = { path = "../wugs-model" }
+# Device identity and roster signatures. 2.x shares curve25519-dalek 4 with
+# pake-cpace below, so the tree carries one curve implementation; `pkcs8`
+# gives the DER forms rustls loads for TLS raw public keys.
+ed25519-dalek = { version = "2.2", features = ["rand_core", "pkcs8", "zeroize"] }
+# OS randomness for key generation, the session id and the pairing code.
+# 0.2 is the version pake-cpace and ed25519-dalek 2 (via rand_core 0.6) use.
+getrandom = "0.2"
+rand_core = { version = "0.6", features = ["getrandom"] }
+# Seals the pairing payload under the PAKE-derived key (RustCrypto, audited
+# by NCC Group).
+chacha20poly1305 = "0.10"
+# Roster record hashes (SHA-512/256) and the labeled pairing key
+# derivation. Already in the tree through ed25519-dalek, so no new crate.
+sha2 = "0.10"
+# Wipes key seeds and PAKE session keys from memory once used.
+zeroize = "1.8"
+# CPace PAKE (CFRG-selected balanced PAKE), 1Password's implementation,
+# audited by Cure53 in 2022. Pinned by revision: the crates.io crate of the
+# same name is the older jedisct1 code this one was rewritten from.
+pake-cpace = { git = "https://github.com/1Password/cpace", rev = "7e2e42c7d359969f4356292c2bd2cf3ff6eeeecc" }
+
+[dev-dependencies]
+proptest = "1"

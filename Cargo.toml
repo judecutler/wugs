@@ -1,0 +1,40 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/wugs-model",
+    "crates/wugs-sqlite",
+    "crates/wugs-oplog",
+    "crates/wugs-projection",
+    "crates/wugs-validate",
+    "crates/wugs-core",
+    "crates/wugs-bench",
+    "crates/wugs-sync",
+    "crates/wugs-elan",
+    "crates/wugs-xml",
+    "crates/wugs-flex",
+    "crates/wugs-text",
+    "crates/wugs-net",
+    "crates/wugs-seal",
+    "crates/wugs-unicode",
+    "crates/wugs-blob",
+    "crates/wugs-auth",
+    "crates/wugs-legacy",
+    "crates/wugs-kit",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2021"
+license = "MPL-2.0"
+
+[profile.release]
+debug = true
+
+# Debug builds of the curve arithmetic are ~50x slower, which turns the
+# roster property tests (thousands of signatures) into minutes.
+[profile.dev.package.curve25519-dalek]
+opt-level = 3
+[profile.dev.package.ed25519-dalek]
+opt-level = 3
+[profile.dev.package.sha2]
+opt-level = 3

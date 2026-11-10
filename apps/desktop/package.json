@@ -1,0 +1,24 @@
+{
+  "name": "wugs-desktop",
+  "private": true,
+  "version": "0.0.1",
+  "license": "MPL-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "node --experimental-strip-types --test src/redraw.test.ts src/last-project.test.ts src/timeline/viewport.test.ts src/timeline/gestures.test.ts src/transcribe/logic.test.ts src/transcribe/field.test.ts src/playback-controller.test.ts src/transcribe/ipa.test.ts src/capture/pcm.test.ts src/capture/take.test.ts src/search/logic.test.ts src/gloss/tokenizer.test.ts src/gloss/morphs.test.ts src/gloss/leipzig.test.ts src/gloss/suggest.test.ts src/gloss/state.test.ts src/gloss/translation.test.ts src/gloss/lexicon.test.ts src/gloss/keys.test.ts src/gloss/analysis.test.ts src/gloss/hidden.test.ts src/lexicon/logic.test.ts src/elicit/logic.test.ts src/conflicts/logic.test.ts src/kits/logic.test.ts"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "dockview-core": "^8.9.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.5"
+  }
+}

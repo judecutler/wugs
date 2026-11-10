@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<document version="2">
+  <interlinear-text guid="c0de0001-0000-4000-8000-000000000001">
+    <item type="title" lang="en">Dogs came</item>
+    <item type="source" lang="en">Elicitation 01, Ankara</item>
+    <paragraphs>
+      <paragraph guid="c0de0001-0000-4000-8000-0000000000p1">
+        <phrases>
+          <phrase guid="c0de0001-0000-4000-8000-0000000000f1" begin-time-offset="0" end-time-offset="1500" media-file="c0de0001-0000-4000-8000-0000000000a0">
+            <item type="segnum" lang="en">1</item>
+            <words>
+              <word guid="c0de0001-0000-4000-8000-0000000000w1">
+                <item type="txt" lang="tr">köpekler</item>
+                <morphemes>
+                  <morph type="stem" guid="c0de0001-0000-4000-8000-0000000000m1">
+                    <item type="txt" lang="tr">köpek</item>
+                    <item type="cf" lang="tr">köpek</item>
+                    <item type="gls" lang="en">dog</item>
+                    <item type="msa" lang="en">n</item>
+                  </morph>
+                  <morph type="suffix" guid="c0de0001-0000-4000-8000-0000000000m2">
+                    <item type="txt" lang="tr">-ler</item>
+                    <item type="cf" lang="tr">-ler</item>
+                    <item type="gls" lang="en">PL</item>
+                  </morph>
+                </morphemes>
+                <item type="gls" lang="en">dogs</item>
+                <item type="pos" lang="en">N</item>
+              </word>
+              <word guid="c0de0001-0000-4000-8000-0000000000w2">
+                <item type="txt" lang="tr">geldi</item>
+                <morphemes>
+                  <morph type="stem" guid="c0de0001-0000-4000-8000-0000000000m3">
+                    <item type="txt" lang="tr">gel</item>
+                    <item type="cf" lang="tr">gel</item>
+                    <item type="gls" lang="en">come</item>
+                  </morph>
+                  <morph type="suffix" guid="c0de0001-0000-4000-8000-0000000000m4">
+                    <item type="txt" lang="tr">-di</item>
+                    <item type="cf" lang="tr">-di</item>
+                    <item type="gls" lang="en">PST</item>
+                  </morph>
+                </morphemes>
+              </word>
+              <word>
+                <item type="punct" lang="tr">.</item>
+              </word>
+            </words>
+            <item type="gls" lang="en">The dogs came.</item>
+            <item type="gls" lang="de">Die Hunde kamen.</item>
+          </phrase>
+          <phrase guid="c0de0001-0000-4000-8000-0000000000f2">
+            <item type="segnum" lang="en">2</item>
+            <words>
+              <word guid="c0de0001-0000-4000-8000-0000000000w3">
+                <item type="txt" lang="tr">yüz</item>
+                <morphemes>
+                  <morph type="stem" guid="c0de0001-0000-4000-8000-0000000000m5">
+                    <item type="txt" lang="tr">yüz</item>
+                    <item type="cf" lang="tr">yüz</item>
+                    <item type="gls" lang="en">hundred</item>
+                  </morph>
+                </morphemes>
+              </word>
+              <word guid="c0de0001-0000-4000-8000-0000000000w1">
+                <item type="txt" lang="tr">köpekler</item>
+                <morphemes>
+                  <morph type="stem" guid="c0de0001-0000-4000-8000-0000000000m1">
+                    <item type="txt" lang="tr">köpek</item>
+                    <item type="cf" lang="tr">köpek</item>
+                    <item type="gls" lang="en">dog</item>
+                  </morph>
+                  <morph type="suffix" guid="c0de0001-0000-4000-8000-0000000000m2">
+                    <item type="txt" lang="tr">-ler</item>
+                    <item type="cf" lang="tr">-ler</item>
+                    <item type="gls" lang="en">PL</item>
+                  </morph>
+                </morphemes>
+              </word>
+              <word guid="c0de0001-0000-4000-8000-0000000000w4">
+                <item type="txt" lang="tr">Ali &amp; Ayşe</item>
+              </word>
+            </words>
+            <item type="gls" lang="en">a hundred; Ali &amp; Ayşe</item>
+          </phrase>
+        </phrases>
+      </paragraph>
+      <paragraph>
+        <phrases>
+          <phrase begin-time-offset="2000" end-time-offset="2600">
+            <words>
+              <word><item type="txt" lang="tr">yüz</item></word>
+            </words>
+          </phrase>
+        </phrases>
+      </paragraph>
+    </paragraphs>
+    <media-files offset-type="">
+      <media guid="c0de0001-0000-4000-8000-0000000000a0" location="recordings/elicitation01.wav"/>
+    </media-files>
+    <languages>
+      <language lang="tr" font="Charis SIL" vernacular="true"/>
+      <language lang="en" font="Times New Roman"/>
+    </languages>
+  </interlinear-text>
+</document>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lift producer="SIL.FLEx 9.1" version="0.13">
+  <header>
+    <ranges/>
+  </header>
+  <entry id="köpek_6f1a" guid="6f1a0001-0000-4000-8000-000000000001" dateCreated="2024-03-01T10:00:00Z" dateModified="2024-05-02T08:30:00Z">
+    <lexical-unit>
+      <form lang="tr"><text>köpek</text></form>
+      <form lang="tr-x-ipa"><text>cœˈpec</text></form>
+    </lexical-unit>
+    <citation><form lang="tr"><text>köpek</text></form></citation>
+    <sense id="köpek_s1" guid="6f1a0001-0000-4000-8000-0000000000a1">
+      <grammatical-info value="Noun"/>
+      <gloss lang="en"><text>dog</text></gloss>
+      <gloss lang="de"><text>Hund</text></gloss>
+      <definition><form lang="en"><text>a domesticated <span lang="la">Canis</span> animal</text><annotation name="status" value="checked"/></form></definition>
+      <example><form lang="tr"><text>Köpek havladı.</text></form></example>
+    </sense>
+  </entry>
+  <entry id="-ler_7b2c" guid="7b2c0002-0000-4000-8000-000000000002">
+    <lexical-unit><form lang="tr"><text>-ler</text></form></lexical-unit>
+    <sense id="-ler_s1" guid="7b2c0002-0000-4000-8000-0000000000a1">
+      <grammatical-info value="Nominal suffix"/>
+      <gloss lang="en"><text>PL</text></gloss>
+    </sense>
+    <variant ref="vowel-harmony"><form lang="tr"><text>-lar</text></form></variant>
+  </entry>
+  <entry id="gel_8c3d" guid="8c3d0003-0000-4000-8000-000000000003">
+    <lexical-unit><form lang="tr"><text>gel</text></form></lexical-unit>
+    <sense id="gel_s1" guid="8c3d0003-0000-4000-8000-0000000000a1">
+      <grammatical-info value="Verb"/>
+      <gloss lang="en"><text>come</text></gloss>
+    </sense>
+  </entry>
+  <entry id="-di_9d4e" guid="9d4e0004-0000-4000-8000-000000000004">
+    <lexical-unit><form lang="tr"><text>-di</text></form></lexical-unit>
+    <sense id="-di_s1" guid="9d4e0004-0000-4000-8000-0000000000a1">
+      <gloss lang="en"><text>PST</text></gloss>
+    </sense>
+  </entry>
+  <entry id="yüz_1" guid="ae5f0005-0000-4000-8000-000000000005" order="1">
+    <lexical-unit><form lang="tr"><text>yüz</text></form></lexical-unit>
+    <sense id="yüz1_s1"><gloss lang="en"><text>face</text></gloss></sense>
+  </entry>
+  <entry id="yüz_2" guid="bf600006-0000-4000-8000-000000000006" order="2">
+    <lexical-unit><form lang="tr"><text>yüz</text></form></lexical-unit>
+    <sense id="yüz2_s1"><gloss lang="en"><text>hundred</text></gloss></sense>
+    <sense id="yüz2_s2"><gloss lang="en"><text>swim</text></gloss></sense>
+    <note><form lang="en"><text>homograph of yüz 'face'</text></form></note>
+  </entry>
+</lift>

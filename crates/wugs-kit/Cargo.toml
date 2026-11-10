@@ -1,0 +1,9 @@
+[package]
+name = "wugs-kit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Kit manifests (kit.toml): parse, validate and rewrite in place"
+
+[dependencies]
+toml_edit = "0.25"

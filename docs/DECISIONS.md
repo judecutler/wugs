@@ -1,0 +1,165 @@
+# Decision Log
+
+*Short record of architecture and product decisions. Newest first. Status: Decided / Proposed. Code: github.com/judecutler/wugs (docs mirrored in its `docs/`).*
+
+## 2026-11-09 — Kits: manifests as data, layouts as placements, no scripts — Decided
+**A kit is a `kit.toml` the app reads; nothing about a kit is code.** `wugs-kit` (edge crate, `toml_edit`) parses and checks a manifest and writes form edits back into the file in place, so comments and the tables it does not model (`[templates]`, `[validators]`) survive. **A kit's workspace is a list of placements** (`{ panel, place = left|right|above|below|tab, of, width/height }`, each against a panel placed before it), not a saved dockview state: placements are readable in "View code", hand-editable, and independent of dockview's serialization version, and the Kit Builder turns a live arrangement back into placements level by level, which rebuilds the same split tree. The person's own rearrangement is still saved per kit as dockview JSON in app data; Reset layout returns to the kit's placements. **Tool ids are the shell's panel ids**, and Conflicts, Devices and Kits are platform panels every kit offers. Unknown tool or panel ids are kept and named in the Kit Builder rather than refused, so a kit written for a newer version still loads. **The bundled Tongues kit is compiled in and read-only;** "Duplicate" makes an editable user copy (`kits/<id>.toml` in app data). Kits from others are untrusted input: a size cap, path-safe ids (they name files), bounded strings, and any `[scripts]` table refuses the install until sandboxed scripts exist. The active kit is a per-machine choice for now; a project-level kit choice that syncs is a follow-up. Details: CLAUDE.md, roadmap item 26.
+
+## 2026-11-09 — Conflict queue: settle by a resolving write, never by a dismiss — Decided
+**The Conflicts panel lists every open conflict with its versions, and the only way to close one is to write the field.** "Keep this" on any version, or a typed value, is one resolving write (`Project::resolve_field`): a `set`, or a `text-edit` when the field's winner is one, written in the scope of the winner's op so it syncs with the field's own data. It names every open version, so the conflict closes on every device that receives it, and every value stays in the log. A local "dismiss" was rejected: it would hide a disagreement on one device while the others still show it, and the projection keeps no state that is not derived from ops. Keeping the version already shown is still a write, because the other device needs to learn the decision. The choice carries the versions the card showed; if the field's open versions changed since (another device settled it, or a new version arrived), nothing is written and the queue reloads, because a write may only name versions its writer was shown (§2.2). Equal values never reach the queue (§5.3).
+
+## 2026-11-09 — Lexicon: reference lists as attributed data, derived ids, equal values are not a conflict — Decided
+**Reference lists made by others ship as separately licensed data files and load into a project only when someone asks.** SIL Semantic Domains v4 (© SIL Global, CC BY-SA 4.0) sits in `kits/tongues/semdom/` with its own README (source commit, changes, converter); the desktop app embeds it, shows the attribution where it offers the list, and a sealed package gains `metadata/third-party.txt` when the project holds any of it, because the labels and descriptions then live in the log. Loaded domains get ids derived from their permanent GUIDs, so loading twice, or on two devices before they sync, gives one tree. **Two open versions of a field that hold the same value are not a conflict** (DATA-MODEL §5.3): a projection rule over each write's own value (a text-edit's `resolved`), so it stays order-independent; without it the twin loads above produced about 10,700 equal-valued conflict rows. Lexicon field edits are resolving writes; creates, deletes, links and the import are plain. Details: CLAUDE.md, roadmap item 22.
+
+## 2026-11-09 — Causal conflict detection via write heads — Decided
+**A conflict is an open version of a field: a write that no later write names. Each op may carry `heads`, the field's open versions its writer had, and the projection derives conflicts from them.** The old rule (incoming `base` differs from the current winner, from another actor) missed real conflicts: one person on two laptops was never flagged, and three devices relaying out of order could hide one. A replacement that counted a write as "seen" when the other write's `base` was newer was reverted: device B setting PLU and then PLURAL on its own PLU hid device A's concurrent PL, and it gave different rows depending on whether sets or text-edits arrived first. Naming every open version is how a merge commit names its parents in git and how Automerge records a change's dependencies. Whether a version is open depends only on which writes a replica holds, so replay equals every arrival order by construction; a seeded property test checks that against the true happened-before order of random histories. `heads` is additive to the archival format: absent means `[base]`, and writers leave it out whenever it equals `[base]` (always for plain writes, and for a resolving write unless a conflict is open), so the log grows only where conflicts exist. **A new envelope field that changes meaning bumps the sync session version (ALPN), here `wugs/2` to `wugs/3`.** A build that predates the field ignores it on read and drops it on write, and sync windows hash op ids only, so its stripped copy of an op would pass for the real one and dedupe it on every peer; refusing the older peer at the TLS handshake is the only place that catches it before any op moves. Two merged text-edits are still never a conflict; a set and a text-edit are. **Resolution needs no special op, but it must be a person's:** a direct edit or pick of the field (`Txn::resolving()` in `wugs-core`) names every open version, so the conflict closes on every device once it arrives, and the losing values stay in the log. Bulk, derived and import writes name only `[base]` and leave conflicts open, so a batch action can never settle a disagreement nobody looked at. The projection keeps conflict rows only while open (a closed row cannot be kept without depending on arrival order).
+
+*Review fixes, same day.* The op schema is now 2. Schema-1 ops were written under the actor rule, so two schema-1 writes by the same actor never pair (otherwise every upgraded project would show conflicts between one person's two laptops from before the upgrade, which nobody can act on). A degraded text-edit (no or corrupt Loro payload) that wins by HLC keeps its own value; the merged path used to overwrite it when an older merged edit arrived later, which made the value depend on arrival order. A txn stamped more than 24 h ahead is held in quarantine before it applies, instead of being committed and then failing the clock check; opening a project no longer drift-checks its own log, so a clock set back cannot lock a project. `wugs-legacy` joined the cargo workspace (it had been left out, so CI never ran its tests).
+
+*Second review round, same day.* A field whose Loro updates stop merging as a set (colliding op ids) showed merged text of whatever subset arrived first; its value is now the HLC winner's own in every order, and a local edit there falls back to plain text instead of failing (it could otherwise never settle the field's conflicts). The schema-1 rule became "a schema-1 head closes once its own actor wrote the field again under schema 1", so a later schema-2 write cannot revive a pre-upgrade pair. Retyping a word is a resolving write of its `form` (`Txn::set_resolving`), so a form conflict has a way to close; `split_morph`, which no UI calls, went back to plain. The property test gained a fragile merger that refuses some sets.
+
+Cost, 500k ops, release build, same machine, two runs each: default workload (no concurrent writes) cold replay 31.5 / 30.0 s on this branch against 31.7 / 31.0 s on main, incremental p95 85 / 77 µs against 84 / 91 µs, projection 618 MB against 658 MB (the projection also dropped its unused `fields.actor` column), peak memory 55 MB against 54 MB. With `--contested` (one gloss in 8 gets a concurrent write from a second device, one in 16 is then settled): 35.3 s, p95 88 µs, 608 MB, 10.5k ref rows and 5.3k open conflicts. All gates pass.
+
+## 2026-11-09 — Glossing model: per-occurrence analyses with derived suggestions; TierDef role/language; gloss:<lang> — Decided
+**A word's analysis stays on each occurrence (Segment, Token, Morph), and FLEx-level speed comes from suggestions derived from the projection, never from a shared object.** When a linguist glosses a word, the projection is queried for every earlier analysis of the same form (NFC, case-folded) across the project, ranked by use, plus a lexicon lookup of each morph surface against lexeme lemmas and allomorph forms. Accepting a suggestion writes ordinary per-occurrence ops under an `apply-analysis` intent, and an explicit "apply to the N other unanalysed" action is the batch step; nothing is applied automatically, so every stored analysis was approved by a person. A shared wordform inventory was rejected because a synced edit would silently re-gloss every occurrence on every device, and every interchange format is per-occurrence anyway. `TierDef` gains an optional open-vocabulary `role` (`transcription`, `translation`, `note`, …) and an optional `language`, and further gloss languages are sibling fields `gloss:<bcp47>` so each merges on its own. Retokenizing a changed transcription keeps the analysis of every unchanged word. Comparison with FLEx, Toolbox, ELAN, Xigt, Ligt and CLDF: `docs/design/GLOSSING-MODEL.md`.
+
+**Amended the same day after a two-device review: ordered membership is one atomic field.** The first build replaced a token's morphs (and a segment's tokens) by tombstoning and recreating them, so a gloss made on another device at the same time was lost without a trace, two concurrent analyses interleaved their morphs, and two first tokenizes doubled the words. `Segment.tokens` and `Token.morphs` are now JSON arrays of ids, set with `base`, so concurrent lists give one LWW winner plus the ordinary conflict row, and member fields still merge per field. The glossing intents diff against what the device sees (matched entities keep their ids, `form` refs and `x.*` fields), and nothing is tombstoned: an entity a winning list leaves out is hidden, recoverable, and its edits from other devices are reported as hidden edits with a restore action. Per-morph generations were rejected because two separate LWW decisions can disagree under interleaved clocks. Conflict detection is unchanged by this work; per-device and order-independent detection is roadmap item 49 (decided above: write heads). Lookup keys fold Turkic dotted and dotless i together, and validator #1 compares case exactly after NFC.
+
+## 2026-11-08 — Copied-folder detection: cache/instance.json — Decided
+**A project folder copied to another machine would write one device id from two places and fork that device's log, so the shell warns at open.** `cache/instance.json` stores the display path and the filesystem identity of `cache/` itself (inode on Unix, creation time on Windows). A relocation is reported only when that identity differs from the recorded one, so a stick that mounts at a new path or a renamed parent stays quiet and just refreshes the stored path. The marker is cache-local (never synced, not part of the archive format) and warn-only: nothing is blocked, and the two resolutions are accept-move (keep the device id) or mint (a fresh device id). When the recorded path still holds a project with the same id, the banner calls the folder a copy.
+
+Limits: copies made before the marker existed go undetected, and filesystems with unstable or reused inodes can hide a copy or flag a move.
+
+## 2026-11-08 — Bundle SQLite (libsqlite3-sys bundled) — Decided
+**The app must build and run on any OS, Windows first.** `wugs-sqlite` used to link the system `libsqlite3`, which Windows does not have and nothing checked off Linux. It now depends on `libsqlite3-sys` with the `bundled` feature, which compiles SQLite from source into the binary. The extern block and the wrapper API are unchanged, so no caller moved. A 3-OS CI matrix (`.github/workflows/ci.yml`) builds and tests both cargo workspaces so platform breakage fails PRs.
+
+Why:
+- Windows has no system sqlite3, and distro versions elsewhere vary.
+- FTS5 with the `unicode61 remove_diacritics 2` tokenizer, which `Projection::search` needs, is guaranteed on every OS. A wugs-sqlite test asserts the FTS5 folding, and another asserts the linked version equals the one `libsqlite3-sys` shipped, so a fall back to a system library fails it.
+- One pinned SQLite version everywhere. The projection is disposable, so a bad upgrade costs only a replay.
+
+Consequences:
+- The core crates are no longer strictly zero-dep. `wugs-sqlite`, and so every crate that links it (projection, validate, core), carries one transitive crates.io dependency, `libsqlite3-sys`, plus its build-time `cc`, `pkg-config` and `vcpkg`. The format-bearing crates (`wugs-model`, `wugs-oplog`, `wugs-xml`) stay zero-dep.
+- `libsqlite3-sys` sets `links = "sqlite3"`, so no second version of it can ever coexist in either cargo workspace.
+- The bundled build compiles in different defaults from a typical system library: `SQLITE_DEFAULT_FOREIGN_KEYS=1`, `SQLITE_USE_URI`, `SQLITE_ENABLE_LOAD_EXTENSION` and STAT4. Nothing in our schemas uses foreign keys today, but future schema work must expect `foreign_keys` to be ON by default.
+
+Cost: we own SQLite security bumps through crate updates instead of the OS package manager. Rewriting onto `rusqlite`'s API stays a possible later step. It would add no behavior now.
+
+## 2026-11-08 — Sync sharing: simple pairing, flat trust, guest mode — Decided
+**Sharing must be as simple as possible; wugs is the tool, not the ethics board.** The owner reviewed the sync-auth design memo (Project doc `product/design/SYNC-AUTH.md`) and chose its candidate **C (pairing code into a flat project roster)** plus a **guest read-only mode**, rejecting the recommended D (root key, stewards, steward PINs, grant expiries) as security ceremony that makes the product unusable — for PhD students doing real work and for people just trying wugs out. Enforcing CARE/consent practice is the researcher's job, not the software's; wugs provides the machinery (access levels, consent records, per-scope sync filtering) as opt-in tools and never puts it in the way.
+
+What this means concretely:
+- **Pairing**: one 8-digit one-time code (CPace PAKE, audited implementation, vendored or pinned by revision), then TLS 1.3 with raw public keys between enrolled devices. Pairing is the whole ceremony; after it, sync is invisible.
+- **Flat trust**: any enrolled member can add a device, and any member can mark a device lost (revocation spreads with sync and stops future syncs to it). No stewards, no PINs, no root key, no paper recovery sheet, no grant expiries.
+- **Members see everything by default**: lexicon, config, all sources and texts, and the people/consent scope if the team uses it. The access-level machinery stays for teams that want to restrict a scope — but nothing is withheld by default and nothing nags.
+- **Unset access = open — the DATA-MODEL §4 open question is now decided.**
+- **Guest read-only mode exists**: a guest device sees open scopes, cannot write, cannot enroll others.
+- Keys at rest go in the OS keychain. No op signatures, no disk-encryption gate. `auth/` in the project folder is not part of the archive format; sealed packages omit it.
+
+Honest limit, recorded once: the op log makes every **edit** undoable (append-only, tombstones, full history), but **transmission is not undoable** — bytes that synced to another machine are on that disk; revocation stops future syncs only. That is inherent to local-first sync.
+
+*This closes two of the three open owner decisions (unset access; peer identity). Still open: the legal/organizational form behind paid services. Same date, related working rule: prefer existing maintained tools and libraries over building our own, everywhere except the deliberately zero-dep format-bearing core crates.*
+
+## 2026-11-08 — Blob ref format and GC marking — Decided
+**Blob refs are the string `blake3:<64 lowercase hex>`, and the GC mark comes from the op log.** The ref string appears inside ops, so it is part of the archive format (Apache-2.0 OR MIT carve-out, like the rest of DATA-MODEL §9): a future hash algorithm means a new prefix, never a reinterpretation of old refs. The `blake3` dependency lives only in the `wugs-blob` edge crate; `wugs-core` and `wugs-projection` validate the ref by its spelled-out format. GC's mark phase (`Project::blob_refs`) scans the op log itself as raw text (every log line, torn tails included, plus quarantine spill files and parked ops) — never the projection alone, which can trail the log after a crash. A ref the log ever held is live forever, tombstoned and overwritten refs included (never hard-delete means a `restore` must find its media, and sealed bags name old refs for good); the sweep reclaims only never-referenced blobs older than a caller-chosen grace period. Consequence: deleting a recording's track does not reclaim its disk space — by design; reclaim follows only if the log itself never referenced the blob (an aborted import).
+
+## 2026-11-07 — Open source with paid hosted services — Decided
+**Everything is open source. Money comes only from hosted services, never from features.** No feature is paywalled, and no part of the product is held back as closed source. This covers the client, the kits, the sync protocol and the server software that wugs itself would host.
+
+Hosted services that cost money to run may be paid: hosted AI analysis (inference, and training or fine-tuning models we host), hosted sync, backup and data storage, and institutional hosting and support. **Prices may include a margin above running cost.** The margin funds the project: development, maintenance, outreach and growing usage. Anyone can self-host every service with the same open code and pay nothing.
+
+*Revised the same day.* The first version of this entry allowed only at-cost pricing. The owner changed it so the project can fund its own growth, because a project that cannot pay for development stalls, and that would harm its mission.
+
+What this rules out:
+- Open core, meaning paid features inside the app. The offline core and every tool stay free.
+- Closed server components, such as a proprietary hosted-sync server or admin tools.
+- Charging for data access or export. Data formats stay open forever, per the License decision.
+
+Consequences:
+- The MPL-2.0 code / permissive-format split stands as decided. Nothing needs a proprietary carve-out.
+- Any hosted service must be deployable from the public repo. A self-host path is part of shipping it.
+- Paid hosting competes with free self-hosting, so it must earn its price through convenience, reliability and support, not lock-in.
+- **Still open:** the legal or organizational form behind the paid services (for example a for-profit company, a public-benefit corporation, a nonprofit, or a fiscal sponsor). This decision does not settle it.
+
+## 2026-11-07 — License — Decided
+**MPL-2.0 for the engine and app, with the archive format spec and a minimal reference reader dual-licensed Apache-2.0 OR MIT.** Applied in the repo: `LICENSE` (canonical MPL text), `LICENSES/`, `LICENSING.md` (the exact carve-out), `CONTRIBUTING.md` (DCO sign-off, never a CLA), and `license = "MPL-2.0"` on every crate. GitHub reports the repo as MPL-2.0.
+
+Why MPL-2.0 for the code:
+- File-level copyleft. Anyone's improvements to wugs's own files must be published, so no vendor can take the engine, improve it privately, and sell it back to the communities whose data it holds.
+- It combines with proprietary code and does not reach into separate files, so third-party kits, plugins and institutional integrations stay frictionless. Kits are the growth engine, and a license that chills them is a strategic loss.
+- Institution-safe. University and archive legal review accepts MPL without the "will this infect our other code" fight that GPL and AGPL trigger.
+- It does not block paid hosted services (hosted sync, cloud compute, institutional support).
+- Precedent: Syncthing, a local-first sync tool, is MPL-2.0.
+
+Why the format spec goes more permissive still: a sealed archive may be the only surviving record of a language, and somebody must be able to write a reader for it in 2056 with no license question to answer. Permissive terms on the format are the license half of "data formats stay open forever." The carve-out covers DATA-MODEL §1, §2, §3, §9, §10, the schemas written into sealed packages, and a future reference-reader crate. The engine's own implementation of the format stays MPL-2.0.
+
+Alternatives considered and why they lost:
+| License | Would suit | Cost that ruled it out |
+| --- | --- | --- |
+| Apache-2.0 / MIT | Adoption as the only win condition | A vendor can fork it, close it, and resell it to the communities whose data it holds |
+| AGPL-3.0 | Being the sole hosted provider | Institutional friction, and needs a CLA to dual-license, which reduces contributions |
+| GPL-3.0 | Strong copyleft on the app itself | Plugin and linking ambiguity chills third-party kits, and it still does not close the hosted-service gap |
+| Ethical-source (Hippocratic and similar) | Encoding CARE in the license | Non-OSI licenses block institutional adoption and grant funding, and are largely unenforceable. Ethics live in governance, defaults and the consent machinery instead. |
+
+Contribution terms: **DCO, not a CLA.** Contributors keep copyright, so the project cannot quietly stop being open. The cost is that relicensing later would require contributor consent, which is the intended constraint.
+
+## 2026-11-07 — Names — Decided
+- **Suite: wugs.** From the wug test (Berko Gleason 1958). Repo: github.com/judecutler/wugs.
+- **Kits: Tongues** (Fieldwork), **Scrolls** (Corpus), **Glyphs** (Historical, epigraphic and comparative work, and the home of script decipherment).
+- Hybrid naming in the UI: themed name plus a plain subtitle, e.g. "Glyphs — Historical".
+- Decipherment of unknown scripts and undeciphered manuscripts belongs to **Glyphs**. The shared **writing systems** tool (orthography, keyboards, sort order, Unicode) stays platform-level, because Tongues needs it for orthography design.
+
+## 2026-11-07 — Platform core v0 built; prototype gate 1 PASSED — Done
+Zero-dependency Rust core (sandbox had no crates.io access): op log, SQLite projection via FFI, validators #1–#4, quarantine ingest.
+
+**Gate 1 (op-log replay, DATA-MODEL §12), measured on a fast cloud machine, not yet on a mid-2010s laptop:**
+- cold replay of 500k ops: **30.2 s** (streamed k-way merge over per-device files) — PASS
+- peak memory: **53 MB** (was 769 MB before streaming; the fix is the production design, not a bench trick) — PASS
+- incremental apply: **p95 87 µs** — PASS
+- projection size 532 MB for 500k ops: acceptable, revisit with typed tables
+
+**First tool pass (PR #1, #2):** `wugs-sync` (per-scope merkle window diff, sender-side scope ACL, quarantine-aware pair sync) and `wugs-elan` (ELAN `.eaf` import/export with an independent-parser fidelity harness). Core hardened alongside: ingest is idempotent on the log, and both commit paths append to the log before releasing the projection savepoint.
+
+**Still open from the build:** Loro text CRDTs, Tauri UI shell and npm scaffolding (blocked on package-registry access in the build environment — enable installs in network settings for the next session), sync wire protocol, FLEx importer, waveform-on-Linux (gate 2).
+
+## 2026-11-07 — Archival: "Seal a version" — Decided
+Archival longevity is handled at the format level by the op log (plain, documented JSONL). On top of that:
+
+- **No Loro dependency in the archival record.** Every op that carries an embedded Loro text payload also stores the resolved plain-text value. On sealing, Loro payloads can be stripped, leaving a plain-text log.
+- **Seal, don't convert.** Archiving produces an output and never replaces the live project, because projects come back to life. It can be run by hand, at milestones, or automatically after a set idle period, and can be run again at any time.
+- **A sealed package (BagIt, with per-file checksums) contains:**
+  - Current state in community-standard formats: ELAN `.eaf`, LIFT (lexicon), FlexText/XML (IGT), CLDF (structured data), original media untouched
+  - Archive metadata: OLAC / IMDI / CMDI, consent and access levels
+  - The full op log (plain text), carrying history and provenance
+  - The format spec and JSON schemas, so the package explains itself
+- Archive-ready for ELAR / PARADISEC / AILLA deposit. This fulfils the "end-to-end archive deposit" success signal.
+
+## 2026-11-07 — Data model architecture — Decided
+**Canonical store: an append-only log of domain operations ("the field journal"), not a generic CRDT document tree.** Everything else is derived.
+
+- **Op log (canonical, archival).** Every edit is a linguistic operation (`create-lexeme`, `set-gloss`, `split-morph`, `link-sense`, `set-interval`…) stamped with a hybrid logical clock (HLC), actor, device, and where relevant session and speaker. Stored in a documented, versioned JSONL format. The log *is* the archive format and the provenance/audit trail — replayable without our software, decades from now.
+- **Merge semantics we own.** Per-field last-write-wins by HLC as the default; concurrent writes to the same field surface as the conflict prompt instead of silently losing one. Fractional indexing for order; tombstones, never hard deletes. Incoming peer batches go to quarantine → replay on a scratch projection → validators run → passing ops commit, failing ops held, at the granularity of single linguistic actions.
+- **Embedded text CRDT only where character-level merging is real** (transcription lines, free translation, notes): each such field carries a small Loro text document inside its op payload, plus the resolved plain-text value (see Archival). Loro is the text-merge engine, not the store of everything.
+- **SQLite projection** for all queries; rebuildable from the log at any time. One write API in the Rust core — direct SQLite writes impossible by construction.
+- **Content-addressed blob store** for audio/video/images; ops reference hashes. Sources immutable, annotations standoff (annotation-graph / LAF heritage).
+- **Merkle tree over applied ops** for cheap sync verification between field devices (Actual Budget's pattern).
+
+**Why not the alternatives:**
+- *Generic CRDT doc tree (Loro/Automerge) as truth:* binary library format as a 30-year archival store is a lock-in risk; auto-merge fights validated merge (can't hold one bad edit out of a batch at linguistic granularity); provenance (speaker, session, elicitation context) must be bolted on, whereas in this field it's required scholarly data. IGT/lexicon data is field-grained, ledger-like — character-merge machinery is overkill for ~95% of it (Figma's lesson).
+- *cr-sqlite (CRDT relational tables):* right idea, but maintenance activity too low to bet the canonical format on.
+- *Pure relational or pure JSON tree:* fail offline merging or queries respectively, as previously established.
+
+**Accepted cost:** we own sync correctness (property-based tests + simulation required). Actual Budget proves per-field LWW + HLC + merkle is small-team tractable; we had to own the merge layer anyway for validation and provenance.
+
+Precedents studied: Actual Budget (message log + HLC + merkle), Figma/Linear (per-property LWW + transaction log), Ink & Switch Patchwork (human-reviewed merges — read before designing conflict UI), ELAN's annotation-graph model and LAF/GrAF standoff annotation (immutable sources, annotation layers).
+
+Full spec: `product/DATA-MODEL.md`.
+
+## 2026-11-07 — Sync & conflict handling — Decided
+- **The op log is the source of truth.** SQLite is a derived index that can always be rebuilt from the log, never written to independently. *(Superseded wording: originally "the CRDT is the source of truth"; refined by the data-model decision above.)*
+- **Merges are checked, not automatic.** Incoming changes are quarantined first. Configurable linguistic validators run on the would-be merged state. Changes that pass merge automatically; changes that fail are held as a conflict.
+  - Validators are configurable per project and kit. Examples: morphemes concatenate to the word form; morpheme and gloss counts match; time intervals don't overlap within a tier; referenced entries exist; characters are valid for the writing system.
+- **Git-like branching UI.** Conflicts appear as a subtle inline prompt: "Conflicting edits on this term. Choose version or edit manually."
+
+## 2026-11-07 — Suite structure — Decided
+Three core kits (Tongues / Scrolls / Glyphs) built on a shared platform. Analysis, Datasets and Publishing are layers available in every kit. Typology ships as an official starter kit. Custom kits are manifests editable through a UI or as code, and shared through a GitHub-backed library. Every feature is labelled Offline or Online. See `product/SUITE-CONTEXT.md`.

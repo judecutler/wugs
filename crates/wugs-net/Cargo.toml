@@ -1,0 +1,18 @@
+[package]
+name = "wugs-net"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wugs-model = { path = "../wugs-model" }
+wugs-core = { path = "../wugs-core" }
+wugs-sync = { path = "../wugs-sync" }
+mdns-sd = "0.21"
+wugs-auth = { path = "../wugs-auth" }
+# TLS 1.3 with RFC 7250 raw public keys between enrolled devices. The ring
+# provider (not the aws-lc-rs default) because it builds without cmake or
+# NASM on every target the shell ships to; TLS 1.2 stays compiled out.
+rustls = { version = "0.23.46", default-features = false, features = ["ring", "std"] }
+# Hashes the project id for the mDNS announcement; already in-tree via wugs-blob.
+blake3 = "1"

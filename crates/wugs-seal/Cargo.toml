@@ -1,0 +1,16 @@
+[package]
+name = "wugs-seal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wugs-core = { path = "../wugs-core" }
+wugs-elan = { path = "../wugs-elan" }
+wugs-flex = { path = "../wugs-flex" }
+wugs-model = { path = "../wugs-model" }
+wugs-oplog = { path = "../wugs-oplog" }
+wugs-xml = { path = "../wugs-xml" }
+
+[dev-dependencies]
+wugs-text = { path = "../wugs-text" }

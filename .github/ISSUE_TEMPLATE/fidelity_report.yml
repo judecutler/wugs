@@ -1,0 +1,35 @@
+name: Import/export fidelity report
+description: An ELAN, FLEx, Toolbox or TextGrid file that does not round-trip
+labels: [fidelity]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fidelity is a core promise: nothing lost silently. If wugs dropped, changed
+        or failed to re-export something from your file, that is a bug we want.
+  - type: dropdown
+    id: format
+    attributes:
+      label: Format
+      options: [ELAN .eaf, FLEx LIFT, FLEx FlexText, Toolbox SFM, Praat TextGrid, other]
+    validations:
+      required: true
+  - type: textarea
+    id: diff
+    attributes:
+      label: What differs
+      description: The element, marker, tier or value that was lost or changed, and the import report counts if you have them (not_carried, markers_kept_verbatim, not_exported…).
+    validations:
+      required: true
+  - type: textarea
+    id: sample
+    attributes:
+      label: Minimal sample
+      description: The smallest snippet of the file that shows the problem. Strip or anonymize any restricted or personal content first — never attach consent records or unredacted recordings metadata.
+    validations:
+      required: true
+  - type: input
+    id: source-tool
+    attributes:
+      label: Tool and version that wrote the file
+      placeholder: e.g. ELAN 6.7, FLEx 9.1, Praat 6.4

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wugs.dev/schema/op/1",
+  "title": "wugs op envelope, schema 1",
+  "description": "One line of a wugs op log (log/<scope>/<device>.jsonl), as specified in DATA-MODEL.md section 2.2 and 2.3 in this package. Licensed Apache-2.0 OR MIT.",
+  "type": "object",
+  "required": ["id", "hlc", "txn", "actor", "device", "scope", "schema", "op", "entity", "target"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^op_", "description": "Op id: 'op_' + ULID. Unique, never reused." },
+    "hlc": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{12,}-[0-9a-f]{4,}-",
+      "description": "Hybrid logical clock: wall millis (hex), counter (hex), device id. Lexicographic order is the total order of ops."
+    },
+    "txn": { "type": "string", "pattern": "^txn_", "description": "Transaction id shared by every op one domain intent emitted. Txns apply atomically." },
+    "intent": { "type": "string", "description": "Human-readable domain intent that produced the txn, e.g. 'split-morph'." },
+    "actor": { "type": "string", "description": "Person id of the researcher who made the edit." },
+    "device": { "type": "string", "pattern": "^dvc_", "description": "Device that authored the op; also the log file name." },
+    "session": { "type": "string", "description": "Optional elicitation-session id (provenance)." },
+    "scope": { "type": "string", "description": "Sync and access scope: a source or text id, or one of 'lexicon', 'project', 'people'." },
+    "schema": { "type": "integer", "minimum": 1, "description": "Schema version this op was written under. Older versions are reinterpreted at replay, never rewritten." },
+    "op": {
+      "type": "string",
+      "enum": ["create", "set", "delete", "restore", "text-edit"],
+      "description": "Primitive verb. create: value is the initial field map. set: one field, last-writer-wins by hlc. delete/restore: tombstone flag only. text-edit: collaborative text field."
+    },
+    "entity": { "type": "string", "description": "Entity kind, e.g. 'text', 'segment', 'lexeme'." },
+    "target": { "type": "string", "description": "Id of the entity the op writes." },
+    "field": { "type": "string", "description": "Field name for set and text-edit ops." },
+    "value": { "description": "Field value (set), initial field map (create), or a text-edit payload." },
+    "base": { "type": ["string", "null"], "description": "Hlc of the field value this write overwrote (the winner the writer saw); null or absent if unset." },
+    "heads": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[0-9a-f]{12,}-[0-9a-f]{4,}-" },
+      "uniqueItems": true,
+      "description": "Hlcs of every open version of the field the writer had: the winner plus unresolved conflict heads, like a merge commit's parents. Absent means [base], or none when base is null or absent. A field version no write names is open; two open versions that are not both merged text-edits are a conflict."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "op": { "const": "create" } } },
+      "then": { "properties": { "value": { "type": "object" } } }
+    },
+    {
+      "if": { "properties": { "op": { "enum": ["set", "text-edit"] } } },
+      "then": { "required": ["field"] }
+    },
+    {
+      "if": { "properties": { "op": { "const": "text-edit" } } },
+      "then": {
+        "required": ["value"],
+        "properties": {
+          "value": {
+            "type": "object",
+            "required": ["resolved"],
+            "properties": {
+              "resolved": { "type": "string", "description": "Full plain text after the edit. Authoritative for every reader." },
+              "loro": { "type": "string", "contentEncoding": "base64", "description": "Optional Loro CRDT update, used only to merge concurrent edits. May be stripped from sealed archives." }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

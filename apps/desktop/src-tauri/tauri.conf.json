@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "wugs",
+  "version": "0.0.1",
+  "identifier": "dev.wugs.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "wugs",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 720,
+        "minHeight": 480
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; media-src 'self' asset: http://asset.localhost; connect-src ipc: http://ipc.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": []
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "app", "dmg", "appimage", "deb"],
+    "publisher": "wugs",
+    "category": "Education",
+    "shortDescription": "Local-first fieldwork linguistics",
+    "longDescription": "wugs Tongues keeps a recording, its transcription, glosses and the dictionary in one connected, offline-first project with its edit history preserved.",
+    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"]
+  },
+  "plugins": {}
+}

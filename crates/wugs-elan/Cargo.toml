@@ -1,0 +1,11 @@
+[package]
+name = "wugs-elan"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wugs-model = { path = "../wugs-model" }
+wugs-projection = { path = "../wugs-projection" }
+wugs-core = { path = "../wugs-core" }
+wugs-xml = { path = "../wugs-xml" }

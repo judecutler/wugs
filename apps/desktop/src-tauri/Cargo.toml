@@ -1,0 +1,46 @@
+[package]
+name = "wugs-desktop"
+version = "0.0.1"
+edition = "2021"
+license = "MPL-2.0"
+publish = false
+
+# An empty workspace table keeps this crate out of the root workspace, so the
+# root `cargo test --workspace` never needs GTK or WebKitGTK.
+[workspace]
+
+[lib]
+name = "wugs_desktop"
+path = "src/lib.rs"
+
+[[bin]]
+name = "wugs-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# protocol-asset serves project media (blobs/) to the webview's <audio>.
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+# Remembers the window's size, position and maximized state between runs.
+tauri-plugin-window-state = "2"
+serde = { version = "1", features = ["derive"] }
+wugs-core = { path = "../../../crates/wugs-core" }
+wugs-model = { path = "../../../crates/wugs-model" }
+wugs-blob = { path = "../../../crates/wugs-blob" }
+wugs-peaks = { path = "../../../crates/wugs-peaks" }
+wugs-text = { path = "../../../crates/wugs-text" }
+wugs-unicode = { path = "../../../crates/wugs-unicode" }
+wugs-auth = { path = "../../../crates/wugs-auth" }
+wugs-net = { path = "../../../crates/wugs-net" }
+wugs-sync = { path = "../../../crates/wugs-sync" }
+wugs-kit = { path = "../../../crates/wugs-kit" }
+# The OS keychain for the device key (DECISIONS 2026-11-08): Keychain
+# Services, Windows Credential Manager, the Secret Service on Linux.
+keyring = "4"
+zeroize = "1.8"
+# A second launch focuses the running window instead of opening the same
+# projects again (two writers on one device's log would fork its chain).
+tauri-plugin-single-instance = "2"

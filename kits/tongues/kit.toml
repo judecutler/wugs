@@ -1,0 +1,67 @@
+# Tongues: the fieldwork kit. Schema: crates/wugs-kit (parse, checks, in-place rewrite).
+# A kit is a recipe, not a container: it presets which tools open, how the
+# workspace is laid out, and project template defaults. Tools live in the platform.
+
+[kit]
+id = "org.wugs.tongues"
+name = "Tongues"
+subtitle = "Fieldwork"            # hybrid naming: themed name + plain subtitle
+version = "0.0.1"
+description = "Language documentation: record, slice, transcribe, gloss, build the lexicon."
+offline_core = true                # must be fully usable with zero connectivity
+
+[tools]                            # panels this kit offers; ids are the shell's panel ids.
+enabled = [                        # Conflicts, Devices and Kits are platform panels, always offered.
+  "timeline",                      # waveform + ELAN-style tier lanes
+  "media",
+  "texts",
+  "transcribe",
+  "gloss",                         # interlinear glossing
+  "lexicon",
+  "elicit",
+  "search",
+]
+
+[layout]                           # the workspace a fresh install starts with; Reset layout returns here.
+# The first panel fills the workspace; each later one goes left, right, above
+# or below a panel placed before it, or joins it as a tab. Sizes are pixels.
+panels = [
+  { panel = "timeline" },
+  { panel = "media", place = "left", of = "timeline", width = 260 },
+  { panel = "texts", place = "tab", of = "media" },
+  { panel = "lexicon", place = "right", of = "timeline", width = 320 },
+  { panel = "elicit", place = "tab", of = "lexicon" },
+  { panel = "search", place = "tab", of = "lexicon" },
+  { panel = "devices", place = "tab", of = "lexicon" },
+  { panel = "transcribe", place = "below", of = "timeline", height = 260 },
+  { panel = "gloss", place = "right", of = "transcribe" },
+  { panel = "conflicts", place = "right", of = "gloss", width = 320 },
+]
+active = ["texts", "timeline"]     # tabs brought to the front, in order
+
+[templates.tiers]                  # default tier schema for new texts
+default = [
+  { name = "utterance", kind = "time-aligned" },
+  { name = "translation", kind = "symbolic-association", parent = "utterance" },
+  { name = "word", kind = "symbolic-subdivision", parent = "utterance" },
+]
+
+[templates.gloss]
+conventions = "leipzig"            # Leipzig Glossing Rules abbreviation set
+
+[templates.concept-lists]          # offered in the Elicit panel, loaded on demand
+lists = ["concepts/Swadesh-1955-100.jsonl", "concepts/Swadesh-1952-200.jsonl", "concepts/Tadmor-2009-100.jsonl"]
+license = "CC-BY-4.0"
+attribution = "Concepticon, Max Planck Institute for Evolutionary Anthropology"
+
+[templates.semantic-domains]       # offered, never loaded unasked (Lexicon panel)
+sil = { file = "semdom/semdom-v4-en.jsonl", origin = "semdom:v4", license = "CC-BY-SA-4.0", attribution = "SIL Semantic Domains v4, © SIL Global, semdom.org" }
+
+[validators]                       # see docs/DATA-MODEL.md §7; warn|hold
+morph-concat = "warn"
+gloss-count = "warn"
+tier-overlap = "hold"
+ref-exists = "hold"
+
+# No [scripts] section: a manifest without scripts is safe to install.
+# Scripts, when they exist, run sandboxed (WASM) behind a permission prompt.

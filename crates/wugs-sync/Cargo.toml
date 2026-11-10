@@ -1,0 +1,11 @@
+[package]
+name = "wugs-sync"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wugs-model = { path = "../wugs-model" }
+wugs-oplog = { path = "../wugs-oplog" }
+wugs-projection = { path = "../wugs-projection" }
+wugs-core = { path = "../wugs-core" }

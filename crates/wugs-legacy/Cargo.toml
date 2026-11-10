@@ -1,0 +1,9 @@
+[package]
+name = "wugs-legacy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+wugs-model = { path = "../wugs-model" }
+wugs-core = { path = "../wugs-core" }

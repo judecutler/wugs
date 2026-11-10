@@ -1,0 +1,20 @@
+name: Feature request
+description: Something wugs should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to do in your linguistic work, not the solution. "During elicitation I need to…"
+    validations:
+      required: true
+  - type: textarea
+    id: today
+    attributes:
+      label: How you do it today
+      description: The tool or workaround you use now (ELAN, FLEx, Praat, Toolbox, spreadsheets…).
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea, if you have one

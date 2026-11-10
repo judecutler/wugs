@@ -1,0 +1,36 @@
+name: Bug report
+description: Something in wugs misbehaves
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open project …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: wugs version or commit
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: OS and hardware
+      placeholder: e.g. Ubuntu 24.04, ThinkPad T480
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or validator findings
+      description: Paste any error text. Never paste restricted project data (recordings, consent records, people) — describe it instead.

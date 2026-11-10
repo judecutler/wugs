@@ -1,0 +1,6 @@
+[package]
+name = "wugs-peaks"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Streaming WAV reader and min/max peak pyramid for waveform display. Zero dependencies."
