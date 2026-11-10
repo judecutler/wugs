@@ -10,7 +10,7 @@ for f in sorted(glob.glob(os.path.join(out, "*.jsonl"))):
     name = os.path.basename(f)[: -len(".jsonl")]
     r = subprocess.run(
         [sys.executable, "-m", "src.metrics.phone_recognition", "--prediction_file", os.path.abspath(f),
-         "--gt_field", "target", "--pred_field", "processed_transcript", "--key_field", "utt_id",
+         "--evaluation_name", name, "--gt_field", "target", "--pred_field", "processed_transcript", "--key_field", "utt_id",
          "--output_file", os.path.abspath(os.path.join(out, name + ".csv"))],
         cwd=prism, capture_output=True, text=True, env={**os.environ, "PYTHONPATH": prism},
     )
