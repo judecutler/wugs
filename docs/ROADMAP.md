@@ -32,7 +32,8 @@
 | 24 | Conflict-resolution UI ("Choose version or edit manually") | 🟡 | PR #35 (stacked on #34): Conflicts panel queue: every open conflict described in words (field of what, where), its versions side by side (whose, when, which is shown), "Keep this" or type the right value; `resolve_field` writes a resolving set or text-edit in the winner's scope, so the conflict closes everywhere. Glossing slice ("Use that instead") stays in the Gloss panel. Owner hand check needs two devices (item 48) |
 | 25 | Search UI | 🟡 | Search panel: jump to segment, kind filter, grouped results, keyboard nav (PR #30); owner hand check pending |
 | 27 | Downloadable local phone recognizer as an optional offline extension | 🟡 | [PR #1](https://github.com/judecutler/wugs/pull/1) (archive #38): `wugs-asr` (tract, CTC phone models, per-phone confidence), `machine-transcribe` intent with derived verification, Speech assist panel (download, Suggest, fill empty segments of a tier), yellow/red machine tints; first model wav2vec2 espeak (Apache-2.0); owner hand check with the real model pending |
-| 51 | ZIPA phone models for speech assist (CC BY 4.0, 64M CTC, INT8 ONNX): Kaldi filterbank front end, Zipformer graph under tract | ⬜ | Split from 27: smaller and more accurate than wav2vec2 (ZIPA, ACL 2025); needs the fbank front end checked against lhotse |
+| 53 | Capabilities: features powered by swappable models (design `docs/design/PACKAGES.md`): the app asks for a job (`phone-transcription`, `acoustic-analysis`), model packages declare which job they serve and which runtime adapter runs them, a per-capability choice (Automatic or a picked model, pinnable per project) | ⬜ | Owner direction 2026-11-10: build features, not model dependencies. First: wav2vec2 as a manifest, Praat analysis as a provider, the choice in the Speech assist panel; bundled catalogue until 37 |
+| 51 | ZIPA phone models for speech assist (CC BY 4.0, 64M CTC, INT8 ONNX): Kaldi filterbank front end, Zipformer graph under tract | ⬜ | Split from 27: smaller and more accurate than wav2vec2 (ZIPA, ACL 2025); needs the fbank front end checked against lhotse. Comes after 53, as the second `phone-transcription` model and the `onnx-ctc-fbank` adapter |
 
 ## Validate with real users
 | # | Item | Status | Notes |
@@ -51,14 +52,17 @@
 | 33 | Write user docs and the plugin/kit authoring guide | ⬜ | |
 | 35 | Ship Tongues 1.0 | ⬜ | |
 
-## Sub-Prioritiy
-| 52 | Conference demo-track paper (ACL / EMNLP / NAACL System Demonstrations; ComputEL or LREC as fallbacks): a short system paper, screencast and live demo | ⬜ | for later (advice from the owner's professor: a demo-track acceptance is the strongest route to adoption by linguists). Needs technical rigour above all on the ML side: a reproducible evaluation harness (phone error rate per language on public held-out data, baselines such as Allosaurus and ZIPA, item 51), optimized latency and memory, documented models and data licences, the replay/sync gates written up, and usage evidence from the alpha (29, 31), Human in the loop continuous improvement for WUGS AI features, and  streamlined data exporting. Build new ML features with that evaluation in mind from the start.
+## Sub-priority
+| # | Item | Status | Notes |
+| --- | --- | --- | --- |
+| 52 | Conference demo-track paper (ACL / EMNLP / NAACL System Demonstrations; ComputEL or LREC as fallbacks): a short system paper, screencast and live demo | ⬜ | for later (advice from the owner's professor: a demo-track acceptance is the strongest route to adoption by linguists). Needs technical rigour above all on the ML side: a reproducible evaluation harness (phone error rate per language on public held-out data, baselines such as Allosaurus and ZIPA, item 51), optimized latency and memory, documented models and data licences, the replay/sync gates written up, and usage evidence from the alpha (29, 31), Human in the loop continuous improvement for WUGS AI features, and  streamlined data exporting. Build new ML features with that evaluation in mind from the start. |
 
 ## Expand the suite
 | # | Item | Status | Notes |
 | --- | --- | --- | --- |
 | 36 | WASM plugin sandbox + permission prompts | ⬜ | |
-| 37 | Kit Library (GitHub-backed index) | ⬜ | |
+| 37 | wugs marketplace: a package index (one git repo + GitHub Pages; entries pin each package's commit and file hashes) over packages hosted on their authors' GitHub or Hugging Face; a Packages panel showing your setup by type with drag-to-install, updates and removal; kits, models, datasets and integrations first (code plugins after 36); extra index URLs for private or institutional indexes | ⬜ | Was "Kit Library"; widened by the owner 2026-11-10. Design `docs/design/PACKAGES.md` §4–6 |
+| 54 | Publish from wugs: sign in to GitHub (device code) or Hugging Face, push the package, tag a release, open the index pull request | ⬜ | Staged: a ready-to-publish folder first, then GitHub, then Hugging Face. Design §5 |
 | 38 | Analysis layer: stats, charts, maps, notebook | ⬜ | |
 | 39 | Datasets layer: Glottolog, WALS, Grambank connectors | ⬜ | |
 | 40 | Typology starter kit (proves custom kits work) | ⬜ | |
@@ -67,3 +71,4 @@
 | 43 | Publishing layer: dictionaries, grammars, community apps | ⬜ | |
 | 44 | Mobile companion (evaluate Tauri 2 mobile first) | ⬜ | |
 | 45 | Hosted sync and cloud AI, opt-in per project | ⬜ | Paid hosted services; must be self-hostable from the public repo |
+| 55 | Optional accounts and wug points: credits earned for referrals that turn into real use, published packages that people keep using, donated corrections (human-in-the-loop data, with consent), translations and bug reports; spent only on hosted services (45) | ⬜ | Owner idea 2026-11-10, for later; proposed guardrails in DECISIONS. Waits on 45 and on the open legal-form decision |
