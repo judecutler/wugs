@@ -75,8 +75,10 @@ fn usual_places() -> Vec<PathBuf> {
         }
         if let Some(home) = std::env::var_os("USERPROFILE").map(PathBuf::from) {
             for sub in ["Desktop", "Downloads", "Documents"] {
-                out.push(home.join(sub).join("Praat.exe"));
-                out.push(home.join(sub).join("Praat").join("Praat.exe"));
+                let dir = home.join(sub);
+                out.push(dir.join("Praat.exe"));
+                // Unzipping praat7003_win-x64v3.zip makes a folder named after it.
+                out.extend(praat_folders(&dir).into_iter().map(|d| d.join("Praat.exe")));
             }
         }
     } else if cfg!(target_os = "macos") {
@@ -94,6 +96,21 @@ fn usual_places() -> Vec<PathBuf> {
         }
     }
     out
+}
+
+/// Folders directly in `dir` whose names start with "praat" (any case),
+/// highest name first (case ignored), so the latest unzipped version wins.
+pub fn praat_folders(dir: &Path) -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = fs::read_dir(dir)
+        .map(|rd| {
+            rd.filter_map(Result::ok)
+                .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()) && e.file_name().to_string_lossy().to_lowercase().starts_with("praat"))
+                .map(|e| e.path())
+                .collect()
+        })
+        .unwrap_or_default();
+    found.sort_by_key(|p| std::cmp::Reverse(p.file_name().map(|n| n.to_string_lossy().to_lowercase())));
+    found
 }
 
 fn on_path() -> Vec<PathBuf> {
@@ -171,7 +188,7 @@ pub fn parse_version(bytes: &[u8]) -> Result<String, String> {
 
 /// Run to completion with a deadline, returning stdout. The child is killed
 /// at the deadline.
-fn run_quietly(cmd: &mut Command, deadline: Duration) -> Result<Vec<u8>, String> {
+pub(crate) fn run_quietly(cmd: &mut Command, deadline: Duration) -> Result<Vec<u8>, String> {
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     #[cfg(windows)]
     {
@@ -311,7 +328,7 @@ impl Files {
     }
 }
 
-fn write_atomic(path: &Path, body: &[u8]) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, body: &[u8]) -> Result<(), String> {
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, body).map_err(|e| format!("could not write {}: {e}", path.display()))?;
     fs::rename(&tmp, path).map_err(|e| format!("could not write {}: {e}", path.display()))

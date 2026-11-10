@@ -434,3 +434,5 @@ export const praatPending = (args: { text: string }) => invoke<boolean>("praat_p
 export const praatBringBack = (args: { text: string }) => invoke<PraatReturn>("praat_bring_back", args);
 export const praatApply = (args: { text: string }) => invoke<{ changes: number; findings: string[] }>("praat_apply", args);
 export const praatDiscard = (args: { text: string }) => invoke<void>("praat_discard", args);
+export const praatAnalysis = (args: { source: string; chunks: number[] }) =>
+  invoke<import("./praat/analysis").Chunk[]>("praat_analysis", args);

@@ -9,6 +9,7 @@ pub mod layout;
 pub mod lexicon;
 pub mod listen;
 pub mod praat;
+pub mod praat_analysis;
 pub mod session;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -462,6 +463,17 @@ fn praat_bring_back(s: State<SessionThread>, dir: State<AppData>, text: String) 
 #[tauri::command(async)]
 fn praat_apply(s: State<SessionThread>, text: String) -> Result<praat::Applied, String> {
     s.run(move |s| praat::apply(s, &text))
+}
+
+/// Pitch, intensity and formants of `source`'s recording for the given
+/// 10 s chunks, computed by Praat (cached per chunk).
+#[tauri::command]
+async fn praat_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>, source: String, chunks: Vec<u32>) -> Result<Vec<praat_analysis::Chunk>, String> {
+    let exe = praat::praat(&dir.0)?;
+    let job = s.run(move |s| praat_analysis::job(s, &source))?;
+    // Praat can take seconds: on a blocking thread, not an async worker or
+    // the session thread.
+    tauri::async_runtime::spawn_blocking(move || praat_analysis::analyse(&exe, &job, &chunks)).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command(async)]
@@ -934,6 +946,7 @@ pub fn run() {
             praat_bring_back,
             praat_apply,
             praat_discard,
+            praat_analysis,
             conflict_resolve,
             list_sources,
             import_media,

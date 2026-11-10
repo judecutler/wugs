@@ -194,3 +194,14 @@ fn a_save_is_seen_by_the_file_appearing_and_a_missing_one_puts_the_old_grid_back
     assert!(started.elapsed() >= praat::SAVE_WAIT);
     assert_eq!(fs::read_to_string(&grid).unwrap(), "same", "the old grid is back");
 }
+
+#[test]
+fn unzipped_praat_folders_are_searched_newest_first() {
+    let dir = TempDir::new();
+    for d in ["praat6402_win-x64", "Praat7003_win-x64v3", "photos", "praat"] {
+        fs::create_dir_all(dir.0.join(d)).unwrap();
+    }
+    fs::write(dir.0.join("praat-notes.txt"), "").unwrap();
+    let names: Vec<String> = praat::praat_folders(&dir.0).iter().map(|p| p.file_name().unwrap().to_string_lossy().into_owned()).collect();
+    assert_eq!(names, ["Praat7003_win-x64v3", "praat6402_win-x64", "praat"]);
+}

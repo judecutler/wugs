@@ -34,7 +34,7 @@ export const timelinePanel: PanelDef = {
       const sel = getSelection();
       const seg = sel !== null && sel.textId === s.text.id ? s.text.segments.find((x) => x.id === sel.segmentId) ?? null : null;
       return { textId: s.text.id, sourceId: selectedSource, selected: seg, visible: view.visibleRange() };
-    });
+    }, () => view?.analysis ?? null);
     const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, perfButton, praat.element);
     const gutter = h("div", { className: "tl-gutter" });
     const body = h("div", { className: "tl-body" });
@@ -181,6 +181,7 @@ export const timelinePanel: PanelDef = {
       }
       if (view === null) {
         view = new TimelineView();
+        view.analysis.onChange = () => praat.refresh();
         body.replaceChildren(view.element);
         el.replaceChildren(toolbar, praat.review, main);
         lastText = "";

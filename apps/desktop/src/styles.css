@@ -185,7 +185,9 @@ button:disabled { opacity: 0.55; cursor: default; }
    canvas filling the rest. The canvas area never scrolls the DOM; panning
    and zooming live in the canvas itself. */
 .panel-timeline { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
-.tl-toolbar { display: flex; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.tl-toolbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.tl-toolbar button { white-space: nowrap; }
+.tl-toolbar .tl-sources { min-width: 0; flex: 0 1 auto; }
 .tl-toolbar .tl-sources { max-width: 260px; }
 .tl-toolbar button.active { border-color: var(--accent); background: #e7efe9; }
 .tl-main { display: flex; flex: 1; min-height: 0; }
