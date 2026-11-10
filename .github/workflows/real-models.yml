@@ -32,7 +32,7 @@ jobs:
           python-version: "3.12"
       - name: Python packages (CPU torch for lhotse)
         run: |
-          pip install onnxruntime==1.23.2 numpy soundfile librosa lhotse
+          pip install onnxruntime==1.23.2 onnx numpy soundfile librosa lhotse
           pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Download ZIPA-CR small (the files catalog/zipa-cr-small.toml names)
         run: |
