@@ -24,7 +24,7 @@ const F_XMIN: &str = "x.praat.xmin";
 const F_XMAX: &str = "x.praat.xmax";
 
 #[derive(Clone, Copy, PartialEq, Debug)]
-enum Class {
+pub(crate) enum Class {
     Interval,
     Text,
 }
@@ -40,13 +40,13 @@ impl Class {
 
 /// A time in seconds with the text it is written as.
 #[derive(Clone, Debug)]
-struct Time {
-    secs: f64,
-    text: String,
+pub(crate) struct Time {
+    pub(crate) secs: f64,
+    pub(crate) text: String,
 }
 
 impl Time {
-    fn ms(&self) -> f64 {
+    pub(crate) fn ms(&self) -> f64 {
         (self.secs * 1000.0).round()
     }
 
@@ -63,24 +63,24 @@ impl Time {
     }
 }
 
-struct Item {
-    start: Time,
-    end: Time,
-    label: String,
+pub(crate) struct Item {
+    pub(crate) start: Time,
+    pub(crate) end: Time,
+    pub(crate) label: String,
 }
 
-struct TierIn {
-    class: Class,
-    name: String,
+pub(crate) struct TierIn {
+    pub(crate) class: Class,
+    pub(crate) name: String,
     xmin: Time,
     xmax: Time,
-    items: Vec<Item>,
+    pub(crate) items: Vec<Item>,
 }
 
-struct Grid {
+pub(crate) struct Grid {
     xmin: Time,
     xmax: Time,
-    tiers: Vec<TierIn>,
+    pub(crate) tiers: Vec<TierIn>,
 }
 
 // ------------------------------------------------------------------ reader
@@ -188,7 +188,7 @@ fn range(c: &mut Cursor, what: &str) -> Result<(Time, Time), ImportError> {
     Ok((a, b))
 }
 
-fn parse(input: &str) -> Result<Grid, ImportError> {
+pub(crate) fn parse(input: &str) -> Result<Grid, ImportError> {
     let toks = tokenize(strip_bom(input))?;
     let mut c = Cursor(toks.iter());
     let ft = c.str("File type")?;
@@ -430,6 +430,7 @@ pub struct TextGridExport {
 }
 
 struct SegOut {
+    id: String,
     start: Time,
     end: Time,
     label: String,
@@ -437,6 +438,21 @@ struct SegOut {
 
 /// Render a text as a long-form TextGrid. Reads the projection only.
 pub fn export_textgrid(project: &Project, text: &str) -> Result<TextGridExport, String> {
+    export_mapped(project, text).map(|(e, _)| e)
+}
+
+/// Which segment each written interval or point is, tier by tier in file
+/// order. `None` is a gap interval export filled in.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TierMap {
+    pub tier: String,
+    pub name: String,
+    pub items: Vec<Option<String>>,
+}
+
+/// [`export_textgrid`] plus the segment behind every item it wrote, so an
+/// edited copy of the file can be traced back to segments.
+pub fn export_mapped(project: &Project, text: &str) -> Result<(TextGridExport, Vec<TierMap>), String> {
     let p = &project.proj;
     if p.entity_kind(text)?.as_deref() != Some("text") {
         return Err(format!("{text} is not a text"));
@@ -455,6 +471,7 @@ pub fn export_textgrid(project: &Project, text: &str) -> Result<TextGridExport, 
     tier_ids.extend(referenced.into_iter().cloned());
 
     struct TierOut {
+        id: String,
         order: f64,
         name: String,
         class: Class,
@@ -472,6 +489,7 @@ pub fn export_textgrid(project: &Project, text: &str) -> Result<TextGridExport, 
                 continue;
             };
             segs.push(SegOut {
+                id: seg.clone(),
                 start: Time::from_ms(s, opt_str(project, &seg, F_XMIN)?),
                 end: Time::from_ms(e, opt_str(project, &seg, F_XMAX)?),
                 label: opt_str(project, &seg, "content")?.unwrap_or_default(),
@@ -489,6 +507,7 @@ pub fn export_textgrid(project: &Project, text: &str) -> Result<TextGridExport, 
             None => Class::Interval,
         };
         tiers.push(TierOut {
+            id: tier.clone(),
             order: p.field_num(&tier, F_ORDER)?.unwrap_or(f64::MAX),
             name: opt_str(project, &tier, "name")?.unwrap_or_else(|| tier.clone()),
             class,
@@ -512,8 +531,9 @@ pub fn export_textgrid(project: &Project, text: &str) -> Result<TextGridExport, 
     out.push_str(&format!("xmin = {} \nxmax = {} \n", gmin.text, gmax.text));
     if tiers.is_empty() {
         out.push_str("tiers? <absent> \n");
-        return Ok(TextGridExport { textgrid: out, not_exported });
+        return Ok((TextGridExport { textgrid: out, not_exported }, Vec::new()));
     }
+    let mut maps = Vec::new();
     out.push_str(&format!("tiers? <exists> \nsize = {} \nitem []: \n", tiers.len()));
     for (n, t) in tiers.iter().enumerate() {
         let tfirst = t.segs.first().map_or(f64::INFINITY, |s| s.start.secs);
@@ -530,8 +550,9 @@ pub fn export_textgrid(project: &Project, text: &str) -> Result<TextGridExport, 
         match t.class {
             Class::Interval => {
                 let ivs = intervals(&t.segs, &xmin, &xmax, &mut not_exported);
+                maps.push(TierMap { tier: t.id.clone(), name: t.name.clone(), items: ivs.iter().map(|iv| iv.3.clone()).collect() });
                 out.push_str(&format!("        intervals: size = {} \n", ivs.len()));
-                for (i, (a, b, label)) in ivs.iter().enumerate() {
+                for (i, (a, b, label, _)) in ivs.iter().enumerate() {
                     out.push_str(&format!(
                         "        intervals [{}]:\n            xmin = {} \n            xmax = {} \n            text = {} \n",
                         i + 1,
@@ -550,6 +571,7 @@ pub fn export_textgrid(project: &Project, text: &str) -> Result<TextGridExport, 
                         pts.push(s);
                     }
                 }
+                maps.push(TierMap { tier: t.id.clone(), name: t.name.clone(), items: pts.iter().map(|s| Some(s.id.clone())).collect() });
                 out.push_str(&format!("        points: size = {} \n", pts.len()));
                 for (i, s) in pts.iter().enumerate() {
                     out.push_str(&format!(
@@ -562,7 +584,7 @@ pub fn export_textgrid(project: &Project, text: &str) -> Result<TextGridExport, 
             }
         }
     }
-    Ok(TextGridExport { textgrid: out, not_exported })
+    Ok((TextGridExport { textgrid: out, not_exported }, maps))
 }
 
 /// The stored range when it still covers the content, else the fallback
@@ -589,7 +611,7 @@ fn covering(stored: (Option<String>, Option<String>), first: f64, last: f64, fal
 /// the source, or a boundary snapped to the ms in wugs) starts at that end's
 /// exact time instead. Real overlaps and zero-length segments cannot be
 /// represented and are counted instead.
-fn intervals(segs: &[SegOut], xmin: &Time, xmax: &Time, skipped: &mut Counts) -> Vec<(Time, Time, String)> {
+fn intervals(segs: &[SegOut], xmin: &Time, xmax: &Time, skipped: &mut Counts) -> Vec<(Time, Time, String, Option<String>)> {
     let mut out = Vec::new();
     let mut cursor = xmin.clone();
     for s in segs {
@@ -606,13 +628,13 @@ fn intervals(segs: &[SegOut], xmin: &Time, xmax: &Time, skipped: &mut Counts) ->
             continue;
         };
         if start.secs > cursor.secs {
-            out.push((cursor.clone(), start.clone(), String::new()));
+            out.push((cursor.clone(), start.clone(), String::new(), None));
         }
-        out.push((start, s.end.clone(), s.label.clone()));
+        out.push((start, s.end.clone(), s.label.clone(), Some(s.id.clone())));
         cursor = s.end.clone();
     }
     if cursor.secs < xmax.secs || out.is_empty() {
-        out.push((cursor, xmax.clone(), String::new()));
+        out.push((cursor, xmax.clone(), String::new(), None));
     }
     out
 }

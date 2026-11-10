@@ -337,7 +337,7 @@ fn utf16_files_decode() {
     assert_eq!(a.segments_created, 6);
     assert_eq!(b.text, a.text, "UTF-16 BE short form is the same text");
     assert!(decode(&[0xFF, 0xFE, 0x41]).is_err(), "odd UTF-16 rejected");
-    assert!(decode(&[0xC3, 0x28]).is_err(), "invalid UTF-8 rejected");
+    assert_eq!(decode(b"caf\xe9").unwrap(), "café", "bytes that are not UTF-8 are Latin-1, which Praat can be set to write");
     fs::remove_dir_all(root).ok();
 }
 

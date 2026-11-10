@@ -6,6 +6,7 @@
 
 mod common;
 
+pub mod praat;
 pub mod sfm;
 pub mod textgrid;
 pub mod toolbox;
