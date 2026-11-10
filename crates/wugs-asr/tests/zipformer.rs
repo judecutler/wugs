@@ -62,35 +62,31 @@ fn best(row: &[f32]) -> usize {
 #[test]
 fn tract_runs_the_zipformer_as_onnxruntime_does() {
     let r = FbankRecognizer::load(&fixture("tiny-zipformer.onnx"), tokens()).unwrap();
-    // 30 s is a plan length itself, so nothing is padded: the run must
-    // equal onnxruntime's, and it is past the exported positional table
-    // (1000 frames), so it runs on the table computed at load.
-    let (t, v, got) = r.log_probs_for_features(3000, feats(3000)).unwrap();
-    assert_eq!((t, v), (1496, 127));
+    let (t, v, got) = r.log_probs_for_features(173, feats(173)).unwrap();
+    assert_eq!((t, v), (83, 127));
+    let want = f32s("tiny-zipformer.173.out.f32");
+    let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
+    assert!(worst < 1e-4, "largest difference from onnxruntime: {worst}");
+
+    // 30 s: past the exported positional table (1000 frames), so this runs
+    // on the table computed at load.
+    let (t, _, got) = r.log_probs_for_features(3000, feats(3000)).unwrap();
+    assert_eq!(t, 1496);
     let want = f32s("tiny-zipformer.3000.out.f32");
     let ends: Vec<f32> = got[..40 * v].iter().chain(&got[(t - 40) * v..]).copied().collect();
     let worst = ends.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
     assert!(worst < 1e-3, "largest difference from onnxruntime at 30 s: {worst}");
+    assert!(r.log_probs_for_features(3001, feats(3001)).is_err(), "past 30 s is refused");
+    assert!(r.log_probs_for_features(10, feats(10)).is_err(), "too short is refused");
 }
 
 #[test]
-fn a_padded_run_stays_close_to_the_unpadded_one() {
-    // 173 frames run in the 200-frame plan; the output is cut to the real
-    // frames, which padding only nudges (masked in attention, but the
-    // convolutions see a little of it).
-    let r = FbankRecognizer::load(&fixture("tiny-zipformer.onnx"), tokens()).unwrap();
-    let (t, v, got) = r.log_probs_for_features(173, feats(173)).unwrap();
-    assert_eq!((t, v), (83, 127));
+fn an_unoptimized_plan_gives_the_same_answer() {
+    let r = FbankRecognizer::load(&fixture("tiny-zipformer.onnx"), tokens()).unwrap().without_optimizing();
+    let (_, _, got) = r.log_probs_for_features(173, feats(173)).unwrap();
     let want = f32s("tiny-zipformer.173.out.f32");
-    // Only the last few frames can differ: the padding reaches them
-    // through the downsampling at the end.
-    let per: Vec<f32> = got.chunks(v).zip(want.chunks(v)).map(|(a, b)| a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0f32, f32::max)).collect();
-    assert!(per[..t - 4].iter().all(|&d| d < 1e-3), "{per:?}");
-    let worst = per.iter().copied().fold(0f32, f32::max);
-    assert!(worst < 0.25, "largest difference from the unpadded run: {worst}");
-    let agree = got.chunks(v).zip(want.chunks(v)).filter(|(a, b)| best(a) == best(b)).count();
-    assert!(agree * 100 >= t * 95, "best symbol agrees on {agree} of {t} frames");
-    assert!(r.log_probs_for_features(3001, feats(3001)).is_err(), "past 30 s is refused");
+    let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
+    assert!(worst < 1e-4, "largest difference from onnxruntime: {worst}");
 }
 
 #[test]
@@ -107,13 +103,12 @@ fn recognizing_audio_runs_end_to_end() {
 #[test]
 fn the_int8_release_format_runs_too() {
     // ZIPA's INT8 files quantize every MatMul (DynamicQuantizeLinear +
-    // MatMulInteger); quantization rounds a little differently in tract,
-    // and 173 frames are padded to 200.
+    // MatMulInteger); quantization rounds a little differently in tract.
     let r = FbankRecognizer::load(&fixture("tiny-zipformer.int8.onnx"), tokens()).unwrap();
     let (t, v, got) = r.log_probs_for_features(173, feats(173)).unwrap();
     let want = f32s("tiny-zipformer.int8.173.out.f32");
     let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
-    assert!(worst < 0.3, "largest difference from onnxruntime: {worst}");
+    assert!(worst < 0.05, "largest difference from onnxruntime: {worst}");
     let agree = got.chunks(v).zip(want.chunks(v)).filter(|(a, b)| best(a) == best(b)).count();
     assert!(agree * 100 >= t * 95, "best symbol agrees on {agree} of {t} frames");
 }
@@ -127,29 +122,27 @@ fn the_int8_release_format_runs_too() {
 fn the_real_zipa_release_matches_onnxruntime() {
     let dir = PathBuf::from(std::env::var("WUGS_ZIPA_DIR").expect("set WUGS_ZIPA_DIR"));
     let vocab = Vocab::from_tokens_txt(&std::fs::read_to_string(dir.join("tokens.txt")).unwrap()).unwrap();
-    let t0 = std::time::Instant::now();
-    let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab).unwrap();
-    eprintln!("load {:?}", t0.elapsed());
-    for t in [500usize, 3000, 517] {
-        let t0 = std::time::Instant::now();
-        let (frames, v, got) = r.log_probs_for_features(t, feats(t)).unwrap();
-        eprintln!("{t} input frames -> {frames} in {:?} (plan built)", t0.elapsed());
-        let t0 = std::time::Instant::now();
-        r.log_probs_for_features(t, feats(t)).unwrap();
-        eprintln!("{t} input frames again in {:?} (plan cached)", t0.elapsed());
-        let want: Vec<f32> = std::fs::read(dir.join(format!("ref.{t}.out.f32"))).unwrap().chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
-        assert_eq!(got.len(), want.len());
-        let agree = got.chunks(v).zip(want.chunks(v)).filter(|(a, b)| best(a) == best(b)).count();
-        let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
-        eprintln!("worst {worst}, best symbol agrees on {agree} of {frames} frames");
-        // 3000 frames run unpadded; 500 and 517 are padded to 700.
-        assert!(agree * 100 >= frames * 95, "best symbol agrees on only {agree} of {frames} frames");
+    for optimize in [true, false] {
+        let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab.clone()).unwrap();
+        let r = if optimize { r } else { r.without_optimizing() };
+        for t in [500usize, 3000] {
+            let t0 = std::time::Instant::now();
+            let (frames, v, got) = r.log_probs_for_features(t, feats(t)).unwrap();
+            let first = t0.elapsed();
+            let t0 = std::time::Instant::now();
+            r.log_probs_for_features(t, feats(t)).unwrap();
+            eprintln!("optimize={optimize}: {t} input frames, first run {first:?} (plan built), again {:?}", t0.elapsed());
+            let want: Vec<f32> = std::fs::read(dir.join(format!("ref.{t}.out.f32"))).unwrap().chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+            assert_eq!(got.len(), want.len());
+            let agree = got.chunks(v).zip(want.chunks(v)).filter(|(a, b)| best(a) == best(b)).count();
+            assert!(agree * 100 >= frames * 99, "best symbol agrees on only {agree} of {frames} frames");
+        }
     }
 }
 
 /// End to end on real speech: the whole wugs pipeline (WAV reading,
-/// filterbank, padding, the adjusted graph under tract) against ZIPA's
-/// own inference script (lhotse + onnxruntime) on the sample recording in
+/// filterbank, the adjusted graph under tract) against ZIPA's own
+/// inference script (lhotse + onnxruntime) on the sample recording in
 /// ZIPA's repository. Needs `WUGS_ZIPA_DIR` as above plus `sample.wav`
 /// and `sample.expected.txt` (the script's space-separated phones).
 #[test]
@@ -164,12 +157,8 @@ fn the_real_zipa_release_transcribes_like_zipas_own_script() {
         .filter(|s| !matches!(*s, "▁" | "<unk>" | "<sos/eos>"))
         .map(str::to_string)
         .collect();
-    let exact = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab.clone()).unwrap().exact_lengths();
-    let padded = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab).unwrap();
-    let phones = |r: &FbankRecognizer| -> Vec<String> { r.recognize(&audio).unwrap().phones.into_iter().map(|p| p.symbol).collect() };
-    let got_padded = phones(&padded);
-    eprintln!("padded: {}  ({} edits)", got_padded.join(" "), edits(&got_padded, &want));
-    let got = phones(&exact);
+    let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab).unwrap();
+    let got: Vec<String> = r.recognize(&audio).unwrap().phones.into_iter().map(|p| p.symbol).collect();
     eprintln!("ours:   {}\nZIPA's: {}", got.join(" "), want.join(" "));
     let distance = edits(&got, &want);
     eprintln!("{distance} edits over {} phones", want.len());

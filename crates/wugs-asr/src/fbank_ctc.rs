@@ -15,17 +15,13 @@
 //! - `Range` with a negative step (the attention's relative-to-absolute
 //!   shift) gets the wrong length in tract's shape inference; it becomes
 //!   `start - Range(0, start - limit, -step)`.
-//! - tract cannot follow the shapes symbolically, so a plan is built for a
-//!   fixed number of frames, which takes seconds for a real model. Inputs
-//!   are padded up to one of a few lengths (`BUCKETS`) and `x_lens` says
-//!   how much is real, so a handful of plans serve every segment. The
-//!   padding mask's length is `max(x_lens)` in the export, which would be
-//!   shorter than a padded input; it becomes the encoder input's own
-//!   length (the batch is always one).
-//!
-//! Padded frames are masked in attention but still reach the convolution
-//! and downsampling modules a little, so a padded run is close to, not
-//! equal to, an unpadded one (the tests bound the difference).
+//! - tract cannot follow the mask's data-dependent shapes symbolically,
+//!   so a plan is built for each input length, with `x_lens` a constant.
+//!   Inputs are never padded: the export does not mask padding at batch
+//!   one, and the real model's transcript of ZIPA's sample changed by a
+//!   third with as little as 14 padded frames (any padding value), while
+//!   unpadded runs reproduce ZIPA's own script exactly. Building a plan
+//!   takes seconds for the real model, so the last few are kept.
 
 use std::collections::VecDeque;
 use std::path::Path;
@@ -37,17 +33,8 @@ use tract_onnx::prelude::*;
 use crate::fbank::{Fbank, BINS};
 use crate::{ctc_greedy, model_err, Error, Recognition, Vocab, MAX_SECONDS, SAMPLE_RATE};
 
-/// Input lengths in feature frames (10 ms) that plans are built for: a
-/// segment is padded up to the next one, so padding costs at most half
-/// again the work, and the last is exactly `MAX_SECONDS`.
-pub const BUCKETS: [usize; 8] = [200, 300, 450, 700, 1050, 1600, 2400, 3000];
-
-/// Feature value past the end of a padded input (lhotse's `LOG_EPSILON`).
-const LOG_EPSILON: f32 = -23.025_85;
-
-/// Plans kept at once: each holds its own packed copy of the weights.
-const PLANS: usize = 3;
-
+/// Plans kept at once: a batch run often meets the same length again.
+const PLANS: usize = 4;
 
 pub struct FbankRecognizer {
     /// The adjusted graph, parsed once; each plan starts from a clone.
@@ -55,8 +42,8 @@ pub struct FbankRecognizer {
     vocab: Vocab,
     fbank: Fbank,
     plans: Mutex<VecDeque<(usize, Arc<TypedSimplePlan>)>>,
-    /// Build a plan for each exact length instead of padding into buckets.
-    exact: bool,
+    /// Whether plans run tract's full optimizer (slower to build, faster to run).
+    optimize: bool,
 }
 
 impl Vocab {
@@ -96,43 +83,44 @@ impl FbankRecognizer {
         let max_frames = (MAX_SECONDS * 100.0 / 2.0) as usize + 64;
         inline_positional_tables(graph, max_frames)?;
         rewrite_negative_ranges(graph);
-        mask_by_input_length(graph)?;
         // The exported shapes name a symbolic batch; ours is always 1.
         graph.value_info.clear();
         let model = tract_onnx::onnx().model_for_proto_model(&proto).map_err(model_err)?;
-        Ok(FbankRecognizer { model, vocab, fbank: Fbank::new(), plans: Mutex::new(VecDeque::new()), exact: false })
+        Ok(FbankRecognizer { model, vocab, fbank: Fbank::new(), plans: Mutex::new(VecDeque::new()), optimize: true })
     }
 
-    /// Run every input at its own length, unpadded: exact, but each new
-    /// length builds a plan (seconds for a real model).
-    pub fn exact_lengths(mut self) -> Self {
-        self.exact = true;
+    /// Build plans without tract's optimizer: quicker to build, slower to run.
+    pub fn without_optimizing(mut self) -> Self {
+        self.optimize = false;
         self
     }
 
-    fn plan(&self, bucket: usize) -> Result<Arc<TypedSimplePlan>, Error> {
+    fn plan(&self, frames: usize) -> Result<Arc<TypedSimplePlan>, Error> {
         {
             // Least recently used goes first when the cache is full.
             let mut plans = self.plans.lock().expect("plans lock");
-            if let Some(i) = plans.iter().position(|(n, _)| *n == bucket) {
+            if let Some(i) = plans.iter().position(|(n, _)| *n == frames) {
                 let hit = plans.remove(i).expect("found above");
                 plans.push_front(hit.clone());
                 return Ok(hit.1);
             }
         }
         let mut model = self.model.clone();
-        model.set_input_fact(0, InferenceFact::dt_shape(DatumType::F32, tvec!(1.to_dim(), bucket.to_dim(), BINS.to_dim()))).map_err(model_err)?;
-        model.set_input_fact(1, InferenceFact::dt_shape(DatumType::I64, tvec!(1.to_dim()))).map_err(model_err)?;
-        let plan = model.into_typed().map_err(model_err)?.into_optimized().map_err(model_err)?.into_runnable().map_err(model_err)?;
+        model.set_input_fact(0, InferenceFact::dt_shape(DatumType::F32, tvec!(1.to_dim(), frames.to_dim(), BINS.to_dim()))).map_err(model_err)?;
+        model.set_input_fact(1, InferenceFact::from(tract_ndarray::arr1(&[frames as i64]).into_tensor())).map_err(model_err)?;
+        let x = model.node(model.input_outlets().map_err(model_err)?[0].node).name.clone();
+        let model = model.with_input_names([x]).map_err(model_err)?.into_typed().map_err(model_err)?;
+        let model = if self.optimize { model.into_optimized() } else { model.into_decluttered() }.map_err(model_err)?;
+        let plan = model.into_runnable().map_err(model_err)?;
         let mut plans = self.plans.lock().expect("plans lock");
-        plans.retain(|(n, _)| *n != bucket);
-        plans.push_front((bucket, plan.clone()));
+        plans.retain(|(n, _)| *n != frames);
+        plans.push_front((frames, plan.clone()));
         plans.truncate(PLANS);
         Ok(plan)
     }
 
     /// Log probabilities for filterbank features, as `(frames, vocab_len, flat)`.
-    pub fn log_probs_for_features(&self, frames: usize, mut feats: Vec<f32>) -> Result<(usize, usize, Vec<f32>), Error> {
+    pub fn log_probs_for_features(&self, frames: usize, feats: Vec<f32>) -> Result<(usize, usize, Vec<f32>), Error> {
         if feats.len() != frames * BINS {
             return Err(Error::Input(format!("expected {frames} × {BINS} features")));
         }
@@ -140,15 +128,12 @@ impl FbankRecognizer {
         if frames < 16 {
             return Err(Error::Input("the segment is shorter than a tenth of a second".into()));
         }
-        let bucket = *BUCKETS.iter().find(|&&b| b >= frames).ok_or_else(|| Error::Input(format!("the segment is longer than {MAX_SECONDS} s")))?;
-        let bucket = if self.exact { frames } else { bucket };
-        let plan = self.plan(bucket)?;
-        // lhotse pads batches with log(1e-10), so that is what the model
-        // saw past an utterance's end in training.
-        feats.resize(bucket * BINS, LOG_EPSILON);
-        let x = tract_ndarray::Array3::from_shape_vec((1, bucket, BINS), feats).map_err(model_err)?.into_tensor();
-        let lens = tract_ndarray::arr1(&[frames as i64]).into_tensor();
-        let out = plan.run(tvec!(x.into(), lens.into())).map_err(model_err)?;
+        if frames > MAX_SECONDS as usize * 100 {
+            return Err(Error::Input(format!("the segment is longer than {MAX_SECONDS} s")));
+        }
+        let plan = self.plan(frames)?;
+        let x = tract_ndarray::Array3::from_shape_vec((1, frames, BINS), feats).map_err(model_err)?.into_tensor();
+        let out = plan.run(tvec!(x.into())).map_err(model_err)?;
         let lp = out[0].cast_to::<f32>().map_err(model_err)?.into_owned();
         let (t, v) = match lp.shape() {
             [1, t, v] => (*t, *v),
@@ -157,12 +142,8 @@ impl FbankRecognizer {
         if v != self.vocab.symbols.len() {
             return Err(Error::Model(format!("the model scores {v} symbols but tokens.txt lists {}", self.vocab.symbols.len())));
         }
-        // The frames that came from real input; the rest are padding.
-        let first = |l: &TValue| -> Option<i64> { l.cast_to::<i64>().ok()?.to_plain_array_view::<i64>().ok()?.iter().next().copied() };
-        let real = out.get(1).and_then(first).ok_or_else(|| Error::Model("the model gave no output length".into()))?;
-        let real = (real.max(0) as usize).min(t);
-        let flat = lp.to_plain_array_view::<f32>().map_err(model_err)?.iter().take(real * v).copied().collect();
-        Ok((real, v, flat))
+        let flat = lp.to_plain_array_view::<f32>().map_err(model_err)?.iter().copied().collect();
+        Ok((t, v, flat))
     }
 
     pub fn recognize(&self, audio: &[f32]) -> Result<Recognition, Error> {
@@ -252,50 +233,6 @@ fn inline_positional_tables(graph: &mut GraphProto, max_t: usize) -> Result<(), 
             ..Default::default()
         };
     }
-    Ok(())
-}
-
-/// The padding mask's length becomes the encoder input's own length. The
-/// export takes `max(x_lens)` (a whole-tensor `ReduceMax`), which equals
-/// it only when the longest input is unpadded; the encoder input is what
-/// the first `Transpose` with perm `[1, 0, 2]` (the `(N, T, C)` to
-/// `(T, N, C)` permute) reads.
-fn mask_by_input_length(graph: &mut GraphProto) -> Result<(), Error> {
-    let perm = |n: &NodeProto| n.attribute.iter().find(|a| a.name == "perm").map(|a| a.ints.clone());
-    let encoder_in = graph
-        .node
-        .iter()
-        .find(|n| n.op_type == "Transpose" && perm(n).as_deref() == Some(&[1, 0, 2][..]))
-        .map(|n| n.input[0].clone())
-        .ok_or_else(|| Error::Model("not a Zipformer export this runtime knows (no encoder permute)".into()))?;
-    let whole = |n: &NodeProto| n.op_type == "ReduceMax" && n.input.len() == 1 && !n.attribute.iter().any(|a| a.name == "axes");
-    if graph.node.iter().filter(|n| whole(n)).count() != 1 {
-        return Err(Error::Model("not a Zipformer export this runtime knows (expected one padding-mask length)".into()));
-    }
-    let mut out = Vec::with_capacity(graph.node.len() + 2);
-    for n in std::mem::take(&mut graph.node) {
-        if !whole(&n) {
-            out.push(n);
-            continue;
-        }
-        let p = &n.name;
-        let index = TensorProto { data_type: tensor_proto::DataType::Int64 as i32, int64_data: vec![1], ..Default::default() };
-        out.push(NodeProto { op_type: "Shape".into(), input: vec![encoder_in.clone()], output: vec![format!("{p}/wugs_shape")], ..Default::default() });
-        out.push(NodeProto {
-            op_type: "Constant".into(),
-            output: vec![format!("{p}/wugs_time_axis")],
-            attribute: vec![AttributeProto { name: "value".into(), r#type: attribute_proto::AttributeType::Tensor as i32, t: Some(index), ..Default::default() }],
-            ..Default::default()
-        });
-        out.push(NodeProto {
-            op_type: "Gather".into(),
-            input: vec![format!("{p}/wugs_shape"), format!("{p}/wugs_time_axis")],
-            output: n.output.clone(),
-            attribute: vec![AttributeProto { name: "axis".into(), r#type: attribute_proto::AttributeType::Int as i32, i: 0, ..Default::default() }],
-            ..Default::default()
-        });
-    }
-    graph.node = out;
     Ok(())
 }
 
