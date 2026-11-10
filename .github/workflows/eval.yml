@@ -44,6 +44,7 @@ jobs:
       - name: Transcribe every set with every model
         run: python3 -I scripts/eval/run.py "$RUNNER_TEMP/models" "$RUNNER_TEMP/sets" "$RUNNER_TEMP/out" ${LIMIT:+--limit $LIMIT}
       - name: Score with PRiSM's scorer
+        if: always()
         run: |
           git clone -q https://github.com/changelinglab/prism "$RUNNER_TEMP/prism"
           git -C "$RUNNER_TEMP/prism" checkout -q "$PRISM_COMMIT"

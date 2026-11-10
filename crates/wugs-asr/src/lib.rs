@@ -59,7 +59,8 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 pub(crate) fn model_err(e: impl std::fmt::Display) -> Error {
-    Error::Model(e.to_string())
+    // `{:#}` includes anyhow's cause chain, which names the failing node.
+    Error::Model(format!("{e:#}"))
 }
 
 /// One recognized phone: its symbol, where it sits in the segment, and the

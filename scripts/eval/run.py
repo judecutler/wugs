@@ -13,6 +13,7 @@ for root, dirs, files in os.walk(sets_dir):
     if "wav.scp" in files and "text.good" in files:
         sets.append(root)
 print("sets:", sets)
+failed = []
 for m in json.load(open(os.path.join(models_dir, "models.json"))):
     d = os.path.join(models_dir, m["id"])
     p = m["params"]
@@ -32,4 +33,7 @@ for m in json.load(open(os.path.join(models_dir, "models.json"))):
         open(os.path.join(out, name + ".log"), "w").write(r.stderr)
         print(r.stderr[-2000:], flush=True)
         if r.returncode != 0:
-            sys.exit(f"{name} failed")
+            failed.append(name)
+            print(f"{name} failed", flush=True)
+if failed:
+    sys.exit(f"failed: {failed}")

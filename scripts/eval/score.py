@@ -15,7 +15,8 @@ for f in sorted(glob.glob(os.path.join(out, "*.jsonl"))):
         cwd=prism, capture_output=True, text=True, env={**os.environ, "PYTHONPATH": prism},
     )
     print(f"## {name}\n```\n{r.stdout[-4000:]}\n{r.stderr[-2000:]}\n```", file=sys.stderr)
-    speed = open(os.path.join(out, name + ".log")).read().strip().splitlines()[-1:] or [""]
+    log = os.path.join(out, name + ".log")
+    speed = (open(log).read().strip().splitlines()[-1:] if os.path.exists(log) else []) or [""]
     rows.append((name, r.returncode, speed[0]))
 print("| model.set | scorer exit | speed and memory |\n| --- | --- | --- |")
 for name, code, speed in rows:
