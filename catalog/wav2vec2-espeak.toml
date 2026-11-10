@@ -1,0 +1,29 @@
+[package]
+id = "wav2vec2-espeak"
+source = "hf:sadda-speech/wav2vec2-espeak-ctc"
+type = "model"
+version = "1.0.0"
+name = "wav2vec 2.0 phones (espeak IPA)"
+about = "Meta's wav2vec2-lv-60-espeak-cv-ft phone recognizer, exported to ONNX. Writes the phones it hears in any language as IPA. Strongest on sounds common in its Common Voice training languages; expect to correct rarer segments."
+license = "Apache-2.0"
+attribution = "Model © Meta Platforms (Xu, Baevski & Auli 2022); ONNX export by sadda-speech"
+homepage = "https://huggingface.co/sadda-speech/wav2vec2-espeak-ctc"
+approx_mb = 640
+
+[model]
+capability = "phone-transcription"
+runtime = "onnx-ctc-raw"
+languages = ["*"]
+
+[runtime]
+onnx = "model.onnx"
+vocab = "vocab.json"
+normalize = true
+
+[[files]]
+path = "model.onnx"
+url = "https://huggingface.co/sadda-speech/wav2vec2-espeak-ctc/resolve/main/model.onnx"
+
+[[files]]
+path = "vocab.json"
+url = "https://huggingface.co/sadda-speech/wav2vec2-espeak-ctc/resolve/main/vocab.json"

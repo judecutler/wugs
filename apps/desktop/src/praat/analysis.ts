@@ -1,6 +1,6 @@
 // Praat analysis overlays (roadmap item 46): which chunks a view needs and
 // where values sit on screen. Pure, so node --test runs them. Chunks come
-// from the praat_analysis command (src-tauri/src/praat_analysis.rs).
+// from the acoustic_analysis command (src-tauri/src/praat_analysis.rs).
 
 export const CHUNK_MS = 10_000;
 /** Wider views are not analysed: one request is at most six chunks. */

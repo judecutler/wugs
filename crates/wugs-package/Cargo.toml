@@ -1,0 +1,10 @@
+[package]
+name = "wugs-package"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Package manifests (models first): parse and check what a package says it is"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+toml = "1"

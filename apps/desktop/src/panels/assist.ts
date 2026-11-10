@@ -1,23 +1,29 @@
-// The Speech assist panel (roadmap item 27): download a phone model once,
-// then fill empty segments with what it hears. Everything runs on this
+// The Speech assist panel (roadmap items 27 and 53): download phone models,
+// choose which one powers phone transcription (Automatic, a picked model, or
+// the project's pin), then fill empty segments with what it hears. Everything runs on this
 // computer; the recording never leaves it. Machine transcriptions stay
 // tinted until someone edits them (src/assist/logic.ts).
-import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, errorText, type AssistModel } from "../api";
+import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, errorText, type AssistModel, type CapabilityView } from "../api";
 import { batchTargets, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
+import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
 import { emptyState, h } from "../dom";
-import { assistModelList, getState, installedModel, mediaSource, refreshText, setAssistModels, showToast } from "../store";
+import { assistModelList, capability, getState, mediaSource, refreshCapabilities, refreshText, setAssistModels, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 /** A batch run in progress, shared by every instance of the panel. */
 let run: { text: string; tier: string; done: number; total: number; filled: number; skipped: number; stop: boolean } | null = null;
 let armed: string | null = null;
 
+const CAP = "phone-transcription";
+
+/** Models and what powers each capability: a download changes both. */
 export async function reloadModels() {
   setAssistModels(await assistModels());
+  await refreshCapabilities();
 }
 
 /** Fill one tier's empty segments one after another; each is its own write, so stopping keeps what was done. */
-async function runBatch(text: string, tier: string, model: string, source: string, rerender: () => void) {
+async function runBatch(text: string, tier: string, source: string, rerender: () => void) {
   const s = getState();
   if (s.kind !== "open" || s.text === null || run !== null) return;
   const targets = batchTargets(s.text.segments, tier);
@@ -35,7 +41,7 @@ async function runBatch(text: string, tier: string, model: string, source: strin
       break;
     }
     try {
-      const r = await assistSuggest({ text, segment: seg.id, source, model });
+      const r = await assistSuggest({ text, segment: seg.id, source });
       if (r.content === "") run.skipped += 1;
       else run.filled += 1;
     } catch (e) {
@@ -62,9 +68,9 @@ export const assistPanel: PanelDef = {
     let tierChoice: string | null = null;
 
     function draw() {
-      const models = assistModelList();
+      const models = assistModelList().filter((m) => m.capability === CAP);
       const s = getState();
-      const model = installedModel();
+      const phones = capability(CAP);
       el.replaceChildren(
         h("p", { className: "as-intro", textContent: "Suggests a phonetic transcription for empty segments, as IPA. It runs on this computer: your recordings are never sent anywhere. Suggestions stay tinted until you edit them." }),
         h(
@@ -77,8 +83,9 @@ export const assistPanel: PanelDef = {
         ),
         h("h4", { textContent: "Models" }),
         ...(models.length === 0 ? [h("p", { className: "as-note", textContent: "Loading…" })] : models.map(modelCard)),
+        ...(phones === null ? [] : [h("h4", { textContent: "Which model" }), chooser(phones, s.kind === "open")]),
         h("h4", { textContent: "Fill empty segments" }),
-        batchControls(s, model),
+        batchControls(s, phones),
       );
     }
 
@@ -89,7 +96,7 @@ export const assistPanel: PanelDef = {
         actions.push(h("progress", { max: Math.max(1, dl.total), value: dl.done }), h("span", { className: "as-note", textContent: progressLabel(dl.done, dl.total) }), h("button", { type: "button", textContent: "Cancel", onclick: () => void act(() => assistCancel({ id: m.id })) }));
       } else if (m.installed === null) {
         actions.push(
-          h("button", { type: "button", textContent: `Download (about ${m.approxMb} MB)`, onclick: () => void act(() => assistDownload({ id: m.id })) }),
+          h("button", { type: "button", textContent: m.approxMb === null ? "Download" : `Download (about ${m.approxMb} MB)`, disabled: !m.runsHere, title: m.runsHere ? "" : "This model needs a newer version of wugs.", onclick: () => void act(() => assistDownload({ id: m.id })) }),
           ...(dl?.error ? [h("span", { className: "as-error", textContent: dl.error }), h("button", { type: "button", textContent: "Dismiss", onclick: () => void act(() => assistCancel({ id: m.id })) })] : []),
         );
       } else {
@@ -132,9 +139,36 @@ export const assistPanel: PanelDef = {
       );
     }
 
-    function batchControls(s: ReturnType<typeof getState>, model: AssistModel | null) {
+    /** This computer's choice, the project's pin, and what runs now. */
+    function chooser(v: CapabilityView, projectOpen: boolean) {
+      const picker = h(
+        "select",
+        {
+          disabled: v.pin !== null,
+          title: v.pin !== null ? "This project is pinned; unpin it to choose for this computer." : "Automatic picks the best downloaded model.",
+          onchange: () => void act(() => capabilityChoose({ capability: v.id, choice: picker.value })),
+        },
+        ...choiceOptions(v).map((o) => h("option", { value: o.value, textContent: o.label, selected: o.value === v.machine, disabled: o.disabled })),
+      );
+      const target = pinTarget(v);
+      const pinButton = !projectOpen
+        ? null
+        : v.pin !== null
+          ? h("button", { type: "button", textContent: "Unpin", title: "Let each computer choose again.", onclick: () => void act(() => capabilityPin({ capability: v.id, provider: "" })) })
+          : target !== null
+            ? h("button", { type: "button", textContent: "Pin for this project", title: "Everyone on this project uses this model, so a long transcription campaign is not switched halfway.", onclick: () => void act(() => capabilityPin({ capability: v.id, provider: target })) })
+            : null;
+      return h(
+        "div",
+        { className: "as-choice" },
+        h("div", { className: "as-actions" }, picker, pinButton),
+        h("p", { className: v.problem === null ? "as-note" : "as-error", textContent: statusLine(v) }),
+      );
+    }
+
+    function batchControls(s: ReturnType<typeof getState>, phones: CapabilityView | null) {
       if (s.kind !== "open" || s.text === null) return h("p", { className: "as-note", textContent: "Open a text to fill its empty segments." });
-      if (model === null) return h("p", { className: "as-note", textContent: "Download a model first." });
+      if (phones?.effective == null) return h("p", { className: "as-note", textContent: phones?.problem ?? "Download a model first." });
       const source = mediaSource();
       if (source === null) return h("p", { className: "as-note", textContent: "Load the text's recording on the Timeline first." });
       const text = s.text;
@@ -161,7 +195,7 @@ export const assistPanel: PanelDef = {
           textContent: count === 0 ? "No empty segments" : `Suggest for ${count} empty segment${count === 1 ? "" : "s"}`,
           disabled: count === 0,
           title: "Each segment takes a few seconds. You can stop at any time; what was filled stays.",
-          onclick: () => void runBatch(text.id, tierChoice!, model.id, source, draw),
+          onclick: () => void runBatch(text.id, tierChoice!, source, draw),
         }),
       );
     }

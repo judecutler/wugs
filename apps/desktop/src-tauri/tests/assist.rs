@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use wugs_asr::{Phone, Recognition};
-use wugs_desktop::assist::{self, FileSpec, Hearer, ModelSpec, Worker};
+use wugs_desktop::assist::{self, Hearer, Worker};
+use wugs_package::{File, Manifest, Model};
 use wugs_desktop::session::{self, Session};
 use wugs_model::ulid;
 
@@ -50,22 +51,21 @@ fn serve(files: Vec<(&'static str, Vec<u8>)>) -> String {
     base
 }
 
-fn spec(base: &str, sha: Option<&'static str>) -> ModelSpec {
-    ModelSpec {
-        id: "test-model",
-        name: "Test",
-        about: "",
-        license: "Apache-2.0",
-        attribution: "",
-        homepage: "",
-        approx_mb: 1,
-        files: vec![
-            FileSpec { name: "model.onnx", url: format!("{base}/model.onnx"), sha256: sha },
-            FileSpec { name: "vocab.json", url: format!("{base}/vocab.json"), sha256: None },
-        ],
-        onnx: "model.onnx",
-        vocab: "vocab.json",
-        normalize: true,
+fn spec(base: &str, sha: Option<&'static str>) -> Manifest {
+    let file = |path: &str, sha256: Option<&str>| File { path: path.into(), url: format!("{base}/{path}"), sha256: sha256.map(str::to_string), bytes: None };
+    Manifest {
+        id: "test-model".into(),
+        source: "hf:test/test".into(),
+        version: "1".into(),
+        name: "Test".into(),
+        about: String::new(),
+        license: "Apache-2.0".into(),
+        attribution: String::new(),
+        homepage: String::new(),
+        approx_mb: Some(1),
+        model: Model { capability: "phone-transcription".into(), runtime: "onnx-ctc-raw".into(), languages: vec!["*".into()], params: Default::default() },
+        files: vec![file("model.onnx", sha), file("vocab.json", None)],
+        evaluation: None,
     }
 }
 
@@ -110,6 +110,19 @@ fn a_published_checksum_must_match() {
 }
 
 #[test]
+fn a_published_size_must_match() {
+    let dir = TempDir::new();
+    let base = serve(vec![("model.onnx", MODEL.to_vec()), ("vocab.json", b"{}".to_vec())]);
+    let mut s = spec(&base, None);
+    s.files[0].bytes = Some(MODEL.len() as u64 + 1);
+    let err = assist::download(&dir.0, &s, &AtomicBool::new(false), &|_, _| {}).unwrap_err();
+    assert!(err.contains("size"), "{err}");
+    assert_eq!(assist::installed(&dir.0, &s), None);
+    s.files[0].bytes = Some(MODEL.len() as u64);
+    assist::download(&dir.0, &s, &AtomicBool::new(false), &|_, _| {}).unwrap();
+}
+
+#[test]
 fn a_cancelled_or_failed_download_leaves_nothing_installed() {
     let dir = TempDir::new();
     let base = serve(vec![("model.onnx", MODEL.to_vec())]);
@@ -140,7 +153,7 @@ fn only_https_or_this_machine() {
     s.files.truncate(1);
     let err = assist::download(&dir.0, &s, &AtomicBool::new(false), &|_, _| {}).unwrap_err();
     assert!(err.contains("insecure"), "{err}");
-    assert!(assist::catalog().iter().all(|m| m.files.iter().all(|f| f.url.starts_with("https://"))));
+    assert!(wugs_desktop::capability::catalogue().iter().all(|m| m.files.iter().all(|f| f.url.starts_with("https://"))));
 }
 
 #[test]
@@ -214,7 +227,7 @@ fn a_suggestion_is_heard_and_written_as_the_machine() {
     let heard = Recognition { phones: vec![phone("k", 0.0, 0.9), phone("o", 40.0, 0.3), phone("p", 400.0, 0.6)], confidence: 0.6 };
     let fixed = heard.clone();
     let got = worker.hear("m", move || Ok(Box::new(Fixed(fixed)) as Box<dyn Hearer>), target.wav, target.start_ms, target.end_ms).unwrap();
-    let done = assist::commit(&mut s, &text, &seg, "test-model", &got).unwrap();
+    let done = assist::commit(&mut s, &text, &seg, &spec("http://127.0.0.1:1", None), &got).unwrap();
     assert_eq!(done.content, "ko p");
     let row = session::get_text(&mut s, &text).unwrap().segments.into_iter().find(|r| r.id == seg).unwrap();
     assert_eq!(row.content, "ko p");
@@ -233,7 +246,7 @@ fn a_suggestion_is_heard_and_written_as_the_machine() {
 #[test]
 fn hearing_nothing_writes_nothing() {
     let (_dir, mut s, _source, text, seg) = project();
-    let done = assist::commit(&mut s, &text, &seg, "test-model", &Recognition { phones: vec![], confidence: 0.0 }).unwrap();
+    let done = assist::commit(&mut s, &text, &seg, &spec("http://127.0.0.1:1", None), &Recognition { phones: vec![], confidence: 0.0 }).unwrap();
     assert_eq!(done.content, "");
     assert!(!done.notes.is_empty());
     let row = session::get_text(&mut s, &text).unwrap().segments.into_iter().find(|r| r.id == seg).unwrap();

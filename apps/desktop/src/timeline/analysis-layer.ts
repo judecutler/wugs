@@ -2,7 +2,7 @@
 // (roadmap item 46). Asks the backend for the 10 s chunks the view needs,
 // once each, and draws what has arrived; nothing is fetched while every kind
 // is off. Display rules are in ../praat/analysis.ts.
-import { errorText, praatAnalysis } from "../api";
+import { errorText, acousticAnalysis } from "../api";
 import { chunksFor, frameMs, RANGES, yFor, type Chunk, type Kind } from "../praat/analysis";
 import type { Viewport } from "./viewport";
 
@@ -69,7 +69,7 @@ export class AnalysisLayer {
       const gen = this.generation;
       if (source === null) return;
       this.inflight = true;
-      praatAnalysis({ source, chunks: missing }).then(
+      acousticAnalysis({ source, chunks: missing }).then(
         (got) => {
           if (gen !== this.generation) return;
           this.inflight = false;

@@ -20,17 +20,21 @@ The feature code (Speech assist's Suggest, the Timeline overlays) calls the capa
 
 ```toml
 [package]
-id = "github:someone/zipa-small-onnx"   # where it lives
+id = "zipa-small"                        # short and path-safe: the install folder, and the model name machine writes record
+source = "hf:someone/zipa-small-onnx"   # where it lives (hf: or github:)
 type = "model"
 version = "1.0.0"
+name = "ZIPA small"
 license = "CC-BY-4.0"
 
 [model]
 capability = "phone-transcription"
 runtime = "onnx-ctc-fbank"              # which adapter in wugs can run it
 languages = ["*"]                        # or BCP 47 tags
-sample_rate = 16000
-vocab = "tokens.txt"
+
+[runtime]                                # the adapter's own settings, read only by that adapter
+onnx = "model.int8.onnx"
+tokens = "tokens.txt"
 
 [[files]]
 path = "model.int8.onnx"
@@ -43,11 +47,15 @@ benchmark = "wugs-phone-bench@1"
 per = { "*" = 0.21, "tr" = 0.18 }
 ```
 
+The format is parsed and checked by the `wugs-package` crate (unknown keys, non-HTTPS URLs, unsafe ids and file names and malformed digests are refused, every problem listed at once). The bundled catalogue is `catalog/*.toml` in the repository until the index exists (item 37). As built in item 53, the shipped wav2vec2 model is `catalog/wav2vec2-espeak.toml`.
+
 A **runtime adapter** is code in wugs that runs a family of models (`onnx-ctc-raw` for wav2vec2-style models, `onnx-ctc-fbank` for Zipformer/ZIPA-style models, `praat-script` for Praat, later `http` for a model served by the user's own machine or a paid hosted service). New models of a known family need no wugs release, only a manifest; a genuinely new architecture needs one adapter, written once. That is the line between "data" (installable any time) and "code" (ships with wugs, or later as a sandboxed plugin).
 
 ## 2. Choosing and updating
 
 Each capability has a setting in the app: **Automatic (recommended)** or a model the person picks. Automatic means: the installed model with the best published evaluation for the project's language (falling back to the overall score), among those whose runtime this wugs build has. A project can pin a model so a long annotation campaign is not switched halfway.
+
+As built (item 53): this computer's choice lives in `<app data>/capabilities.json`; a project's pin is a `Setting` in the project config scope (`capability:<id>`, DATA-MODEL §3), so it syncs to every member and two people pinning different models at once get the ordinary conflict card. The pin wins over the computer's choice. A picked or pinned model that is not downloaded here is reported by name ("This project uses X … not downloaded"), never silently swapped for another. Until the evaluation harness scores the catalogue, Automatic ranks unscored models after scored ones instead of skipping them, so the one model that exists today is still chosen; the project language is not modelled yet, so Automatic uses the overall score. Praat is the `acoustic-analysis` provider: not a package but the person's own program, found the way the handoff finds it.
 
 Updates, adjusted for field conditions:
 

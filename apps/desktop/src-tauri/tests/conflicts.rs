@@ -105,3 +105,26 @@ fn a_reference_is_shown_by_what_it_names_and_is_not_typed() {
     assert_eq!(c.title, "Sense link of «köpek»");
     assert_eq!(c.place, "Text «T»");
 }
+
+#[test]
+fn two_pins_read_as_the_project_model_with_model_names() {
+    let (da, db) = (
+        TempDir(std::env::temp_dir().join(format!("wugs-desktop-pins-a-{}", ulid()))),
+        TempDir(std::env::temp_dir().join(format!("wugs-desktop-pins-b-{}", ulid()))),
+    );
+    let mut a = Project::open(&da.0, "prs_Ana").unwrap();
+    let mut b = Project::open(&db.0, "prs_Bo").unwrap();
+    a.set_setting("capability:phone-transcription", "wav2vec2-espeak").unwrap();
+    b.set_setting("capability:phone-transcription", "zipa-small").unwrap();
+    a.ingest(mine(&b)).unwrap();
+    drop(a);
+    let mut s: Session = None;
+    session::open_project(&mut s, da.0.to_str().unwrap(), "prs_Ana").unwrap();
+    let list = conflicts::conflicts_list(&mut s).unwrap();
+    assert_eq!(list.len(), 1, "{list:?}");
+    assert_eq!(list[0].title, "This project's model for phone transcription");
+    assert_eq!(list[0].place, "Project settings");
+    let mut labels: Vec<&str> = list[0].versions.iter().map(|v| v.label.as_str()).collect();
+    labels.sort();
+    assert_eq!(labels, ["wav2vec 2.0 phones (espeak IPA)", "zipa-small"]);
+}

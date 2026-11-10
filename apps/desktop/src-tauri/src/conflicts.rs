@@ -177,9 +177,15 @@ fn free_text(field: &str) -> bool {
 
 fn view(p: &Project, c: &OpenConflict) -> ConflictView {
     let me = p.device().to_string();
+    let setting = c.kind == "setting";
     let version = |v: &Version, winner: bool| {
         let (at_ms, device) = hlc_parts(&v.hlc);
-        VersionView { raw: v.value.to_json(), label: label(p, &v.value), at_ms, mine: device == me, winner }
+        // A capability pin's value is a provider id: show its name.
+        let label = match (&v.value, setting) {
+            (Value::Str(id), true) => crate::capability::provider_name(id),
+            (v, _) => label(p, v),
+        };
+        VersionView { raw: v.value.to_json(), label, at_ms, mine: device == me, winner }
     };
     let mut versions = vec![version(&c.winner, true)];
     versions.extend(c.others.iter().rev().map(|v| version(v, false)));
@@ -194,8 +200,12 @@ fn view(p: &Project, c: &OpenConflict) -> ConflictView {
         "segment" => "a segment".to_string(),
         _ => name(p, &c.target),
     };
+    let title = match s(p, &c.target, "key").strip_prefix("capability:").and_then(|id| crate::capability::Capability::parse(id).ok()) {
+        Some(cap) if setting => format!("This project's model for {}", cap.title().to_lowercase()),
+        _ => format!("{} of {what}", field_name(&c.field)),
+    };
     ConflictView {
-        title: format!("{} of {what}", field_name(&c.field)),
+        title,
         target: c.target.clone(),
         field: c.field.clone(),
         place: where_,
