@@ -157,16 +157,26 @@ fn the_real_zipa_release_matches_onnxruntime() {
 fn the_real_zipa_release_transcribes_like_zipas_own_script() {
     let dir = PathBuf::from(std::env::var("WUGS_ZIPA_DIR").expect("set WUGS_ZIPA_DIR"));
     let vocab = Vocab::from_tokens_txt(&std::fs::read_to_string(dir.join("tokens.txt")).unwrap()).unwrap();
-    let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab).unwrap();
     let audio = wugs_asr::read_span(&dir.join("sample.wav"), 0.0, 30_000.0).unwrap();
-    let got: Vec<String> = r.recognize(&audio).unwrap().phones.into_iter().map(|p| p.symbol).collect();
     let want: Vec<String> = std::fs::read_to_string(dir.join("sample.expected.txt"))
         .unwrap()
         .split_whitespace()
         .filter(|s| !matches!(*s, "▁" | "<unk>" | "<sos/eos>"))
         .map(str::to_string)
         .collect();
+    let exact = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab.clone()).unwrap().exact_lengths();
+    let padded = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab).unwrap();
+    let phones = |r: &FbankRecognizer| -> Vec<String> { r.recognize(&audio).unwrap().phones.into_iter().map(|p| p.symbol).collect() };
+    let got_padded = phones(&padded);
+    eprintln!("padded: {}  ({} edits)", got_padded.join(" "), edits(&got_padded, &want));
+    let got = phones(&exact);
     eprintln!("ours:   {}\nZIPA's: {}", got.join(" "), want.join(" "));
+    let distance = edits(&got, &want);
+    eprintln!("{distance} edits over {} phones", want.len());
+    assert!(!want.is_empty() && distance * 100 <= want.len() * 3, "{distance} edits over {} phones", want.len());
+}
+
+fn edits(got: &[String], want: &[String]) -> usize {
     // Levenshtein distance over phones.
     let mut row: Vec<usize> = (0..=want.len()).collect();
     for (i, a) in got.iter().enumerate() {
@@ -178,7 +188,5 @@ fn the_real_zipa_release_transcribes_like_zipas_own_script() {
             prev = cur;
         }
     }
-    let distance = row[want.len()];
-    eprintln!("{distance} edits over {} phones", want.len());
-    assert!(!want.is_empty() && distance * 100 <= want.len() * 3, "{distance} edits over {} phones", want.len());
+    row[want.len()]
 }

@@ -52,6 +52,8 @@ pub struct FbankRecognizer {
     vocab: Vocab,
     fbank: Fbank,
     plans: Mutex<VecDeque<(usize, Arc<TypedSimplePlan>)>>,
+    /// Build a plan for each exact length instead of padding into buckets.
+    exact: bool,
 }
 
 impl Vocab {
@@ -95,7 +97,14 @@ impl FbankRecognizer {
         // The exported shapes name a symbolic batch; ours is always 1.
         graph.value_info.clear();
         let model = tract_onnx::onnx().model_for_proto_model(&proto).map_err(model_err)?;
-        Ok(FbankRecognizer { model, vocab, fbank: Fbank::new(), plans: Mutex::new(VecDeque::new()) })
+        Ok(FbankRecognizer { model, vocab, fbank: Fbank::new(), plans: Mutex::new(VecDeque::new()), exact: false })
+    }
+
+    /// Run every input at its own length, unpadded: exact, but each new
+    /// length builds a plan (seconds for a real model).
+    pub fn exact_lengths(mut self) -> Self {
+        self.exact = true;
+        self
     }
 
     fn plan(&self, bucket: usize) -> Result<Arc<TypedSimplePlan>, Error> {
@@ -129,6 +138,7 @@ impl FbankRecognizer {
             return Err(Error::Input("the segment is shorter than a tenth of a second".into()));
         }
         let bucket = *BUCKETS.iter().find(|&&b| b >= frames).ok_or_else(|| Error::Input(format!("the segment is longer than {MAX_SECONDS} s")))?;
+        let bucket = if self.exact { frames } else { bucket };
         let plan = self.plan(bucket)?;
         // Padding repeats the last real frame: the few frames before the
         // end that the padding still reaches then see a continuation of the
