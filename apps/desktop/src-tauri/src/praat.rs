@@ -188,7 +188,7 @@ pub fn parse_version(bytes: &[u8]) -> Result<String, String> {
 
 /// Run to completion with a deadline, returning stdout. The child is killed
 /// at the deadline.
-fn run_quietly(cmd: &mut Command, deadline: Duration) -> Result<Vec<u8>, String> {
+pub(crate) fn run_quietly(cmd: &mut Command, deadline: Duration) -> Result<Vec<u8>, String> {
     cmd.stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::null());
     #[cfg(windows)]
     {
@@ -328,7 +328,7 @@ impl Files {
     }
 }
 
-fn write_atomic(path: &Path, body: &[u8]) -> Result<(), String> {
+pub(crate) fn write_atomic(path: &Path, body: &[u8]) -> Result<(), String> {
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, body).map_err(|e| format!("could not write {}: {e}", path.display()))?;
     fs::rename(&tmp, path).map_err(|e| format!("could not write {}: {e}", path.display()))

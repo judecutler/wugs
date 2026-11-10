@@ -16,6 +16,7 @@ import {
 } from "../api";
 import { h } from "../dom";
 import { refreshText, showToast } from "../store";
+import { KINDS, type Kind } from "./analysis";
 import { changeSummary, notBroughtBack, praatRange, type Range } from "./logic";
 
 export type PraatContext = {
@@ -26,7 +27,15 @@ export type PraatContext = {
 };
 
 /** `element` goes in the toolbar; `review` is a row of its own under it. */
-export function praatControls(context: () => PraatContext | null): { element: HTMLElement; review: HTMLElement; refresh: () => void } {
+/** What the analysis toggles switch: the Timeline's overlay layer. */
+export type Overlays = { enabled: (kind: Kind) => boolean; toggle: (kind: Kind) => void };
+
+const KIND_LABEL: Record<Kind, string> = { pitch: "Pitch", intensity: "Intensity", formants: "Formants" };
+
+export function praatControls(
+  context: () => PraatContext | null,
+  overlays: () => Overlays | null,
+): { element: HTMLElement; review: HTMLElement; refresh: () => void } {
   const element = h("span", { className: "praat-bar" });
   const reviewRow = h("div", { className: "praat-review", hidden: true });
   let status: PraatStatus | null = null;
@@ -159,7 +168,22 @@ export function praatControls(context: () => PraatContext | null): { element: HT
       disabled: busy || ctx.sourceId === null,
       onclick: () => openInPraat(),
     });
-    const parts: Node[] = [open];
+    const layer = overlays();
+    const toggles =
+      layer === null || ctx.sourceId === null
+        ? []
+        : KINDS.map((kind) =>
+            h("button", {
+              className: layer.enabled(kind) ? "active" : "",
+              textContent: KIND_LABEL[kind],
+              title: `Show Praat's ${kind} over the waveform (analysed by your Praat, a minute at a time)`,
+              onclick: () => {
+                layer.toggle(kind);
+                draw();
+              },
+            }),
+          );
+    const parts: Node[] = [...toggles, open];
     if (pendingFor === ctx.textId) {
       parts.push(
         h("button", {
