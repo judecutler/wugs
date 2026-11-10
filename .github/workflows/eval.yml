@@ -1,7 +1,7 @@
 name: Evaluate models
 
 # Scores every catalogued phone-transcription model, run the way wugs runs
-# it, on PRiSM's multilingual phone recognition test sets (roadmap 52,
+# it, on PRiSM's public multilingual phone recognition test sets (VoxAngeles, Tusom 2021; roadmap 52,
 # docs/design/PACKAGES.md §3), with PRiSM's own scorer: PFER and PER per
 # set, plus speed and memory. On demand, and on PRs that touch it.
 on:
@@ -35,7 +35,7 @@ jobs:
       - name: Python packages (PRiSM's scorer needs lightning and hydra for its utils)
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install huggingface_hub panphon tqdm rich lightning hydra-core rootutils "git+https://github.com/changelinglab/phone-inventory-metric@v0.2.5"
+          pip install huggingface_hub pyarrow soundfile panphon tqdm rich lightning hydra-core rootutils "git+https://github.com/changelinglab/phone-inventory-metric@v0.2.5"
       - name: Find PRiSM's phone recognition sets
         run: python3 -I scripts/eval/prism_sets.py "$RUNNER_TEMP/sets"
       - name: Download the catalogued phone models
