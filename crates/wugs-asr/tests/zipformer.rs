@@ -114,7 +114,10 @@ fn the_real_zipa_release_matches_onnxruntime() {
     for t in [500usize, 3000] {
         let t0 = std::time::Instant::now();
         let (frames, v, got) = r.log_probs_for_features(t, feats(t)).unwrap();
-        eprintln!("{t} input frames -> {frames} in {:?}", t0.elapsed());
+        eprintln!("{t} input frames -> {frames} in {:?} (plan built)", t0.elapsed());
+        let t0 = std::time::Instant::now();
+        r.log_probs_for_features(t, feats(t)).unwrap();
+        eprintln!("{t} input frames again in {:?} (plan cached)", t0.elapsed());
         let want: Vec<f32> = std::fs::read(dir.join(format!("ref.{t}.out.f32"))).unwrap().chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
         assert_eq!(got.len(), want.len());
         let best = |row: &[f32]| row.iter().enumerate().fold((0, f32::MIN), |m, (i, &x)| if x > m.1 { (i, x) } else { m }).0;
