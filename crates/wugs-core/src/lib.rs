@@ -18,6 +18,7 @@ use wugs_projection::{ApplyStats, Projection};
 pub use wugs_projection::{HiddenEdit, OpenConflict, Version};
 use wugs_validate::{default_validators, has_hold, run_all, Validator};
 
+pub mod assist;
 pub mod conflicts;
 mod elicitation;
 mod gloss;

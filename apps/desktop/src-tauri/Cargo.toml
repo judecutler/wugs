@@ -44,3 +44,7 @@ zeroize = "1.8"
 # A second launch focuses the running window instead of opening the same
 # projects again (two writers on one device's log would fork its chain).
 tauri-plugin-single-instance = "2"
+ureq = "3"
+sha2 = "0.10"
+wugs-asr = { version = "0.0.1", path = "../../../crates/wugs-asr" }
+serde_json = "1.0.154"

@@ -15,7 +15,8 @@ import {
 } from "../api";
 import { h } from "../dom";
 import * as playback from "../playback";
-import { getSelection, refreshConflicts, refreshText, reloadTexts, selectSegment, showToast, subscribeSelection } from "../store";
+import { getSelection, refreshConflicts, refreshText, reloadTexts, selectSegment, setMediaSource, showToast, subscribeSelection } from "../store";
+import { tint } from "../assist/logic";
 import { crossedDragThreshold, dragEdge, grabOffset, hitTest, DRAG_PX, type Edge, type Hit } from "./gestures";
 import { StripCache } from "./strips";
 import {
@@ -190,6 +191,7 @@ export class TimelineView {
     window.removeEventListener("mousemove", this.windowMoves);
     window.removeEventListener("mouseup", this.windowUps);
     playback.setSource(null);
+    setMediaSource(null);
   }
 
   private vp(): Viewport {
@@ -234,6 +236,7 @@ export class TimelineView {
     this.info = info;
     this.strips = info !== null && sourceId !== null ? new StripCache(sourceId, info.sampleRate, info.durationMs) : null;
     playback.setSource(info !== null ? convertFileSrc(info.mediaPath) : null);
+    setMediaSource(info !== null ? sourceId : null);
     this.fitDuration();
     const v = this.vp();
     this.setVp({ ...v, t0Ms: 0, pxPerSec: fitPxPerSec(v) });
@@ -378,7 +381,9 @@ export class TimelineView {
     const y = top + 4;
     const hgt = TIER_H - 8;
     const selected = seg.id === this.selected;
-    ctx.fillStyle = selected ? "rgba(46, 94, 78, 0.14)" : this.colors.box;
+    // Machine output stays tinted until a person edits it.
+    const machine = seg.machine === null ? null : tint(seg.machine);
+    ctx.fillStyle = machine === "very-unsure" ? "rgba(196, 64, 48, 0.22)" : machine === "unsure" ? "rgba(214, 170, 40, 0.28)" : selected ? "rgba(46, 94, 78, 0.14)" : this.colors.box;
     ctx.strokeStyle = selected ? this.colors.accent : this.colors.line;
     ctx.lineWidth = selected ? 2 : 1;
     ctx.fillRect(x0, y, x1 - x0, hgt);

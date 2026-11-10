@@ -9,3 +9,6 @@ wugs-model = { path = "../wugs-model" }
 wugs-oplog = { path = "../wugs-oplog" }
 wugs-projection = { path = "../wugs-projection" }
 wugs-core = { path = "../wugs-core" }
+
+[dev-dependencies]
+wugs-text = { path = "../wugs-text" }

@@ -1,5 +1,6 @@
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
-import { captureReset, createProject, errorText, kitsList, openProject } from "./api";
+import { captureReset, createProject, errorText, kitsList, onAssistDownload, openProject } from "./api";
+import { reloadModels } from "./panels/assist";
 import { refuseProjectChange } from "./capture/session.ts";
 import { closedPanels, layoutKit, mountDock, showPanel } from "./dock";
 import type { DockviewApi } from "./dockview";
@@ -8,7 +9,7 @@ import { autoOpen } from "./last-project";
 import { onDevicesChange, relocationBanner, wireDeviceEvents } from "./panels/devices";
 import { isPanelId, PANELS } from "./panels/registry";
 import { attachDock } from "./kits/workspace";
-import { activeKit, attempt, enterProject, getState, getToast, researcher, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
+import { activeKit, assistModelList, attempt, enterProject, getState, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
 const top = h("header", { className: "top" });
 const bannerSlot = h("div", { className: "relocation-slot" });
@@ -85,6 +86,20 @@ function renderToast() {
   );
 }
 
+/** Speech-assist models: listed at start, kept current while they download. */
+async function wireAssist() {
+  await attempt(reloadModels);
+  await onAssistDownload((e) => {
+    if (e.finished === null) {
+      setAssistModels(assistModelList().map((m) => (m.id === e.id ? { ...m, download: { done: e.done, total: e.total, error: null } } : m)));
+      return;
+    }
+    if ("Err" in e.finished && e.finished.Err !== "cancelled") showToast({ tone: "error", lines: [`The model download failed: ${e.finished.Err}`] });
+    if ("Ok" in e.finished) showToast({ tone: "info", lines: ["Model downloaded. Empty segments can now get suggestions."] });
+    void attempt(reloadModels);
+  });
+}
+
 async function pickProject(mode: "open" | "create") {
   if (refuseProjectChange()) return;
   const who = researcher();
@@ -132,6 +147,7 @@ if (app !== null) {
     dock.onDidLayoutChange(renderTop);
     renderTop();
     await wireDeviceEvents();
+    await wireAssist();
     // A reload leaves the old page's captures open on the Rust side; this page owns none.
     await captureReset().catch(() => 0);
     await reopenLast();
