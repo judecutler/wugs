@@ -43,7 +43,7 @@ for it in items:
             print(f"{f}: {table.num_rows} rows, schema: {table.schema}")
             audio_col = pick(cols, "audio")
             id_col = pick(cols, "utt_id", "id", "key", "uttid")
-            target_col = pick(cols, "text.good", "text_good", "phones", "phonemes", "ipa", "target", "text", "transcription")
+            target_col = pick(cols, "text.good", "text_good", "phones", "phonemes", "ipa", "target", "transcript", "text", "transcription")
             lang_col = pick(cols, "lang_sym", "lang", "language", "text.lang", "lang_id", "iso")
             first = {c: table.column(c)[0].as_py() for c in cols if c != audio_col}
             print("first row (no audio):", first)
