@@ -54,6 +54,6 @@ jobs:
           cat "$RUNNER_TEMP/zipa/sample.expected.txt"
       - run: python3 -I crates/wugs-asr/tests/fixtures/real_zipa_reference.py "$RUNNER_TEMP/zipa"
       - name: tract against onnxruntime, and end to end against ZIPA's script
-        run: cargo test --release -p wugs-asr --test zipformer -- --ignored --nocapture the_real_zipa_release
+        run: cargo test --release -p wugs-asr --test zipformer -- --ignored --nocapture --test-threads=1 the_real_zipa_release
         env:
           WUGS_ZIPA_DIR: ${{ runner.temp }}/zipa
