@@ -52,7 +52,7 @@
 | 35 | Ship Tongues 1.0 | ⬜ | |
 
 ## Sub-Prioritiy
-| 52 | Conference demo-track paper (ACL / EMNLP / NAACL System Demonstrations; ComputEL or LREC as fallbacks): a short system paper, screencast and live demo | ⬜ | for later (advice from the owner's professor: a demo-track acceptance is the strongest route to adoption by linguists). Needs technical rigour above all on the ML side: a reproducible evaluation harness (phone error rate per language on public held-out data, baselines such as Allosaurus and ZIPA, item 51), optimized latency and memory, documented models and data licences, the replay/sync gates written up, and usage evidence from the alpha (29, 31), Human in the loop continuous improvement for WUGS AI, and data exporting. Build new ML features with that evaluation in mind from the start.
+| 52 | Conference demo-track paper (ACL / EMNLP / NAACL System Demonstrations; ComputEL or LREC as fallbacks): a short system paper, screencast and live demo | ⬜ | for later (advice from the owner's professor: a demo-track acceptance is the strongest route to adoption by linguists). Needs technical rigour above all on the ML side: a reproducible evaluation harness (phone error rate per language on public held-out data, baselines such as Allosaurus and ZIPA, item 51), optimized latency and memory, documented models and data licences, the replay/sync gates written up, and usage evidence from the alpha (29, 31), Human in the loop continuous improvement for WUGS AI features, and  streamlined data exporting. Build new ML features with that evaluation in mind from the start.
 
 ## Expand the suite
 | # | Item | Status | Notes |
