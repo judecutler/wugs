@@ -1,3 +1,4 @@
+pub mod assist;
 pub mod capture;
 pub mod conflicts;
 pub mod elicit;
@@ -11,6 +12,7 @@ pub mod session;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
@@ -514,6 +516,114 @@ fn load_layout(dir: State<AppData>, kit: String) -> Result<Option<String>, Strin
 }
 
 #[tauri::command(async)]
+fn assist_models(dir: State<AppData>, downloads: State<assist::Downloads>) -> Vec<assist::ModelRow> {
+    assist::rows(&dir.0, &downloads)
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct DownloadEvent {
+    id: String,
+    done: u64,
+    total: u64,
+    /// Set once: `Ok` text "installed" or the error.
+    finished: Option<Result<(), String>>,
+}
+
+/// Start a model download in the background; progress arrives as
+/// `assist-download` events.
+#[tauri::command(async)]
+fn assist_download(app: AppHandle, dir: State<AppData>, downloads: State<assist::Downloads>, id: String) -> Result<(), String> {
+    let spec = assist::catalog().into_iter().find(|s| s.id == id).ok_or_else(|| format!("no model {id:?}"))?;
+    let cancel = Arc::new(AtomicBool::new(false));
+    let token = wugs_model::ulid();
+    {
+        let mut inflight = downloads.0.lock().expect("downloads lock");
+        if inflight.get(&id).is_some_and(|d| d.state.error.is_none()) {
+            return Err("That model is already downloading.".into());
+        }
+        inflight.insert(id.clone(), assist::Inflight { state: assist::DownloadState { done: 0, total: 0, error: None }, cancel: cancel.clone(), token: token.clone() });
+    }
+    let app_data = dir.0.clone();
+    std::thread::spawn(move || {
+        let last = std::sync::Mutex::new(std::time::Instant::now());
+        let progress = |done: u64, total: u64| {
+            let mut at = last.lock().expect("progress clock");
+            if at.elapsed() < std::time::Duration::from_millis(200) {
+                return;
+            }
+            *at = std::time::Instant::now();
+            // Emitted under the lock, so a Cancel cannot land between the
+            // token check and the event and leave a stale progress bar.
+            match app.state::<assist::Downloads>().0.lock().expect("downloads lock").get_mut(spec.id) {
+                Some(d) if d.token == token => {
+                    d.state.done = done;
+                    d.state.total = total;
+                    app.emit("assist-download", DownloadEvent { id: spec.id.into(), done, total, finished: None }).ok();
+                }
+                // Cancelled or replaced: this transfer reports nothing more.
+                _ => {}
+            }
+        };
+        let result = assist::download(&app_data, &spec, &cancel, &progress).map(|_| ());
+        let downloads = app.state::<assist::Downloads>();
+        let mut inflight = downloads.0.lock().expect("downloads lock");
+        if !inflight.get(spec.id).is_some_and(|d| d.token == token) {
+            // Cancelled earlier: its slot is gone or belongs to a newer download.
+            return;
+        }
+        match &result {
+            Ok(()) => {
+                inflight.remove(spec.id);
+            }
+            Err(e) => {
+                if let Some(d) = inflight.get_mut(spec.id) {
+                    d.state.error = Some(e.clone());
+                }
+            }
+        }
+        drop(inflight);
+        app.state::<assist::Worker>().forget(spec.id);
+        app.emit("assist-download", DownloadEvent { id: spec.id.into(), done: 0, total: 0, finished: Some(result) }).ok();
+    });
+    Ok(())
+}
+
+#[tauri::command(async)]
+fn assist_cancel(downloads: State<assist::Downloads>, id: String) {
+    // Flag the transfer and free its slot now: a read stalled on a dead
+    // link may not return for hours, and the person must be able to retry.
+    if let Some(d) = downloads.0.lock().expect("downloads lock").remove(&id) {
+        d.cancel.store(true, Ordering::Relaxed);
+    }
+}
+
+#[tauri::command(async)]
+fn assist_delete(dir: State<AppData>, downloads: State<assist::Downloads>, worker: State<assist::Worker>, id: String) -> Result<(), String> {
+    if downloads.0.lock().expect("downloads lock").get(&id).is_some_and(|d| d.state.error.is_none()) {
+        return Err("Cancel the download first.".into());
+    }
+    worker.forget(&id);
+    assist::delete(&dir.0, &id)
+}
+
+/// Hear one empty segment with an installed model and write what it heard.
+#[tauri::command(async)]
+fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<assist::Worker>, text: String, segment: String, source: String, model: String) -> Result<assist::Suggested, String> {
+    let spec = assist::catalog().into_iter().find(|m| m.id == model).ok_or_else(|| format!("no model {model:?}"))?;
+    if assist::installed(&dir.0, &spec).is_none() {
+        return Err("Download the model first (Speech assist panel).".into());
+    }
+    let (t, seg) = (text.clone(), segment.clone());
+    let target = s.run(move |s| assist::target(s, &t, &seg, &source))?;
+    let app_data = dir.0.clone();
+    let make_spec = spec.clone();
+    let heard = worker.hear(spec.id, move || Ok(Box::new(assist::ModelHearer::new(&app_data, make_spec)?) as Box<dyn assist::Hearer>), target.wav, target.start_ms, target.end_ms)?;
+    let id = spec.id;
+    s.run(move |s| assist::commit(s, &text, &segment, id, &heard))
+}
+
+#[tauri::command(async)]
 fn kits_list(dir: State<AppData>) -> Result<kits::KitsView, String> {
     kits::list(&dir.0)
 }
@@ -708,6 +818,8 @@ pub fn run() {
         .manage(SessionThread::spawn())
         .manage(Reachable::default())
         .manage(Captures::default())
+        .manage(assist::Downloads::default())
+        .manage(assist::Worker::spawn())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             let identity = identity::device_identity(&dir, &KeychainKeyStore).map(|(k, info)| (Arc::new(k), info));
@@ -716,6 +828,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            assist_models,
+            assist_download,
+            assist_cancel,
+            assist_delete,
+            assist_suggest,
             open_project,
             create_project,
             list_texts,

@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type { MorphSpec, Suggestion } from "./gloss/suggest";
+import type { Machine } from "./assist/logic";
 import type { Kit } from "./kits/logic";
 import type { Scope } from "./search/logic";
 
@@ -38,6 +39,8 @@ export type SegmentRow = {
   endMs: number | null;
   content: string;
   pos: string;
+  /** Set while the transcription is still the one a phone model wrote. */
+  machine: Machine | null;
 };
 
 export type TextDetail = {
@@ -396,3 +399,26 @@ export type ConflictsResolved = { conflicts: ConflictView[]; notes: string[] };
 
 export const conflictsList = () => invoke<ConflictView[]>("conflicts_list");
 export const conflictResolve = (args: { target: string; field: string; raw: string; heads: string[] }) => invoke<ConflictsResolved>("conflict_resolve", args);
+
+// Speech assist: src-tauri/src/assist.rs. Models are downloaded on request
+// into app data; suggestions are written as machine transcriptions.
+export type InstalledFile = { name: string; bytes: number; sha256: string; published: boolean };
+export type AssistModel = {
+  id: string;
+  name: string;
+  about: string;
+  license: string;
+  attribution: string;
+  homepage: string;
+  approxMb: number;
+  installed: { files: InstalledFile[] } | null;
+  download: { done: number; total: number; error: string | null } | null;
+};
+export type Suggested = { content: string; confidence: number; notes: string[] };
+export type DownloadEvent = { id: string; done: number; total: number; finished: { Ok: null } | { Err: string } | null };
+export const assistModels = () => invoke<AssistModel[]>("assist_models");
+export const assistDownload = (args: { id: string }) => invoke<void>("assist_download", args);
+export const assistCancel = (args: { id: string }) => invoke<void>("assist_cancel", args);
+export const assistDelete = (args: { id: string }) => invoke<void>("assist_delete", args);
+export const assistSuggest = (args: { text: string; segment: string; source: string; model: string }) => invoke<Suggested>("assist_suggest", args);
+export const onAssistDownload = (f: (e: DownloadEvent) => void): Promise<UnlistenFn> => listen<DownloadEvent>("assist-download", (ev) => f(ev.payload));

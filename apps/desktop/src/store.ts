@@ -1,6 +1,6 @@
 // App state every panel reads, and the actions that change it. Panels
 // subscribe and re-render; only this module assigns `state`.
-import { conflictCount, errorText, getText, listTexts, type KitsView, type ProjectInfo, type TextDetail, type TextRow } from "./api";
+import { conflictCount, errorText, getText, listTexts, type AssistModel, type KitsView, type ProjectInfo, type TextDetail, type TextRow } from "./api";
 import type { Kit } from "./kits/logic";
 import { rememberProject } from "./last-project";
 
@@ -134,6 +134,29 @@ export async function refreshConflicts() {
 
 let generation = 0;
 let lexiconRev = 0;
+let media: string | null = null;
+let models: AssistModel[] = [];
+
+/** The recording the Timeline has loaded, which the Transcribe panel plays and speech assist hears. */
+export const mediaSource = (): string | null => media;
+
+export function setMediaSource(id: string | null) {
+  if (id === media) return;
+  media = id;
+  for (const f of listeners) f();
+}
+
+/** Speech-assist models and whether each is downloaded. */
+export const assistModelList = (): AssistModel[] => models;
+
+/** The model suggestions use: the first one downloaded. */
+export const installedModel = (): AssistModel | null => models.find((m) => m.installed !== null) ?? null;
+
+export function setAssistModels(next: AssistModel[]) {
+  models = next;
+  for (const f of listeners) f();
+}
+
 let kits: KitsView | null = null;
 
 /** Installed kits, or null until the first load. */

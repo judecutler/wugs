@@ -138,6 +138,15 @@ pub struct SegmentRow {
     pub end_ms: Option<f64>,
     pub content: String,
     pub pos: String,
+    /// Set while the transcription is still the one a phone model wrote.
+    pub machine: Option<MachineView>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MachineView {
+    pub model: String,
+    pub confidence: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -163,7 +172,7 @@ pub struct AddedSegment {
     pub findings: Vec<String>,
 }
 
-fn finding_lines(res: &CommitResult) -> Vec<String> {
+pub(crate) fn finding_lines(res: &CommitResult) -> Vec<String> {
     res.findings.iter().map(|f| format!("{}: {}", f.code, f.message)).collect()
 }
 
@@ -251,6 +260,7 @@ pub fn get_text(session: &mut Session, text_id: &str) -> Result<TextDetail, Stri
             end_ms: p.proj.field_num(&id, "end")?,
             content: p.proj.field_str(&id, "content")?.unwrap_or_default(),
             pos: p.proj.field_str(&id, "pos")?.unwrap_or_default(),
+            machine: p.machine_mark(&id)?.map(|m| MachineView { model: m.model, confidence: m.confidence }),
             id,
         });
     }
@@ -551,7 +561,7 @@ fn import_wav(open: &mut OpenProject, file: &Path, label: &str) -> Result<Source
 
 /// The audio blob behind a source: its first audio track's blob (lowest
 /// track id, so every device picks the same one), else the source's own.
-fn audio_blob(p: &Project, source_id: &str) -> Result<String, String> {
+pub(crate) fn audio_blob(p: &Project, source_id: &str) -> Result<String, String> {
     if p.proj.entity_kind(source_id)?.as_deref() != Some("source") || p.proj.is_tombstoned(source_id)? {
         return Err(format!("no source {source_id}"));
     }

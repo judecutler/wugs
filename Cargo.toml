@@ -19,6 +19,7 @@ members = [
     "crates/wugs-blob",
     "crates/wugs-auth",
     "crates/wugs-legacy",
+    "crates/wugs-asr",
     "crates/wugs-kit",
 ]
 

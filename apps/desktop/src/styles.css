@@ -354,6 +354,21 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .cf-meta { display: flex; align-items: center; gap: 6px; }
 .cf-type { margin-top: 6px; }
 
+/* Speech assist: machine transcriptions stay tinted until a person edits them. */
+.machine-unsure { background: rgba(214, 170, 40, 0.28); }
+.machine-very-unsure { background: rgba(196, 64, 48, 0.22); }
+.tx-row.selected.machine-unsure, .tx-row.selected.machine-very-unsure { box-shadow: inset 3px 0 0 var(--accent); }
+.tx-suggest { flex: none; font-size: 12px; padding: 2px 8px; }
+.panel-assist { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.panel-assist > * { flex: none; }
+.panel-assist h4 { margin: 8px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.as-intro, .as-note { color: var(--muted); margin: 0; font-size: 12px; }
+.as-error { color: var(--error); font-size: 12px; }
+.as-legend { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+.as-swatch { display: inline-block; width: 14px; height: 10px; border-radius: 2px; margin-left: 8px; }
+.as-model { border: 1px solid var(--line); border-radius: 4px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.as-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.as-actions progress { flex: 1 1 120px; }
 /* Kits panel (Kit Builder) */
 .panel-kits { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 .panel-kits > * { flex: none; }

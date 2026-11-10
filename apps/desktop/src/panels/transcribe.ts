@@ -1,10 +1,11 @@
 // The transcription loop (TONGUES-UI build order step 3): one tier's
 // segments in time order, the selected one editable in place. Enter saves
 // and plays the next, so hearing and typing never leave the keyboard.
-import { editSegmentContent, errorText, type SegmentRow, type TierRow } from "../api";
+import { assistSuggest, editSegmentContent, errorText, type SegmentRow, type TierRow } from "../api";
+import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
-import { getSelection, getState, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
+import { getSelection, getState, installedModel, mediaSource, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
 import { IPA_GROUPS } from "../transcribe/ipa";
 import { createFieldController, type FieldController } from "../transcribe/field";
 import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, neighbor, renderWindow, tierSegments } from "../transcribe/logic";
@@ -29,8 +30,35 @@ export const transcribePanel: PanelDef = {
 
     const selTime = h("span", { className: "tx-time" });
     const selBadge = h("span", { className: "tx-unsaved", title: "The last save failed. Press Enter to retry." });
+    const suggestButton = h("button", { type: "button", className: "tx-suggest", textContent: "Suggest", title: "Fill this empty segment with what the speech model hears (Speech assist panel)." });
     /** The selected segment's row. It stays in the list across redraws so the field is never detached mid-composition. */
-    const selRow = h("div", { className: "tx-row selected" }, selTime, field, selBadge);
+    const selRow = h("div", { className: "tx-row selected" }, selTime, field, suggestButton, selBadge);
+    let suggesting = false;
+
+    /** Ask the downloaded model for the selected empty segment. */
+    async function suggest() {
+      const s = getState();
+      const sel = getSelection();
+      const model = installedModel();
+      const source = mediaSource();
+      if (suggesting || s.kind !== "open" || s.text === null || sel === null || model === null || source === null) return;
+      suggesting = true;
+      suggestButton.disabled = true;
+      suggestButton.textContent = "Listening…";
+      try {
+        const r = await assistSuggest({ text: s.text.id, segment: sel.segmentId, source, model: model.id });
+        if (r.notes.length > 0) showToast({ tone: r.content === "" ? "info" : "warn", lines: r.notes });
+        await refreshText();
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      } finally {
+        suggesting = false;
+        suggestButton.textContent = "Suggest";
+        draw(true);
+      }
+    }
+    suggestButton.onmousedown = (ev) => ev.preventDefault();
+    suggestButton.onclick = () => void suggest();
 
     let ready = false;
     let tierId: string | null = null;
@@ -111,7 +139,12 @@ export const transcribePanel: PanelDef = {
       else if (action === "revert") revertField();
       else if (ctl?.segmentId != null) play(stored(ctl.segmentId));
     };
-    field.oninput = () => ctl?.type(field.value);
+    field.oninput = () => {
+      ctl?.type(field.value);
+      // Typed text is the person's: the machine offer goes until the field is empty again.
+      if (field.value.trim() !== "") suggestButton.style.display = "none";
+      else draw(true);
+    };
     field.onblur = () => {
       if (!moving) commitField();
     };
@@ -204,7 +237,8 @@ export const transcribePanel: PanelDef = {
       const ordered = tierSegments(text.segments, tierId);
       const sel = getSelection();
       const selId = sel !== null && sel.textId === text.id ? (ordered.find((x) => x.id === sel.segmentId)?.id ?? null) : null;
-      const next = `${tierId}|${selId}|${JSON.stringify(ordered)}|${playback.hasSource()}|${c.unsavedIds().join(",")}`;
+      const model = installedModel();
+      const next = `${tierId}|${selId}|${JSON.stringify(ordered)}|${playback.hasSource()}|${c.unsavedIds().join(",")}|${model?.id ?? ""}|${mediaSource() ?? ""}`;
       const hadFocus = document.activeElement === field;
 
       if (selId === null) {
@@ -224,15 +258,20 @@ export const transcribePanel: PanelDef = {
       moving = true;
       const rows = ordered.slice(from, to).map((seg) => {
         const label = c.label(seg.id, seg.content);
+        const machine = seg.machine === null ? "" : ` machine-${tint(seg.machine)}`;
         if (seg.id === selId) {
-          selRow.className = label.unsaved ? "tx-row selected unsaved" : "tx-row selected";
+          selRow.className = (label.unsaved ? "tx-row selected unsaved" : "tx-row selected") + machine;
+          selRow.title = seg.machine === null ? "" : tintTitle(seg.machine);
+          const offer = model !== null && mediaSource() !== null && suggestable(seg) && c.value.trim() === "";
+          suggestButton.style.display = offer ? "" : "none";
+          suggestButton.disabled = suggesting;
           selTime.textContent = formatRange(seg.startMs, seg.endMs);
           selBadge.textContent = label.unsaved ? "not saved, press Enter to retry" : "";
           return selRow;
         }
         const row = h(
           "div",
-          { className: label.unsaved ? "tx-row unsaved" : "tx-row" },
+          { className: (label.unsaved ? "tx-row unsaved" : "tx-row") + machine, title: seg.machine === null ? "" : tintTitle(seg.machine) },
           h("span", { className: "tx-time", textContent: formatRange(seg.startMs, seg.endMs) }),
           h("span", { className: "tx-text", textContent: label.text === "" ? "·" : label.text }),
           ...(label.unsaved ? [h("span", { className: "tx-unsaved", textContent: "not saved", title: "The last save failed. Select this segment and press Enter to retry." })] : []),

@@ -107,6 +107,14 @@ impl<R: Read> WavReader<R> {
         self.fmt
     }
 
+    /// A reader over sample frames from the current position of `r`, for a
+    /// caller that parsed the header with [`WavReader::new`] and then seeked
+    /// inside the data chunk. `remaining_bytes` stops it at the end of the
+    /// data chunk (`None` reads to end of file, for an open-ended size).
+    pub fn resume(r: R, fmt: WavFormat, remaining_bytes: Option<u64>) -> Self {
+        WavReader { r, fmt, declared_bytes: remaining_bytes, remaining: remaining_bytes, truncated: false, done: false, raw: Vec::new() }
+    }
+
     /// Frames the `data` chunk header claims, or `None` for a streaming
     /// writer's open-ended `0xFFFFFFFF` size.
     pub fn declared_frames(&self) -> Option<u64> {

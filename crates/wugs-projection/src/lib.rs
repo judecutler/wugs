@@ -791,6 +791,34 @@ impl Projection {
         Ok(out)
     }
 
+    /// The op ids of a field's open versions: its winner, then every other
+    /// write no held write names (§5.3).
+    pub fn open_version_ops(&self, target: &str, field: &str) -> Result<Vec<String>, String> {
+        let mut s = self.db.prepare(
+            "SELECT op_id FROM fields WHERE target=?1 AND field=?2
+             UNION ALL SELECT op_id FROM field_heads WHERE target=?1 AND field=?2",
+        )?;
+        s.bind_text(1, target)?;
+        s.bind_text(2, field)?;
+        let mut out = Vec::new();
+        while s.step()? {
+            let op = s.col_text(0);
+            if !out.contains(&op) {
+                out.push(op);
+            }
+        }
+        Ok(out)
+    }
+
+    /// Whether the field has an open conflict, as the Conflicts panel lists
+    /// them (open versions that merged or hold equal values are not one).
+    pub fn has_conflict(&self, target: &str, field: &str) -> Result<bool, String> {
+        let mut s = self.db.prepare("SELECT 1 FROM conflicts WHERE target=?1 AND field=?2 LIMIT 1")?;
+        s.bind_text(1, target)?;
+        s.bind_text(2, field)?;
+        s.step()
+    }
+
     fn searchable(field: &str) -> bool {
         wugs_model::is_language_field(field)
     }
