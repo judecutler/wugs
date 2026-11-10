@@ -4,7 +4,7 @@
 //! frames every 10 ms, edges reflected, DC offset removed, pre-emphasis
 //! 0.97, a Povey window, a 512-point power spectrum, 80 triangular mel
 //! bins from 20 Hz to Nyquist minus 400 Hz, natural log with a floor.
-//! `tests/fbank.rs` checks it against lhotse's own output.
+//! `tests/zipformer.rs` checks it against lhotse's own output.
 
 use std::sync::Arc;
 

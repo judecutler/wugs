@@ -1,9 +1,10 @@
 name: Real models
 
-# Runs the catalogued models themselves (too large for the repository) under
-# tract and checks them against onnxruntime, and prints each file's SHA-256
-# so the catalogue can pin it. On demand, and on PRs that touch the speech
-# runtime or the catalogue.
+# Runs the catalogued models themselves (too large for the repository) and
+# prints each file's SHA-256 so the catalogue can pin it: under tract
+# against onnxruntime on made-up features, and end to end on real speech
+# against the model's own inference script. On demand, and on PRs that
+# touch the speech runtime or the catalogue.
 on:
   workflow_dispatch:
   pull_request:
@@ -12,30 +13,47 @@ on:
       - "catalog/**"
       - ".github/workflows/real-models.yml"
 
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
+  # ZIPA's repository at the commit whose inference script and sample were read.
+  ZIPA_COMMIT: 21e9e8aa4cc6c130cb05d836a1979886f9245302
 
 jobs:
   zipa:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
-      - run: pip install onnxruntime numpy
+      - name: Python packages (CPU torch for lhotse)
+        run: |
+          pip install onnxruntime==1.23.2 numpy soundfile librosa lhotse
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
       - name: Download ZIPA-CR small (the files catalog/zipa-cr-small.toml names)
         run: |
           mkdir -p "$RUNNER_TEMP/zipa"
           for f in model.int8.onnx tokens.txt; do
             url=$(grep -o "https://[^\"]*/$f\"" catalog/zipa-cr-small.toml | tr -d '"')
+            [ "$(echo "$url" | wc -l)" = 1 ] || { echo "expected one URL for $f"; exit 1; }
             curl -fsSL -o "$RUNNER_TEMP/zipa/$f" "$url"
           done
           ls -l "$RUNNER_TEMP/zipa"
           sha256sum "$RUNNER_TEMP/zipa"/*
+      - name: ZIPA's own inference on its sample recording
+        run: |
+          git clone -q https://github.com/lingjzhu/zipa "$RUNNER_TEMP/zipa-src"
+          git -C "$RUNNER_TEMP/zipa-src" checkout -q "$ZIPA_COMMIT"
+          cp "$RUNNER_TEMP/zipa-src/sample.wav" "$RUNNER_TEMP/zipa/"
+          cd "$RUNNER_TEMP/zipa-src"
+          python3 inference/inference.py sample.wav --model-path "$RUNNER_TEMP/zipa/model.int8.onnx" --model-type ctc --tokens "$RUNNER_TEMP/zipa/tokens.txt" | tail -n 1 > "$RUNNER_TEMP/zipa/sample.expected.txt"
+          cat "$RUNNER_TEMP/zipa/sample.expected.txt"
       - run: python3 -I crates/wugs-asr/tests/fixtures/real_zipa_reference.py "$RUNNER_TEMP/zipa"
-      - name: tract against onnxruntime
+      - name: tract against onnxruntime, and end to end against ZIPA's script
         run: cargo test --release -p wugs-asr --test zipformer -- --ignored --nocapture the_real_zipa_release
         env:
           WUGS_ZIPA_DIR: ${{ runner.temp }}/zipa

@@ -6,9 +6,8 @@ version = "500k"
 name = "ZIPA-CR small (IPA phones)"
 about = "A 64M-parameter Zipformer CTC phone recognizer trained on IPAPack++ (17,000 hours, 88 languages; ACL 2025), in its INT8 ONNX release. Smaller and, on the authors' benchmarks, more accurate than wav2vec2 on unseen languages; writes broad IPA including diacritics. Not yet scored by wugs's own evaluation."
 license = "CC-BY-4.0"
-attribution = "ZIPA by Jian Zhu, Farhan Samir, Eleanor Chodroff and David R. Mortensen (2025), CC BY 4.0, github.com/lingjzhu/zipa; unchanged INT8 export from anyspeech"
+attribution = "ZIPA by Jian Zhu, Farhan Samir, Eleanor Chodroff and David R. Mortensen (2025), github.com/lingjzhu/zipa, CC BY 4.0 (creativecommons.org/licenses/by/4.0); the authors' INT8 export, unchanged"
 homepage = "https://huggingface.co/anyspeech/zipa-small-crctc-500k"
-approx_mb = 70
 
 [model]
 capability = "phone-transcription"
@@ -19,11 +18,15 @@ languages = ["*"]
 onnx = "model.int8.onnx"
 tokens = "tokens.txt"
 
-# Pinned to a revision, so the files never change under an install.
+# Pinned to a revision, with the hashes the real-models workflow measured.
 [[files]]
 path = "model.int8.onnx"
 url = "https://huggingface.co/anyspeech/zipa-small-crctc-500k/resolve/dfe87c97662606fa6db90ad06f627d4363314744/model.int8.onnx"
+sha256 = "d0e28b68164e8b1fbd6105100c01798828aa0855000ce9bbbd1a2cec233adf13"
+bytes = 70677672
 
 [[files]]
 path = "tokens.txt"
 url = "https://huggingface.co/anyspeech/zipa-small-crctc-500k/resolve/dfe87c97662606fa6db90ad06f627d4363314744/tokens.txt"
+sha256 = "f8e042a0c9130532b22d03ec7cae2f75a23fbec70c450c31a8efb51787b2b8fe"
+bytes = 769
