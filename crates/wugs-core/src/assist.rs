@@ -305,7 +305,7 @@ impl Project {
     /// What live consent records say about AI use, per thing they cover:
     /// false when any refuses, true when some allow and none refuses. Any
     /// `AI-ok` other than `true` (`false`, `"no"`, anything) is a refusal.
-    fn ai_consent(&self) -> Result<std::collections::HashMap<String, bool>, String> {
+    pub(crate) fn ai_consent(&self) -> Result<std::collections::HashMap<String, bool>, String> {
         let mut said = std::collections::HashMap::new();
         for c in self.proj.entities_of_kind("consent")? {
             if self.proj.is_tombstoned(&c)? {

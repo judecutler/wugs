@@ -435,3 +435,16 @@ button.rec-start { border-color: var(--error); color: var(--error); }
   font: inherit;
   color: var(--muted);
 }
+
+/* People panel (roadmap 61) */
+.panel-people { display: flex; flex-direction: column; gap: 10px; }
+.pp-note { margin: 0; color: var(--muted); font-size: var(--text-xs); }
+.pp-add, .pp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.pp-name { flex: 1; min-width: 8em; }
+.pp-person { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 8px; display: flex; flex-direction: column; gap: 8px; background: var(--surface-raised); }
+.pp-consent { border-left: 3px solid var(--accent-soft); padding-left: 8px; display: flex; flex-direction: column; gap: 4px; }
+.pp-label { color: var(--muted); font-size: var(--text-xs); }
+.pp-term { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.pp-term-label { flex: 1; min-width: 12em; font-size: var(--text-sm); }
+.pp-term button { padding: 2px 8px; font-size: var(--text-xs); }
+.pp-term button.active { border-color: var(--accent); background: var(--accent-soft); }

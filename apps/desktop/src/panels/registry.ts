@@ -7,6 +7,7 @@ import { kitsPanel } from "./kits";
 import { lexiconPanel } from "./lexicon";
 import { mediaPanel } from "./media";
 import type { PanelDef } from "./panel";
+import { peoplePanel } from "./people";
 import { searchPanel } from "./search";
 import { textsPanel } from "./texts";
 import { timelinePanel } from "./timeline";
@@ -24,6 +25,7 @@ export const PANELS = {
   elicit: elicitPanel,
   search: searchPanel,
   assist: assistPanel,
+  people: peoplePanel,
   conflicts: conflictsPanel,
   devices: devicesPanel,
   kits: kitsPanel,

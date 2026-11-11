@@ -11,6 +11,7 @@ pub mod interchange;
 pub mod kits;
 pub mod layout;
 pub mod lexicon;
+pub mod people;
 pub mod listen;
 pub mod praat;
 pub mod praat_analysis;
@@ -369,6 +370,56 @@ fn lexicon_list(s: State<SessionThread>, query: String) -> Result<Vec<lexicon::E
 #[tauri::command(async)]
 fn lexicon_entry(s: State<SessionThread>, id: String) -> Result<lexicon::EntryView, String> {
     s.run(move |s| lexicon::lexicon_entry(s, &id))
+}
+
+// People and consent (roadmap 61): src/people.rs. Each returns the whole view.
+#[tauri::command(async)]
+fn people_view(s: State<SessionThread>) -> Result<people::PeopleView, String> {
+    s.run(people::view)
+}
+#[tauri::command(async)]
+fn person_add(s: State<SessionThread>, name: String, role: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::add_person(s, &name, &role))
+}
+#[tauri::command(async)]
+fn person_set_name(s: State<SessionThread>, person: String, name: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::set_name(s, &person, &name))
+}
+#[tauri::command(async)]
+fn person_set_roles(s: State<SessionThread>, person: String, roles: Vec<String>) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::set_roles(s, &person, &roles))
+}
+#[tauri::command(async)]
+fn person_delete(s: State<SessionThread>, person: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::delete_person(s, &person))
+}
+#[tauri::command(async)]
+fn consent_add(s: State<SessionThread>, person: String, covers: String, date: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::add_consent(s, &person, &covers, &date))
+}
+#[tauri::command(async)]
+fn consent_set_term(s: State<SessionThread>, consent: String, term: String, answer: Option<bool>) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::set_term(s, &consent, &term, answer))
+}
+#[tauri::command(async)]
+fn consent_set_covers(s: State<SessionThread>, consent: String, covers: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::set_covers(s, &consent, &covers))
+}
+#[tauri::command(async)]
+fn consent_set_date(s: State<SessionThread>, consent: String, date: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::set_date(s, &consent, &date))
+}
+#[tauri::command(async)]
+fn consent_attach(s: State<SessionThread>, consent: String, path: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::attach(s, &consent, &path))
+}
+#[tauri::command(async)]
+fn consent_detach(s: State<SessionThread>, consent: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::detach(s, &consent))
+}
+#[tauri::command(async)]
+fn consent_delete(s: State<SessionThread>, consent: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::delete_consent(s, &consent))
 }
 
 #[tauri::command(async)]
@@ -1140,6 +1191,18 @@ pub fn run() {
             gloss_lexicon,
             gloss_restore,
             gloss_choose_list,
+            people_view,
+            person_add,
+            person_set_name,
+            person_set_roles,
+            person_delete,
+            consent_add,
+            consent_set_term,
+            consent_set_covers,
+            consent_set_date,
+            consent_attach,
+            consent_detach,
+            consent_delete,
             lexicon_list,
             lexicon_entry,
             lexicon_add,
