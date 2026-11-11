@@ -36,8 +36,10 @@ fn every_compressed_format_decodes_to_a_wav_of_the_same_length() {
         ("tone.flac", 16000, 1),
         ("tone.ogg", 16000, 1),
         ("stereo.m4a", 22050, 2),
+        ("tone-alac.m4a", 16000, 1),
+        ("tone-mulaw.wav", 16000, 1),
     ] {
-        assert!(!convert::is_wav(&fixture(name)), "{name}");
+        assert_eq!(convert::is_wav(&fixture(name)), name.ends_with(".wav"), "{name}");
         let out = dir.0.join(format!("{name}.wav"));
         let Converted { sample_rate, channels: ch, frames } = convert::to_wav(&fixture(name), &out).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!((sample_rate, ch), (rate, channels), "{name}");
@@ -76,4 +78,18 @@ fn a_decoded_recording_imports_under_its_own_name() {
     assert!(row.has_media);
     let listed = session::list_sources(&mut s).unwrap();
     assert!(listed.iter().any(|r| r.id == row.id && r.has_media));
+}
+
+#[test]
+fn a_wav_the_peaks_reader_refuses_is_decoded_instead() {
+    let dir = TempDir::new();
+    let mut s: Session = None;
+    session::create_project(&mut s, dir.0.join("p").to_str().unwrap(), "prs_Test").unwrap();
+    let mulaw = fixture("tone-mulaw.wav");
+    // The import command falls back to decoding on exactly this message.
+    let err = session::import_media(&mut s, mulaw.to_str().unwrap()).unwrap_err();
+    assert!(err.contains("unsupported WAV"), "{err}");
+    let wav = dir.0.join("decoded.wav");
+    convert::to_wav(&mulaw, &wav).unwrap();
+    assert!(session::import_media_named(&mut s, &wav, "tone-mulaw.wav").unwrap().has_media);
 }

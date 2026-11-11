@@ -1,5 +1,6 @@
-//! Compressed recordings (phone voice memos in `.m4a`, `.mp3`, `.flac`,
-//! `.ogg`, `.aiff`) become WAV before import, because the blob store, the
+//! Compressed recordings (phone voice memos in `.m4a`, AAC or Apple
+//! Lossless, `.mp3`, `.flac`, `.ogg`, `.aiff`) and WAV encodings the peaks
+//! reader does not take (8-bit, A-law, μ-law, ADPCM) become WAV before import, because the blob store, the
 //! peaks, the timeline, speech assist and Praat all read WAV. Decoding is
 //! Symphonia (pure Rust, MPL-2.0). The decoded audio keeps the file's own
 //! sample rate; one or two channels stay as they are, more are mixed to one.
@@ -18,6 +19,18 @@ use symphonia::core::probe::Hint;
 
 /// The WAV data chunk's size field is 32-bit.
 const MAX_DATA: u64 = u32::MAX as u64 - 64;
+
+/// Remove decoded files a crash left in `dir` (older than an hour, so an
+/// import running now keeps its own).
+pub fn sweep(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    for e in entries.flatten() {
+        let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age.as_secs() > 3600);
+        if old && e.path().extension().is_some_and(|x| x == "wav") {
+            std::fs::remove_file(e.path()).ok();
+        }
+    }
+}
 
 /// Whether the file is already a WAV (RIFF … WAVE), from its first bytes.
 pub fn is_wav(path: &Path) -> bool {
@@ -53,9 +66,13 @@ fn decode(input: &Path, output: &Path, name: &str) -> Result<Converted, String> 
     if let Some(ext) = input.extension().and_then(|e| e.to_str()) {
         hint.with_extension(ext);
     }
-    let unreadable = |e: Error| format!("{name} is not audio wugs can read ({e}); WAV, M4A/AAC, MP3, FLAC, Ogg Vorbis and AIFF import");
+    const KINDS: &str = "WAV, M4A (AAC or Apple Lossless), MP3, FLAC, Ogg Vorbis and AIFF import";
+    let unreadable = |e: Error| format!("{name} is not audio wugs can read ({e}); {KINDS}");
+    let undecodable = |e: Error| format!("{name} uses an audio encoding wugs cannot decode yet ({e}); {KINDS}");
     let probed = symphonia::default::get_probe()
-        .format(&hint, mss, &FormatOptions::default(), &MetadataOptions::default())
+        // Gapless: encoder priming and padding are trimmed, so times match
+        // what other players show for the same file.
+        .format(&hint, mss, &FormatOptions { enable_gapless: true, ..Default::default() }, &MetadataOptions::default())
         .map_err(unreadable)?;
     let mut format = probed.format;
     let track = format
@@ -66,7 +83,7 @@ fn decode(input: &Path, output: &Path, name: &str) -> Result<Converted, String> 
     let track_id = track.id;
     let mut decoder = symphonia::default::get_codecs()
         .make(&track.codec_params, &DecoderOptions::default())
-        .map_err(unreadable)?;
+        .map_err(undecodable)?;
 
     let out = File::create(output).map_err(|e| format!("{}: {e}", output.display()))?;
     let mut w = BufWriter::new(out);
@@ -78,7 +95,8 @@ fn decode(input: &Path, output: &Path, name: &str) -> Result<Converted, String> 
         let packet = match format.next_packet() {
             Ok(p) => p,
             Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-            Err(Error::ResetRequired) => break,
+            // A chained stream (a new Ogg section) may change its format.
+            Err(Error::ResetRequired) => return Err(format!("{name} changes its format part way through; split it first")),
             Err(e) => return Err(format!("{name}: {e}")),
         };
         if packet.track_id() != track_id {

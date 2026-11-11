@@ -190,13 +190,19 @@ fn import_media(s: State<SessionThread>, path: String) -> Result<SourceRow, Stri
     // project opens (open, create, join) passes through allow_media.
     let file = std::path::PathBuf::from(&path);
     if convert::is_wav(&file) {
-        return s.run(move |s| session::import_media(s, &path));
+        let wav = path.clone();
+        match s.run(move |s| session::import_media(s, &wav)) {
+            // 8-bit, A-law, μ-law and ADPCM WAVs are decoded like compressed audio.
+            Err(e) if e.contains("unsupported WAV") => {}
+            done => return done,
+        }
     }
     // Compressed audio is decoded to a WAV in the project's cache, off the
     // session thread, then imported like any WAV under its own file name.
     let root = s.run(session::project_root)?;
     let dir = root.join("cache").join("convert");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    convert::sweep(&dir);
     let wav = dir.join(format!("{}.wav", wugs_model::ulid()));
     convert::to_wav(&file, &wav)?;
     let label = file.file_name().and_then(|n| n.to_str()).unwrap_or("Recording").to_string();
