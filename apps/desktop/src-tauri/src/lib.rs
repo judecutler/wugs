@@ -12,6 +12,7 @@ pub mod lexicon;
 pub mod listen;
 pub mod praat;
 pub mod praat_analysis;
+pub mod segmentation;
 pub mod session;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -483,6 +484,53 @@ async fn acoustic_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>,
     // Praat can take seconds: on a blocking thread, not an async worker or
     // the session thread.
     tauri::async_runtime::spawn_blocking(move || praat_analysis::analyse(&exe, &job, &chunks)).await.map_err(|e| e.to_string())?
+}
+
+/// Resolve what powers segmentation here (the project's pin, else this
+/// computer's choice) and find the speech spans of `source`'s recording off
+/// the session thread (cached per recording).
+async fn segmentation_spans(s: &SessionThread, dir: &AppData, source: String) -> Result<Vec<(f64, f64)>, String> {
+    let cap = capability::Capability::Segmentation;
+    let (job, pin) = s.run(move |s| {
+        let job = segmentation::job(s, &source)?;
+        Ok((job, capability::project_pin(session::project(s)?, cap)?))
+    })?;
+    let provider = capability::resolve(cap, pin.as_deref(), &dir.0)?;
+    tauri::async_runtime::spawn_blocking(move || segmentation::spans(&provider, &job)).await.map_err(|e| e.to_string())?
+}
+
+/// Where speech starts and ends in `source`'s recording, for edge snapping.
+#[tauri::command]
+async fn speech_spans(s: State<'_, SessionThread>, dir: State<'_, AppData>, source: String) -> Result<Vec<[f64; 2]>, String> {
+    Ok(segmentation_spans(&s, &dir, source).await?.into_iter().map(|(a, b)| [a, b]).collect())
+}
+
+/// One machine segment per stretch of speech in `source`'s recording on
+/// `tier` (the utterance tier when None), skipping what is already covered.
+#[tauri::command]
+async fn auto_segment(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, source: String, tier_id: Option<String>) -> Result<segmentation::AutoSegmented, String> {
+    let spans = segmentation_spans(&s, &dir, source).await?;
+    s.run(move |s| segmentation::commit(s, &text_id, tier_id.as_deref(), &spans))
+}
+
+#[tauri::command(async)]
+fn restore_segments(s: State<SessionThread>, text_id: String, segment_ids: Vec<String>) -> Result<Vec<String>, String> {
+    s.run(move |s| session::restore_segments(s, &text_id, &segment_ids))
+}
+
+#[tauri::command(async)]
+fn delete_segments(s: State<SessionThread>, text_id: String, segment_ids: Vec<String>) -> Result<Vec<String>, String> {
+    s.run(move |s| session::delete_segments(s, &text_id, &segment_ids))
+}
+
+#[tauri::command(async)]
+fn split_segment(s: State<SessionThread>, text_id: String, segment_id: String, at_ms: f64) -> Result<AddedSegment, String> {
+    s.run(move |s| session::split_segment(s, &text_id, &segment_id, at_ms))
+}
+
+#[tauri::command(async)]
+fn merge_segments(s: State<SessionThread>, text_id: String, first_id: String, second_id: String) -> Result<Vec<String>, String> {
+    s.run(move |s| session::merge_segments(s, &text_id, &first_id, &second_id))
 }
 
 #[tauri::command(async)]
@@ -989,6 +1037,12 @@ pub fn run() {
             edit_segment_content,
             set_segment_times,
             delete_segment,
+            restore_segments,
+            delete_segments,
+            split_segment,
+            merge_segments,
+            speech_spans,
+            auto_segment,
             add_tier,
             gloss_get,
             gloss_tokenize,

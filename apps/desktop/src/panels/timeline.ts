@@ -1,13 +1,14 @@
 // The canvas timeline (TONGUES-UI build order step 2): waveform + tier
 // lanes + segment editing. The canvas work lives in ../timeline/view.ts;
 // this file is the panel chrome around it: source picker, import, the
-// tier gutter and the perf toggle.
+// tier gutter, the editing buttons (Auto-segment, Split, Merge, Undo, Redo)
+// and the perf toggle.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { addTier, importMedia, listSources, peaksInfo, type SourceRow, type TierTemplate } from "../api";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
 import { attempt, dataGeneration, getSelection, getState, refreshText } from "../store";
-import { RULER_H, TimelineView, WAVE_H, TIER_H } from "../timeline/view";
+import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
 import type { PanelDef, PanelView } from "./panel";
 
 const TEMPLATES: TierTemplate[] = ["transcription", "translation", "notes", "custom"];
@@ -35,7 +36,42 @@ export const timelinePanel: PanelDef = {
       const seg = sel !== null && sel.textId === s.text.id ? s.text.segments.find((x) => x.id === sel.segmentId) ?? null : null;
       return { textId: s.text.id, sourceId: selectedSource, selected: seg, visible: view.visibleRange() };
     }, () => view?.analysis ?? null);
-    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, perfButton, praat.element);
+    const autoButton = h("button", {
+      textContent: "Auto-segment",
+      title: "Add a segment for each stretch of speech in this recording (on the selected segment's track, else the utterance track). Segments you drew are left alone; Undo takes them all back.",
+    });
+    const splitButton = h("button", { textContent: "Split", title: "Cut the selected segment at the playhead (S). Its text stays on the first part." });
+    const mergeButton = h("button", { textContent: "Merge with next", title: "Join the selected segment with the next one on its track (M)." });
+    const undoButton = h("button", { textContent: "Undo", title: "Undo (Ctrl+Z)" });
+    const redoButton = h("button", { textContent: "Redo", title: "Redo (Ctrl+Shift+Z or Ctrl+Y)" });
+    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, splitButton, mergeButton, undoButton, redoButton);
+    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, perfButton, praat.element);
+
+    const updateEditButtons = () => {
+      const stack = view?.history() ?? null;
+      undoButton.disabled = stack === null || !stack.canUndo();
+      redoButton.disabled = stack === null || !stack.canRedo();
+      undoButton.title = stack?.undoLabel() != null ? `Undo ${stack.undoLabel()} (Ctrl+Z)` : "Undo (Ctrl+Z)";
+      redoButton.title = stack?.redoLabel() != null ? `Redo ${stack.redoLabel()} (Ctrl+Shift+Z or Ctrl+Y)` : "Redo (Ctrl+Shift+Z or Ctrl+Y)";
+      autoButton.disabled = autoButton.dataset.busy === "1" || view === null || selectedSource === null;
+    };
+    timelineHistory.onChange = updateEditButtons;
+    undoButton.onclick = () => void view?.undo();
+    redoButton.onclick = () => void view?.redo();
+    splitButton.onclick = () => void view?.splitAtPlayhead();
+    mergeButton.onclick = () => void view?.mergeWithNext();
+    autoButton.onclick = () => {
+      const source = selectedSource;
+      if (view === null || source === null) return;
+      autoButton.dataset.busy = "1";
+      autoButton.textContent = "Finding speech…";
+      updateEditButtons();
+      void view.autoSegment(source).finally(() => {
+        autoButton.dataset.busy = "";
+        autoButton.textContent = "Auto-segment";
+        updateEditButtons();
+      });
+    };
     const gutter = h("div", { className: "tl-gutter" });
     const body = h("div", { className: "tl-body" });
     const main = h("div", { className: "tl-main" }, gutter, body);
@@ -91,6 +127,7 @@ export const timelinePanel: PanelDef = {
       });
       sourcePicker.value = sourceId;
       praat.refresh();
+      updateEditButtons();
     }
 
     function addTrackControl(): HTMLElement {
@@ -206,6 +243,7 @@ export const timelinePanel: PanelDef = {
       }
       lastSlice = slice;
       praat.refresh();
+      updateEditButtons();
     };
 
     return {

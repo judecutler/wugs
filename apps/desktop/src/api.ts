@@ -87,6 +87,22 @@ export const setSegmentTimes = (args: { textId: string; segmentId: string; start
 export const deleteSegment = (args: { textId: string; segmentId: string }) =>
   invoke<string[]>("delete_segment", args);
 
+/** Several segments in one txn each way: the timeline's undo and redo. */
+export const deleteSegments = (args: { textId: string; segmentIds: string[] }) => invoke<string[]>("delete_segments", args);
+export const restoreSegments = (args: { textId: string; segmentIds: string[] }) => invoke<string[]>("restore_segments", args);
+
+/** Cut at `atMs`; the transcription stays on the first part. Returns the new part. */
+export const splitSegment = (args: { textId: string; segmentId: string; atMs: number }) => invoke<AddedSegment>("split_segment", args);
+/** Join a segment with the next one on its tier. */
+export const mergeSegments = (args: { textId: string; firstId: string; secondId: string }) => invoke<string[]>("merge_segments", args);
+
+/** Where speech starts and ends in a recording, `[startMs, endMs]` in time order (cached per recording). */
+export const speechSpans = (args: { source: string }) => invoke<[number, number][]>("speech_spans", args);
+
+export type AutoSegmented = { ids: string[]; skipped: number; tier: string; findings: string[] };
+/** One machine segment per stretch of speech not already covered on the tier (the utterance tier when null). */
+export const autoSegment = (args: { textId: string; source: string; tierId: string | null }) => invoke<AutoSegmented>("auto_segment", args);
+
 export type TierTemplate = "transcription" | "translation" | "notes" | "custom";
 
 export const addTier = (args: { template: TierTemplate; name: string | null }) =>
@@ -438,7 +454,7 @@ export const MODEL_CHANGED = "Phone transcription now uses ";
 
 // Capabilities: src-tauri/src/capability.rs (roadmap 53). Feature code asks for a
 // job; what powers it is chosen here (this computer's choice, the project's pin).
-export type ProviderRow = { id: string; name: string; kind: "model" | "program"; ready: boolean; note: string; score: number | null };
+export type ProviderRow = { id: string; name: string; kind: "model" | "program" | "built-in"; ready: boolean; note: string; score: number | null };
 export type CapabilityView = {
   id: string;
   title: string;

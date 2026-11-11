@@ -17,6 +17,7 @@
 
 pub mod fbank;
 pub mod fbank_ctc;
+pub mod vad;
 
 use std::fs::File;
 use std::io::{BufReader, Seek, SeekFrom};

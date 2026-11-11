@@ -350,6 +350,30 @@ pub fn delete_segment(session: &mut Session, text_id: &str, segment_id: &str) ->
     Ok(finding_lines(&res))
 }
 
+/// Bring deleted segments back in one txn (the timeline's undo of a delete).
+pub fn restore_segments(session: &mut Session, text_id: &str, segment_ids: &[String]) -> Result<Vec<String>, String> {
+    let res = project(session)?.restore_segments(text_id, segment_ids)?;
+    Ok(finding_lines(&res))
+}
+
+/// Delete segments in one txn (the timeline's undo of an Auto-segment).
+pub fn delete_segments(session: &mut Session, text_id: &str, segment_ids: &[String]) -> Result<Vec<String>, String> {
+    let res = project(session)?.delete_segments(text_id, segment_ids)?;
+    Ok(finding_lines(&res))
+}
+
+/// Cut a segment at `at_ms`; the transcription stays on the first part.
+pub fn split_segment(session: &mut Session, text_id: &str, segment_id: &str, at_ms: f64) -> Result<AddedSegment, String> {
+    let (id, res) = project(session)?.split_segment(text_id, segment_id, at_ms.round())?;
+    Ok(AddedSegment { id, findings: finding_lines(&res) })
+}
+
+/// Join a segment with the next one on its tier.
+pub fn merge_segments(session: &mut Session, text_id: &str, first_id: &str, second_id: &str) -> Result<Vec<String>, String> {
+    let res = project(session)?.merge_segments(text_id, first_id, second_id)?;
+    Ok(finding_lines(&res))
+}
+
 /// The "Add track" templates (TONGUES-UI): each is a default name and a tier
 /// role over the time-aligned kind. There is no "gloss" template: glosses live
 /// on morphs, under the words of a transcription (GLOSSING-MODEL), so a gloss
@@ -376,7 +400,7 @@ pub fn add_tier(session: &mut Session, template: &str, name: Option<&str>) -> Re
 /// One past the largest existing pos, so a new segment sorts last even when
 /// earlier ones were deleted or imported with their own numbering. The live
 /// count alone can collide with a taken pos.
-fn next_pos_index(p: &Project, text_id: &str) -> Result<usize, String> {
+pub(crate) fn next_pos_index(p: &Project, text_id: &str) -> Result<usize, String> {
     let mut next = 0usize;
     for seg in p.proj.children_by_ref("text", text_id, "segment")? {
         let pos = p.proj.field_str(&seg, "pos")?.unwrap_or_default();
@@ -389,7 +413,7 @@ fn next_pos_index(p: &Project, text_id: &str) -> Result<usize, String> {
     Ok(next)
 }
 
-fn utterance_tier(p: &mut Project) -> Result<String, String> {
+pub(crate) fn utterance_tier(p: &mut Project) -> Result<String, String> {
     for id in p.proj.entities_of_kind("tier")? {
         if p.proj.field_str(&id, "origin")?.as_deref() == Some(UTTERANCE_ORIGIN) {
             return Ok(id);

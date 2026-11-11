@@ -3,7 +3,8 @@
 //! `resolve` for a capability and gets a provider; it never names a model
 //! or a program. A provider is either a model package (a manifest in the
 //! catalogue, run by one of this build's runtime adapters) or a program the
-//! person installed (Praat).
+//! person installed (Praat), or one built into wugs (voice activity for
+//! segmentation).
 //!
 //! The choice per capability is Automatic or a named provider. This
 //! computer keeps its own choice in `<app data>/capabilities.json`; a
@@ -23,15 +24,17 @@ use wugs_package::Manifest;
 pub enum Capability {
     PhoneTranscription,
     AcousticAnalysis,
+    Segmentation,
 }
 
 impl Capability {
-    pub const ALL: [Capability; 2] = [Capability::PhoneTranscription, Capability::AcousticAnalysis];
+    pub const ALL: [Capability; 3] = [Capability::PhoneTranscription, Capability::AcousticAnalysis, Capability::Segmentation];
 
     pub fn id(self) -> &'static str {
         match self {
             Capability::PhoneTranscription => "phone-transcription",
             Capability::AcousticAnalysis => "acoustic-analysis",
+            Capability::Segmentation => "segmentation",
         }
     }
 
@@ -39,6 +42,7 @@ impl Capability {
         match self {
             Capability::PhoneTranscription => "Phone transcription",
             Capability::AcousticAnalysis => "Acoustic analysis",
+            Capability::Segmentation => "Segmentation",
         }
     }
 
@@ -58,6 +62,12 @@ pub const RUNTIMES: &[&str] = &["onnx-ctc-raw", "onnx-ctc-fbank"];
 
 /// Praat, as a provider id. Not a package: the person's own program.
 pub const PRAAT: &str = "praat";
+
+/// Built-in voice-activity detection (`wugs_asr::vad`), as a provider id:
+/// where speech starts and ends, from loudness over the recording's own
+/// noise floor. Not a package and always ready; segmentation models can
+/// join it as packages later.
+pub const VOICE_ACTIVITY: &str = "voice-activity";
 
 /// In catalogue order, which is Automatic's last tie-break. wav2vec2 stays
 /// first until ZIPA has been checked on real speech by hand: downloading
@@ -127,8 +137,10 @@ pub fn project_pin(project: &wugs_core::Project, cap: Capability) -> Result<Opti
 /// Every provider id that can serve `cap`, ready here or not.
 pub fn known(cap: Capability) -> Vec<String> {
     let mut ids: Vec<String> = catalogue().iter().filter(|m| m.model.capability == cap.id()).map(|m| m.id.clone()).collect();
-    if cap == Capability::AcousticAnalysis {
-        ids.push(PRAAT.into());
+    match cap {
+        Capability::AcousticAnalysis => ids.push(PRAAT.into()),
+        Capability::Segmentation => ids.push(VOICE_ACTIVITY.into()),
+        Capability::PhoneTranscription => {}
     }
     ids
 }
@@ -141,7 +153,7 @@ pub fn known(cap: Capability) -> Vec<String> {
 pub struct ProviderRow {
     pub id: String,
     pub name: String,
-    /// "model" or "program".
+    /// "model", "program" or "built-in".
     pub kind: &'static str,
     /// Ready to run here now.
     pub ready: bool,
@@ -193,6 +205,16 @@ pub fn options(cap: Capability, here: &Here) -> Vec<ProviderRow> {
         };
         out.push(ProviderRow { id: PRAAT.into(), name: "Praat".into(), kind: "program", ready, note, score: None });
     }
+    if cap == Capability::Segmentation {
+        out.push(ProviderRow {
+            id: VOICE_ACTIVITY.into(),
+            name: "Voice activity (built in)".into(),
+            kind: "built-in",
+            ready: true,
+            note: "Built in: finds pauses in the recording, offline.".into(),
+            score: None,
+        });
+    }
     out
 }
 
@@ -213,6 +235,7 @@ fn automatic(options: &[ProviderRow]) -> Option<&ProviderRow> {
 pub enum Provider {
     Model(&'static Manifest),
     Praat(PathBuf),
+    VoiceActivity,
 }
 
 impl Provider {
@@ -220,6 +243,7 @@ impl Provider {
         match self {
             Provider::Model(m) => &m.id,
             Provider::Praat(_) => PRAAT,
+            Provider::VoiceActivity => VOICE_ACTIVITY,
         }
     }
 }
@@ -239,7 +263,11 @@ pub fn effective(cap: Capability, pin: Option<&str>, machine: &Choice, options: 
                 "{} {} {} for {}, and it is not ready here: {}",
                 if pinned { "This project uses" } else { "You chose" },
                 o.name,
-                if o.kind == "model" { "(a model)" } else { "(a program)" },
+                match o.kind {
+                    "model" => "(a model)",
+                    "program" => "(a program)",
+                    _ => "(built in)",
+                },
                 cap.title().to_lowercase(),
                 o.note
             )),
@@ -252,6 +280,7 @@ pub fn effective(cap: Capability, pin: Option<&str>, machine: &Choice, options: 
         Choice::Automatic => automatic(options).map(|o| o.id.clone()).ok_or_else(|| match cap {
             Capability::PhoneTranscription => "No phone transcription model is downloaded yet. Download one in the Speech assist panel.".to_string(),
             Capability::AcousticAnalysis => options.iter().find(|o| o.id == PRAAT).map(|o| o.note.clone()).unwrap_or_else(|| "Nothing on this computer can analyse audio.".into()),
+            Capability::Segmentation => "Nothing here can segment a recording.".to_string(),
         }),
     }
 }
@@ -262,6 +291,9 @@ pub fn resolve(cap: Capability, pin: Option<&str>, app_data: &Path) -> Result<Pr
     let id = effective(cap, pin, &machine_choice(app_data, cap), &options(cap, &here))?;
     if id == PRAAT {
         return here.praat.map(Provider::Praat);
+    }
+    if id == VOICE_ACTIVITY {
+        return Ok(Provider::VoiceActivity);
     }
     manifest(&id).map(Provider::Model).ok_or_else(|| format!("no package {id:?}"))
 }
@@ -305,6 +337,7 @@ pub fn provider_name(id: &str) -> String {
     match id {
         "" => "not pinned".into(),
         PRAAT => "Praat".into(),
+        VOICE_ACTIVITY => "Voice activity (built in)".into(),
         "automatic" => "Automatic".into(),
         _ => manifest(id).map(|m| m.name.clone()).unwrap_or_else(|| id.to_string()),
     }
@@ -354,6 +387,22 @@ mod tests {
         assert!(known(Capability::PhoneTranscription).contains(&"wav2vec2-espeak".to_string()));
         assert!(!known(Capability::PhoneTranscription).contains(&PRAAT.to_string()));
         assert_eq!(known(Capability::AcousticAnalysis), [PRAAT]);
+        assert_eq!(known(Capability::Segmentation), [VOICE_ACTIVITY]);
+        assert!(!known(Capability::PhoneTranscription).contains(&VOICE_ACTIVITY.to_string()));
+    }
+
+    #[test]
+    fn segmentation_is_built_in_and_always_ready() {
+        let dir = std::env::temp_dir().join(format!("wugs-cap-seg-{}", wugs_model::ulid()));
+        assert_eq!(Capability::parse("segmentation").unwrap(), Capability::Segmentation);
+        let here = Here::look(&dir, Capability::Segmentation);
+        let os = options(Capability::Segmentation, &here);
+        assert_eq!(os.iter().map(|o| (o.id.as_str(), o.kind, o.ready)).collect::<Vec<_>>(), [(VOICE_ACTIVITY, "built-in", true)]);
+        assert_eq!(effective(Capability::Segmentation, None, &Choice::Automatic, &os).unwrap(), VOICE_ACTIVITY);
+        assert!(matches!(resolve(Capability::Segmentation, None, &dir).unwrap(), Provider::VoiceActivity));
+        let err = effective(Capability::Segmentation, Some("some-model"), &Choice::Automatic, &os).unwrap_err();
+        assert!(err.contains("does not know"), "{err}");
+        assert_eq!(provider_name(VOICE_ACTIVITY), "Voice activity (built in)");
     }
 
     #[test]

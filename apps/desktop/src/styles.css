@@ -190,6 +190,7 @@ button:disabled { opacity: 0.55; cursor: default; }
 .tl-toolbar .tl-sources { min-width: 0; flex: 0 1 auto; }
 .tl-toolbar .tl-sources { max-width: 260px; }
 .tl-toolbar button.active { border-color: var(--accent); background: #e7efe9; }
+.tl-toolbar .tl-edit-tools { display: inline-flex; gap: 4px; padding: 0 6px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .tl-main { display: flex; flex: 1; min-height: 0; }
 .tl-gutter { position: relative; width: 132px; border-right: 1px solid var(--line); background: var(--panel); font-size: 12px; flex: none; }
 .tl-gutter-wave, .tl-gutter-tier { position: absolute; left: 0; right: 0; padding: 4px 8px; color: var(--chrome-ink); border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

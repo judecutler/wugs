@@ -84,6 +84,57 @@ pub fn pos_seq(i: usize) -> String {
     format!("{:08x}", i)
 }
 
+/// A position key that sorts after `a` and before `b` (or after `a` alone),
+/// over the lowercase hex digits `pos_seq` writes: a split segment's second
+/// part goes right after the first without renumbering anyone. `b`, when
+/// given, must sort after `a`.
+pub fn pos_between(a: &str, b: Option<&str>) -> String {
+    const HEX: &[u8] = b"0123456789abcdef";
+    let digit = |s: &[u8], i: usize| s.get(i).and_then(|c| HEX.iter().position(|h| h == c));
+    let (a, b) = (a.as_bytes(), b.map(str::as_bytes));
+    let mut out = Vec::new();
+    let mut i = 0;
+    // Copy the common prefix; where the two part, take a digit between them
+    // if there is room, else a's digit and then anything above a's tail.
+    if let Some(b) = b {
+        loop {
+            let da = digit(a, i).unwrap_or(0);
+            let Some(db) = digit(b, i) else { break };
+            if da == db {
+                out.push(HEX[da]);
+                i += 1;
+                continue;
+            }
+            if db > da + 1 {
+                out.push(HEX[(da + db) / 2]);
+                return String::from_utf8(out).expect("hex");
+            }
+            if db > da {
+                out.push(HEX[da]);
+                i += 1;
+            }
+            break;
+        }
+    }
+    loop {
+        match digit(a, i) {
+            None => {
+                out.push(b'8');
+                break;
+            }
+            Some(15) => {
+                out.push(b'f');
+                i += 1;
+            }
+            Some(d) => {
+                out.push(HEX[(d + 16 + 1) / 2]);
+                break;
+            }
+        }
+    }
+    String::from_utf8(out).expect("hex")
+}
+
 /// Does this string look like a prefixed entity id (`tok_01ARZ…`)?
 pub fn looks_like_id(s: &str) -> bool {
     let Some((prefix, rest)) = s.split_once('_') else {
@@ -135,5 +186,19 @@ mod tests {
         assert!(pos_seq(1) < pos_seq(2));
         assert!(pos_seq(9) < pos_seq(10));
         assert!(pos_seq(255) < pos_seq(4096));
+        let (a, b) = (pos_seq(3), pos_seq(4));
+        let m = pos_between(&a, Some(&b));
+        assert!(a < m && m < b, "{m}");
+        let m2 = pos_between(&a, Some(&m));
+        assert!(a < m2 && m2 < m, "{m2}");
+        let m3 = pos_between(&m2, Some(&m));
+        assert!(m2 < m3 && m3 < m, "{m3}");
+        assert!(pos_between(&a, None) > a);
+        assert!(pos_between("0f", None).as_str() > "0f");
+        let m5 = pos_between("0f", Some("1"));
+        assert!("0f" < m5.as_str() && m5.as_str() < "1", "{m5}");
+        assert_eq!(pos_between("00000003", Some("00000009")), "00000006");
+        let m4 = pos_between("03", Some("0301"));
+        assert!("03" < m4.as_str() && m4.as_str() < "0301", "{m4}");
     }
 }

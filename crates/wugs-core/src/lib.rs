@@ -23,9 +23,11 @@ pub mod conflicts;
 mod elicitation;
 mod gloss;
 mod lexicon;
+mod segments;
 pub mod settings;
 pub use wugs_validate::{Finding, Severity};
 pub use gloss::{lcs_pairs, AppliedToUnanalysed, LexiconMatch, MorphSpec, Retokenized, Suggestion};
+pub use segments::MACHINE_SEGMENT_INTENT;
 pub use lexicon::{domain_id, DomainRow, ImportedDomains};
 pub use elicitation::{concept_id, concept_list_id, ConceptRow, ImportedConcepts};
 
@@ -900,6 +902,12 @@ impl<'a> Txn<'a> {
 
     pub fn delete(&mut self, entity: &str, target: &str, scope: &str) {
         let op = self.envelope("delete", entity, target, scope);
+        self.ops.push(op);
+    }
+
+    /// Lift a tombstone (the inverse of `delete`; DATA-MODEL §2).
+    pub fn restore(&mut self, entity: &str, target: &str, scope: &str) {
+        let op = self.envelope("restore", entity, target, scope);
         self.ops.push(op);
     }
 

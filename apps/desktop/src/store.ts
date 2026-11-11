@@ -8,7 +8,8 @@ export type AppState =
   | { kind: "closed" }
   | { kind: "open"; info: ProjectInfo; texts: TextRow[]; text: TextDetail | null };
 
-export type Toast = { tone: "info" | "warn" | "error"; lines: string[] };
+/** `action`: one button beside Dismiss (e.g. Undo); it closes the toast. */
+export type Toast = { tone: "info" | "warn" | "error"; lines: string[]; action?: { label: string; run: () => void } };
 
 /** The segment the user is working on, shared by the timeline and the
  * transcription panel so each follows the other. */
