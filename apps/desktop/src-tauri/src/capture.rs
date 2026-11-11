@@ -117,6 +117,12 @@ impl Captures {
         self.map.lock().map_err(|_| "capture state poisoned".to_string())
     }
 
+    /// How many takes are open (recording, or stopped and not yet saved,
+    /// kept or discarded). The updater refuses to restart while any is.
+    pub fn open_count(&self) -> Result<usize, String> {
+        Ok(self.map()?.len())
+    }
+
     /// Open a WAV under `root/recordings-pending/` and return its capture id.
     pub fn begin(&self, root: &Path, sample_rate: u32, channels: u16) -> Result<String, String> {
         if !(8_000..=384_000).contains(&sample_rate) || !(1..=2).contains(&channels) {

@@ -48,7 +48,7 @@
 ## Release and open up
 | # | Item | Status | Notes |
 | --- | --- | --- | --- |
-| 32 | Package installers for Windows, macOS, Linux | 🟡 | CI builds unsigned installers on tag/dispatch (PR #27); signing + updater later |
+| 32 | Package installers for Windows, macOS, Linux | 🟡 | CI builds unsigned installers on tag/dispatch (PR #27); in-app updater from GitHub Releases, updates signed in the `release` environment, ask before download (feat/updater); code-signing certificates (SmartScreen, Gatekeeper) still pending |
 | 33 | Write user docs and the plugin/kit authoring guide | ⬜ | |
 | 35 | Ship Tongues 1.0 | ⬜ | |
 

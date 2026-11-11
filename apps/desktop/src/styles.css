@@ -404,3 +404,35 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .praat-review[hidden] { display: none; }
 .praat-summary { font-weight: 600; }
 .praat-note { color: var(--muted); flex-basis: 100%; }
+
+/* Update notice (Online), between the header and the dock. */
+.update-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--line);
+  background: white;
+  font-size: 13px;
+}
+.online-chip {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 10px;
+  padding: 0 7px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.update-message { color: var(--warn); }
+.update-notice progress { width: 160px; }
+.update-notes {
+  flex-basis: 100%;
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  white-space: pre-wrap;
+  font: inherit;
+  color: var(--muted);
+}

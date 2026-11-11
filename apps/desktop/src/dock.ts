@@ -47,6 +47,8 @@ export type Dock = {
   api: DockviewApi;
   /** Save this kit's arrangement, then show `kit`'s: its saved one, or its manifest's. */
   switchKit(kit: Kit): Promise<void>;
+  /** Write a pending arrangement change now (before an update restarts the app). */
+  flush(): Promise<void>;
 };
 
 /** Restore the kit's saved arrangement (or its manifest's) and save every change after. */
@@ -111,6 +113,7 @@ export async function mountDock(host: HTMLElement, kit: Kit): Promise<Dock> {
   });
   return {
     api,
+    flush,
     async switchKit(next: Kit) {
       await flush();
       kitId = next.id;
