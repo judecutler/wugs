@@ -4,7 +4,7 @@ source = "hf:anyspeech/zipa-small-crctc-500k"
 type = "model"
 version = "500k"
 name = "ZIPA-CR small (IPA phones)"
-about = "A 64M-parameter Zipformer CTC phone recognizer trained on IPAPack++ (17,000 hours, 88 languages; ACL 2025), in its INT8 ONNX release. Smaller and, on the authors' benchmarks, more accurate than wav2vec2 on unseen languages; writes broad IPA including diacritics. Not yet scored by wugs's own evaluation."
+about = "A 64M-parameter Zipformer CTC phone recognizer trained on IPAPack++ (17,000 hours, 88 languages; ACL 2025), in its INT8 ONNX release. A third of the memory of wav2vec2; on wugs's evaluation slightly less accurate on unseen languages (VoxAngeles) and level on Tusom, and slower on short segments. Writes broad IPA including diacritics."
 license = "CC-BY-4.0"
 attribution = "ZIPA by Jian Zhu, Farhan Samir, Eleanor Chodroff and David R. Mortensen (2025), github.com/lingjzhu/zipa, CC BY 4.0 (creativecommons.org/licenses/by/4.0); the authors' INT8 export, unchanged"
 homepage = "https://huggingface.co/anyspeech/zipa-small-crctc-500k"
@@ -30,3 +30,11 @@ path = "tokens.txt"
 url = "https://huggingface.co/anyspeech/zipa-small-crctc-500k/resolve/dfe87c97662606fa6db90ad06f627d4363314744/tokens.txt"
 sha256 = "f8e042a0c9130532b22d03ec7cae2f75a23fbec70c450c31a8efb51787b2b8fe"
 bytes = 769
+
+# wugs's own evaluation (roadmap 52): PRiSM's scorer at commit 85094ff on
+# every 8th utterance of its public sets, run by .github/workflows/eval.yml
+# (run 42925215956, 2026-11-11). PFER as a fraction, lower is better; the
+# overall figure is the mean of the two sets. VoxAngeles 0.195, Tusom 2021 0.261.
+[evaluation]
+benchmark = "prism-pfer@85094ff/every-8th"
+per = { "*" = 0.228 }
