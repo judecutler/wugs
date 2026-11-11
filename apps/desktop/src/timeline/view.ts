@@ -2,6 +2,7 @@
 // drawn in one devicePixelRatio-aware canvas every animation frame from
 // whatever peak strips are cached. Nothing in the draw loop awaits or
 // allocates beyond scratch state created up front.
+import { token } from "../theme/tokens";
 import { AnalysisLayer } from "./analysis-layer";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
@@ -197,16 +198,14 @@ export class TimelineView {
     const ctx = this.canvas.getContext("2d");
     if (ctx === null) throw new Error("no 2d canvas context");
     this.ctx = ctx;
-    const style = getComputedStyle(document.documentElement);
-    const read = (name: string, fallback: string) => style.getPropertyValue(name).trim() || fallback;
     this.colors = {
-      line: read("--line", this.colors.line),
-      ink: read("--ink", this.colors.ink),
-      muted: read("--muted", this.colors.muted),
-      accent: read("--accent", this.colors.accent),
-      wave: this.colors.wave,
-      box: "#ffffff",
-      warn: read("--warn", this.colors.warn),
+      line: token("--line", this.colors.line),
+      ink: token("--ink", this.colors.ink),
+      muted: token("--muted", this.colors.muted),
+      accent: token("--accent", this.colors.accent),
+      wave: token("--wave", this.colors.wave),
+      box: token("--surface-raised", this.colors.box),
+      warn: token("--warn", this.colors.warn),
     };
 
     this.observer = new ResizeObserver(() => this.resize());
@@ -515,10 +514,10 @@ export class TimelineView {
     const line1 = `draw ${this.stats.avgDraw().toFixed(2)} ms avg · ${this.stats.p95Draw().toFixed(2)} ms p95`;
     const line2 = `${this.stats.fps().toFixed(0)} fps · strip hits ${rate.toFixed(1)}%`;
     const w = 240;
-    ctx.fillStyle = "rgba(31, 29, 26, 0.82)";
+    ctx.fillStyle = token("--overlay-bg", "rgba(31, 29, 26, 0.82)");
     ctx.fillRect(this.vp().widthPx - w - 8, 8, w, 40);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "11px ui-monospace, monospace";
+    ctx.fillStyle = token("--on-accent", "#ffffff");
+    ctx.font = `11px ${token("--font-mono", "monospace")}`;
     ctx.fillText(line1, this.vp().widthPx - w, 24);
     ctx.fillText(line2, this.vp().widthPx - w, 40);
   }

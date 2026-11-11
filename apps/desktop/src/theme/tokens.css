@@ -1,0 +1,60 @@
+/* Design tokens: every colour, font, size and radius the shell uses.
+ * The UI revamp (roadmap 60) changes values here, not across the
+ * stylesheet; a kit can later override any of them on :root. The canvas
+ * views (timeline, analysis overlays, level meter) read the same tokens
+ * through src/theme/tokens.ts. */
+:root {
+  /* surfaces */
+  --bg: #fbfaf7;              /* the workspace behind panels */
+  --panel: #f1efe9;           /* bars, headers, hovered rows */
+  --surface-raised: #ffffff;  /* inputs, buttons, popovers, segment boxes */
+  --chrome: #ece6da;
+  --line: #dcd8cf;
+
+  /* text */
+  --ink: #1f1d1a;
+  --muted: #7a756c;
+  --chrome-ink: #4a443b;
+  --on-accent: #ffffff;       /* text on an accent, warn or error fill */
+
+  /* brand and state */
+  --accent: #2e5e4e;
+  --accent-soft: #e7efe9;     /* selected rows, active toggles */
+  --warn: #8a5a00;
+  --warn-soft: #f6ecd6;
+  --error: #9b2c2c;
+  --highlight: #f3e2b3;       /* search hits */
+  --notice-soft: #f3efe4;     /* a row of news under a toolbar */
+
+  /* machine suggestions (speech assist) */
+  --machine-unsure: rgba(214, 170, 40, 0.28);
+  --machine-very-unsure: rgba(196, 64, 48, 0.22);
+
+  /* canvas: timeline, analysis overlays, recording meter */
+  --wave: #4a7a68;
+  --pitch: #1f5fbf;
+  --intensity: #c9a400;
+  --formants: #c0392b;
+  --meter-ok: #4d7c5a;
+  --meter-clip: #b3402f;
+  --meter-bg: #222222;
+  --overlay-bg: rgba(31, 29, 26, 0.82);
+
+  /* type */
+  --font-ui: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, Menlo, Consolas, monospace;
+  /* Fonts that draw every IPA symbol and stacked diacritic well, where installed. */
+  --font-ipa: "Charis SIL", "Doulos SIL", "Gentium Plus", "Noto Sans", var(--font-ui);
+  --text-base: 14px;
+  --text-sm: 13px;
+  --text-xs: 12px;
+
+  /* shape */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --shadow-pop: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --focus-ring: 2px solid var(--accent);
+
+  /* brand assets: public/brand/README.md */
+  --logo-height: 20px;
+}

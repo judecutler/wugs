@@ -1,3 +1,4 @@
+import { brandLogo } from "./theme/brand";
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import { captureReset, createProject, errorText, kitsList, onAssistDownload, openProject } from "./api";
 import { reloadModels } from "./panels/assist";
@@ -59,6 +60,7 @@ function renderTop() {
     h("option", { value: "auto", textContent: autoChecks() ? "Stop checking at start (Online)" : "Check at start (Online)" }),
   );
   top.replaceChildren(
+    ...[brandLogo()].filter((x): x is HTMLImageElement => x !== null),
     h("strong", { className: "brand", textContent: kit?.name ?? "wugs", title: kit === null ? "wugs" : `wugs: ${kit.name}${kit.subtitle === "" ? "" : `, ${kit.subtitle.toLowerCase()}`}` }),
     h("span", { className: "subtitle", textContent: kit?.subtitle ?? "" }),
     who,
