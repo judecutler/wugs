@@ -427,7 +427,8 @@ export const assistDelete = (args: { id: string }) => invoke<void>("assist_delet
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
 // Corrections export: src-tauri/src/corrections.rs (roadmap 57).
 /** `recordedNo`: a consent record says no to AI use; `restricted`: a restricted or community access level. Both start left out; the person decides. */
-export type CorrectionsSummary = { ready: number; recordedNo: number; restricted: number; unchecked: number; unusable: number };
+/** `partial`: why this device may not know every consent record (a guest, records still arriving), or null. */
+export type CorrectionsSummary = { ready: number; recordedNo: number; restricted: number; unchecked: number; unusable: number; partial: string | null };
 export type CorrectionsExported = { folder: string; written: number; problems: string[]; failed: number };
 export const correctionsSummary = () => invoke<CorrectionsSummary>("corrections_summary");
 /** `flagged`: also include clips the project's records speak against (a recorded no, a restricted level). */

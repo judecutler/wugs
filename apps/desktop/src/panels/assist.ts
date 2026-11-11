@@ -243,6 +243,7 @@ export const assistPanel: PanelDef = {
         { className: "as-choice" },
         h("p", { className: "as-note", textContent: "Each suggestion you checked pairs what the model heard with what you wrote. Exported as a folder of clips, it measures how well models do on this language and can help train better ones. Nothing is sent anywhere: you choose where the folder goes." }),
         h("p", { className: "as-note", textContent: correctionsLine(c) }),
+        c.partial === null ? null : h("p", { className: "as-note", textContent: c.partial }),
         consent,
         h("div", { className: "as-actions" }, h("button", {
           type: "button",

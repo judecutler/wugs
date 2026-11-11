@@ -44,11 +44,12 @@ test("sizes read as people say them", () => {
   assert.equal(progressLabel(1024 * 1024, 0), "1.0 MB so far");
 });
 
-test("the export line says what is ready and what is not", () => {
+test("the export line matches what the button exports", () => {
   const none = { ready: 0, recordedNo: 0, restricted: 0, unchecked: 0, unusable: 0 };
   assert.equal(correctionsLine(none), "No checked suggestions to export yet.");
   assert.equal(correctionsLine({ ...none, ready: 1 }), "1 checked suggestion ready to export.");
-  assert.equal(correctionsLine({ ...none, ready: 2, restricted: 3, unchecked: 1 }), "5 checked suggestions ready to export. Not yet: 1 suggestion not checked yet.");
+  assert.equal(correctionsLine({ ...none, ready: 2, restricted: 3, unchecked: 1 }), "5 checked suggestions: 2 ready, 3 left out unless you include them. Also: 1 suggestion not checked yet.");
+  assert.equal(correctionsLine({ ...none, ready: 1, unusable: 2 }), "1 checked suggestion ready to export. Also: 2 clips without a recording or times, which cannot be exported.");
 });
 
 test("what the records say against is told, and included only on the person's choice", () => {

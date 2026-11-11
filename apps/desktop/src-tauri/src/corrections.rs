@@ -35,7 +35,15 @@ pub struct Summary {
     pub restricted: usize,
     pub unchecked: usize,
     pub unusable: usize,
+    /// Why this device may not know every consent record (a guest never
+    /// receives them; some may still be arriving), or None. Shown and
+    /// written into the datasheet, never a gate.
+    pub partial: Option<String>,
 }
+
+/// Guests never receive the people scope (sync shares only open scopes with them).
+const GUEST: &str = "This device is a guest, so it does not receive the project's consent records: a clip shown without a record may have one.";
+const ARRIVING: &str = "Some of the project's consent records are still arriving on this device: a clip shown without a record may have one.";
 
 /// One clip to cut and its lines in the folder's tables.
 #[derive(Debug, Clone)]
@@ -61,12 +69,13 @@ fn flagged(p: &Correction) -> bool {
     p.consent == Consent::No || p.restricted
 }
 
-pub fn summary(s: &mut Session) -> Result<Summary, String> {
-    Ok(tally(&session::project(s)?.corrections()?))
+pub fn summary(s: &mut Session, guest: bool) -> Result<Summary, String> {
+    Ok(tally(&session::project(s)?.corrections()?, guest))
 }
 
-fn tally(c: &Corrections) -> Summary {
-    let mut sum = Summary { unchecked: c.unchecked, unusable: c.unusable, ..Summary::default() };
+fn tally(c: &Corrections, guest: bool) -> Summary {
+    let partial = if guest { Some(GUEST.to_string()) } else if c.records_incomplete { Some(ARRIVING.to_string()) } else { None };
+    let mut sum = Summary { unchecked: c.unchecked, unusable: c.unusable, partial, ..Summary::default() };
     for p in &c.pairs {
         count(&mut sum, p, 1);
     }
@@ -87,10 +96,10 @@ fn count(sum: &mut Summary, p: &Correction, by: isize) {
 /// The pairs to export and where each one's recording is. `flagged`: the
 /// person also includes pairs their records speak against. A pair whose
 /// recording has no audio file here is left out, counted as `unusable`.
-pub fn prepare(s: &mut Session, include_flagged: bool) -> Result<(Vec<Job>, Summary), String> {
+pub fn prepare(s: &mut Session, guest: bool, include_flagged: bool) -> Result<(Vec<Job>, Summary), String> {
     let p = session::project(s)?;
     let c = p.corrections()?;
-    let mut sum = tally(&c);
+    let mut sum = tally(&c, guest);
     let mut jobs = Vec::new();
     for pair in c.pairs {
         if flagged(&pair) && !include_flagged {
@@ -160,7 +169,8 @@ pub fn write(jobs: &[Job], sum: &Summary, parent: &Path, today: &str) -> Result<
             ("text.machine", one_line(&p.machine)),
             ("utt2model", p.model.clone()),
             ("utt2confidence", format!("{:.3}", p.confidence)),
-            ("utt2consent", p.consent.as_str().to_string()),
+            // Where this device may not know every record, "none here" is not "none".
+            ("utt2consent", if p.consent == Consent::Unrecorded && sum.partial.is_some() { "unknown".to_string() } else { p.consent.as_str().to_string() }),
         ] {
             let t = tables.entry(table).or_default();
             t.push_str(&format!("{utt} {value}\n"));
@@ -178,13 +188,19 @@ pub fn write(jobs: &[Job], sum: &Summary, parent: &Path, today: &str) -> Result<
             Consent::Unrecorded => tally.unrecorded += 1,
             Consent::No => tally.no += 1,
         }
+        // Against the records, counted once each as the summary does: a no first.
+        if p.consent == Consent::No {
+            tally.against_no += 1;
+        } else if p.restricted {
+            tally.against_restricted += 1;
+        }
         *models.entry(p.model.clone()).or_default() += 1;
     }
     if written == 0 {
         fs::remove_dir_all(&folder).ok();
         return Err(format!("No clip could be cut. {}", problems.join(" ")));
     }
-    let readme = datasheet(today, written, &tally, &models, sum, jobs.iter().any(|j| flagged(&j.pair)));
+    let readme = datasheet(today, written, failed, &tally, &models, sum, jobs.iter().any(|j| flagged(&j.pair)));
     let finish = || -> Result<(), String> {
         for (name, body) in &tables {
             fs::write(folder.join(name), body).map_err(|e| format!("{name}: {e}"))?;
@@ -207,26 +223,33 @@ struct Tally {
     no: usize,
     restricted: usize,
     retimed: usize,
+    against_no: usize,
+    against_restricted: usize,
 }
 
-fn datasheet(today: &str, written: usize, t: &Tally, models: &BTreeMap<String, usize>, sum: &Summary, included_flagged: bool) -> String {
+fn datasheet(today: &str, written: usize, failed: usize, t: &Tally, models: &BTreeMap<String, usize>, sum: &Summary, included_flagged: bool) -> String {
     let models = models.iter().map(|(m, n)| format!("- `{m}`: {n}")).collect::<Vec<_>>().join("\n");
-    let left_out = if included_flagged { String::new() } else if sum.recorded_no + sum.restricted > 0 {
-        format!(" Left out by the exporter's choice: {} clips a consent record says no to and {} with a restricted or community access level.", sum.recorded_no, sum.restricted)
+    let left_out = if included_flagged || sum.recorded_no + sum.restricted == 0 {
+        String::new()
+    } else {
+        format!(" Left out (the default, which the exporter did not change): {} clips a consent record says no to, and {} more with a restricted or community access level.", sum.recorded_no, sum.restricted)
+    };
+    let against = if t.against_no + t.against_restricted > 0 {
+        format!(" The exporter chose to include {} clips a consent record in the project says no to, and {} more with a restricted or community access level (listed in `utt2consent` and `restricted`).", t.against_no, t.against_restricted)
     } else {
         String::new()
     };
-    let against = if t.no + t.restricted > 0 {
-        format!(" The exporter chose to include {} clips a consent record in the project says no to and {} with a restricted or community access level (both listed: `utt2consent`, `restricted`).", t.no, t.restricted)
-    } else {
-        String::new()
+    let partial = match &sum.partial {
+        Some(why) => format!(" Note: {why} Such clips read `unknown` in `utt2consent`."),
+        None => String::new(),
     };
+    let failed = if failed > 0 { format!(" {failed} chosen clips could not be cut from their recordings and are not here.") } else { String::new() };
     format!(
         "# Corrected machine transcriptions (wugs)\n\n\
 Exported {today}. {written} clips, each a segment where a phone model suggested a transcription and a person then checked and corrected it in wugs.\n\n\
 **These are speech recordings of real people. Treat this folder as you would the recordings themselves:** share it only as far as the speakers agreed.\n\n\
 ## What the project's records say\n\n\
-wugs records consent as the project enters it and does not judge it; the people who made this export, and their review board, are responsible for its use. Of these clips, {} are covered by a consent record that allows AI use, {} by none that speaks about it, and {} by one that does not allow it.{against}{left_out} Not in this export: {} suggestions not yet checked by a person, {} without a recording or times.\n\n\
+wugs records consent as the project enters it and does not judge it; the people who made this export, and their review board, are responsible for its use. Of these clips, {} are covered by a consent record that allows AI use, {} by none that speaks about it, and {} by one that does not allow it.{partial}{against}{left_out}{failed} Not in this export: {} suggestions not yet checked by a person, {} without a recording or times.\n\n\
 ## Files\n\n\
 Kaldi-style tables, one line per clip, keyed by the segment's id:\n\n\
 - `wav/<id>.wav`: the segment's audio, 16 kHz mono 16-bit PCM\n\
@@ -234,7 +257,7 @@ Kaldi-style tables, one line per clip, keyed by the segment's id:\n\n\
 - `text.good`: the person's transcription (the reference)\n\
 - `text.machine`: what the model heard (IPA phones, spaces at pauses)\n\
 - `utt2model`, `utt2confidence`: which model suggested it and how sure it was (mean phone confidence, 0 to 1)\n\
-- `utt2consent`: what the project's consent records say about AI use of the clip (`recorded-yes`, `not-recorded`, `recorded-no`)\n\
+- `utt2consent`: what the project's consent records say about AI use of the clip (`recorded-yes`, `not-recorded`, `recorded-no`, or `unknown` where this device may not have every record)\n\
 - `restricted`: clips whose text or recording has a restricted or community access level ({} here)\n\
 - `retimed`: clips whose times were changed after the suggestion, so the model heard a slightly different span ({} here)\n\n\
 The person's transcription follows the project's own conventions: it may be phonetic, phonemic or orthographic, which matters when it is compared with phones.\n\n\
@@ -310,15 +333,21 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("wugs-corrections-{}", wugs_model::ulid()));
         fs::create_dir_all(&dir).unwrap();
         let mut s = restricted_pair(&dir);
-        let sum = summary(&mut s).unwrap();
+        let sum = summary(&mut s, false).unwrap();
         assert_eq!((sum.ready, sum.restricted), (0, 1));
-        assert!(prepare(&mut s, false).unwrap().0.is_empty(), "left out by default");
-        let (jobs, sum) = prepare(&mut s, true).unwrap();
+        assert!(prepare(&mut s, false, false).unwrap().0.is_empty(), "left out by default");
+        // A guest may not see every record: said, and the clip reads unknown.
+        let (jobs, guest) = prepare(&mut s, true, true).unwrap();
+        assert!(guest.partial.is_some());
+        let g = PathBuf::from(write(&jobs, &guest, &dir.join("g"), "2026-11-10").unwrap().folder);
+        assert!(fs::read_to_string(g.join("utt2consent")).unwrap().ends_with(" unknown\n"));
+        assert!(fs::read_to_string(g.join("README.md")).unwrap().contains("This device is a guest"));
+        let (jobs, sum) = prepare(&mut s, false, true).unwrap();
         assert_eq!(jobs.len(), 1, "the person's choice");
         let done = write(&jobs, &sum, &dir, "2026-11-10").unwrap();
         let folder = PathBuf::from(done.folder);
         let readme = fs::read_to_string(folder.join("README.md")).unwrap();
-        assert!(readme.contains("chose to include 0 clips a consent record in the project says no to and 1 with a restricted"), "{readme}");
+        assert!(readme.contains("chose to include 0 clips a consent record in the project says no to, and 1 more with a restricted"), "{readme}");
         assert!(fs::read_to_string(folder.join("restricted")).unwrap().starts_with("seg_"));
         drop(s);
         fs::remove_dir_all(&dir).ok();

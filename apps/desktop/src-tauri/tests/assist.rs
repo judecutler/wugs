@@ -307,13 +307,13 @@ fn a_checked_suggestion_exports_as_a_clip_with_both_transcriptions() {
     let (dir, mut s, source, text, seg) = project();
     let heard = Recognition { phones: vec![phone("k", 0.0, 0.9), phone("o", 40.0, 0.5)], confidence: 0.7 };
     assist::commit(&mut s, &text, &seg, &source, &spec("http://127.0.0.1:1", None), &heard).unwrap();
-    assert_eq!(corrections::summary(&mut s).unwrap().unchecked, 1, "nothing leaves until a person checks it");
+    assert_eq!(corrections::summary(&mut s, false).unwrap().unchecked, 1, "nothing leaves until a person checks it");
     session::edit_segment_content(&mut s, &text, &seg, "kɔ").unwrap();
 
-    let sum = corrections::summary(&mut s).unwrap();
+    let sum = corrections::summary(&mut s, false).unwrap();
     assert_eq!((sum.ready, sum.recorded_no, sum.restricted, sum.unchecked), (1, 0, 0, 0));
     // No consent record is no reason to hold a clip back: the person decides.
-    let (jobs, sum) = corrections::prepare(&mut s, false).unwrap();
+    let (jobs, sum) = corrections::prepare(&mut s, false, false).unwrap();
     assert_eq!(jobs.len(), 1);
 
     let out = dir.0.join("out");
@@ -354,7 +354,7 @@ fn an_untrusted_segment_id_never_names_a_file() {
     let heard = Recognition { phones: vec![phone("k", 0.0, 0.9)], confidence: 0.7 };
     assist::commit(&mut s, &text, &seg, &source, &spec("http://127.0.0.1:1", None), &heard).unwrap();
     session::edit_segment_content(&mut s, &text, &seg, "k").unwrap();
-    let (mut jobs, sum) = corrections::prepare(&mut s, false).unwrap();
+    let (mut jobs, sum) = corrections::prepare(&mut s, false, false).unwrap();
     let mut evil: Job = jobs[0].clone();
     evil.pair.segment = "/tmp/evil".into();
     jobs.push(evil);

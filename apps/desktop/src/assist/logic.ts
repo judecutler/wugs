@@ -53,15 +53,20 @@ export function exportable(s: Summary, includeFlagged: boolean): number {
 
 const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
 
-/** One line on what is ready to export and what is not, in words. */
+/** One line on what can be exported now and what is left out, in words. */
 export function correctionsLine(s: Summary): string {
-  const ready = s.ready + s.recordedNo + s.restricted;
-  const not = [
+  const checked = s.ready + s.recordedNo + s.restricted;
+  const out = s.recordedNo + s.restricted;
+  const head = checked === 0
+    ? "No checked suggestions to export yet."
+    : out === 0
+      ? `${n(checked, "checked suggestion")} ready to export.`
+      : `${n(checked, "checked suggestion")}: ${s.ready} ready, ${out} left out unless you include them.`;
+  const extra = [
     s.unchecked > 0 ? `${n(s.unchecked, "suggestion")} not checked yet` : null,
-    s.unusable > 0 ? `${s.unusable} without a recording` : null,
+    s.unusable > 0 ? `${n(s.unusable, "clip")} without a recording or times, which cannot be exported` : null,
   ].filter((x) => x !== null);
-  const head = ready === 0 ? "No checked suggestions to export yet." : `${n(ready, "checked suggestion")} ready to export.`;
-  return not.length === 0 ? head : `${head} Not yet: ${not.join(", ")}.`;
+  return extra.length === 0 ? head : `${head} Also: ${extra.join("; ")}.`;
 }
 
 /** What the project's own records say against some clips, or null when nothing does. */

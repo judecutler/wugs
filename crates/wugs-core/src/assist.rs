@@ -183,6 +183,10 @@ pub struct Corrections {
     pub unchecked: usize,
     /// No recording or times to cut the audio from, or the segment was emptied.
     pub unusable: usize,
+    /// Consent records are still arriving here (people-scope ops held in
+    /// quarantine or waiting on an op not yet received), so a clip with no
+    /// record here may have one elsewhere. Reported, never a gate.
+    pub records_incomplete: bool,
 }
 
 impl Project {
@@ -193,7 +197,10 @@ impl Project {
     /// say about it; which ones leave is the person's choice. Derived from
     /// the projection only; nothing is written.
     pub fn corrections(&self) -> Result<Corrections, String> {
-        let mut out = Corrections::default();
+        let mut out = Corrections {
+            records_incomplete: !self.proj.held_op_ids(crate::SCOPE_PEOPLE)?.is_empty() || !self.proj.pending_op_ids(crate::SCOPE_PEOPLE)?.is_empty(),
+            ..Corrections::default()
+        };
         let consent = self.ai_consent()?;
         // Each suggested segment's records, from one scan of the field index.
         let mut suggested: Vec<(String, Vec<String>)> = Vec::new();
