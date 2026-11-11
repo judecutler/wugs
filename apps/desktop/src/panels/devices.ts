@@ -22,7 +22,7 @@ import {
 } from "../api";
 import { h } from "../dom";
 import { refuseProjectChange } from "../capture/session.ts";
-import { attempt, clearRelocation, enterProject, getState, refreshAll, researcher, showToast } from "../store";
+import { attempt, clearRelocation, enterProject, getState, getToast, refreshAll, researcher, showToast } from "../store";
 import type { PanelDef } from "./panel";
 
 const DEVICE_NAME_KEY = "wugs.deviceName";
@@ -274,10 +274,10 @@ async function join(addr: string, code: HTMLInputElement) {
     const joined = await pairJoin({ path, researcher: who, addr, code: code.value, label: deviceName() });
     await enterProject(joined.project);
     code.value = "";
-    showToast({
-      tone: "info",
-      lines: [`Joined as ${joined.standing === "guest" ? "a guest (read-only)" : "a member"}. Sync with the other device to bring the project over.`],
-    });
+    const joinedLine = `Joined as ${joined.standing === "guest" ? "a guest (read-only)" : "a member"}. Sync with the other device to bring the project over.`;
+    // entering the project may have left a warning; one toast slot, so keep it
+    const kept = getToast();
+    showToast(kept === null ? { tone: "info", lines: [joinedLine] } : { ...kept, lines: [...kept.lines, joinedLine] });
     await reloadDevices();
   });
 }
