@@ -338,11 +338,17 @@ fn people_consent_and_languages_reach_the_metadata() {
     let mut f = fixture();
     let mut t = f.project.intent("add-person");
     let prs = t.create("person", "prs", SCOPE_PEOPLE, vec![("names", Value::obj(vec![("en", Value::str("Ayşe"))]))]);
-    t.create(
+    let evidence_hex = "ab".repeat(32);
+    let cns = t.create(
         "consent",
         "cns",
         SCOPE_PEOPLE,
-        vec![("person", Value::str(&prs)), ("terms", Value::obj(vec![("archive-ok", Value::Bool(true))]))],
+        vec![
+            ("person", Value::str(&prs)),
+            ("terms", Value::obj(vec![("archive-ok", Value::Bool(true))])),
+            ("evidence", Value::Str(format!("blake3:{evidence_hex}"))),
+            ("x.evidence-name", Value::str("consent-form.jpg")),
+        ],
     );
     t.create("language", "lng", SCOPE_CONFIG, vec![("name", Value::str("Turkish")), ("iso639-3", Value::str("tur"))]);
     t.commit().unwrap();
@@ -371,6 +377,37 @@ fn people_consent_and_languages_reach_the_metadata() {
     assert_eq!(consents[0].get("fields").and_then(|f| f.get_str("person")), Some(prs.as_str()));
     let restricted = list("texts").into_iter().find(|t| t.get_str("id") == Some(f.eaf_text.as_str())).unwrap();
     assert_eq!(restricted.get_str("access"), Some("restricted"));
+
+    // The attached signed form is personal data in media/: named as a
+    // consent form and flagged restricted, so an archivist scanning media/
+    // can tell it from a recording.
+    let forms = list("consent_forms");
+    assert_eq!(forms.len(), 1);
+    assert_eq!(forms[0].get_str("media"), Some(format!("media/{evidence_hex}").as_str()));
+    assert_eq!(forms[0].get_str("name"), Some("consent-form.jpg"));
+    assert_eq!(forms[0].get_str("consent"), Some(cns.as_str()));
+    assert_eq!(forms[0].get_str("person"), Some(prs.as_str()));
+    assert_eq!(forms[0].get_str("access"), Some("restricted"));
+}
+
+#[test]
+fn a_consent_form_alone_marks_the_bag_restricted() {
+    let mut p = fresh();
+    let mut t = p.intent("add-person");
+    let prs = t.create("person", "prs", SCOPE_PEOPLE, vec![("names", Value::obj(vec![("full", Value::str("B"))]))]);
+    t.create(
+        "consent",
+        "cns",
+        SCOPE_PEOPLE,
+        vec![("person", Value::str(&prs)), ("evidence", Value::Str(format!("blake3:{}", "cd".repeat(32))))],
+    );
+    t.commit().unwrap();
+    let bag = temp_dir("bag");
+    seal(&p, &bag, &SealOptions::default()).unwrap();
+    let access = json::parse(&read(&bag, "data/metadata/access.json")).unwrap();
+    assert_eq!(access.get("contains_restricted"), Some(&Value::Bool(true)));
+    assert_eq!(bag_info(&bag).get("Wugs-Contains-Restricted").map(String::as_str), Some("true"));
+    std::fs::remove_dir_all(bag).ok();
 }
 
 /// An op as a hostile or careless peer could send it.
