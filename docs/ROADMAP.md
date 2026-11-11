@@ -1,6 +1,6 @@
 # Roadmap: from here to a shipped suite
 
-*What's left, in order. Status: 🟡 in progress or partial · ⬜ not started. **When an item is finished, delete its row** — decisions are recorded in `DECISIONS.md`, and what was built is recorded in `CLAUDE.md` and the PR. Item numbers stay fixed, so gaps mean finished items. Mirror of the claude.ai Project doc `product/ROADMAP.md`.*
+*What's left, in order. Status: ✅ or Delete for completed ·🟡 in progress or partial · ⬜ not started. **When an item is finished, delete its row** — decisions are recorded in `DECISIONS.md`, and what was built is recorded in `CLAUDE.md` and the PR. Item numbers stay fixed, so gaps mean finished items. Mirror of the claude.ai Project doc `product/ROADMAP.md`.*
 
 *Last updated: 2026-11-10.*
 
