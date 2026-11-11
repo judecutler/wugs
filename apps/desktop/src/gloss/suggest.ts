@@ -49,6 +49,26 @@ export function suggestionsToShow(list: readonly Suggestion[], analysed: boolean
 /** The ghost chip is the top suggestion of an unanalysed word. */
 export const ghostFor = (list: readonly Suggestion[], analysed: boolean): Suggestion | null => suggestionsToShow(list, analysed, 1)[0] ?? null;
 
+/** A suggestion accepted on a sentence-initial capital («Köpekler» from
+ * «köpek -ler») stores a lower-case root, and validator #1 compares case
+ * exactly, so the word warns until someone retypes it. The first morph's
+ * first character takes the word's own first character when the two are
+ * case variants, so the accepted analysis matches as typed. The word's
+ * character is copied, never computed with toUpperCase, so a Turkish «İ»
+ * stays what the person typed. Only an added capital is taken: a
+ * lower-case word never de-capitalizes a stored surface. */
+export function matchCase(form: string, morphs: readonly MorphSpec[]): MorphSpec[] {
+  const f = [...form][0];
+  const first = morphs[0];
+  const m = first === undefined ? undefined : [...first.surface][0];
+  if (f === undefined || first === undefined || m === undefined || f === m) return [...morphs];
+  // JS folding does not pair the Turkic capitals with their lower-case
+  // letters, so the two pairs are named, as the engine's lookup keys do.
+  const variants = f.toLowerCase() === m.toLowerCase() || (f === "I" && m === "ı") || (f === "İ" && m === "i");
+  if (!variants || f === f.toLowerCase()) return [...morphs];
+  return [{ ...first, surface: f + first.surface.slice(m.length) }, ...morphs.slice(1)];
+}
+
 /** The "apply to the others" link, or null when there is nothing to apply it to. The count comes first. */
 export function applyOthersLabel(form: string, others: number, armed = false): string | null {
   if (others <= 0) return null;

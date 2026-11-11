@@ -14,7 +14,7 @@ import { glossParts } from "../gloss/leipzig";
 import { matchLabel, offerText, shouldOfferLexeme } from "../gloss/lexicon";
 import { breakdownChanged, formatBreakdown, marked, parseBreakdown, type MorphType } from "../gloss/morphs";
 import { tokenState } from "../gloss/state";
-import { applyNeedsConfirm, applyOthersLabel, describe } from "../gloss/suggest";
+import { applyNeedsConfirm, applyOthersLabel, describe, matchCase } from "../gloss/suggest";
 import { forms } from "../gloss/tokenizer";
 import { needsTranslationTrack, translationLines } from "../gloss/translation";
 import { emptyState, h } from "../dom";
@@ -169,7 +169,7 @@ export const glossPanel: PanelDef = {
       if (at === null || ghost === undefined || view === null) return;
       const nextWord = nextWordCell(order(view), breakdownCell(word.id), 1);
       pending = nextWord === null ? { cell: breakdownCell(word.id) } : { cell: nextWord };
-      void run(() => glossApply({ ...at, tokenId: word.id, morphs: ghost.morphs }));
+      void run(() => glossApply({ ...at, tokenId: word.id, morphs: matchCase(word.form, ghost.morphs) }));
     }
 
     /** Apply a typed breakdown. False when it does not parse (the error shows under the field). */
@@ -462,7 +462,7 @@ export const glossPanel: PanelDef = {
           const b = h("button", { type: "button", className: "gl-alt", textContent: `${d.breakdown}  ${d.glosses}`, title: d.usesLabel });
           b.onclick = () => {
             const at = ids();
-            if (at !== null) void run(() => glossApply({ ...at, tokenId: w.id, morphs: alt.morphs }));
+            if (at !== null) void run(() => glossApply({ ...at, tokenId: w.id, morphs: matchCase(w.form, alt.morphs) }));
           };
           chips.push(b);
         }

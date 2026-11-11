@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyNeedsConfirm, applyOthersLabel, describe, ghostFor, ranked, suggestionsToShow, type MorphSpec, type Suggestion } from "./suggest.ts";
+import { applyNeedsConfirm, applyOthersLabel, describe, ghostFor, matchCase, ranked, suggestionsToShow, type MorphSpec, type Suggestion } from "./suggest.ts";
 
 const morph = (surface: string, type: string, gloss: string | null): MorphSpec => ({ surface, type, gloss, glossesByLang: {}, sense: null });
 const dogPl: Suggestion = { morphs: [morph("köpek", "root", "dog"), morph("ler", "suffix", "PL")], count: 3 };
@@ -55,4 +55,31 @@ test("the apply-to-others link shows its count first and hides at zero", () => {
 test("applying to more than 20 other words takes a second click", () => {
   assert.equal(applyNeedsConfirm(20), false);
   assert.equal(applyNeedsConfirm(21), true);
+});
+
+test("an accepted suggestion takes the word's sentence-initial capital", () => {
+  const fixed = matchCase("Köpekler", dogPl.morphs);
+  assert.equal(fixed[0]?.surface, "Köpek");
+  assert.equal(fixed[1]?.surface, "ler", "other morphs are untouched");
+  assert.notEqual(fixed[0], dogPl.morphs[0], "the stored suggestion is never mutated");
+  assert.equal(dogPl.morphs[0]?.surface, "köpek");
+});
+
+test("case matching changes nothing without an added capital", () => {
+  assert.deepEqual(matchCase("köpekler", dogPl.morphs), dogPl.morphs, "already lower-case");
+  const capStored: MorphSpec[] = [morph("Ankara", "root", "Ankara")];
+  assert.deepEqual(matchCase("ankara", capStored), capStored, "a lower-case word never de-capitalizes");
+  const other: MorphSpec[] = [morph("ev", "root", "house")];
+  assert.deepEqual(matchCase("Köpekler", other), other, "a different first letter is left alone");
+  assert.deepEqual(matchCase("", dogPl.morphs), dogPl.morphs);
+  assert.deepEqual(matchCase("Köpekler", []), []);
+});
+
+test("the word's own character is copied, so a typed İ survives", () => {
+  // İ (U+0130) lower-cases to i + combining dot in JS, so the fold test is
+  // the function's miss case for dotted I; the plain-I case must work.
+  const kir: MorphSpec[] = [morph("kır", "root", "steppe")];
+  assert.equal(matchCase("Kır", kir)[0]?.surface, "Kır");
+  const kis: MorphSpec[] = [morph("ışık", "root", "light")];
+  assert.equal(matchCase("Işık", kis)[0]?.surface, "Işık", "dotless I is a case variant of ı");
 });
