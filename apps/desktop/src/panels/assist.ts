@@ -5,7 +5,7 @@
 // tinted until someone edits them (src/assist/logic.ts).
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, correctionsExport, correctionsSummary, errorText, MODEL_CHANGED, type AssistModel, type CapabilityView, type CorrectionsSummary } from "../api";
-import { batchTargets, correctionsLine, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
+import { batchTargets, correctionsLine, count, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
 import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
 import { emptyState, h } from "../dom";
 import { assistModelList, capability, getState, mediaSource, refreshCapabilities, refreshText, setAssistModels, showToast } from "../store";
@@ -65,7 +65,7 @@ async function runBatch(text: string, tier: string, source: string, expect: stri
   showToast({
     tone: failures.length > 0 || changed !== null ? "warn" : "info",
     lines: [
-      `Filled ${r.filled} of ${r.total} empty segments with ${modelName}${r.stop ? " before stopping" : moved ? " before you switched texts" : changed !== null ? " before the model changed" : ""}.`,
+      `Filled ${r.filled} of ${count(r.total, "empty segment")} with ${modelName}${r.stop ? " before stopping" : moved ? " before you switched texts" : changed !== null ? " before the model changed" : ""}.`,
       ...(changed !== null ? [`${changed} Start the run again to continue with it.`] : []),
       ...(r.skipped > 0 ? [`${r.skipped} skipped (no speech heard, or an error).`] : []),
       ...failures,
@@ -260,7 +260,9 @@ export const assistPanel: PanelDef = {
       exporting = true;
       draw();
       try {
-        const r = await correctionsExport({ folder, flagged: includeFlagged });
+        const now = new Date();
+        const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const r = await correctionsExport({ folder, flagged: includeFlagged, date });
         showToast({
           tone: r.failed > 0 ? "warn" : "info",
           lines: [`Exported ${r.written} correction${r.written === 1 ? "" : "s"} to ${r.folder}.`, ...(r.failed > 0 ? [`${r.failed} could not be cut from the recording.`, ...r.problems] : [])],

@@ -34,9 +34,15 @@ export function batchTargets(segments: Seg[], tier: string): Seg[] {
     .sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0) || (a.pos < b.pos ? -1 : a.pos > b.pos ? 1 : 0));
 }
 
+/** Sizes in decimal units (1 MB = 1,000,000 bytes), as catalogues and download buttons give them. */
 export function megabytes(bytes: number): string {
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(bytes < 100 * 1024 * 1024 ? 1 : 0)} MB`;
+  if (bytes < 1_000_000) return `${Math.max(1, Math.round(bytes / 1000))} KB`;
+  return `${(bytes / 1_000_000).toFixed(bytes < 100_000_000 ? 1 : 0)} MB`;
+}
+
+/** "1 segment", "3 segments". */
+export function count(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
 }
 
 export function progressLabel(done: number, total: number): string {
@@ -44,14 +50,12 @@ export function progressLabel(done: number, total: number): string {
   return `${megabytes(done)} of ${megabytes(total)} (${Math.floor((done / total) * 100)}%)`;
 }
 
-type Summary = { ready: number; recordedNo: number; restricted: number; unchecked: number; unusable: number };
+type Summary = { ready: number; recordedNo: number; restricted: number; unchecked: number; unusable: number; emptied: number };
 
 /** How many clips an export holds: the ready ones, plus those the records speak against when the person includes them. */
 export function exportable(s: Summary, includeFlagged: boolean): number {
   return s.ready + (includeFlagged ? s.recordedNo + s.restricted : 0);
 }
-
-const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
 
 /** One line on what can be exported now and what is left out, in words. */
 export function correctionsLine(s: Summary): string {
@@ -60,11 +64,12 @@ export function correctionsLine(s: Summary): string {
   const head = checked === 0
     ? "No checked suggestions to export yet."
     : out === 0
-      ? `${n(checked, "checked suggestion")} ready to export.`
-      : `${n(checked, "checked suggestion")}: ${s.ready} ready, ${out} left out unless you include them.`;
+      ? `${count(checked, "checked suggestion")} ready to export.`
+      : `${count(checked, "checked suggestion")}: ${s.ready} ready, ${out} left out unless you include them.`;
   const extra = [
-    s.unchecked > 0 ? `${n(s.unchecked, "suggestion")} not checked yet` : null,
-    s.unusable > 0 ? `${n(s.unusable, "clip")} without a recording or times, which cannot be exported` : null,
+    s.unchecked > 0 ? `${count(s.unchecked, "suggestion")} not checked yet` : null,
+    s.emptied > 0 ? `${count(s.emptied, "suggestion")} cleared by hand, so there is nothing to pair` : null,
+    s.unusable > 0 ? `${count(s.unusable, "clip")} without a recording or times, which cannot be exported` : null,
   ].filter((x) => x !== null);
   return extra.length === 0 ? head : `${head} Also: ${extra.join("; ")}.`;
 }

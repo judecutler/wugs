@@ -181,8 +181,10 @@ pub struct Corrections {
     pub pairs: Vec<Correction>,
     /// Still unchecked: the machine's text is what the segment shows.
     pub unchecked: usize,
-    /// No recording or times to cut the audio from, or the segment was emptied.
+    /// No recording or times to cut the audio from.
     pub unusable: usize,
+    /// Checked by clearing: the person emptied the segment, so there is no text to pair.
+    pub emptied: usize,
     /// Consent records are still arriving here (people-scope ops held in
     /// quarantine or waiting on an op not yet received), so a clip with no
     /// record here may have one elsewhere. Reported, never a gate.
@@ -248,7 +250,11 @@ impl Project {
                 out.unusable += 1;
                 continue;
             }
-            if person.trim().is_empty() || end_ms <= start_ms {
+            if person.trim().is_empty() {
+                out.emptied += 1;
+                continue;
+            }
+            if end_ms <= start_ms {
                 out.unusable += 1;
                 continue;
             }
