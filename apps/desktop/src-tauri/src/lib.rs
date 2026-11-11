@@ -137,8 +137,12 @@ fn set_segment_times(
     segment_id: String,
     start_ms: Option<f64>,
     end_ms: Option<f64>,
+    expect: Option<Vec<session::SegmentCheckView>>,
 ) -> Result<Vec<String>, String> {
-    s.run(move |s| session::set_segment_times(s, &text_id, &segment_id, start_ms, end_ms))
+    s.run(move |s| match expect {
+        Some(e) => session::set_segment_times_checked(s, &text_id, &segment_id, start_ms, end_ms, &e),
+        None => session::set_segment_times(s, &text_id, &segment_id, start_ms, end_ms),
+    })
 }
 
 #[tauri::command(async)]
@@ -249,8 +253,12 @@ fn edit_segment_content(
     text_id: String,
     segment_id: String,
     content: String,
+    expect: Option<Vec<session::SegmentCheckView>>,
 ) -> Result<EditResult, String> {
-    s.run(move |s| session::edit_segment_content(s, &text_id, &segment_id, &content))
+    s.run(move |s| match expect {
+        Some(e) => session::edit_segment_content_checked(s, &text_id, &segment_id, &content, &e),
+        None => session::edit_segment_content(s, &text_id, &segment_id, &content),
+    })
 }
 
 #[tauri::command(async)]
@@ -514,13 +522,13 @@ async fn auto_segment(s: State<'_, SessionThread>, dir: State<'_, AppData>, text
 }
 
 #[tauri::command(async)]
-fn restore_segments(s: State<SessionThread>, text_id: String, segment_ids: Vec<String>) -> Result<Vec<String>, String> {
+fn restore_segments(s: State<SessionThread>, text_id: String, segment_ids: Vec<String>) -> Result<session::SegmentsEdit, String> {
     s.run(move |s| session::restore_segments(s, &text_id, &segment_ids))
 }
 
 #[tauri::command(async)]
-fn delete_segments(s: State<SessionThread>, text_id: String, segment_ids: Vec<String>) -> Result<Vec<String>, String> {
-    s.run(move |s| session::delete_segments(s, &text_id, &segment_ids))
+fn delete_segments(s: State<SessionThread>, text_id: String, expect: Vec<session::SegmentCheckView>, keep_changed: bool) -> Result<session::DeletedSegments, String> {
+    s.run(move |s| session::delete_segments(s, &text_id, &expect, keep_changed))
 }
 
 #[tauri::command(async)]
@@ -529,8 +537,21 @@ fn split_segment(s: State<SessionThread>, text_id: String, segment_id: String, a
 }
 
 #[tauri::command(async)]
-fn merge_segments(s: State<SessionThread>, text_id: String, first_id: String, second_id: String) -> Result<Vec<String>, String> {
-    s.run(move |s| session::merge_segments(s, &text_id, &first_id, &second_id))
+fn merge_segments(s: State<SessionThread>, text_id: String, first_id: String, second_id: String, expect: Option<Vec<session::SegmentCheckView>>) -> Result<session::SegmentsEdit, String> {
+    s.run(move |s| session::merge_segments(s, &text_id, &first_id, &second_id, &expect.unwrap_or_default()))
+}
+
+#[tauri::command(async)]
+fn unmerge_segments(
+    s: State<SessionThread>,
+    text_id: String,
+    first_id: String,
+    second_id: String,
+    first_end_ms: f64,
+    first_content: Option<String>,
+    expect: Vec<session::SegmentCheckView>,
+) -> Result<session::SegmentsEdit, String> {
+    s.run(move |s| session::unmerge_segments(s, &text_id, &first_id, &second_id, first_end_ms, first_content.as_deref(), &expect))
 }
 
 #[tauri::command(async)]
@@ -1041,6 +1062,7 @@ pub fn run() {
             delete_segments,
             split_segment,
             merge_segments,
+            unmerge_segments,
             speech_spans,
             auto_segment,
             add_tier,

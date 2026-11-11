@@ -99,7 +99,15 @@ pub fn pos_between(a: &str, b: Option<&str>) -> String {
     if let Some(b) = b {
         loop {
             let da = digit(a, i).unwrap_or(0);
-            let Some(db) = digit(b, i) else { break };
+            let Some(db) = digit(b, i) else {
+                // b ran out level with a: b is a followed by zeros (a = "",
+                // b = "00000000"). Only a shorter run of those zeros sorts
+                // between them; when b is a and a single zero, nothing does.
+                if b.len() > a.len() + 1 {
+                    return String::from_utf8(b[..b.len() - 1].to_vec()).expect("hex");
+                }
+                break;
+            };
             if da == db {
                 out.push(HEX[da]);
                 i += 1;
@@ -198,6 +206,11 @@ mod tests {
         let m5 = pos_between("0f", Some("1"));
         assert!("0f" < m5.as_str() && m5.as_str() < "1", "{m5}");
         assert_eq!(pos_between("00000003", Some("00000009")), "00000006");
+        // Before the very first key: a shorter run of zeros, not a key after b.
+        let m6 = pos_between("", Some("00000000"));
+        assert!("" < m6.as_str() && m6.as_str() < "00000000", "{m6}");
+        let m7 = pos_between("00", Some("0000"));
+        assert!("00" < m7.as_str() && m7.as_str() < "0000", "{m7}");
         let m4 = pos_between("03", Some("0301"));
         assert!("03" < m4.as_str() && m4.as_str() < "0301", "{m4}");
     }

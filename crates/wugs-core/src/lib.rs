@@ -27,7 +27,7 @@ mod segments;
 pub mod settings;
 pub use wugs_validate::{Finding, Severity};
 pub use gloss::{lcs_pairs, AppliedToUnanalysed, LexiconMatch, MorphSpec, Retokenized, Suggestion};
-pub use segments::MACHINE_SEGMENT_INTENT;
+pub use segments::{SegmentCheck, SegmentState, MACHINE_SEGMENT_INTENT};
 pub use lexicon::{domain_id, DomainRow, ImportedDomains};
 pub use elicitation::{concept_id, concept_list_id, ConceptRow, ImportedConcepts};
 

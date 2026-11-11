@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { laneBounds, snapEdge, snapRange, SNAP_MS, type Span } from "./snap.ts";
+import { laneBounds, snapDragged, snapEdge, snapRange, SNAP_MS, type Span } from "./snap.ts";
 
 const spans: Span[] = [
   [1000, 2000],
@@ -52,4 +52,16 @@ test("lane bounds are the neighbours either side, not the segment itself", () =>
   assert.deepEqual(laneBounds(segs, 1000, 2000, "b"), { lo: 900, hi: 2500 });
   assert.deepEqual(laneBounds(segs, 3100, 3200), { lo: 3000 });
   assert.deepEqual(laneBounds([], 0, 1), {});
+});
+
+test("a dragged edge snaps only when it moves outward from where it was", () => {
+  // Trimming the start inward, to 100 ms after the speech start: it stays.
+  assert.equal(snapDragged("start", 1100, 950, spans), 1100);
+  // Dragging the start out from 1300 to 1080 (inside the word): out to 1000.
+  assert.equal(snapDragged("start", 1080, 1300, spans), 1000);
+  // Trimming the end in to 1900 from 2050: stays; pulling it out from 1800 to 1900: snaps.
+  assert.equal(snapDragged("end", 1900, 2050, spans), 1900);
+  assert.equal(snapDragged("end", 1900, 1800, spans), 2000);
+  // Never past a neighbour.
+  assert.equal(snapDragged("end", 1900, 1800, spans, 1950), 1900);
 });

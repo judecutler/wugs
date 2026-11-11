@@ -1186,6 +1186,24 @@ impl Projection {
         Ok(out)
     }
 
+    /// `children_by_ref` including deleted (tombstoned) entities, for keys
+    /// that must stay unique if a deleted one is restored (positions).
+    pub fn children_by_ref_with_deleted(&self, field: &str, ref_id: &str, kind: &str) -> Result<Vec<String>, String> {
+        let quoted = Value::str(ref_id).to_json();
+        let mut s = self.db.prepare(
+            "SELECT f.target FROM fields f JOIN entities e ON e.id=f.target
+             WHERE f.field=?1 AND f.value=?2 AND e.kind=?3",
+        )?;
+        s.bind_text(1, field)?;
+        s.bind_text(2, &quoted)?;
+        s.bind_text(3, kind)?;
+        let mut out = Vec::new();
+        while s.step()? {
+            out.push(s.col_text(0));
+        }
+        Ok(out)
+    }
+
     /// Store a held txn's ops so sync summaries can count them and a later
     /// ingest can retry them without a network re-offer (DATA-MODEL §6).
     pub fn quarantine_store(&self, op: &Op) -> Result<(), String> {

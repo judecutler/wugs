@@ -1,18 +1,75 @@
 // Undo and redo of timeline edits, pure and unit-tested. The op log is
 // never rewritten: each entry's undo() and redo() call ordinary commands
 // that write the inverse edit as a new write (create -> delete, delete ->
-// restore, retime -> the old times, split -> merge, ...). An undo writes the
-// old value even if another device changed the target since: undo is the
-// person's explicit choice, and the log keeps both versions either way.
-// If an undo or redo fails (its target is gone), the entry is dropped and
-// the error is passed on for the view to show.
+// restore, retime -> the old times, split -> merge, merge -> unmerge).
+// Nothing a person did since may be lost to an undo, wherever they did it
+// (the Transcribe or Gloss panel, another device): each entry keeps what
+// its undo or redo would delete or overwrite (a SegmentCheck), and the
+// command refuses, writing nothing, when that no longer holds. If an undo
+// or redo fails or is refused, the entry is dropped and the error is passed
+// on for the view to show.
 
 export type UndoEntry = {
   /** Shown in the buttons' titles: "Undo split". */
   label: string;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
+  /** When this edit folds into `older` (same key, in quick succession), the
+   * entry kept in its place. Without it, older's undo and this redo. */
+  fold?: (older: UndoEntry) => UndoEntry;
 };
+
+/** A segment as an edit left it (session.rs `SegmentStateView`). */
+export type SegmentState = {
+  id: string;
+  deleted: boolean;
+  startMs: number | null;
+  endMs: number | null;
+  content: string;
+  /** Words (tokens) made from its transcription. */
+  words: number;
+};
+
+/** The parts of a SegmentState an undo depends on; absent parts are not checked. */
+export type SegmentCheck = {
+  id: string;
+  deleted?: boolean;
+  startMs?: number;
+  endMs?: number;
+  content?: string;
+  words?: number;
+};
+
+type Part = "deleted" | "startMs" | "endMs" | "content" | "words";
+
+/** A check of `parts` of `s` (all of them by default: for an undo that deletes it). */
+export function checkOf(s: SegmentState, parts: readonly Part[] = ["deleted", "startMs", "endMs", "content", "words"]): SegmentCheck {
+  const c: SegmentCheck = { id: s.id };
+  for (const p of parts) {
+    if (p === "deleted") c.deleted = s.deleted;
+    else if (p === "content") c.content = s.content;
+    else if (p === "words") c.words = s.words;
+    else if (s[p] !== null) c[p] = s[p];
+  }
+  return c;
+}
+
+type EdgeEntry = UndoEntry & { fromMs: number };
+
+/**
+ * A segment edge moved from `fromMs` to `toMs`. `write(ms, expectMs)` writes
+ * the edge, refused unless it is still at `expectMs`. Quick repeats (keyboard
+ * nudges) fold into one entry from the first `fromMs` to the last `toMs`.
+ */
+export function edgeEntry(label: string, fromMs: number, toMs: number, write: (ms: number, expectMs: number) => Promise<void>): EdgeEntry {
+  return {
+    label,
+    fromMs,
+    undo: () => write(fromMs, toMs),
+    redo: () => write(toMs, fromMs),
+    fold: (older) => edgeEntry(label, (older as Partial<EdgeEntry>).fromMs ?? fromMs, toMs, write),
+  };
+}
 
 /** How long a run of same-key edits (keyboard nudges) stays one entry, ms. */
 export const COALESCE_MS = 1500;
@@ -41,8 +98,8 @@ export class UndoStack {
     this.undone = [];
     const top = this.done[this.done.length - 1];
     if (key !== null && top !== undefined && top.key === key && now - top.at <= COALESCE_MS) {
-      top.redo = entry.redo;
-      top.at = now;
+      const kept = entry.fold?.(top) ?? { ...entry, undo: top.undo };
+      this.done[this.done.length - 1] = { ...kept, key, at: now };
     } else {
       this.done.push({ ...entry, key, at: now });
       if (this.done.length > LIMIT) this.done.shift();

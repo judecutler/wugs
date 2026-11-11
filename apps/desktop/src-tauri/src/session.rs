@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use wugs_auth::{pair_host, Body, DeviceKey, PairError, PairingCode, PublicKey, Roster, RosterFile, RosterState, SignedRecord, Standing};
 use wugs_blob::BlobStore;
-use wugs_core::{CommitResult, Engines, Project, SCOPE_CONFIG};
+use wugs_core::{CommitResult, Engines, Project, SegmentCheck, SegmentState, SCOPE_CONFIG};
 use wugs_model::Value;
 use wugs_peaks::{Params, Peaks};
 use wugs_net::{default_policy, ClientReport, Role, SessionOutcome, Warning, Watchdog};
@@ -170,6 +170,72 @@ pub struct EditResult {
 pub struct AddedSegment {
     pub id: String,
     pub findings: Vec<String>,
+    /// The segments as the edit left them (the new one; for a split, both
+    /// parts, first then second), so a timeline undo can check nothing
+    /// changed since before it writes.
+    pub states: Vec<SegmentStateView>,
+}
+
+/// What a timeline undo would delete or overwrite on a segment
+/// (`wugs_core::SegmentState`).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SegmentStateView {
+    pub id: String,
+    pub deleted: bool,
+    pub start_ms: Option<f64>,
+    pub end_ms: Option<f64>,
+    pub content: String,
+    pub words: usize,
+}
+
+impl From<SegmentState> for SegmentStateView {
+    fn from(s: SegmentState) -> Self {
+        SegmentStateView { id: s.id, deleted: s.deleted, start_ms: s.start, end_ms: s.end, content: s.content, words: s.words }
+    }
+}
+
+/// The parts of a segment's state an undo depends on; an absent part is
+/// not checked (`wugs_core::SegmentCheck`).
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SegmentCheckView {
+    pub id: String,
+    pub deleted: Option<bool>,
+    pub start_ms: Option<f64>,
+    pub end_ms: Option<f64>,
+    pub content: Option<String>,
+    pub words: Option<usize>,
+}
+
+fn checks(expect: &[SegmentCheckView]) -> Vec<SegmentCheck> {
+    expect
+        .iter()
+        .map(|c| SegmentCheck { id: c.id.clone(), deleted: c.deleted, start: c.start_ms, end: c.end_ms, content: c.content.clone(), words: c.words })
+        .collect()
+}
+
+pub(crate) fn states(p: &Project, ids: &[String]) -> Result<Vec<SegmentStateView>, String> {
+    Ok(p.segment_states(ids)?.into_iter().map(Into::into).collect())
+}
+
+/// Findings and the touched segments' states after the edit (and, for a
+/// merge, before it: what its undo puts back).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SegmentsEdit {
+    pub findings: Vec<String>,
+    pub states: Vec<SegmentStateView>,
+    pub before: Vec<SegmentStateView>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeletedSegments {
+    pub deleted: Vec<String>,
+    /// Edited since the checks were taken, so left alone.
+    pub kept: Vec<String>,
+    pub findings: Vec<String>,
 }
 
 pub(crate) fn finding_lines(res: &CommitResult) -> Vec<String> {
@@ -323,7 +389,8 @@ pub fn add_segment(
     };
     let index = next_pos_index(p, text_id)?;
     let (id, res) = p.add_segment(text_id, &tier, index, start_ms, end_ms, content)?;
-    Ok(AddedSegment { id, findings: finding_lines(&res) })
+    let states = states(p, std::slice::from_ref(&id))?;
+    Ok(AddedSegment { id, findings: finding_lines(&res), states })
 }
 
 /// Retime one or both edges. An omitted edge is not written, so a drag of
@@ -350,28 +417,86 @@ pub fn delete_segment(session: &mut Session, text_id: &str, segment_id: &str) ->
     Ok(finding_lines(&res))
 }
 
-/// Bring deleted segments back in one txn (the timeline's undo of a delete).
-pub fn restore_segments(session: &mut Session, text_id: &str, segment_ids: &[String]) -> Result<Vec<String>, String> {
-    let res = project(session)?.restore_segments(text_id, segment_ids)?;
-    Ok(finding_lines(&res))
+/// `set_segment_times` for a timeline undo or redo: refused, writing
+/// nothing, when `expect` no longer holds (the segment was edited since).
+/// The check and the write run in one call on the session thread, so no
+/// other command can land between them.
+pub fn set_segment_times_checked(
+    session: &mut Session,
+    text_id: &str,
+    segment_id: &str,
+    start_ms: Option<f64>,
+    end_ms: Option<f64>,
+    expect: &[SegmentCheckView],
+) -> Result<Vec<String>, String> {
+    project(session)?.require_unchanged(&checks(expect))?;
+    set_segment_times(session, text_id, segment_id, start_ms, end_ms)
 }
 
-/// Delete segments in one txn (the timeline's undo of an Auto-segment).
-pub fn delete_segments(session: &mut Session, text_id: &str, segment_ids: &[String]) -> Result<Vec<String>, String> {
-    let res = project(session)?.delete_segments(text_id, segment_ids)?;
-    Ok(finding_lines(&res))
+/// `edit_segment_content` for a timeline undo or redo, checked like
+/// [`set_segment_times_checked`].
+pub fn edit_segment_content_checked(session: &mut Session, text_id: &str, segment_id: &str, content: &str, expect: &[SegmentCheckView]) -> Result<EditResult, String> {
+    project(session)?.require_unchanged(&checks(expect))?;
+    edit_segment_content(session, text_id, segment_id, content)
+}
+
+/// Bring deleted segments back in one txn (the timeline's undo of a
+/// delete, redo of a draw or Auto-segment). Nothing is lost by a restore.
+pub fn restore_segments(session: &mut Session, text_id: &str, segment_ids: &[String]) -> Result<SegmentsEdit, String> {
+    let p = project(session)?;
+    let res = p.restore_segments(text_id, segment_ids)?;
+    Ok(SegmentsEdit { findings: finding_lines(&res), states: states(p, segment_ids)?, before: Vec::new() })
+}
+
+/// Delete segments in one txn (the timeline's undo of a draw or an
+/// Auto-segment, redo of a delete), only those `expect` still holds for.
+/// With `keep_changed`, the changed ones are kept and the rest deleted;
+/// without, any change refuses the whole step.
+pub fn delete_segments(session: &mut Session, text_id: &str, expect: &[SegmentCheckView], keep_changed: bool) -> Result<DeletedSegments, String> {
+    let p = project(session)?;
+    let checks = checks(expect);
+    if !keep_changed {
+        p.require_unchanged(&checks)?;
+    }
+    let (deleted, kept, res) = p.delete_unchanged_segments(text_id, &checks)?;
+    Ok(DeletedSegments { deleted, kept, findings: finding_lines(&res) })
 }
 
 /// Cut a segment at `at_ms`; the transcription stays on the first part.
 pub fn split_segment(session: &mut Session, text_id: &str, segment_id: &str, at_ms: f64) -> Result<AddedSegment, String> {
-    let (id, res) = project(session)?.split_segment(text_id, segment_id, at_ms.round())?;
-    Ok(AddedSegment { id, findings: finding_lines(&res) })
+    let p = project(session)?;
+    let (id, res) = p.split_segment(text_id, segment_id, at_ms.round())?;
+    let states = states(p, &[segment_id.to_string(), id.clone()])?;
+    Ok(AddedSegment { id, findings: finding_lines(&res), states })
 }
 
-/// Join a segment with the next one on its tier.
-pub fn merge_segments(session: &mut Session, text_id: &str, first_id: &str, second_id: &str) -> Result<Vec<String>, String> {
-    let res = project(session)?.merge_segments(text_id, first_id, second_id)?;
-    Ok(finding_lines(&res))
+/// Join a segment with the next one on its tier. With `expect` (the undo
+/// of a split, the redo of a merge), refused when it no longer holds.
+/// States: first, then second (deleted).
+pub fn merge_segments(session: &mut Session, text_id: &str, first_id: &str, second_id: &str, expect: &[SegmentCheckView]) -> Result<SegmentsEdit, String> {
+    let p = project(session)?;
+    p.require_unchanged(&checks(expect))?;
+    let pair = [first_id.to_string(), second_id.to_string()];
+    let before = states(p, &pair)?;
+    let res = p.merge_segments(text_id, first_id, second_id)?;
+    Ok(SegmentsEdit { findings: finding_lines(&res), states: states(p, &pair)?, before })
+}
+
+/// Take a merge back (or redo a split) in one txn, refused when `expect`
+/// no longer holds. States: first, then second.
+pub fn unmerge_segments(
+    session: &mut Session,
+    text_id: &str,
+    first_id: &str,
+    second_id: &str,
+    first_end_ms: f64,
+    first_content: Option<&str>,
+    expect: &[SegmentCheckView],
+) -> Result<SegmentsEdit, String> {
+    let p = project(session)?;
+    p.require_unchanged(&checks(expect))?;
+    let res = p.unmerge_segments(text_id, first_id, second_id, first_end_ms, first_content)?;
+    Ok(SegmentsEdit { findings: finding_lines(&res), states: states(p, &[first_id.to_string(), second_id.to_string()])?, before: Vec::new() })
 }
 
 /// The "Add track" templates (TONGUES-UI): each is a default name and a tier
@@ -399,10 +524,11 @@ pub fn add_tier(session: &mut Session, template: &str, name: Option<&str>) -> Re
 
 /// One past the largest existing pos, so a new segment sorts last even when
 /// earlier ones were deleted or imported with their own numbering. The live
-/// count alone can collide with a taken pos.
+/// count alone can collide with a taken pos. Deleted segments count too, so
+/// restoring one never brings back a pos a newer segment took.
 pub(crate) fn next_pos_index(p: &Project, text_id: &str) -> Result<usize, String> {
     let mut next = 0usize;
-    for seg in p.proj.children_by_ref("text", text_id, "segment")? {
+    for seg in p.proj.children_by_ref_with_deleted("text", text_id, "segment")? {
         let pos = p.proj.field_str(&seg, "pos")?.unwrap_or_default();
         if let Ok(i) = usize::from_str_radix(&pos, 16) {
             next = next.max(i + 1);

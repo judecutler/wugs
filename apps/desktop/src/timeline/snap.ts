@@ -2,7 +2,9 @@
 // near where speech starts or ends is pulled outward onto that point, so a
 // hand-drawn box does not cut off the start of a word ("th" of "three").
 // Outward only: a start moves earlier, an end later, so snapping never cuts
-// more speech than the person drew. Holding Alt turns it off (the view
+// more speech than the person drew; a dragged edge snaps only when it moves
+// outward from where it was, so trimming inward is never undone by a snap.
+// Holding Alt turns it off (the view
 // decides that); spans that are not ready yet mean no snapping, never a wait.
 
 /** A stretch of speech, [startMs, endMs], in time order. */
@@ -29,6 +31,17 @@ export function snapEdge(edge: "start" | "end", ms: number, spans: readonly Span
     bestDist = dist;
   }
   return best;
+}
+
+/**
+ * Where a dragged edge lands. It snaps only while it is outward of where
+ * the drag started (a start earlier, an end later), so trimming a segment
+ * inward near a speech edge stays where the person put it instead of
+ * jumping back out; Alt is not needed for that.
+ */
+export function snapDragged(edge: "start" | "end", ms: number, fromMs: number, spans: readonly Span[], bound?: number, tolMs = SNAP_MS): number {
+  const outward = edge === "start" ? ms < fromMs : ms > fromMs;
+  return outward ? snapEdge(edge, ms, spans, tolMs, bound) : ms;
 }
 
 /** Both edges of a drawn range snapped outward, each within its bound. */

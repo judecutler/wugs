@@ -19,7 +19,7 @@ use wugs_asr::vad;
 
 use crate::capability::Provider;
 use crate::praat::write_atomic;
-use crate::session::{self, finding_lines, Session};
+use crate::session::{self, finding_lines, SegmentStateView, Session};
 
 /// One computation at a time: the snap prefetch and an Auto-segment on the
 /// same recording must not both read an hours-long file; the second waits
@@ -78,6 +78,8 @@ pub struct AutoSegmented {
     /// Which tier they went on (the utterance tier when none was given).
     pub tier: String,
     pub findings: Vec<String>,
+    /// The new segments as written, for the undo's check.
+    pub states: Vec<SegmentStateView>,
 }
 
 /// Write the spans as machine segments on `tier` (the utterance tier when
@@ -90,7 +92,8 @@ pub fn commit(session: &mut Session, text: &str, tier: Option<&str>, spans: &[(f
     };
     let index = session::next_pos_index(p, text)?;
     let (ids, res) = p.add_segments(text, &tier, index, spans)?;
-    Ok(AutoSegmented { skipped: spans.len() - ids.len(), ids, tier, findings: finding_lines(&res) })
+    let states = session::states(p, &ids)?;
+    Ok(AutoSegmented { skipped: spans.len() - ids.len(), ids, tier, findings: finding_lines(&res), states })
 }
 
 #[cfg(test)]
@@ -143,11 +146,21 @@ mod tests {
         assert_eq!(detail.segments.len(), 2);
         assert!(detail.segments.iter().any(|r| r.id == drawn && r.content == "mine"));
 
-        // Undo deletes them; redo restores the same ids.
-        session::delete_segments(&mut s, &text, &out.ids).unwrap();
-        assert_eq!(session::get_text(&mut s, &text).unwrap().segments.len(), 1);
-        session::restore_segments(&mut s, &text, &out.ids).unwrap();
-        assert_eq!(session::get_text(&mut s, &text).unwrap().segments.len(), 2);
+        // Undo deletes the untouched ones; one typed into since is kept.
+        let checks = |st: &[SegmentStateView]| -> Vec<session::SegmentCheckView> {
+            st.iter()
+                .map(|x| session::SegmentCheckView { id: x.id.clone(), deleted: Some(x.deleted), start_ms: x.start_ms, end_ms: x.end_ms, content: Some(x.content.clone()), words: Some(x.words) })
+                .collect()
+        };
+        assert_eq!(out.states.len(), 1);
+        assert!(session::delete_segments(&mut s, &text, &checks(&out.states), false).is_ok());
+        let back = session::restore_segments(&mut s, &text, &out.ids).unwrap();
+        session::edit_segment_content(&mut s, &text, &out.ids[0], "typed later").unwrap();
+        let err = session::delete_segments(&mut s, &text, &checks(&back.states), false).unwrap_err();
+        assert!(err.contains("edited since"), "{err}");
+        let partial = session::delete_segments(&mut s, &text, &checks(&back.states), true).unwrap();
+        assert_eq!((partial.deleted.len(), partial.kept.len()), (0, 1));
+        assert_eq!(session::get_text(&mut s, &text).unwrap().segments.len(), 2, "nothing typed is lost");
         drop(s);
         fs::remove_dir_all(root).ok();
     }
@@ -162,10 +175,19 @@ mod tests {
         let b = session::split_segment(&mut s, &text, &a, 1200.4).unwrap().id;
         let rows = session::get_text(&mut s, &text).unwrap().segments;
         assert_eq!(rows.iter().map(|r| (r.id.clone(), r.start_ms, r.end_ms)).collect::<Vec<_>>(), [(a.clone(), Some(0.0), Some(1200.0)), (b.clone(), Some(1200.0), Some(2000.0))]);
-        session::merge_segments(&mut s, &text, &a, &b).unwrap();
+        let merged = session::merge_segments(&mut s, &text, &a, &b, &[]).unwrap();
         let rows = session::get_text(&mut s, &text).unwrap().segments;
         assert_eq!(rows.len(), 1);
         assert_eq!((rows[0].end_ms, rows[0].content.as_str()), (Some(2000.0), "one"));
+        assert!(merged.states[1].deleted);
+        // The undo of the merge after the text was changed elsewhere is refused.
+        session::edit_segment_content(&mut s, &text, &a, "one more").unwrap();
+        let expect = [session::SegmentCheckView { id: a.clone(), end_ms: Some(2000.0), content: Some("one".into()), ..Default::default() }];
+        assert!(session::unmerge_segments(&mut s, &text, &a, &b, 1200.0, Some("one"), &expect).unwrap_err().contains("edited since"));
+        assert_eq!(session::get_text(&mut s, &text).unwrap().segments.len(), 1, "nothing written");
+        let expect = [session::SegmentCheckView { id: a.clone(), end_ms: Some(2000.0), content: Some("one more".into()), ..Default::default() }];
+        let apart = session::unmerge_segments(&mut s, &text, &a, &b, 1200.0, None, &expect).unwrap();
+        assert_eq!((apart.states[0].end_ms, apart.states[1].deleted), (Some(1200.0), false));
         drop(s);
         fs::remove_dir_all(root).ok();
     }

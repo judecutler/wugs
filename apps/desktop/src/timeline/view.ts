@@ -16,6 +16,7 @@ import {
   setSegmentTimes,
   speechSpans,
   splitSegment,
+  unmergeSegments,
   type PeaksInfo,
   type SegmentRow,
   type TextDetail,
@@ -25,8 +26,8 @@ import * as playback from "../playback";
 import { getSelection, getState, refreshConflicts, refreshText, reloadTexts, selectSegment, setMediaSource, showToast, subscribeSelection } from "../store";
 import { tint } from "../assist/logic";
 import { crossedDragThreshold, dragEdge, grabOffset, hitTest, DRAG_PX, type Edge, type Hit } from "./gestures";
-import { laneBounds, snapEdge, snapRange, type Span } from "./snap";
-import { UndoHistory, type UndoEntry, type UndoStack } from "./undo";
+import { laneBounds, snapDragged, snapRange, type Span } from "./snap";
+import { checkOf, edgeEntry, UndoHistory, type SegmentCheck, type UndoEntry, type UndoStack } from "./undo";
 import { StripCache } from "./strips";
 import {
   clamp,
@@ -167,6 +168,9 @@ export class TimelineView {
   /** Alt held during the current gesture: snapping off. */
   private altHeld = false;
   private nudging = false;
+  /** Edits still waiting on their command: an undo or redo waits for them,
+   * so the entry an edit records is on the stack before Ctrl+Z can run. */
+  private inflight = new Set<Promise<void>>();
 
   private stats = new FrameStats();
   showPerf = false;
@@ -622,8 +626,9 @@ export class TimelineView {
             // Pull the moved edge out to where speech starts or ends, never
             // onto a neighbour; Alt drags freely.
             const b = laneBounds(this.laneOf(seg)?.segments ?? [], seg.startMs, seg.endMs, seg.id);
-            if (drag.edge === "start") startMs = Math.min(snapEdge("start", startMs, this.spans, undefined, b.lo), endMs - MIN_SEGMENT_MS);
-            else endMs = Math.max(snapEdge("end", endMs, this.spans, undefined, b.hi), startMs + MIN_SEGMENT_MS);
+            // Only outward of where the edge was: trimming inward stays put.
+            if (drag.edge === "start") startMs = Math.min(snapDragged("start", startMs, seg.startMs, this.spans, b.lo), endMs - MIN_SEGMENT_MS);
+            else endMs = Math.max(snapDragged("end", endMs, seg.endMs, this.spans, b.hi), startMs + MIN_SEGMENT_MS);
           }
           this.resizeDraft = { id: drag.id, startMs, endMs };
           break;
@@ -642,10 +647,10 @@ export class TimelineView {
           this.seek(drag.downMs);
           break;
         case "create":
-          void this.commitCreate(drag.lane, drag.anchorMs, drag.currentMs);
+          void this.track(this.commitCreate(drag.lane, drag.anchorMs, drag.currentMs));
           break;
         case "resize":
-          if (drag.active) void this.commitResize(drag.edge);
+          if (drag.active) void this.track(this.commitResize(drag.edge));
           break;
         case "pan":
         case "maybe-create":
@@ -694,7 +699,7 @@ export class TimelineView {
       if (ev.code === "BracketLeft" || ev.code === "BracketRight") {
         // [ ] move the start, Shift+[ ] the end, by NUDGE_MS.
         ev.preventDefault();
-        void this.nudge(ev.shiftKey ? "end" : "start", ev.code === "BracketLeft" ? -NUDGE_MS : NUDGE_MS);
+        void this.track(this.nudge(ev.shiftKey ? "end" : "start", ev.code === "BracketLeft" ? -NUDGE_MS : NUDGE_MS));
       } else if (ev.key === "s" || ev.key === "S") {
         ev.preventDefault();
         void this.splitAtPlayhead();
@@ -760,14 +765,20 @@ export class TimelineView {
     const range = this.createRange(laneIdx, aMs, bMs);
     const startMs = Math.round(range.startMs);
     const endMs = Math.round(range.endMs);
+    const stack = this.history();
     try {
       const added = await addSegment({ textId: text.id, tierId: lane.tierId, startMs, endMs, content: "" });
       if (added.findings.length > 0) showToast({ tone: "warn", lines: added.findings });
       const ids = [added.id];
-      this.remember({
+      // Undo deletes it only while it is as drawn: typed into or retimed
+      // since (anywhere), the undo is refused instead.
+      let expect = added.states.map((st) => checkOf(st));
+      stack?.push({
         label: "draw segment",
-        undo: async () => void (await deleteSegments({ textId: text.id, segmentIds: ids })),
-        redo: async () => void (await restoreSegments({ textId: text.id, segmentIds: ids })),
+        undo: async () => void (await deleteSegments({ textId: text.id, expect, keepChanged: false })),
+        redo: async () => {
+          expect = (await restoreSegments({ textId: text.id, segmentIds: ids })).states.map((st) => checkOf(st));
+        },
       });
       await reloadTexts();
       await refreshText();
@@ -786,10 +797,11 @@ export class TimelineView {
     const before = this.findSegment(draft.id);
     const was = edge === "start" ? before?.startMs : before?.endMs;
     const now = Math.round(edge === "start" ? draft.startMs : draft.endMs);
+    const stack = this.history();
     try {
       const findings = await setSegmentTimes({ textId: text.id, segmentId: draft.id, ...(edge === "start" ? { startMs: now } : { endMs: now }) });
       if (findings.length > 0) showToast({ tone: "warn", lines: findings });
-      if (was !== null && was !== undefined) this.rememberRetime(text.id, draft.id, edge, was, now);
+      if (was !== null && was !== undefined) this.rememberRetime(stack, text.id, draft.id, edge, was, now);
       await refreshText();
       await refreshConflicts();
     } catch (e) {
@@ -809,14 +821,19 @@ export class TimelineView {
       this.confirmBar.hidden = true;
       const text = this.text;
       if (text === null) return;
+      const stack = this.history();
       try {
         const findings = await deleteSegment({ textId: text.id, segmentId: segId });
         if (findings.length > 0) showToast({ tone: "warn", lines: findings });
         const ids = [segId];
-        this.remember({
+        // Redo deletes it again only while it is as the undo brought it back.
+        let expect: SegmentCheck[] = [];
+        stack?.push({
           label: "delete segment",
-          undo: async () => void (await restoreSegments({ textId: text.id, segmentIds: ids })),
-          redo: async () => void (await deleteSegments({ textId: text.id, segmentIds: ids })),
+          undo: async () => {
+            expect = (await restoreSegments({ textId: text.id, segmentIds: ids })).states.map((st) => checkOf(st));
+          },
+          redo: async () => void (await deleteSegments({ textId: text.id, expect, keepChanged: false })),
         });
         this.select(null);
         await reloadTexts();
@@ -827,7 +844,7 @@ export class TimelineView {
     };
     this.confirmBar.replaceChildren(
       h("span", { textContent: label === "" ? "Delete this segment?" : `Delete “${label.slice(0, 40)}”?` }),
-      h("button", { className: "danger", textContent: "Delete", onclick: () => void doDelete() }),
+      h("button", { className: "danger", textContent: "Delete", onclick: () => void this.track(doDelete()) }),
       h("button", { textContent: "Keep", onclick: () => (this.confirmBar.hidden = true) }),
     );
     this.confirmBar.hidden = false;
@@ -854,13 +871,23 @@ export class TimelineView {
     return timelineHistory.stack(s.info.projectId, this.text.id);
   }
 
-  private remember(entry: UndoEntry, key: string | null = null): void {
-    this.history()?.push(entry, key);
+  /** Run an edit so that undo and redo wait for it (see `inflight`). */
+  private track(edit: Promise<void>): Promise<void> {
+    this.inflight.add(edit);
+    const done = () => void this.inflight.delete(edit);
+    edit.then(done, done);
+    return edit;
   }
 
-  private rememberRetime(textId: string, segId: string, edge: Edge, was: number, now: number, key: string | null = null): void {
-    const set = (ms: number) => setSegmentTimes({ textId, segmentId: segId, ...(edge === "start" ? { startMs: ms } : { endMs: ms }) });
-    this.remember({ label: "move edge", undo: async () => void (await set(was)), redo: async () => void (await set(now)) }, key);
+  /** Record an edge move on `stack` (taken before the edit's await, so a
+   * text switch meanwhile cannot put it on another text's stack). Its undo
+   * writes `was` back only while the edge is still at `now`. */
+  private rememberRetime(stack: UndoStack | null, textId: string, segId: string, edge: Edge, was: number, now: number, key: string | null = null): void {
+    const write = async (ms: number, expectMs: number) => {
+      const expect: SegmentCheck[] = [{ id: segId, deleted: false, ...(edge === "start" ? { startMs: expectMs } : { endMs: expectMs }) }];
+      await setSegmentTimes({ textId, segmentId: segId, ...(edge === "start" ? { startMs: ms } : { endMs: ms }), expect });
+    };
+    stack?.push(edgeEntry("move edge", was, now, write), key);
   }
 
   private async afterEdit(): Promise<void> {
@@ -880,13 +907,16 @@ export class TimelineView {
   private async step(which: "undo" | "redo"): Promise<void> {
     const stack = this.history();
     if (stack === null) return;
+    // An edit whose command is still running records its entry when it
+    // returns; wait for it, so this step takes that edit, not the one before.
+    await Promise.all([...this.inflight]);
+    const label = which === "undo" ? stack.undoLabel() : stack.redoLabel();
     try {
-      const label = which === "undo" ? await stack.undo() : await stack.redo();
-      if (label === null) return;
+      if ((which === "undo" ? await stack.undo() : await stack.redo()) === null) return;
       await this.afterEdit();
     } catch (e) {
-      showToast({ tone: "error", lines: [`Could not ${which} that edit: ${errorText(e)}`] });
-      await refreshText();
+      showToast({ tone: "warn", lines: [`Did not ${which} ${label ?? "that edit"}: ${errorText(e)}`] });
+      await this.afterEdit();
     }
   }
 
@@ -902,6 +932,10 @@ export class TimelineView {
 
   /** Cut the selected segment at the playhead; its text stays on the first part. */
   async splitAtPlayhead(): Promise<void> {
+    await this.track(this.split());
+  }
+
+  private async split(): Promise<void> {
     const text = this.text;
     const seg = this.selectedSegment();
     if (text === null || seg === null || seg.startMs === null || seg.endMs === null) return;
@@ -910,26 +944,30 @@ export class TimelineView {
       showToast({ tone: "info", lines: ["Put the playhead inside the selected segment (click the waveform), then split."] });
       return;
     }
+    const stack = this.history();
     const first = seg.id;
     try {
       const added = await splitSegment({ textId: text.id, segmentId: first, atMs: at });
       warnFindings(added.findings);
       const second = added.id;
-      // What the first part says just before an undo merges the parts back,
-      // so a redo can put the text back where it was.
-      let firstText: string | null = null;
-      this.remember({
+      // Undo merges the parts back while the new part is untouched (empty,
+      // no words, same times) and the cut is where it was; the merge then
+      // changes no text. Redo takes them apart again in one txn.
+      let [a, b] = added.states;
+      if (a === undefined || b === undefined) throw new Error("the split did not report both parts");
+      let mergedEnd: number | null = null;
+      stack?.push({
         label: "split",
         undo: async () => {
-          firstText = this.findSegment(first)?.content ?? null;
-          await mergeSegments({ textId: text.id, firstId: first, secondId: second });
+          const r = await mergeSegments({ textId: text.id, firstId: first, secondId: second, expect: [checkOf(a!, ["deleted", "endMs"]), checkOf(b!)] });
+          mergedEnd = r.states[0]?.endMs ?? null;
         },
         redo: async () => {
-          await restoreSegments({ textId: text.id, segmentIds: [second] });
-          await setSegmentTimes({ textId: text.id, segmentId: first, endMs: at });
-          if (firstText !== null && firstText !== this.findSegment(first)?.content) {
-            await editSegmentContent({ textId: text.id, segmentId: first, content: firstText });
-          }
+          const cut = a!.endMs;
+          if (mergedEnd === null || cut === null) throw new Error("nothing to split again");
+          const expect: SegmentCheck[] = [{ id: first, deleted: false, endMs: mergedEnd }, { id: second, deleted: true }];
+          const r = await unmergeSegments({ textId: text.id, firstId: first, secondId: second, firstEndMs: cut, firstContent: null, expect });
+          [a, b] = r.states;
         },
       });
       await this.afterEdit();
@@ -939,29 +977,47 @@ export class TimelineView {
     }
   }
 
-  /** Join the selected segment with the next one on its track. */
+  /** Join the selected segment with the next timed one on its track. */
   async mergeWithNext(): Promise<void> {
+    await this.track(this.merge());
+  }
+
+  private async merge(): Promise<void> {
     const text = this.text;
     const seg = this.selectedSegment();
     if (text === null || seg === null || seg.endMs === null) return;
     const lane = this.laneOf(seg);
-    const ordered = [...(lane?.segments ?? [])].sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    // Only timed neighbours: the core merges in time order and has no place for an untimed one.
+    const ordered = (lane?.segments ?? [])
+      .filter((s) => s.startMs !== null && s.endMs !== null)
+      .sort((a, b) => a.startMs! - b.startMs! || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     const next = ordered[ordered.findIndex((s) => s.id === seg.id) + 1];
     if (next === undefined) {
       showToast({ tone: "info", lines: ["There is no next segment on this track to merge with."] });
       return;
     }
-    const [first, second, wasEnd, wasText] = [seg.id, next.id, seg.endMs, seg.content];
+    const stack = this.history();
+    const [first, second] = [seg.id, next.id];
     try {
-      warnFindings(await mergeSegments({ textId: text.id, firstId: first, secondId: second }));
-      this.remember({
+      const r = await mergeSegments({ textId: text.id, firstId: first, secondId: second });
+      warnFindings(r.findings);
+      // The first part as it was (from the backend, not the possibly stale
+      // view), and both parts after each step, for the checks.
+      const was = r.before[0];
+      let [a, b] = r.states;
+      if (was === undefined || was.endMs === null || a === undefined || b === undefined) throw new Error("the merge did not report both parts");
+      const wasEnd = was.endMs;
+      stack?.push({
         label: "merge",
         undo: async () => {
-          await restoreSegments({ textId: text.id, segmentIds: [second] });
-          await setSegmentTimes({ textId: text.id, segmentId: first, endMs: wasEnd });
-          if (this.findSegment(first)?.content !== wasText) await editSegmentContent({ textId: text.id, segmentId: first, content: wasText });
+          const expect = [checkOf(a!, ["deleted", "endMs", "content"]), { id: second, deleted: true }];
+          const u = await unmergeSegments({ textId: text.id, firstId: first, secondId: second, firstEndMs: wasEnd, firstContent: was.content, expect });
+          [a, b] = u.states;
         },
-        redo: async () => void (await mergeSegments({ textId: text.id, firstId: first, secondId: second })),
+        redo: async () => {
+          const m = await mergeSegments({ textId: text.id, firstId: first, secondId: second, expect: [checkOf(a!, ["deleted", "endMs", "content"]), checkOf(b!)] });
+          [a, b] = m.states;
+        },
       });
       await this.afterEdit();
     } catch (e) {
@@ -982,9 +1038,10 @@ export class TimelineView {
       edge === "start" ? Math.max(0, Math.min(seg.startMs + deltaMs, seg.endMs - MIN_SEGMENT_MS)) : Math.max(seg.startMs + MIN_SEGMENT_MS, seg.endMs + deltaMs);
     if (now === was) return;
     this.nudging = true;
+    const stack = this.history();
     try {
       warnFindings(await setSegmentTimes({ textId: text.id, segmentId: seg.id, ...(edge === "start" ? { startMs: now } : { endMs: now }) }));
-      this.rememberRetime(text.id, seg.id, edge, was, now, `${seg.id}:${edge}`);
+      this.rememberRetime(stack, text.id, seg.id, edge, was, now, `${seg.id}:${edge}`);
       await refreshText();
     } catch (e) {
       showToast({ tone: "error", lines: [errorText(e)] });
@@ -999,10 +1056,16 @@ export class TimelineView {
    * the person already covered alone. Undo takes them all back.
    */
   async autoSegment(source: string): Promise<void> {
+    await this.track(this.autoSegmentNow(source));
+  }
+
+  private async autoSegmentNow(source: string): Promise<void> {
     const text = this.text;
     if (text === null) return;
     const sel = this.selected === null ? null : this.findSegment(this.selected);
-    const tierId = sel?.tier ?? this.lanes.find((l) => l.tierId !== null && l.name === "utterance")?.tierId ?? null;
+    // No selection: null, and the session picks the utterance tier it uses everywhere.
+    const tierId = sel?.tier ?? null;
+    const stack = this.history();
     try {
       const out = await autoSegment({ textId: text.id, source, tierId });
       if (out.ids.length === 0) {
@@ -1010,14 +1073,28 @@ export class TimelineView {
         return;
       }
       const ids = out.ids;
+      // Undo deletes the segments still as Auto-segment made them; any
+      // typed into, retimed or broken into words since (anywhere) stay, and
+      // a toast says how many. Redo brings back what the undo took.
+      let live = out.states.map((st) => checkOf(st));
+      let taken: string[] = [];
       const entry: UndoEntry = {
         label: "auto-segment",
-        undo: async () => void (await deleteSegments({ textId: text.id, segmentIds: ids })),
-        redo: async () => void (await restoreSegments({ textId: text.id, segmentIds: ids })),
+        undo: async () => {
+          const r = await deleteSegments({ textId: text.id, expect: live, keepChanged: true });
+          if (r.deleted.length === 0) throw new Error("every segment it made was edited since, so none was taken back.");
+          taken = r.deleted;
+          if (r.kept.length > 0) {
+            const [d, k] = [r.deleted.length, r.kept.length];
+            showToast({ tone: "info", lines: [`Took back ${d} segment${d === 1 ? "" : "s"}; kept ${k} edited since, so that work is not lost.`] });
+          }
+        },
+        redo: async () => {
+          live = (await restoreSegments({ textId: text.id, segmentIds: taken })).states.map((st) => checkOf(st));
+        },
       };
-      this.remember(entry);
+      stack?.push(entry);
       await this.afterEdit();
-      const stack = this.history();
       showToast({
         tone: "info",
         lines: [
@@ -1028,7 +1105,7 @@ export class TimelineView {
         action: {
           label: "Undo",
           run: () => {
-            if (stack !== null && stack.isNewest(entry)) void this.undo();
+            if (stack !== null && stack === this.history() && stack.isNewest(entry)) void this.undo();
             else showToast({ tone: "info", lines: ["Later edits came after it; use Undo on the timeline to step back to it."] });
           },
         },
@@ -1067,6 +1144,8 @@ export class TimelineView {
         ev.preventDefault();
         this.closeEditor(true);
       } else if (ev.key === "Escape") {
+        // Kept here: the timeline's own Escape would deselect the segment.
+        ev.stopPropagation();
         this.closeEditor(false);
       }
     };
@@ -1084,14 +1163,17 @@ export class TimelineView {
     if (!save || text === null || value === seg.content) return;
     const was = seg.content;
     seg.content = value;
-    void (async () => {
+    const stack = this.history();
+    void this.track((async () => {
       try {
         const result = await editSegmentContent({ textId: text.id, segmentId: seg.id, content: value });
-        this.remember({
-          label: "text edit",
-          undo: async () => void (await editSegmentContent({ textId: text.id, segmentId: seg.id, content: was })),
-          redo: async () => void (await editSegmentContent({ textId: text.id, segmentId: seg.id, content: value })),
-        });
+        // Each way writes only over the text the other way left: typed
+        // over since (Transcribe, another device), the step is refused.
+        let shown = result.content;
+        const write = async (content: string) => {
+          shown = (await editSegmentContent({ textId: text.id, segmentId: seg.id, content, expect: [{ id: seg.id, deleted: false, content: shown }] })).content;
+        };
+        stack?.push({ label: "text edit", undo: () => write(was), redo: () => write(value) });
         // The merged value can differ when another device's edit folded in.
         seg.content = result.content;
         if (result.findings.length > 0) showToast({ tone: "warn", lines: result.findings });
@@ -1101,6 +1183,6 @@ export class TimelineView {
         showToast({ tone: "error", lines: [errorText(e)] });
         await refreshText();
       }
-    })();
+    })());
   }
 }

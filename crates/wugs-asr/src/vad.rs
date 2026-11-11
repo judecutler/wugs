@@ -6,8 +6,9 @@
 //! (an hours-long WAV is never held in memory), mixed to mono, and measured
 //! in short frames as RMS level in dBFS. A frame is speech when it is a
 //! margin above the recording's own noise floor (a low percentile of the
-//! frame levels), so a hissy field recording and a clean studio one both
-//! work. Speech runs separated by less than a real pause are joined (the
+//! frame levels, digital silence left out), so a hissy field recording and
+//! a clean studio one both work. With no contrast at all, a recording is
+//! speech throughout only when it is loud (room tone is not speech). Speech runs separated by less than a real pause are joined (the
 //! hangover: stops and short closures inside a word stay inside it), runs
 //! too short to be a syllable are dropped, and each span is padded so a
 //! quiet onset such as the fricative of "three" is kept inside it. Pads
@@ -29,7 +30,9 @@ pub struct Params {
     pub frame_ms: f64,
     /// A frame is speech when its level is this many dB over the floor.
     pub margin_db: f32,
-    /// The noise floor is this quantile (0..1) of the frame levels.
+    /// The noise floor is this quantile (0..1) of the frame levels above
+    /// digital silence. Low, so fast speech with few pauses still has its
+    /// floor in the pauses rather than inside the speech.
     pub floor_quantile: f32,
     /// Speech runs shorter than this, after joining, are dropped, ms.
     pub min_speech_ms: f64,
@@ -41,7 +44,7 @@ pub struct Params {
 
 impl Default for Params {
     fn default() -> Params {
-        Params { frame_ms: 20.0, margin_db: 12.0, floor_quantile: 0.1, min_speech_ms: 120.0, min_silence_ms: 250.0, pad_ms: 100.0 }
+        Params { frame_ms: 20.0, margin_db: 12.0, floor_quantile: 0.02, min_speech_ms: 120.0, min_silence_ms: 250.0, pad_ms: 100.0 }
     }
 }
 
@@ -60,17 +63,33 @@ impl Params {
 const FLOOR_DB: f32 = -80.0;
 /// A recording whose loud frames stay under this holds no speech at all.
 const SILENT_DB: f32 = -60.0;
+/// With no quiet frames to measure a floor against, a recording is taken
+/// as speech throughout only when its floor is at least this loud; below
+/// it, a level with no contrast is room tone, hum or hiss.
+const SPEECH_DB: f32 = -35.0;
 
 /// The speech spans of a whole WAV file, as `(start_ms, end_ms)` in time
 /// order, padded and never overlapping.
 pub fn speech_spans(path: &Path, params: Params) -> Result<Vec<(f64, f64)>, Error> {
-    let (levels, duration_ms) = frame_levels(path, params.frame_ms)?;
-    Ok(spans_from_levels(&levels, params, duration_ms))
+    let levels = frame_levels(path, params.frame_ms)?;
+    Ok(spans_from_levels(&levels.levels, levels.frame_ms, params, levels.duration_ms))
 }
 
-/// Per-frame RMS level in dBFS of a WAV file (all channels mixed), with the
-/// recording's length in ms. Streams the file.
-pub fn frame_levels(path: &Path, frame_ms: f64) -> Result<(Vec<f32>, f64), Error> {
+/// Frame levels of a recording.
+pub struct Levels {
+    /// RMS level in dBFS of each frame (all channels mixed).
+    pub levels: Vec<f32>,
+    /// The frames' real length, ms: a whole number of samples, so 20 ms
+    /// at 11025 Hz is 221 samples, 20.045 ms. Times are counted in it, so
+    /// they do not drift over a long recording.
+    pub frame_ms: f64,
+    /// The recording's length, ms.
+    pub duration_ms: f64,
+}
+
+/// Per-frame RMS levels of a WAV file, about `frame_ms` long each. Streams
+/// the file.
+pub fn frame_levels(path: &Path, frame_ms: f64) -> Result<Levels, Error> {
     if !(frame_ms > 0.0) {
         return Err(Error::Input(format!("bad frame length {frame_ms} ms")));
     }
@@ -101,7 +120,8 @@ pub fn frame_levels(path: &Path, frame_ms: f64) -> Result<(Vec<f32>, f64), Error
     if n > 0 {
         levels.push(db(sum / n as f64));
     }
-    Ok((levels, total as f64 * 1000.0 / fmt.sample_rate as f64))
+    let rate = fmt.sample_rate as f64;
+    Ok(Levels { levels, frame_ms: frame_len as f64 * 1000.0 / rate, duration_ms: total as f64 * 1000.0 / rate })
 }
 
 fn db(mean_square: f64) -> f32 {
@@ -113,21 +133,25 @@ fn quantile(sorted: &[f32], q: f32) -> f32 {
     sorted[i]
 }
 
-/// The spans for frame levels already measured: the decision part of
-/// [`speech_spans`], kept apart so it can be tested on made-up levels.
-pub fn spans_from_levels(levels: &[f32], params: Params, duration_ms: f64) -> Vec<(f64, f64)> {
+/// The spans for frame levels already measured, each frame `frame_ms`
+/// long: the decision part of [`speech_spans`], kept apart so it can be
+/// tested on made-up levels.
+pub fn spans_from_levels(levels: &[f32], frame_ms: f64, params: Params, duration_ms: f64) -> Vec<(f64, f64)> {
     if levels.is_empty() {
         return Vec::new();
     }
     let mut sorted = levels.to_vec();
     sorted.sort_by(f32::total_cmp);
-    let floor = quantile(&sorted, params.floor_quantile).max(FLOOR_DB);
     let loud = quantile(&sorted, 0.95);
     if loud < SILENT_DB {
         return Vec::new();
     }
+    // Zeroed stretches (digital silence) say nothing about the room: left
+    // in, they would pull the floor down and make the hiss look like speech.
+    let audible = &sorted[sorted.partition_point(|&l| l <= FLOOR_DB)..];
+    let floor = if audible.is_empty() { FLOOR_DB } else { quantile(audible, params.floor_quantile).max(FLOOR_DB) };
     let threshold = floor + params.margin_db;
-    let fm = params.frame_ms;
+    let fm = frame_ms;
 
     // Speech runs, in frames.
     let mut runs: Vec<(usize, usize)> = Vec::new();
@@ -146,8 +170,9 @@ pub fn spans_from_levels(levels: &[f32], params: Params, duration_ms: f64) -> Ve
         runs.push((s, levels.len()));
     }
     // A loud recording with no quiet frames at all (the floor is speech
-    // itself) is one span; nothing in it says where to cut.
-    if runs.is_empty() && loud - floor < params.margin_db && floor > SILENT_DB {
+    // itself) is one span; nothing in it says where to cut. A quiet one
+    // with no contrast (room tone, hiss) has no speech.
+    if runs.is_empty() && loud - floor < params.margin_db && floor > SPEECH_DB {
         runs.push((0, levels.len()));
     }
 
@@ -191,16 +216,20 @@ mod tests {
     /// length in ms and an amplitude (0 for silence), filled with a 220 Hz
     /// tone plus a little noise, so it looks like voiced speech in a room.
     fn wav(name: &str, channels: u16, parts: &[(f64, f64)], hiss: f64) -> std::path::PathBuf {
+        wav_at(name, RATE, channels, parts, hiss)
+    }
+
+    fn wav_at(name: &str, rate: u32, channels: u16, parts: &[(f64, f64)], hiss: f64) -> std::path::PathBuf {
         let mut samples: Vec<i16> = Vec::new();
         let mut seed = 0x2545_f491_u32;
         let mut t = 0usize;
         for &(ms, amp) in parts {
-            for _ in 0..(ms / 1000.0 * RATE as f64) as usize {
+            for _ in 0..(ms / 1000.0 * rate as f64).round() as usize {
                 seed ^= seed << 13;
                 seed ^= seed >> 17;
                 seed ^= seed << 5;
                 let noise = (seed as f64 / u32::MAX as f64 - 0.5) * 2.0 * hiss;
-                let tone = amp * (2.0 * std::f64::consts::PI * 220.0 * t as f64 / RATE as f64).sin();
+                let tone = amp * (2.0 * std::f64::consts::PI * 220.0 * t as f64 / rate as f64).sin();
                 let v = ((tone + noise) * 32767.0).clamp(-32768.0, 32767.0) as i16;
                 for _ in 0..channels {
                     samples.push(v);
@@ -212,15 +241,15 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("a.wav");
         let data = (samples.len() * 2) as u32;
-        let mut f = std::fs::File::create(&path).unwrap();
+        let mut f = std::io::BufWriter::new(std::fs::File::create(&path).unwrap());
         f.write_all(b"RIFF").unwrap();
         f.write_all(&(36 + data).to_le_bytes()).unwrap();
         f.write_all(b"WAVEfmt ").unwrap();
         f.write_all(&16u32.to_le_bytes()).unwrap();
         f.write_all(&1u16.to_le_bytes()).unwrap();
         f.write_all(&channels.to_le_bytes()).unwrap();
-        f.write_all(&RATE.to_le_bytes()).unwrap();
-        f.write_all(&(RATE * 2 * channels as u32).to_le_bytes()).unwrap();
+        f.write_all(&rate.to_le_bytes()).unwrap();
+        f.write_all(&(rate * 2 * channels as u32).to_le_bytes()).unwrap();
         f.write_all(&(2 * channels).to_le_bytes()).unwrap();
         f.write_all(&16u16.to_le_bytes()).unwrap();
         f.write_all(b"data").unwrap();
@@ -228,6 +257,7 @@ mod tests {
         for s in samples {
             f.write_all(&s.to_le_bytes()).unwrap();
         }
+        f.flush().unwrap();
         path
     }
 
@@ -294,12 +324,60 @@ mod tests {
         for i in (10..30).chain(45..60) {
             levels[i] = -20.0;
         }
-        let spans = spans_from_levels(&levels, p, 1600.0);
+        let spans = spans_from_levels(&levels, 20.0, p, 1600.0);
         assert_eq!(spans.len(), 2, "{spans:?}");
         assert_eq!(spans[0].1, spans[1].0, "the pads meet in the middle of the gap: {spans:?}");
         assert_eq!(spans[0].1, 750.0);
         assert_eq!(spans[0].0, 0.0);
         assert_eq!(spans[1].1, 1600.0);
+    }
+
+    #[test]
+    fn room_tone_alone_is_no_speech_but_loud_speech_throughout_is_one_span() {
+        // Hiss at about -55 dBFS for 5 s: no contrast and quiet, so nothing.
+        let path = wav("roomtone", 1, &[(5000.0, 0.0)], 0.0031);
+        assert!(speech_spans(&path, Params::default()).unwrap().is_empty());
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+        // Speech with no pause at all: one span, the whole recording.
+        let path = wav("throughout", 1, &[(3000.0, 0.3)], 0.002);
+        let spans = speech_spans(&path, Params::default()).unwrap();
+        assert_eq!(spans, [(0.0, 3000.0)]);
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn fast_speech_with_few_pauses_keeps_its_floor_in_the_pauses() {
+        // Four 5 s utterances with 400 ms pauses: under 6% of the frames are
+        // pauses, so a 10th-percentile floor would sit inside the speech.
+        let parts = [(5000.0, 0.3), (400.0, 0.0), (5000.0, 0.25), (400.0, 0.0), (5000.0, 0.3), (400.0, 0.0), (5000.0, 0.2)];
+        let path = wav("fast", 1, &parts, 0.002);
+        let spans = speech_spans(&path, Params::default()).unwrap();
+        assert_eq!(spans.len(), 4, "{spans:?}");
+        assert!(near(spans[1].0, 5300.0, 25.0) && near(spans[1].1, 10500.0, 25.0), "{spans:?}");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn times_do_not_drift_when_a_frame_is_not_a_whole_number_of_samples() {
+        // 20 ms at 11025 Hz is 220.5 samples; one word 290 s into a 300 s file.
+        let path = wav_at("drift", 11_025, 1, &[(290_000.0, 0.0), (1000.0, 0.3), (9000.0, 0.0)], 0.002);
+        let spans = speech_spans(&path, Params::default()).unwrap();
+        assert_eq!(spans.len(), 1, "{spans:?}");
+        assert!(near(spans[0].0, 289_900.0, 25.0) && near(spans[0].1, 291_100.0, 25.0), "{spans:?}");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
+    }
+
+    #[test]
+    fn digital_silence_does_not_pull_the_floor_down() {
+        // A zeroed lead-in, then hiss with one word: the hiss is not speech.
+        let mut levels = vec![-120.0f32; 40];
+        levels.extend(std::iter::repeat_n(-55.0f32, 160));
+        for l in &mut levels[100..130] {
+            *l = -20.0;
+        }
+        let spans = spans_from_levels(&levels, 20.0, Params::default(), 4000.0);
+        assert_eq!(spans.len(), 1, "{spans:?}");
+        assert_eq!(spans[0], (1900.0, 2700.0));
     }
 
     #[test]
