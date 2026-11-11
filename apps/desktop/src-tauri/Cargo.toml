@@ -53,4 +53,6 @@ sha2 = "0.10"
 wugs-asr = { version = "0.0.1", path = "../../../crates/wugs-asr" }
 wugs-package = { path = "../../../crates/wugs-package" }
 serde_json = "1.0.154"
+# Decodes compressed recordings (M4A/AAC, MP3, FLAC, Ogg Vorbis, AIFF) to WAV on import. Pure Rust, MPL-2.0.
+symphonia = { version = "0.5.5", default-features = false, features = ["aac", "isomp4", "mp3", "flac", "ogg", "vorbis", "pcm", "wav", "aiff", "adpcm"] }
 tauri-plugin-updater = "2"
