@@ -35,6 +35,7 @@ pub struct Summary {
     pub restricted: usize,
     pub unchecked: usize,
     pub unusable: usize,
+    pub emptied: usize,
     /// Why this device may not know every consent record (a guest never
     /// receives them; some may still be arriving), or None. Shown and
     /// written into the datasheet, never a gate.
@@ -75,7 +76,7 @@ pub fn summary(s: &mut Session, guest: bool) -> Result<Summary, String> {
 
 fn tally(c: &Corrections, guest: bool) -> Summary {
     let partial = if guest { Some(GUEST.to_string()) } else if c.records_incomplete { Some(ARRIVING.to_string()) } else { None };
-    let mut sum = Summary { unchecked: c.unchecked, unusable: c.unusable, partial, ..Summary::default() };
+    let mut sum = Summary { unchecked: c.unchecked, unusable: c.unusable, emptied: c.emptied, partial, ..Summary::default() };
     for p in &c.pairs {
         count(&mut sum, p, 1);
     }
@@ -246,10 +247,10 @@ fn datasheet(today: &str, written: usize, failed: usize, t: &Tally, models: &BTr
     let failed = if failed > 0 { format!(" {failed} chosen clips could not be cut from their recordings and are not here.") } else { String::new() };
     format!(
         "# Corrected machine transcriptions (wugs)\n\n\
-Exported {today}. {written} clips, each a segment where a phone model suggested a transcription and a person then checked and corrected it in wugs.\n\n\
+Exported {today}. {}, each a segment where a phone model suggested a transcription and a person then checked and corrected it in wugs.\n\n\
 **These are speech recordings of real people. Treat this folder as you would the recordings themselves:** share it only as far as the speakers agreed.\n\n\
 ## What the project's records say\n\n\
-wugs records consent as the project enters it and does not judge it; the people who made this export, and their review board, are responsible for its use. Of these clips, {} are covered by a consent record that allows AI use, {} by none that speaks about it, and {} by one that does not allow it.{partial}{against}{left_out}{failed} Not in this export: {} suggestions not yet checked by a person, {} without a recording or times.\n\n\
+wugs records consent as the project enters it and does not judge it; the people who made this export, and their review board, are responsible for its use. Of these clips, {} are covered by a consent record that allows AI use, {} by none that speaks about it, and {} by one that does not allow it.{partial}{against}{left_out}{failed} Not in this export: {} not yet checked by a person, {} cleared by hand, {} without a recording or times.\n\n\
 ## Files\n\n\
 Kaldi-style tables, one line per clip, keyed by the segment's id:\n\n\
 - `wav/<id>.wav`: the segment's audio, 16 kHz mono 16-bit PCM\n\
@@ -265,8 +266,19 @@ The person's transcription follows the project's own conventions: it may be phon
 ## Scoring\n\n\
 The folder is a test set for `wugs-asr-eval` (in the wugs repository):\n\n\
 ```\nwugs-asr-eval --runtime <runtime> --model <model.onnx> --vocab <vocab> --set <this folder> --out predictions.jsonl\n```\n",
-        t.yes, t.unrecorded, t.no, sum.unchecked, sum.unusable, t.restricted, t.retimed,
+        plural(written, "clip"), t.yes, t.unrecorded, t.no, plural(sum.unchecked, "suggestion"), sum.emptied, sum.unusable, t.restricted, t.retimed,
     )
+}
+
+fn plural(n: usize, one: &str) -> String {
+    format!("{n} {one}{}", if n == 1 { "" } else { "s" })
+}
+
+/// A `YYYY-MM-DD` date from the caller (the person's own calendar day), else today in UTC.
+pub fn date_or_today(date: &str) -> String {
+    let b = date.as_bytes();
+    let ok = b.len() == 10 && b[4] == b'-' && b[7] == b'-' && b.iter().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit());
+    if ok { date.to_string() } else { today() }
 }
 
 fn write_wav(path: &Path, audio: &[f32]) -> Result<(), String> {
@@ -326,6 +338,16 @@ mod tests {
         p.edit_content(&text, &seg, "kɔ").unwrap();
         p.set_access(&source, "restricted").unwrap();
         s
+    }
+
+    #[test]
+    fn the_folder_takes_the_callers_calendar_day() {
+        assert_eq!(date_or_today("2026-11-10"), "2026-11-10");
+        for bad in ["", "2026-1-10", "2026/11/10", "../../etc", "2026-11-1x"] {
+            assert_eq!(date_or_today(bad), today(), "{bad:?} is not a date");
+        }
+        assert_eq!(plural(1, "clip"), "1 clip");
+        assert_eq!(plural(2, "clip"), "2 clips");
     }
 
     #[test]

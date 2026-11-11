@@ -390,6 +390,14 @@ fn a_retimed_or_unplaced_suggestion_is_flagged_or_left_out() {
     let got = c.corrections().unwrap();
     assert!(got.pairs.is_empty());
     assert_eq!(got.unusable, 1);
+
+    // Clearing a suggestion is a check with nothing to pair, not a missing recording.
+    let (mut d, _e, text, seg) = rig.pair();
+    let src = d.add_source("Recording", None, "audio", None).unwrap();
+    d.machine_transcribe(&text, &seg, &heard_from("kopek", &src)).unwrap();
+    d.edit_content(&text, &seg, "").unwrap();
+    let got = d.corrections().unwrap();
+    assert_eq!((got.emptied, got.unusable, got.unchecked), (1, 0, 0));
 }
 
 #[test]

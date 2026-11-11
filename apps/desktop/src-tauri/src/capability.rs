@@ -250,7 +250,7 @@ pub fn effective(cap: Capability, pin: Option<&str>, machine: &Choice, options: 
             )),
         },
         Choice::Automatic => automatic(options).map(|o| o.id.clone()).ok_or_else(|| match cap {
-            Capability::PhoneTranscription => "No phone transcription model is downloaded yet. Download one in the Speech assist panel.".to_string(),
+            Capability::PhoneTranscription => "No phone transcription model is downloaded yet; Speech assist lists the ones you can download.".to_string(),
             Capability::AcousticAnalysis => options.iter().find(|o| o.id == PRAAT).map(|o| o.note.clone()).unwrap_or_else(|| "Nothing on this computer can analyse audio.".into()),
         }),
     }
@@ -334,7 +334,7 @@ mod tests {
         let os = [opt("a", true, None), opt("d", false, Some(0.1))];
         assert_eq!(effective(Capability::PhoneTranscription, None, &Choice::Automatic, &os).unwrap(), "a");
         let err = effective(Capability::PhoneTranscription, None, &Choice::Automatic, &[opt("d", false, None)]).unwrap_err();
-        assert!(err.contains("Download one"), "{err}");
+        assert!(err.contains("ones you can download"), "{err}");
     }
 
     #[test]

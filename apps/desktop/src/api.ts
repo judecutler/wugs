@@ -428,11 +428,12 @@ export const assistSuggest = (args: { text: string; segment: string; source: str
 // Corrections export: src-tauri/src/corrections.rs (roadmap 57).
 /** `recordedNo`: a consent record says no to AI use; `restricted`: a restricted or community access level. Both start left out; the person decides. */
 /** `partial`: why this device may not know every consent record (a guest, records still arriving), or null. */
-export type CorrectionsSummary = { ready: number; recordedNo: number; restricted: number; unchecked: number; unusable: number; partial: string | null };
+export type CorrectionsSummary = { ready: number; recordedNo: number; restricted: number; unchecked: number; unusable: number; emptied: number; partial: string | null };
 export type CorrectionsExported = { folder: string; written: number; problems: string[]; failed: number };
 export const correctionsSummary = () => invoke<CorrectionsSummary>("corrections_summary");
 /** `flagged`: also include clips the project's records speak against (a recorded no, a restricted level). */
-export const correctionsExport = (args: { folder: string; flagged: boolean }) => invoke<CorrectionsExported>("corrections_export", args);
+/** `date`: today on this computer's calendar (YYYY-MM-DD), which names the folder. */
+export const correctionsExport = (args: { folder: string; flagged: boolean; date: string }) => invoke<CorrectionsExported>("corrections_export", args);
 /** How assist_suggest says the model changed under the caller. */
 export const MODEL_CHANGED = "Phone transcription now uses ";
 

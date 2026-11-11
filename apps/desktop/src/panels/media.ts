@@ -81,9 +81,13 @@ export const mediaPanel: PanelDef = {
       void refreshMics();
     };
 
+    /** The message and armed state the naming row was last drawn with. */
+    let pendingSig: string | null = null;
+
     function drawBar() {
       const take = getTake();
       cancelAnimationFrame(raf);
+      if (take.kind !== "pending") pendingSig = null;
       if (getState().kind === "closed" && !isLive(take)) {
         bar.replaceChildren();
         return;
@@ -127,6 +131,12 @@ export const mediaPanel: PanelDef = {
           bar.replaceChildren(h("span", { className: "note", textContent: `Saving "${take.name}"…` }));
           return;
         case "pending": {
+          // A rename changes only the name, which the field already shows:
+          // redrawing would replace the field under the typist and select
+          // its text, so the next key would overwrite the whole name.
+          const sig = `${take.message ?? ""}\u0000${take.armed}`;
+          if (pendingSig === sig && bar.querySelector("input.rec-label") !== null) return;
+          pendingSig = sig;
           const label = h("input", { className: "rec-label", type: "text", value: take.name, ariaLabel: "Recording name" });
           const saveButton = h("button", { className: "primary", textContent: "Save" });
           label.oninput = () => renameTake(label.value);

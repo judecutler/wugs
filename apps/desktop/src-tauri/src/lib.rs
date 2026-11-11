@@ -713,13 +713,13 @@ fn corrections_summary(s: State<SessionThread>, id: State<Identity>) -> Result<c
 /// Export the checked suggestions into a new folder inside `folder`.
 /// `flagged`: also include those the project's records speak against.
 #[tauri::command(async)]
-fn corrections_export(s: State<SessionThread>, id: State<Identity>, folder: String, flagged: bool) -> Result<corrections::Exported, String> {
+fn corrections_export(s: State<SessionThread>, id: State<Identity>, folder: String, flagged: bool, date: String) -> Result<corrections::Exported, String> {
     let key = id.key().ok();
     let (jobs, sum) = s.run(move |s| {
         let guest = session::is_guest(s, key.as_deref())?;
         corrections::prepare(s, guest, flagged)
     })?;
-    corrections::write(&jobs, &sum, std::path::Path::new(&folder), &corrections::today())
+    corrections::write(&jobs, &sum, std::path::Path::new(&folder), &corrections::date_or_today(&date))
 }
 
 /// The start of `assist_suggest`'s refusal when the model changed under a run.
