@@ -216,8 +216,7 @@ impl Project {
         Ok(stats.applied)
     }
 
-    /// A rebuild reads every file whole; a catch-up
-    /// reads from the recorded ends.
+    /// A rebuild reads every file whole; a catch-up reads from the recorded ends.
     fn apply_log(&mut self, rebuild: bool) -> Result<ApplyStats, String> {
         let starts = if rebuild { Default::default() } else { self.proj.log_ends()? };
         let mut stream = self.log.stream_from(&starts).map_err(|e| e.to_string())?;
