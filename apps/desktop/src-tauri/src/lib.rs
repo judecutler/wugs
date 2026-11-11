@@ -6,6 +6,7 @@ pub mod corrections;
 pub mod elicit;
 pub mod gloss;
 pub mod identity;
+pub mod interchange;
 pub mod kits;
 pub mod layout;
 pub mod lexicon;
@@ -117,6 +118,32 @@ fn get_text(s: State<SessionThread>, text_id: String) -> Result<TextDetail, Stri
 #[tauri::command(async)]
 fn create_text(s: State<SessionThread>, title: String) -> Result<String, String> {
     s.run(move |s| session::create_text(s, &title))
+}
+
+/// Import an ELAN, FLEx, Praat or Toolbox file into the open project.
+#[tauri::command(async)]
+fn import_file(s: State<SessionThread>, path: String) -> Result<interchange::Imported, String> {
+    s.run(move |s| interchange::import_file(s, &path))
+}
+
+/// Export one text (`elan`, `flextext`, `textgrid`) into `folder`.
+#[tauri::command(async)]
+fn export_text(s: State<SessionThread>, text_id: String, format: String, folder: String) -> Result<interchange::Exported, String> {
+    let format = interchange::Format::parse(&format)?;
+    s.run(move |s| interchange::export_text(s, &text_id, format, std::path::Path::new(&folder)))
+}
+
+/// Export the lexicon (`lift`, `toolbox`) into `folder`.
+#[tauri::command(async)]
+fn export_lexicon(s: State<SessionThread>, format: String, folder: String) -> Result<interchange::Exported, String> {
+    let format = interchange::Format::parse(&format)?;
+    s.run(move |s| interchange::export_lexicon(s, format, std::path::Path::new(&folder)))
+}
+
+/// Seal the project as an archive package in a new folder inside `folder`.
+#[tauri::command(async)]
+fn seal_project(s: State<SessionThread>, folder: String, date: String) -> Result<interchange::Sealed, String> {
+    s.run(move |s| interchange::seal_project(s, std::path::Path::new(&folder), &date))
 }
 
 #[tauri::command(async)]
@@ -1064,6 +1091,10 @@ pub fn run() {
             list_texts,
             get_text,
             create_text,
+            import_file,
+            export_text,
+            export_lexicon,
+            seal_project,
             add_segment,
             edit_segment_content,
             set_segment_times,

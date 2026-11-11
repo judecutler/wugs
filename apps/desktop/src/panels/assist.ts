@@ -4,6 +4,7 @@
 // computer; the recording never leaves it. Machine transcriptions stay
 // tinted until someone edits them (src/assist/logic.ts).
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
+import { localDay } from "../dates";
 import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, correctionsExport, correctionsSummary, errorText, MODEL_CHANGED, type AssistModel, type CapabilityView, type CorrectionsSummary } from "../api";
 import { batchTargets, correctionsLine, count, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
 import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
@@ -260,9 +261,7 @@ export const assistPanel: PanelDef = {
       exporting = true;
       draw();
       try {
-        const now = new Date();
-        const date = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const r = await correctionsExport({ folder, flagged: includeFlagged, date });
+        const r = await correctionsExport({ folder, flagged: includeFlagged, date: localDay(new Date()) });
         showToast({
           tone: r.failed > 0 ? "warn" : "info",
           lines: [`Exported ${r.written} correction${r.written === 1 ? "" : "s"} to ${r.folder}.`, ...(r.failed > 0 ? [`${r.failed} could not be cut from the recording.`, ...r.problems] : [])],
