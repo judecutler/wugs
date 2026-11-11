@@ -292,6 +292,13 @@ impl Project {
     /// Apply one analysis to every token in the project spelled `form`
     /// (NFC, case-folded) that has no morphs yet, one `apply-analysis` txn
     /// per text. A token that already has an analysis is never touched.
+    /// A bulk apply lands on tokens that share the folded form but not the
+    /// case («Köpekler» spread over «köpekler»), and validator #1 compares
+    /// concatenation case-exactly, so each token takes the analysis with
+    /// the first morph's first character matched to its own form. The
+    /// token's character is copied, never computed, so what the person
+    /// typed is what every surface carries; the Turkic pairs are named
+    /// because char folding does not pair them.
     pub fn apply_analysis_to_unanalysed(
         &mut self,
         form: &str,
@@ -313,7 +320,8 @@ impl Project {
         for (text, tokens) in by_text {
             let mut plans = Vec::with_capacity(tokens.len());
             for token in &tokens {
-                plans.push(self.plan_analysis(token, analysis, &gloss_fields)?);
+                let own = self.proj.field_str(token, "form")?.unwrap_or_default();
+                plans.push(self.plan_analysis(token, &match_case(&own, analysis), &gloss_fields)?);
             }
             let mut t = self.intent("apply-analysis");
             for (token, plan) in tokens.iter().zip(plans) {
@@ -551,6 +559,23 @@ impl Project {
 }
 
 /// Validate an analysis and resolve each morph's extra-language field names.
+/// The analysis with its first morph's first character taken from `form`,
+/// when the two are case variants; otherwise an unchanged copy.
+fn match_case(form: &str, analysis: &[MorphSpec]) -> Vec<MorphSpec> {
+    let mut out = analysis.to_vec();
+    let (Some(f), Some(first)) = (form.chars().next(), out.first_mut()) else {
+        return out;
+    };
+    let Some(m) = first.surface.chars().next() else {
+        return out;
+    };
+    let variants = f.to_lowercase().eq(m.to_lowercase()) || matches!((f, m), ('I', 'ı') | ('ı', 'I') | ('İ', 'i') | ('i', 'İ'));
+    if f != m && variants {
+        first.surface = f.to_string() + &first.surface[m.len_utf8()..];
+    }
+    out
+}
+
 fn check_analysis(analysis: &[MorphSpec]) -> Result<Vec<Vec<(String, String)>>, String> {
     let mut all = Vec::with_capacity(analysis.len());
     for m in analysis {

@@ -274,7 +274,9 @@ fn apply_to_unanalysed_never_touches_an_analysed_token() {
     assert_eq!(p.proj.members(&a[0]).unwrap(), mine_ids, "its morphs were not even re-created");
     assert!(analysis(&p, &a[1]).iter().all(|m| m.2.as_deref() != Some("PL")));
     assert_eq!(analysis(&p, &a[1])[1].2.as_deref(), Some("PLURAL"));
+    assert_eq!(analysis(&p, &a[1])[0].0, "Wug", "«Wugs» takes its own capital, not the applied lower case");
     assert_eq!(analysis(&p, &b[0]).len(), 2);
+    assert_eq!(analysis(&p, &b[0])[0].0, "Wug", "«WUGS» takes its first character; the rest is the analysis's");
     assert!(analysis(&p, &b[1]).is_empty(), "other forms are untouched");
     assert!(analysis(&p, &c[0]).is_empty(), "a token in a deleted segment is untouched");
 
