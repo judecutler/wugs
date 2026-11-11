@@ -48,6 +48,7 @@ pub struct Project {
     clock: Clock,
     validators: Vec<Box<dyn Validator>>,
     relocation: Option<Relocation>,
+    caught_up: usize,
 }
 
 /// `cache/` is not the directory `cache/instance.json` recorded: the folder was
@@ -174,10 +175,13 @@ impl Project {
             clock,
             validators: default_validators(),
             relocation,
+            caught_up: 0,
         };
         if fresh {
             project.replay()?;
             project.reload_quarantine()?;
+        } else {
+            project.caught_up = project.catch_up()?;
         }
         // fold the newest known timestamp into the clock so we issue after it
         if let Some(maxh) = project.proj.max_hlc()? {
@@ -190,28 +194,66 @@ impl Project {
 
     /// Rebuild the projection from the log (the only repair path).
     pub fn replay(&mut self) -> Result<ApplyStats, String> {
-        let report = self.log.read_all().map_err(|e| e.to_string())?;
-        if report.corrupt_lines > 0 {
-            return Err(format!(
-                "log corruption: {} bad non-tail lines — refusing to replay silently",
-                report.corrupt_lines
-            ));
+        self.apply_log(true)
+    }
+
+    /// Apply every log op the cache lacks, in log order, in one transaction:
+    /// a crash between a commit's log append and its savepoint release
+    /// leaves ops in the log that the cache never saw. `Projection::apply`
+    /// skips applied ops and re-parks pending ones as a no-op, so this is
+    /// the replay itself on a warm cache. Unlike a rebuild it does not
+    /// refuse a corrupt line: the cache already holds what it held, and
+    /// opening must not get worse because the log did.
+    fn catch_up(&mut self) -> Result<usize, String> {
+        let stats = self.apply_log(false)?;
+        // A crash inside a held txn's retry leaves its ops logged and its
+        // hold recorded; the retry releases holds whose ops all applied.
+        if stats.applied > 0 && self.proj.count("quarantine")? > 0 {
+            self.retry_held()?;
         }
+        Ok(stats.applied)
+    }
+
+    fn apply_log(&mut self, refuse_corrupt: bool) -> Result<ApplyStats, String> {
+        let mut stream = self.log.stream_all().map_err(|e| e.to_string())?;
         let mut stats = ApplyStats::default();
         self.proj.begin()?;
-        for op in &report.ops {
-            if let Err(e) = self.proj.apply(op, &mut stats) {
-                self.proj.rollback()?;
-                return Err(e);
+        let mut applied = Ok(());
+        loop {
+            let op = match stream.next_op() {
+                Ok(Some(op)) => op,
+                Ok(None) => break,
+                Err(e) => {
+                    applied = Err(e.to_string());
+                    break;
+                }
+            };
+            if let Err(e) = self.proj.apply(&op, &mut stats) {
+                applied = Err(e);
+                break;
             }
-        }
-        self.proj.commit()?;
-        for op in &report.ops {
             if let Some(h) = Hlc::parse(&op.hlc) {
                 self.clock.absorb(&h);
             }
         }
+        if applied.is_ok() && refuse_corrupt && stream.corrupt_lines > 0 {
+            applied = Err(format!(
+                "log corruption: {} bad non-tail lines — refusing to replay silently",
+                stream.corrupt_lines
+            ));
+        }
+        if let Err(e) = applied {
+            self.proj.rollback()?;
+            return Err(e);
+        }
+        self.proj.commit()?;
         Ok(stats)
+    }
+
+    /// Ops the log held that the cache lacked when this project opened,
+    /// applied then (`catch_up`). 0 after a clean close or a rebuild.
+    pub fn caught_up(&self) -> usize {
+        self.caught_up
     }
 
     /// Start a domain intent. All edits happen through this.
@@ -1549,6 +1591,82 @@ mod tests {
             sen
         );
         fs::remove_dir_all(root).ok();
+    }
+
+    /// A crash after `commit`'s log append and before its savepoint
+    /// release: the ops are in the log, the cache never saw them.
+    fn crash_after_append(t: Txn<'_>) -> Vec<String> {
+        t.project.log.append_all(&t.ops).unwrap();
+        t.ops.iter().map(|o| o.id.clone()).collect()
+    }
+
+    #[test]
+    fn open_catches_up_ops_the_log_has_and_the_cache_lacks() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let txt = p.create_text("Story").unwrap();
+        let seg = p.add_segment(&txt, "tir_utt", 0, Some(0.0), Some(900.0), "first").unwrap().0;
+        p.edit_content(&txt, &seg, "typed").unwrap();
+
+        let mut t = p.intent("set-title");
+        t.set("text", &txt, &txt, "title", Value::str("Story, retold")).unwrap();
+        let mut ids = crash_after_append(t);
+        let mut t = p.intent("edit-content").resolving();
+        t.text_edit("segment", &seg, &txt, "content", "typed again").unwrap();
+        ids.extend(crash_after_append(t));
+        assert_eq!(p.proj.field_str(&txt, "title").unwrap().unwrap(), "Story", "the crash left the cache behind");
+        drop(p);
+
+        let p = Project::open(&root, "prs_Alice").unwrap();
+        assert_eq!(p.caught_up(), 2);
+        assert_eq!(p.proj.field_str(&txt, "title").unwrap().unwrap(), "Story, retold");
+        assert_eq!(p.proj.field_str(&seg, "content").unwrap().unwrap(), "typed again");
+        for id in &ids {
+            assert!(p.proj.already_applied(id).unwrap(), "{id} is in ops_applied");
+        }
+        drop(p);
+
+        let p = Project::open(&root, "prs_Alice").unwrap();
+        assert_eq!(p.caught_up(), 0, "a clean reopen catches up nothing");
+        drop(p);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_parked_op_stays_parked_and_uncounted_across_a_reopen() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let txt = p.create_text("Story").unwrap();
+        // An op on a target nobody created yet parks in `pending`; a reopen
+        // must leave it parked, not apply or count it.
+        let mut t = p.intent("orphan");
+        t.set("segment", "seg_missing", &txt, "content", Value::str("x")).unwrap();
+        t.commit().unwrap();
+        assert_eq!(p.proj.count("pending").unwrap(), 1);
+        drop(p);
+        let p = Project::open(&root, "prs_Alice").unwrap();
+        assert_eq!(p.caught_up(), 0);
+        assert_eq!(p.proj.count("pending").unwrap(), 1);
+        drop(p);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_torn_tail_still_opens_and_the_ops_before_it_catch_up() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let txt = p.create_text("Story").unwrap();
+        let mut t = p.intent("set-title");
+        t.set("text", &txt, &txt, "title", Value::str("Retold")).unwrap();
+        crash_after_append(t);
+        let file = p.log.log_root().join(txt.as_str()).join(format!("{}.jsonl", p.device()));
+        drop(p);
+        let mut f = fs::OpenOptions::new().append(true).open(&file).unwrap();
+        std::io::Write::write_all(&mut f, b"{\"id\":\"op_torn\",\"hl").unwrap();
+        drop(f);
+
+        let p = Project::open(&root, "prs_Alice").unwrap();
+        assert_eq!(p.caught_up(), 1);
+        assert_eq!(p.proj.field_str(&txt, "title").unwrap().unwrap(), "Retold");
+        drop(p);
+        fs::remove_dir_all(&root).ok();
     }
 
     fn temp_root() -> PathBuf {
