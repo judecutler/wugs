@@ -116,12 +116,12 @@ export const unmergeSegments = (args: {
   expect: SegmentCheck[];
 }) => invoke<SegmentsEdit>("unmerge_segments", args);
 
-/** Where speech starts and ends in a recording, `[startMs, endMs]` in time order (cached per recording). */
-export const speechSpans = (args: { source: string }) => invoke<[number, number][]>("speech_spans", args);
+/** Where speech starts and ends in a recording, `[startMs, endMs]` in time order, per utterance or per word (cached per recording and granularity). */
+export const speechSpans = (args: { source: string; granularity: "utterance" | "word" }) => invoke<[number, number][]>("speech_spans", args);
 
 export type AutoSegmented = { ids: string[]; skipped: number; tier: string; findings: string[]; states: SegmentState[] };
 /** One machine segment per stretch of speech not already covered on the tier (the utterance tier when null). */
-export const autoSegment = (args: { textId: string; source: string; tierId: string | null }) => invoke<AutoSegmented>("auto_segment", args);
+export const autoSegment = (args: { textId: string; source: string; tierId: string | null; granularity: "utterance" | "word" }) => invoke<AutoSegmented>("auto_segment", args);
 
 export type TierTemplate = "transcription" | "translation" | "notes" | "custom";
 

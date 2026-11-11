@@ -8,10 +8,13 @@ import { addTier, importMedia, listSources, peaksInfo, type SourceRow, type Tier
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
 import { attempt, dataGeneration, getSelection, getState, refreshText } from "../store";
+import { parseGranularity } from "../timeline/edit-rules";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
 import type { PanelDef, PanelView } from "./panel";
 
 const TEMPLATES: TierTemplate[] = ["transcription", "translation", "notes", "custom"];
+/** Auto-segment's last granularity on this machine. */
+const GRANULARITY_KEY = "wugs.timeline.autoSegmentBy";
 
 export const timelinePanel: PanelDef = {
   title: "Timeline",
@@ -40,11 +43,21 @@ export const timelinePanel: PanelDef = {
       textContent: "Auto-segment",
       title: "Add a segment for each stretch of speech in this recording (on the selected segment's track, else the utterance track). Segments you drew are left alone; Undo takes them all back.",
     });
-    const splitButton = h("button", { textContent: "Split", title: "Cut the selected segment at the playhead (S). Its text stays on the first part." });
-    const mergeButton = h("button", { textContent: "Merge with next", title: "Join the selected segment with the next one on its track (M)." });
+    const byPicker = h(
+      "select",
+      { className: "tl-auto-by", title: "Auto-segment makes one segment per utterance (split at real pauses) or per word (split at short pauses too)" },
+      h("option", { value: "utterance", textContent: "by utterance" }),
+      h("option", { value: "word", textContent: "by word" }),
+    );
+    byPicker.value = parseGranularity(localStorage.getItem(GRANULARITY_KEY));
+    byPicker.onchange = () => localStorage.setItem(GRANULARITY_KEY, byPicker.value);
+    const SPLIT_TITLE = "Cut the selected segment at the playhead (S). Its text stays on the first part.";
+    const MERGE_TITLE = "Join the selected segment with the next one on its track (M).";
+    const splitButton = h("button", { textContent: "Split", title: SPLIT_TITLE });
+    const mergeButton = h("button", { textContent: "Merge with next", title: MERGE_TITLE });
     const undoButton = h("button", { textContent: "Undo", title: "Undo (Ctrl+Z)" });
     const redoButton = h("button", { textContent: "Redo", title: "Redo (Ctrl+Shift+Z or Ctrl+Y)" });
-    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, splitButton, mergeButton, undoButton, redoButton);
+    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, splitButton, mergeButton, undoButton, redoButton);
     const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, perfButton, praat.element);
 
     const updateEditButtons = () => {
@@ -54,6 +67,13 @@ export const timelinePanel: PanelDef = {
       undoButton.title = stack?.undoLabel() != null ? `Undo ${stack.undoLabel()} (Ctrl+Z)` : "Undo (Ctrl+Z)";
       redoButton.title = stack?.redoLabel() != null ? `Redo ${stack.redoLabel()} (Ctrl+Shift+Z or Ctrl+Y)` : "Redo (Ctrl+Shift+Z or Ctrl+Y)";
       autoButton.disabled = autoButton.dataset.busy === "1" || view === null || selectedSource === null;
+      byPicker.disabled = autoButton.disabled;
+      // The same rule as the S and M keys; the title says why when disabled.
+      const rules = view?.editRules() ?? { split: "Open a text first.", merge: "Open a text first.", next: null };
+      splitButton.disabled = rules.split !== null;
+      splitButton.title = rules.split === null ? SPLIT_TITLE : `${SPLIT_TITLE} ${rules.split}`;
+      mergeButton.disabled = rules.merge !== null;
+      mergeButton.title = rules.merge === null ? MERGE_TITLE : `${MERGE_TITLE} ${rules.merge}`;
     };
     timelineHistory.onChange = updateEditButtons;
     undoButton.onclick = () => void view?.undo();
@@ -66,7 +86,7 @@ export const timelinePanel: PanelDef = {
       autoButton.dataset.busy = "1";
       autoButton.textContent = "Finding speech…";
       updateEditButtons();
-      void view.autoSegment(source).finally(() => {
+      void view.autoSegment(source, parseGranularity(byPicker.value)).finally(() => {
         autoButton.dataset.busy = "";
         autoButton.textContent = "Auto-segment";
         updateEditButtons();
@@ -219,6 +239,7 @@ export const timelinePanel: PanelDef = {
       if (view === null) {
         view = new TimelineView();
         view.analysis.onChange = () => praat.refresh();
+        view.onEditStateChange = updateEditButtons;
         body.replaceChildren(view.element);
         el.replaceChildren(toolbar, praat.review, main);
         lastText = "";
