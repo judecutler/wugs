@@ -91,6 +91,9 @@ export async function enterProject(info: ProjectInfo) {
   try {
     texts = await listTexts();
   } catch (e) {
+    // Unless the backend lost the project meanwhile (a panic closes it):
+    // then an open state would be a lie, and the callers' catch is right.
+    if (errorText(e).includes("no project is open")) throw e;
     showToast({ tone: "warn", lines: [`The project opened, but its texts did not load: ${errorText(e)}`] });
   }
   setState({ kind: "open", info, texts, text: null });
