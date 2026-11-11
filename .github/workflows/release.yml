@@ -168,7 +168,7 @@ jobs:
               echo "::error::no updater payload matches $f"
               exit 1
             fi
-            "$cli" signer sign --app-version "$version" "$f" > /dev/null
+            "$cli" signer sign --app-version "$version" -- "$f" > /dev/null
             mv "$f.sig" "$sigs/"
           done
           ls -l "$sigs"
@@ -190,11 +190,33 @@ jobs:
         with:
           persist-credentials: false
 
+      # The builds' files and the signer's signatures land in separate folders
+      # first: a .sig or latest.json from a build (a compromised dependency can
+      # write anything there) is refused, so only the sign job's signatures
+      # reach the release.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          pattern: wugs-*
+          pattern: wugs-{Windows,macOS,Linux}
           merge-multiple: true
-          path: ${{ runner.temp }}/release
+          path: ${{ runner.temp }}/built
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: wugs-signatures
+          path: ${{ runner.temp }}/sigs
+
+      - name: Only signed files from the sign job
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/built"
+          if find . -name '*.sig' -o -name 'latest.json' | grep -q .; then
+            echo "::error::a build produced a .sig or latest.json; refusing it"
+            find . -name '*.sig' -o -name 'latest.json'
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/release"
+          cp -- "$RUNNER_TEMP"/built/* "$RUNNER_TEMP/release/"
+          cp -- "$RUNNER_TEMP"/sigs/*.sig "$RUNNER_TEMP/release/"
 
       # The annotated tag's message becomes the release notes and the app's
       # "What's new" (latest.json's notes). Kept in files, never in a step

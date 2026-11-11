@@ -4,10 +4,13 @@ Run by the release workflow's `publish` job on the files the `build` jobs
 made and the `sign` job signed, so the manifest is written once, from local
 files, by a job that holds no signing key. Fails unless every updater
 payload (Windows NSIS installer, macOS universal .app.tar.gz, Linux AppImage
-and .deb) is present exactly once with a .sig, unless every signature was
-made by the key whose public half is in tauri.conf.json, names its own file
-and the tag's version (the app requires the signed version to match the
-announced one), and unless the tag matches tauri.conf.json.
+and .deb) is present exactly once with a .sig, unless every signature names
+the key id whose public half is in tauri.conf.json, its own file and the
+tag's version (the app requires the signed version to match the announced
+one), and unless the tag matches tauri.conf.json. These are consistency
+checks on public fields, not a cryptographic verification: that happens in
+every app, against the public key. The workflow makes sure only the sign
+job's .sig files reach this folder.
 
   python3 -I updater_manifest.py <tag> <notes file> <tauri.conf.json> <release dir> <owner/repo>
 
