@@ -126,3 +126,41 @@ fn a_second_entry_with_the_same_lemma_warns_and_shows_its_twin() {
     assert_eq!(lexicon::lexicon_list(&mut s, "").unwrap().len(), 2);
     assert!(lexicon::lexicon_entry(&mut s, &a.id).is_err());
 }
+
+#[test]
+fn a_paradigm_fills_cell_by_cell_and_lists_forms_that_fit_no_cell() {
+    let (_dir, mut s) = created();
+    let id = lexicon::lexicon_add(&mut s, "gitmek", "go").unwrap().entry.unwrap().id;
+    let axes = vec![
+        lexicon::Axis { feature: "person".into(), values: vec!["1".into(), "2".into(), "3".into()] },
+        lexicon::Axis { feature: "number".into(), values: vec!["sg".into(), "pl".into()] },
+    ];
+    let empty = lexicon::lexicon_paradigm(&mut s, &id, &axes).unwrap();
+    assert_eq!(empty.cells.len(), 6);
+    assert!(empty.cells.iter().all(|c| c.forms.is_empty()));
+
+    let features = |person: &str, number: &str| {
+        std::collections::BTreeMap::from([("person".to_string(), person.to_string()), ("number".to_string(), number.to_string())])
+    };
+    let edit = lexicon::lexicon_fill_cell(&mut s, &id, None, &features("1", "sg"), "gidiyorum", &axes).unwrap();
+    assert!(edit.notes.is_empty(), "{:?}", edit.notes);
+    let first = &edit.paradigm.cells[0];
+    assert_eq!((first.features["person"].as_str(), first.features["number"].as_str()), ("1", "sg"));
+    assert_eq!(first.forms[0].form, "gidiyorum");
+    let form = first.forms[0].id.clone();
+
+    let edit = lexicon::lexicon_fill_cell(&mut s, &id, Some(&form), &features("1", "sg"), "gidiyom", &axes).unwrap();
+    assert_eq!(edit.paradigm.cells[0].forms.len(), 1, "an edit retypes, never adds");
+    assert_eq!(edit.paradigm.cells[0].forms[0].form, "gidiyom");
+    assert!(lexicon::lexicon_fill_cell(&mut s, &id, Some(&form), &features("1", "sg"), " ", &axes).is_err());
+
+    // Another grid over the same entry: the person × number form fits none of its cells.
+    let tense = vec![lexicon::Axis { feature: "tense".into(), values: vec!["prs".into(), "pst".into()] }];
+    let other = lexicon::lexicon_paradigm(&mut s, &id, &tense).unwrap();
+    assert_eq!(other.others.iter().map(|f| f.form.as_str()).collect::<Vec<_>>(), ["gidiyom"]);
+
+    let other_entry = lexicon::lexicon_add(&mut s, "ev", "house").unwrap().entry.unwrap().id;
+    assert!(lexicon::lexicon_delete_form(&mut s, &other_entry, &form, &axes).is_err(), "a form is deleted only through its own entry");
+    let edit = lexicon::lexicon_delete_form(&mut s, &id, &form, &axes).unwrap();
+    assert!(edit.paradigm.cells.iter().all(|c| c.forms.is_empty()));
+}

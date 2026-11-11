@@ -2,20 +2,26 @@
 // glosses in a second language, definitions, and semantic domains. Glossing
 // grows the lexicon (the Gloss panel's add-to-lexicon); this is where it is
 // tidied. Every edit returns the entry's fresh view, so the editor redraws
-// from one answer; warnings (a duplicate lemma) arrive as a toast.
+// from one answer; warnings (a duplicate lemma) arrive as a toast. The
+// entry's paradigm (roadmap item 50) is its own view, fetched for the chosen
+// template and returned whole by every form edit.
 import {
   domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddSense, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
-  lexiconList, lexiconNumberHomographs, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss, lexiconSetSenseText, lexiconUnassignDomain,
-  type DomainItem, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type SenseView,
+  lexiconDeleteForm, lexiconFillCell, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
+  lexiconSetSenseText, lexiconUnassignDomain,
+  type DomainItem, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
 import { normalizeLangTag } from "../gloss/lang";
 import { filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel } from "../lexicon/logic";
+import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, layout, otherFormLine, TEMPLATES, templateById, type Features, type Template } from "../lexicon/paradigms";
 import { dataGeneration, getState, lexiconRevision, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 /** Shared with the Gloss panel: the second analysis language. */
 const LANG_KEY = "wugs.gloss-lang";
+/** The paradigm template last chosen on this machine. */
+const PARADIGM_KEY = "wugs.lexicon.paradigm";
 const ATTRIBUTION = "SIL Semantic Domains v4 · © SIL Global · semdom.org · licensed CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0)";
 
 export const lexiconPanel: PanelDef = {
@@ -40,6 +46,9 @@ export const lexiconPanel: PanelDef = {
     let selected: string | null = null;
     let entry: EntryView | null = null;
     let domains: DomainItem[] | null = null;
+    let template: Template = templateById(localStorage.getItem(PARADIGM_KEY));
+    /** The selected entry's paradigm for `template`; null until it loads. */
+    let paradigm: ParadigmView | null = null;
     /** The sense whose domain picker is open, and what was typed in it. */
     let picker: { senseId: string; query: string; active: number } | null = null;
     /** An armed destructive button: its key; a second click carries it out. */
@@ -78,19 +87,38 @@ export const lexiconPanel: PanelDef = {
       selected = id;
       if (id === null) {
         entry = null;
+        paradigm = null;
         quietly(drawAll);
         return;
       }
+      const t = template;
       try {
-        const e = await lexiconEntry({ id });
+        const [e, pd] = await Promise.all([lexiconEntry({ id }), lexiconParadigm({ id, axes: axesOf(t) }).catch(() => null)]);
         if (selected !== id) return;
         entry = e;
+        if (template === t) paradigm = pd;
       } catch {
         // deleted on another device, or gone after a sync
         entry = null;
+        paradigm = null;
         selected = null;
       }
       keepFocus(drawAll);
+    }
+
+    /** Fetch the selected entry's paradigm for the current template. */
+    async function loadParadigm() {
+      const id = selected;
+      const t = template;
+      if (id === null) return;
+      try {
+        const pd = await lexiconParadigm({ id, axes: axesOf(t) });
+        if (selected !== id || template !== t) return;
+        paradigm = pd;
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      keepFocus(drawEditor);
     }
 
     /** Replace the panel's own nodes without the removed fields' blurs saving. */
@@ -109,8 +137,10 @@ export const lexiconPanel: PanelDef = {
       return have;
     }
 
-    /** Edits run one after another, so the entry that comes back last is the newest. */
-    function run(job: () => Promise<EntryEdit>, refreshList = false): Promise<void> {
+    /** Edits run one after another, so the entry that comes back last is the
+     * newest. A paradigm edit names the template it was made under: its
+     * answer is adopted only while that template is still shown. */
+    function run(job: () => Promise<EntryEdit | ParadigmEdit>, refreshList = false, under?: Template): Promise<void> {
       const gen = projectGen;
       const next = queue.then(async () => {
         if (gen !== projectGen) return;
@@ -118,12 +148,22 @@ export const lexiconPanel: PanelDef = {
           const r = await job();
           if (gen !== projectGen) return;
           if (r.notes.length > 0) showToast({ tone: "warn", lines: r.notes });
-          if (r.entry === null) {
+          if ("paradigm" in r) {
+            if (r.paradigm.lexeme === selected) {
+              if (under === template) paradigm = r.paradigm;
+              else void loadParadigm();
+            }
+          } else if (r.entry === null) {
             entry = null;
+            paradigm = null;
             selected = null;
           } else if (selected === r.entry.id || selected === null) {
+            if (selected !== r.entry.id) {
+              paradigm = null;
+              selected = r.entry.id;
+              void loadParadigm();
+            }
             entry = r.entry;
-            selected = r.entry.id;
           }
           if (refreshList) await loadList();
         } catch (e) {
@@ -225,12 +265,13 @@ export const lexiconPanel: PanelDef = {
     }
 
     /** A button that needs a second click within a few seconds. */
-    function confirmButton(key: string, label: string, act: () => void) {
+    function confirmButton(key: string, label: string, act: () => void, opts: { armedText?: string; title?: string } = {}) {
       const isArmed = armed === key;
       return h("button", {
         type: "button",
         className: "danger",
-        textContent: isArmed ? `${label}? Click again` : label,
+        title: opts.title ?? "",
+        textContent: isArmed ? (opts.armedText ?? `${label}? Click again`) : label,
         onclick: () => {
           if (armed === key) {
             armed = null;
@@ -333,7 +374,88 @@ export const lexiconPanel: PanelDef = {
         h("span", { className: "gl-spacer" }),
         confirmButton(`del:${e.id}`, "Delete entry", () => void run(() => lexiconDelete({ id: e.id }), true)),
       );
-      editor.replaceChildren(head, ...senses, foot);
+      editor.replaceChildren(head, ...senses, paradigmBlock(e), foot);
+    }
+
+    function paradigmBlock(e: EntryView) {
+      const t = template;
+      const select = h("select", { ariaLabel: "Paradigm template" }, ...TEMPLATES.map((x) => h("option", { value: x.id, textContent: x.label, selected: x.id === t.id })));
+      select.dataset.key = `pdg-template:${e.id}`;
+      select.onchange = () => {
+        template = templateById(select.value);
+        localStorage.setItem(PARADIGM_KEY, template.id);
+        paradigm = null;
+        keepFocus(drawEditor);
+        void loadParadigm();
+      };
+      const pd = paradigm !== null && paradigm.lexeme === e.id ? paradigm : null;
+      const head = h(
+        "div",
+        { className: "lx-pdg-head" },
+        h("h2", { textContent: "Paradigm" }),
+        select,
+        h("span", { className: "note", textContent: pd === null ? "Loading…" : coverageLine(t, pd.cells) }),
+      );
+      if (pd === null) return h("section", { className: "lx-paradigm" }, head);
+      const grid = layout(t, pd.cells);
+      const cols = t.cols === null ? [null] : t.cols.values;
+      const table = h(
+        "table",
+        { className: "lx-pdg" },
+        t.cols === null ? null : h("thead", {}, h("tr", {}, h("th", {}), ...t.cols.values.map((v) => h("th", { scope: "col", textContent: v.label })))),
+        h(
+          "tbody",
+          {},
+          ...t.rows.values.map((r, ri) =>
+            h(
+              "tr",
+              {},
+              h("th", { scope: "row", textContent: r.label }),
+              ...cols.map((c, ci) => h("td", {}, ...cellInputs(e, t, cellFeatures(t, r.value, c?.value ?? null), grid[ri]![ci]?.forms ?? []))),
+            ),
+          ),
+        ),
+      );
+      const others =
+        pd.others.length === 0
+          ? null
+          : h(
+              "div",
+              { className: "lx-pdg-others" },
+              h("p", { className: "note", textContent: "Other inflected forms of this entry, not in this grid:" }),
+              h(
+                "ul",
+                {},
+                ...pd.others.map((f) =>
+                  h("li", {}, otherFormLine(f), " ", confirmButton(`delf:${f.id}`, "Delete", () => void run(() => lexiconDeleteForm({ id: e.id, formId: f.id, axes: axesOf(t) }), false, t))),
+                ),
+              ),
+            );
+      return h("section", { className: "lx-paradigm" }, head, table, others);
+    }
+
+    /** A cell's fields: one per form it holds, or one empty field that adds
+     * a form with the cell's features. Delete buttons are out of the Tab
+     * order, so Tab walks from cell to cell. */
+    function cellInputs(e: EntryView, t: Template, features: Features, forms: ParadigmForm[]): Node[] {
+      const label = cellLabel(t, features);
+      const axes = axesOf(t);
+      if (forms.length === 0) {
+        return [cell(cellKey(e.id, features, 0), "", label, (v) => run(() => lexiconFillCell({ id: e.id, formId: null, features, surface: v, axes }), false, t), { placeholder: "—", size: 12 })];
+      }
+      return forms.map((f, i) => {
+        const del = confirmButton(`delf:${f.id}`, "×", () => void run(() => lexiconDeleteForm({ id: e.id, formId: f.id, axes }), false, t), {
+          armedText: "Delete?",
+          title: `Delete «${f.form}»`,
+        });
+        del.tabIndex = -1;
+        return h(
+          "span",
+          { className: "lx-pdg-form" },
+          cell(cellKey(e.id, features, i), f.form, label, (v) => run(() => lexiconFillCell({ id: e.id, formId: f.id, features, surface: v, axes }), false, t), { size: 12 }),
+          del,
+        );
+      });
     }
 
     function senseBlock(e: EntryView, s: SenseView, i: number, lang: string | null) {
@@ -554,6 +676,7 @@ export const lexiconPanel: PanelDef = {
           rows = [];
           selected = null;
           entry = null;
+          paradigm = null;
           domains = null;
           picker = null;
           search.value = "";
