@@ -139,7 +139,9 @@ fn the_real_zipa_release_matches_onnxruntime() {
     let dir = PathBuf::from(std::env::var("WUGS_ZIPA_DIR").expect("set WUGS_ZIPA_DIR"));
     let vocab = Vocab::from_tokens_txt(&std::fs::read_to_string(dir.join("tokens.txt")).unwrap()).unwrap();
     {
+        let t0 = std::time::Instant::now();
         let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab).unwrap();
+        eprintln!("loaded in {:?}; symbolic plan: {}", t0.elapsed(), r.has_symbolic_plan());
         for t in [500usize, 3000] {
             let t0 = std::time::Instant::now();
             let (frames, v, got) = r.log_probs_for_features(t, feats(t)).unwrap();
@@ -147,7 +149,7 @@ fn the_real_zipa_release_matches_onnxruntime() {
             let t0 = std::time::Instant::now();
             r.log_probs_for_features(t, feats(t)).unwrap();
             let peak = std::fs::read_to_string("/proc/self/status").ok().and_then(|s| s.lines().find(|l| l.starts_with("VmHWM")).map(str::to_string)).unwrap_or_default();
-            eprintln!("{t} input frames, first run {first:?} (plan built), again {:?}; {peak}", t0.elapsed());
+            eprintln!("{t} input frames, first run {first:?}, again {:?}; per-length plans {}; {peak}", t0.elapsed(), r.per_length_plans());
             let want: Vec<f32> = std::fs::read(dir.join(format!("ref.{t}.out.f32"))).unwrap().chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
             assert_eq!(got.len(), want.len());
             let agree = got.chunks(v).zip(want.chunks(v)).filter(|(a, b)| best(a) == best(b)).count();
