@@ -30,7 +30,7 @@ export const timelinePanel: PanelDef = {
 
     const sourcePicker = h("select", { className: "tl-sources", title: "The recording behind this timeline" });
     sourcePicker.onchange = () => void loadSource(sourcePicker.value || null);
-    const importButton = h("button", { textContent: "Import audio…", title: "Add a WAV recording to this project" });
+    const importButton = h("button", { textContent: "Import audio…", title: "Add a recording to this project (WAV, M4A, MP3, FLAC, Ogg, AIFF; compressed files are decoded to WAV)" });
     const perfButton = h("button", { textContent: "Perf", title: "Show frame times and strip-cache hits on the canvas" });
     const praat = praatControls(() => {
       const s = getState();
@@ -105,7 +105,13 @@ export const timelinePanel: PanelDef = {
 
     importButton.onclick = () => {
       void attempt(async () => {
-        const path = await pickFile({ title: "Import a WAV recording", filters: [{ name: "WAV audio", extensions: ["wav"] }] });
+        const path = await pickFile({
+          title: "Import a recording",
+          filters: [
+            { name: "Audio (WAV, M4A, MP3, FLAC, Ogg, AIFF)", extensions: ["wav", "m4a", "mp4", "aac", "mp3", "flac", "ogg", "oga", "aif", "aiff"] },
+            { name: "All files", extensions: ["*"] },
+          ],
+        });
         if (typeof path !== "string") return;
         importButton.disabled = true;
         try {

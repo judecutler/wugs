@@ -655,6 +655,13 @@ pub fn import_media(session: &mut Session, path: &str) -> Result<SourceRow, Stri
     import_wav(open, file, &label)
 }
 
+/// Import a WAV under another name: a compressed recording decoded by
+/// `convert::to_wav` keeps its own file name as the source's label.
+pub fn import_media_named(session: &mut Session, wav: &Path, label: &str) -> Result<SourceRow, String> {
+    let open = session.as_mut().ok_or_else(|| "no project is open".to_string())?;
+    import_wav(open, wav, label)
+}
+
 /// A finished in-app recording becomes a source named `label`. The pending
 /// file goes only after the import's intents commit; any failure leaves it
 /// in `recordings-pending/` for a retry or a Recovered recording.
@@ -676,7 +683,7 @@ pub fn project_root(session: &mut Session) -> Result<PathBuf, String> {
 fn import_wav(open: &mut OpenProject, file: &Path, label: &str) -> Result<SourceRow, String> {
     let label = label.to_string();
     let peaks = Peaks::compute_path(file, Params::default(), None).map_err(|e| match e {
-        wugs_peaks::Error::NotWav(m) => format!("{label} is not a WAV file ({m}); only WAV audio imports for now"),
+        wugs_peaks::Error::NotWav(m) => format!("{label} is not a WAV file wugs can read ({m})"),
         wugs_peaks::Error::Unsupported(m) => format!("{label}: unsupported WAV ({m})"),
         e => format!("{label}: {e}"),
     })?;

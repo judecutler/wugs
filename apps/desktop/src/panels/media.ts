@@ -99,7 +99,7 @@ export const mediaPanel: PanelDef = {
         case "discarded":
         case "starting": {
           if (!canRecord()) {
-            bar.replaceChildren(h("p", { className: "note", textContent: "This system's web view cannot record audio. Import a WAV from the timeline instead." }));
+            bar.replaceChildren(h("p", { className: "note", textContent: "This system's web view cannot record audio. Import a recording (WAV, M4A, MP3, FLAC) from the timeline instead." }));
             return;
           }
           const starting = take.kind === "starting";
