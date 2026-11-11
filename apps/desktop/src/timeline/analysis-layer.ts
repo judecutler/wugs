@@ -2,6 +2,7 @@
 // (roadmap item 46). Asks the backend for the 10 s chunks the view needs,
 // once each, and draws what has arrived; nothing is fetched while every kind
 // is off. Display rules are in ../praat/analysis.ts.
+import { token } from "../theme/tokens";
 import { errorText, acousticAnalysis } from "../api";
 import { chunksFor, frameMs, RANGES, yFor, type Chunk, type Kind } from "../praat/analysis";
 import type { Viewport } from "./viewport";
@@ -9,7 +10,18 @@ import type { Viewport } from "./viewport";
 /** About ten minutes of analysis kept in memory. */
 const KEEP_CHUNKS = 60;
 
-const COLORS: Record<Kind, string> = { pitch: "#1f5fbf", intensity: "#c9a400", formants: "#c0392b" };
+const FALLBACK: Record<Kind, string> = { pitch: "#1f5fbf", intensity: "#c9a400", formants: "#c0392b" };
+/** Colours from the design tokens (--pitch, --intensity, --formants, --muted),
+ * read once: the draw loop runs every frame and must not query styles. */
+let palette: (Record<Kind, string> & { muted: string }) | null = null;
+const colors = () =>
+  (palette ??= {
+    pitch: token("--pitch", FALLBACK.pitch),
+    intensity: token("--intensity", FALLBACK.intensity),
+    formants: token("--formants", FALLBACK.formants),
+    muted: token("--muted", "#7a756c"),
+  });
+const color = (kind: Kind): string => colors()[kind];
 
 export class AnalysisLayer {
   private source: string | null = null;
@@ -123,7 +135,7 @@ export class AnalysisLayer {
   }
 
   private dots(ctx: CanvasRenderingContext2D, c: Chunk, values: (number | null)[], kind: Kind, xOf: (ms: number) => number, top: number, height: number, r: number): void {
-    ctx.fillStyle = COLORS[kind];
+    ctx.fillStyle = color(kind);
     // One dot per pixel column is all the eye sees; off-screen frames are skipped.
     let lastCol = Number.NaN;
     for (let i = 0; i < values.length; i++) {
@@ -141,7 +153,7 @@ export class AnalysisLayer {
   }
 
   private line(ctx: CanvasRenderingContext2D, c: Chunk, values: (number | null)[], kind: Kind, xOf: (ms: number) => number, top: number, height: number): void {
-    ctx.strokeStyle = COLORS[kind];
+    ctx.strokeStyle = color(kind);
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     let pen = false;
@@ -171,7 +183,7 @@ export class AnalysisLayer {
     for (const kind of ["pitch", "intensity", "formants"] as Kind[]) {
       if (!this.on.has(kind)) continue;
       const { lo, hi, unit } = RANGES[kind];
-      ctx.fillStyle = COLORS[kind];
+      ctx.fillStyle = color(kind);
       ctx.fillText(`${hi} ${unit}`, v.widthPx - 4, top + 10 + row * 11);
       ctx.fillText(`${lo} ${unit}`, v.widthPx - 4, top + height - 3 - row * 11);
       row++;
@@ -181,7 +193,7 @@ export class AnalysisLayer {
 
   private note(ctx: CanvasRenderingContext2D, v: Viewport, top: number, text: string): void {
     ctx.font = "11px system-ui";
-    ctx.fillStyle = "#7a756c";
+    ctx.fillStyle = colors().muted;
     ctx.textAlign = "right";
     ctx.fillText(text, v.widthPx - 70, top + 12);
     ctx.textAlign = "left";

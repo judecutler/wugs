@@ -1,3 +1,4 @@
+import { token } from "../theme/tokens";
 import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, type Recovered, type SourceRow } from "../api";
 import { canRecord } from "../capture/recorder.ts";
 import { defaultLabel, formatElapsed, meterFill } from "../capture/pcm.ts";
@@ -47,15 +48,16 @@ export const mediaPanel: PanelDef = {
 
     const meter = h("canvas", { className: "rec-meter", width: 240, height: 28 });
     const time = h("span", { className: "rec-time" });
+    const meterColors = { ok: token("--meter-ok", "#4d7c5a"), clip: token("--meter-clip", "#b3402f"), bg: token("--meter-bg", "#222") };
     const drawMeter = () => {
       const g = meter.getContext("2d");
       if (g === null) return;
       const { width, height } = meter;
       const level = takeLevel();
       g.clearRect(0, 0, width, height);
-      g.fillStyle = level.peak > 0.99 ? "#b3402f" : "#4d7c5a";
+      g.fillStyle = level.peak > 0.99 ? meterColors.clip : meterColors.ok;
       g.fillRect(0, 0, meterFill(level.rms) * width, height);
-      g.fillStyle = "#222";
+      g.fillStyle = meterColors.bg;
       g.fillRect(Math.min(width - 2, meterFill(level.peak) * width), 0, 2, height);
       decayLevel();
       if (getTake().kind === "recording") {
