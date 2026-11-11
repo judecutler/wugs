@@ -23,6 +23,10 @@ pub struct PersonRow {
     pub name: String,
     pub roles: Vec<String>,
     pub consents: Vec<ConsentRow>,
+    /// The person was deleted (on another device, while this one added a
+    /// record for them): their live records are still listed, so they can
+    /// be seen and deleted, because the corrections export still reads them.
+    pub deleted: bool,
 }
 
 /// A consent record. `terms` holds only the panel's terms that the record
@@ -92,8 +96,16 @@ impl Project {
         if name.is_empty() {
             return Err("a person needs a name".into());
         }
+        // Names in other keys (language-tagged, from an importer) are kept.
+        let value = match self.proj.field(person, "names")?.map(|(v, _)| v) {
+            Some(Value::Obj(mut m)) => {
+                m.insert("full".into(), Value::str(name));
+                Value::Obj(m)
+            }
+            _ => name_value(name),
+        };
         let mut t = self.intent("edit-person").resolving();
-        t.set("person", person, SCOPE_PEOPLE, "names", name_value(name))?;
+        t.set("person", person, SCOPE_PEOPLE, "names", value)?;
         t.commit()
     }
 
@@ -125,12 +137,15 @@ impl Project {
     }
 
     /// Answer, change or clear (`None`) some of a record's terms; the others
-    /// stay as they are.
+    /// stay as they are. A plain write, not a resolving one: all terms share
+    /// one field, so a concurrent answer to another term from another
+    /// device must stay an open conflict for a person to look at, never be
+    /// closed unseen by an edit of a different term.
     pub fn set_consent_terms(&mut self, consent: &str, terms: &[(String, Option<bool>)]) -> Result<CommitResult, String> {
         self.require(consent, "consent")?;
         let old = self.proj.field(consent, "terms")?.map(|(v, _)| v);
         let value = merged_terms(old.as_ref(), terms)?;
-        let mut t = self.intent("edit-consent").resolving();
+        let mut t = self.intent("edit-consent");
         t.set("consent", consent, SCOPE_PEOPLE, "terms", value)?;
         t.commit()
     }
@@ -196,10 +211,19 @@ impl Project {
         })
     }
 
-    /// Everyone in the project with their consent records, by name.
+    /// Everyone in the project with their consent records, by name, then
+    /// any live records whose person was deleted.
     pub fn people(&self) -> Result<Vec<PersonRow>, String> {
         let mut rows = Vec::new();
-        for id in self.proj.entities_of_kind("person")? {
+        let live: Vec<String> = self.proj.entities_of_kind("person")?;
+        let mut orphans: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+        for c in self.proj.entities_of_kind("consent")? {
+            let person = self.proj.field_str(&c, "person")?.unwrap_or_default();
+            if !live.contains(&person) {
+                orphans.entry(person).or_default().push(c);
+            }
+        }
+        for id in live.iter().cloned() {
             let names = self.proj.field(&id, "names")?.map(|(v, _)| v);
             let name = match &names {
                 Some(Value::Obj(m)) => m
@@ -216,8 +240,21 @@ impl Project {
                 Some(Value::Str(s)) => vec![s],
                 _ => Vec::new(),
             };
-            let mut consents = Vec::new();
-            for c in self.consents_of(&id)? {
+            let consents = self.consent_rows(self.consents_of(&id)?)?;
+            rows.push(PersonRow { id, name, roles, consents, deleted: false });
+        }
+        rows.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then(a.id.cmp(&b.id)));
+        for (person, mut records) in orphans {
+            records.sort();
+            rows.push(PersonRow { id: person, name: String::new(), roles: Vec::new(), consents: self.consent_rows(records)?, deleted: true });
+        }
+        Ok(rows)
+    }
+
+    fn consent_rows(&self, ids: Vec<String>) -> Result<Vec<ConsentRow>, String> {
+        let mut consents = Vec::new();
+        {
+            for c in ids {
                 let terms = match self.proj.field(&c, "terms")?.map(|(v, _)| v) {
                     Some(Value::Obj(m)) => CONSENT_TERMS
                         .iter()
@@ -239,10 +276,8 @@ impl Project {
                     id: c,
                 });
             }
-            rows.push(PersonRow { id, name, roles, consents });
         }
-        rows.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()).then(a.id.cmp(&b.id)));
-        Ok(rows)
+        Ok(consents)
     }
 }
 
@@ -296,6 +331,46 @@ mod tests {
         assert!(p.proj.is_tombstoned(&c).unwrap(), "their records go with them");
         assert!(p.people().unwrap().is_empty());
         std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn a_record_whose_person_was_deleted_stays_visible() {
+        let (root, mut p) = project();
+        let ana = p.add_named_person("Ana", &[]).unwrap();
+        let pid = p.project_id.clone();
+        // Another device deleted Ana while this one recorded consent: only the person goes.
+        let mut t = p.intent("delete-person");
+        t.delete("person", &ana, SCOPE_PEOPLE);
+        t.commit().unwrap();
+        let c = p.add_consent_unchecked_for_test(&ana, &pid);
+        let rows = p.people().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].deleted);
+        assert_eq!(rows[0].consents[0].id, c);
+        p.delete_consent(&c).unwrap();
+        assert!(p.people().unwrap().is_empty());
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn renaming_keeps_names_in_other_keys() {
+        let (root, mut p) = project();
+        let ana = p.add_person(Value::obj(vec![("en", Value::str("Ayşe"))]), Value::Arr(vec![]), "open").unwrap();
+        p.set_person_name(&ana, "Ayşe Yılmaz").unwrap();
+        let names = p.proj.field(&ana, "names").unwrap().unwrap().0;
+        assert_eq!(names.get_str("en"), Some("Ayşe"));
+        assert_eq!(names.get_str("full"), Some("Ayşe Yılmaz"));
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    impl Project {
+        /// A record for a person this device no longer sees, as sync can deliver.
+        fn add_consent_unchecked_for_test(&mut self, person: &str, covers: &str) -> String {
+            let mut t = self.intent("record-consent");
+            let id = t.create("consent", "cns", SCOPE_PEOPLE, vec![("person", Value::str(person)), ("covers", Value::str(covers)), ("terms", Value::obj(vec![("AI-ok", Value::Bool(false))]))]);
+            t.commit().unwrap();
+            id
+        }
     }
 
     #[test]

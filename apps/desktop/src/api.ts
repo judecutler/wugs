@@ -476,7 +476,8 @@ export const sealProject = (args: { folder: string; date: string }) => invoke<Se
 // People and consent (roadmap 61): src-tauri/src/people.rs. Every command returns the whole view.
 /** A term's answer: true agreed, false refused, null not asked. */
 export type PeopleConsent = { id: string; covers: string; terms: [string, boolean | null][]; date: string; evidenceName: string | null; hasEvidence: boolean };
-export type PeoplePerson = { id: string; name: string; roles: string[]; consents: PeopleConsent[] };
+/** `deleted`: the person was deleted on another device while a record was added for them here; the records still count. */
+export type PeoplePerson = { id: string; name: string; roles: string[]; consents: PeopleConsent[]; deleted: boolean };
 export type Coverable = { id: string; kind: "project" | "recording" | "text"; label: string };
 export type PeopleView = { people: PeoplePerson[]; coverable: Coverable[] };
 export type PeopleCommand =

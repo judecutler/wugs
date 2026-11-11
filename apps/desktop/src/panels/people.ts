@@ -30,15 +30,33 @@ export const peoplePanel: PanelDef = {
     async function act(command: PeopleCommand, args: Record<string, unknown> = {}) {
       const path = projectPath();
       const mine = ++seq;
+      // Any other action disarms a pending "Really delete?".
+      if (command !== "people_view") armed.clear();
       try {
         const next = await peopleCommand(command, args);
         if (projectPath() !== path || mine !== seq) return;
         view = next;
         draw();
       } catch (e) {
-        showToast({ tone: "error", lines: [errorText(e)] });
+        // An answer about a project no longer open says nothing about this one.
+        if (projectPath() === path) showToast({ tone: "error", lines: [errorText(e)] });
       }
     }
+
+    /** Typing in the panel holds redraws (a sync must not wipe a half-typed name); they catch up on focusout. */
+    const editing = () => {
+      const a = document.activeElement;
+      return a instanceof HTMLInputElement && el.contains(a);
+    };
+    let pending = false;
+    el.addEventListener("focusout", () =>
+      window.setTimeout(() => {
+        if (pending && !editing()) {
+          pending = false;
+          draw();
+        }
+      }),
+    );
 
     function twoClick(id: string, label: string, run: () => void): HTMLButtonElement {
       const on = armed.has(id);
@@ -122,10 +140,21 @@ export const peoplePanel: PanelDef = {
     }
 
     function personCard(p: PersonView, coverable: Coverable[]): HTMLElement {
+      if (p.deleted)
+        return h(
+          "section",
+          { className: "pp-person" },
+          h("p", { className: "pp-note", textContent: "Records for a person who was deleted on another device. They still count in exports until you delete them." }),
+          ...p.consents.map((c) => consentCard(p, c, coverable)),
+        );
       const name = h("input", { value: p.name, className: "pp-name", ariaLabel: "Name" });
+      let sent = p.name;
       const saveName = () => {
         const next = name.value.trim();
-        if (next !== "" && next !== p.name) void act("person_set_name", { person: p.id, name: next });
+        // A redraw removes the input and may fire blur; Enter then blur must write once.
+        if (!name.isConnected || next === "" || next === sent) return;
+        sent = next;
+        void act("person_set_name", { person: p.id, name: next });
       };
       name.onkeydown = (ev) => {
         if (ev.key === "Enter") saveName();
@@ -133,7 +162,8 @@ export const peoplePanel: PanelDef = {
       name.onblur = saveName;
       const role = h(
         "select",
-        { onchange: () => void act("person_set_roles", { person: p.id, roles: role.value === "" ? [] : [role.value] }) },
+                // The panel shows the first role; any others the person has are kept.
+        { onchange: () => void act("person_set_roles", { person: p.id, roles: [...(role.value === "" ? [] : [role.value]), ...p.roles.slice(1)] }) },
         h("option", { value: "", textContent: "No role" }),
         ...ROLES.map((r) => h("option", { value: r, textContent: r, selected: p.roles[0] === r })),
       );
@@ -187,19 +217,36 @@ export const peoplePanel: PanelDef = {
       );
     }
 
+    /** Fetch the view; while someone types in the panel the redraw waits for focusout. */
+    async function refresh(switched: boolean) {
+      if (switched) draw();
+      const path = projectPath();
+      const mine = ++seq;
+      try {
+        const next = await peopleCommand("people_view");
+        if (projectPath() !== path || mine !== seq) return;
+        view = next;
+        if (editing()) pending = true;
+        else draw();
+      } catch (e) {
+        if (projectPath() === path) showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    }
+
     return {
       element: el,
       render() {
         const s = getState();
         const next = s.kind === "open" ? `${s.info.path}|${dataGeneration()}|${s.texts.length}` : "closed";
         if (next === shownFor) return;
-        if (shownFor.split("|")[0] !== next.split("|")[0]) {
+        const switched = shownFor.split("|")[0] !== next.split("|")[0];
+        if (switched) {
           view = null;
           armed.clear();
         }
         shownFor = next;
-        draw();
-        if (s.kind === "open") void act("people_view");
+        if (s.kind === "open") void refresh(switched);
+        else draw();
       },
     };
   },

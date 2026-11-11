@@ -28,6 +28,8 @@ pub struct PersonView {
     pub name: String,
     pub roles: Vec<String>,
     pub consents: Vec<ConsentView>,
+    /// Deleted on another device while a record was added for them here.
+    pub deleted: bool,
 }
 
 /// Something a consent record can cover.
@@ -56,6 +58,7 @@ pub fn view(s: &mut Session) -> Result<PeopleView, String> {
             id: r.id,
             name: r.name,
             roles: r.roles,
+            deleted: r.deleted,
             consents: r
                 .consents
                 .into_iter()
