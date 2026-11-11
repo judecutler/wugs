@@ -497,27 +497,30 @@ async fn acoustic_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>,
 /// Resolve what powers segmentation here (the project's pin, else this
 /// computer's choice) and find the speech spans of `source`'s recording off
 /// the session thread (cached per recording).
-async fn segmentation_spans(s: &SessionThread, dir: &AppData, source: String) -> Result<Vec<(f64, f64)>, String> {
+async fn segmentation_spans(s: &SessionThread, dir: &AppData, source: String, granularity: &str) -> Result<Vec<(f64, f64)>, String> {
+    let granularity = segmentation::granularity(granularity)?;
     let cap = capability::Capability::Segmentation;
     let (job, pin) = s.run(move |s| {
         let job = segmentation::job(s, &source)?;
         Ok((job, capability::project_pin(session::project(s)?, cap)?))
     })?;
     let provider = capability::resolve(cap, pin.as_deref(), &dir.0)?;
-    tauri::async_runtime::spawn_blocking(move || segmentation::spans(&provider, &job)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || segmentation::spans(&provider, &job, granularity)).await.map_err(|e| e.to_string())?
 }
 
-/// Where speech starts and ends in `source`'s recording, for edge snapping.
+/// Where speech starts and ends in `source`'s recording, at `granularity`
+/// (`word` for edge snapping, `utterance`).
 #[tauri::command]
-async fn speech_spans(s: State<'_, SessionThread>, dir: State<'_, AppData>, source: String) -> Result<Vec<[f64; 2]>, String> {
-    Ok(segmentation_spans(&s, &dir, source).await?.into_iter().map(|(a, b)| [a, b]).collect())
+async fn speech_spans(s: State<'_, SessionThread>, dir: State<'_, AppData>, source: String, granularity: String) -> Result<Vec<[f64; 2]>, String> {
+    Ok(segmentation_spans(&s, &dir, source, &granularity).await?.into_iter().map(|(a, b)| [a, b]).collect())
 }
 
-/// One machine segment per stretch of speech in `source`'s recording on
-/// `tier` (the utterance tier when None), skipping what is already covered.
+/// One machine segment per stretch of speech (per utterance or per word, by
+/// `granularity`) in `source`'s recording on `tier` (the utterance tier
+/// when None), skipping what is already covered.
 #[tauri::command]
-async fn auto_segment(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, source: String, tier_id: Option<String>) -> Result<segmentation::AutoSegmented, String> {
-    let spans = segmentation_spans(&s, &dir, source).await?;
+async fn auto_segment(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, source: String, tier_id: Option<String>, granularity: String) -> Result<segmentation::AutoSegmented, String> {
+    let spans = segmentation_spans(&s, &dir, source, &granularity).await?;
     s.run(move |s| segmentation::commit(s, &text_id, tier_id.as_deref(), &spans))
 }
 

@@ -5,6 +5,10 @@
 //! snapping pulls a drawn or dragged edge out to the nearest speech edge so
 //! a word's onset is not cut off.
 //!
+//! Two granularities (`vad::Granularity`): Auto-segment uses the one the
+//! person picks (utterance by default), snapping always uses words, so an
+//! edge drawn inside a long utterance still finds the nearest word edge.
+//!
 //! Spans are computed once per recording and settings, off the session
 //! thread, and cached as `<project>/cache/speech-spans/<blob hex>/<key>.json`
 //! (a JSON array of `[start_ms, end_ms]`), written whole so a crash never
@@ -48,13 +52,19 @@ fn parse_cache(bytes: &[u8]) -> Option<Vec<(f64, f64)>> {
     Some(v.into_iter().map(|[s, e]| (s, e)).collect())
 }
 
-/// The speech spans of the job's recording, from the cache or computed by
-/// `provider` (and cached). Call off the session thread.
-pub fn spans(provider: &Provider, job: &Job) -> Result<Vec<(f64, f64)>, String> {
+/// The granularity the shell named (`utterance` or `word`).
+pub fn granularity(name: &str) -> Result<vad::Granularity, String> {
+    vad::Granularity::parse(name).ok_or_else(|| format!("Unknown segmentation granularity {name:?}."))
+}
+
+/// The speech spans of the job's recording at `granularity`, from the cache
+/// or computed by `provider` (and cached; the file name carries the
+/// settings, so each granularity has its own). Call off the session thread.
+pub fn spans(provider: &Provider, job: &Job, granularity: vad::Granularity) -> Result<Vec<(f64, f64)>, String> {
     let Provider::VoiceActivity = provider else {
         return Err(format!("{} cannot segment a recording in this version of wugs.", crate::capability::provider_name(provider.id())));
     };
-    let params = vad::Params::default();
+    let params = granularity.params();
     let file = job.dir.join(format!("{}-{}.json", provider.id(), params.key()));
     let _one = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(hit) = fs::read(&file).ok().and_then(|b| parse_cache(&b)) {
@@ -132,11 +142,17 @@ mod tests {
         let text = session::create_text(&mut s, "t").unwrap();
 
         let job = job(&mut s, &source).unwrap();
-        let found = spans(&Provider::VoiceActivity, &job).unwrap();
+        let utt = granularity("utterance").unwrap();
+        let found = spans(&Provider::VoiceActivity, &job, utt).unwrap();
         assert_eq!(found.len(), 2, "{found:?}");
         let cached: Vec<_> = fs::read_dir(&job.dir).unwrap().collect();
         assert_eq!(cached.len(), 1, "one cache file");
-        assert_eq!(spans(&Provider::VoiceActivity, &job).unwrap(), found, "the cache gives the same spans");
+        assert_eq!(spans(&Provider::VoiceActivity, &job, utt).unwrap(), found, "the cache gives the same spans");
+        // Words are cached beside utterances, not over them.
+        let words = spans(&Provider::VoiceActivity, &job, granularity("word").unwrap()).unwrap();
+        assert_eq!(words.len(), 2, "{words:?}");
+        assert_eq!(fs::read_dir(&job.dir).unwrap().count(), 2, "one cache file per granularity");
+        assert!(granularity("phrase").is_err());
 
         // A segment the person drew over the first span is left alone.
         let drawn = session::add_segment(&mut s, &text, None, Some(450.0), Some(1350.0), "mine").unwrap().id;

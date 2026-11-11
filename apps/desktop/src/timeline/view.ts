@@ -27,6 +27,7 @@ import { getSelection, getState, refreshConflicts, refreshText, reloadTexts, sel
 import { tint } from "../assist/logic";
 import { crossedDragThreshold, dragEdge, grabOffset, hitTest, DRAG_PX, type Edge, type Hit } from "./gestures";
 import { laneBounds, snapDragged, snapRange, type Span } from "./snap";
+import { editRules, type EditRules, type Granularity } from "./edit-rules";
 import { checkOf, edgeEntry, UndoHistory, type SegmentCheck, type UndoEntry, type UndoStack } from "./undo";
 import { StripCache } from "./strips";
 import {
@@ -149,6 +150,14 @@ export class TimelineView {
   private canvas = h("canvas", { className: "tl-canvas" });
   private editBox = h("input", { className: "tl-edit", hidden: true });
   private confirmBar = h("div", { className: "tl-confirm", hidden: true });
+  /** The segment the delete popover asks about, while it is open. */
+  private confirmFor: string | null = null;
+  /** Closes the popover on a click or Escape anywhere else while it is open. */
+  private confirmAway = (ev: Event): void => {
+    if (ev instanceof KeyboardEvent ? ev.key === "Escape" : !this.confirmBar.contains(ev.target as Node | null)) this.closeConfirm();
+  };
+  /** Called when what Split and Merge can do may have changed (selection, text, recording). */
+  onEditStateChange: () => void = () => {};
   private ctx: CanvasRenderingContext2D;
 
   private text: TextDetail | null = null;
@@ -202,7 +211,11 @@ export class TimelineView {
 
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(this.element);
-    this.unsubscribeSelection = subscribeSelection(() => this.revealSelected());
+    this.unsubscribeSelection = subscribeSelection(() => {
+      this.revealSelected();
+      if (this.confirmFor !== null && this.confirmFor !== this.selected) this.closeConfirm();
+      this.onEditStateChange();
+    });
     this.wireMouse();
     this.wireKeys();
     const loop = (now: number) => {
@@ -221,6 +234,7 @@ export class TimelineView {
     this.observer.disconnect();
     window.removeEventListener("mousemove", this.windowMoves);
     window.removeEventListener("mouseup", this.windowUps);
+    this.closeConfirm();
     playback.setSource(null);
     setMediaSource(null);
   }
@@ -244,10 +258,9 @@ export class TimelineView {
   setText(text: TextDetail | null): void {
     const sameText = this.text !== null && text !== null && this.text.id === text.id;
     this.text = text;
-    if (!sameText) {
-      this.closeEditor(false);
-      this.confirmBar.hidden = true;
-    }
+    if (!sameText) this.closeEditor(false);
+    // The popover never outlives its segment (deleted here, by an undo, or on another device).
+    if (this.confirmFor !== null && (!sameText || text?.segments.some((x) => x.id === this.confirmFor) !== true)) this.closeConfirm();
     this.lanes = [];
     if (text !== null) {
       const byTier = new Map<string, SegmentRow[]>();
@@ -267,6 +280,7 @@ export class TimelineView {
       }
     }
     this.fitDuration();
+    this.onEditStateChange();
   }
 
   setMedia(info: PeaksInfo | null, sourceId: string | null): void {
@@ -280,7 +294,9 @@ export class TimelineView {
     this.spans = [];
     this.spansFor = info !== null ? sourceId : null;
     if (info !== null && sourceId !== null) {
-      speechSpans({ source: sourceId })
+      // Word-level spans, so an edge drawn inside a long utterance still
+      // finds the nearest word edge.
+      speechSpans({ source: sourceId, granularity: "word" })
         .then((spans) => {
           if (this.spansFor === sourceId) this.spans = spans;
         })
@@ -289,6 +305,7 @@ export class TimelineView {
     this.fitDuration();
     const v = this.vp();
     this.setVp({ ...v, t0Ms: 0, pxPerSec: fitPxPerSec(v) });
+    this.onEditStateChange();
   }
 
   laneNames(): string[] {
@@ -714,7 +731,7 @@ export class TimelineView {
         this.askDelete(this.selected);
       } else if (ev.key === "Escape") {
         this.select(null);
-        this.confirmBar.hidden = true;
+        this.closeConfirm();
       }
     });
   }
@@ -731,7 +748,7 @@ export class TimelineView {
     this.selfSelecting = true;
     selectSegment(seg === null || textId === undefined ? null : { textId, tierId: seg.tier, segmentId: seg.id });
     this.selfSelecting = false;
-    this.confirmBar.hidden = true;
+    this.closeConfirm();
   }
 
   /** A selection made elsewhere scrolls into view; one made here never moves the view under a drag. */
@@ -818,7 +835,7 @@ export class TimelineView {
   private askDelete(segId: string): void {
     const label = this.findSegment(segId)?.content ?? "";
     const doDelete = async () => {
-      this.confirmBar.hidden = true;
+      this.closeConfirm();
       const text = this.text;
       if (text === null) return;
       const stack = this.history();
@@ -845,9 +862,25 @@ export class TimelineView {
     this.confirmBar.replaceChildren(
       h("span", { textContent: label === "" ? "Delete this segment?" : `Delete “${label.slice(0, 40)}”?` }),
       h("button", { className: "danger", textContent: "Delete", onclick: () => void this.track(doDelete()) }),
-      h("button", { textContent: "Keep", onclick: () => (this.confirmBar.hidden = true) }),
+      h("button", { textContent: "Keep", onclick: () => this.closeConfirm() }),
     );
+    this.closeConfirm();
+    this.confirmFor = segId;
     this.confirmBar.hidden = false;
+    // Listen from the next tick, so the click or key that opened it does not close it.
+    setTimeout(() => {
+      if (this.confirmFor !== segId) return;
+      document.addEventListener("mousedown", this.confirmAway, true);
+      document.addEventListener("keydown", this.confirmAway, true);
+    }, 0);
+  }
+
+  private closeConfirm(): void {
+    this.confirmFor = null;
+    this.confirmBar.hidden = true;
+    this.confirmBar.replaceChildren();
+    document.removeEventListener("mousedown", this.confirmAway, true);
+    document.removeEventListener("keydown", this.confirmAway, true);
   }
 
   private laneOf(seg: SegmentRow): Lane | null {
@@ -920,14 +953,12 @@ export class TimelineView {
     }
   }
 
-  private selectedSegment(): SegmentRow | null {
+  /** What Split and Merge can do now; the toolbar and the S / M keys both ask this. */
+  editRules(): EditRules {
     const id = this.selected;
     const seg = id === null ? null : this.findSegment(id);
-    if (seg === null || seg.startMs === null || seg.endMs === null) {
-      showToast({ tone: "info", lines: ["Select a segment on the timeline first."] });
-      return null;
-    }
-    return seg;
+    const lane = seg === null ? null : this.laneOf(seg);
+    return editRules(this.info !== null, seg, lane?.segments ?? []);
   }
 
   /** Cut the selected segment at the playhead; its text stays on the first part. */
@@ -937,7 +968,12 @@ export class TimelineView {
 
   private async split(): Promise<void> {
     const text = this.text;
-    const seg = this.selectedSegment();
+    const rules = this.editRules();
+    const seg = this.selected === null ? null : this.findSegment(this.selected);
+    if (rules.split !== null) {
+      showToast({ tone: "info", lines: [rules.split] });
+      return;
+    }
     if (text === null || seg === null || seg.startMs === null || seg.endMs === null) return;
     const at = Math.round(playback.currentMs());
     if (!(at > seg.startMs + MIN_SEGMENT_MS / 2 && at < seg.endMs - MIN_SEGMENT_MS / 2)) {
@@ -984,20 +1020,16 @@ export class TimelineView {
 
   private async merge(): Promise<void> {
     const text = this.text;
-    const seg = this.selectedSegment();
-    if (text === null || seg === null || seg.endMs === null) return;
-    const lane = this.laneOf(seg);
     // Only timed neighbours: the core merges in time order and has no place for an untimed one.
-    const ordered = (lane?.segments ?? [])
-      .filter((s) => s.startMs !== null && s.endMs !== null)
-      .sort((a, b) => a.startMs! - b.startMs! || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    const next = ordered[ordered.findIndex((s) => s.id === seg.id) + 1];
-    if (next === undefined) {
-      showToast({ tone: "info", lines: ["There is no next segment on this track to merge with."] });
+    const rules = this.editRules();
+    const seg = this.selected === null ? null : this.findSegment(this.selected);
+    if (rules.merge !== null) {
+      showToast({ tone: "info", lines: [rules.merge] });
       return;
     }
+    if (text === null || seg === null || rules.next === null) return;
     const stack = this.history();
-    const [first, second] = [seg.id, next.id];
+    const [first, second] = [seg.id, rules.next];
     try {
       const r = await mergeSegments({ textId: text.id, firstId: first, secondId: second });
       warnFindings(r.findings);
@@ -1055,11 +1087,11 @@ export class TimelineView {
    * selected segment's track (else the utterance track), leaving stretches
    * the person already covered alone. Undo takes them all back.
    */
-  async autoSegment(source: string): Promise<void> {
-    await this.track(this.autoSegmentNow(source));
+  async autoSegment(source: string, granularity: Granularity): Promise<void> {
+    await this.track(this.autoSegmentNow(source, granularity));
   }
 
-  private async autoSegmentNow(source: string): Promise<void> {
+  private async autoSegmentNow(source: string, granularity: Granularity): Promise<void> {
     const text = this.text;
     if (text === null) return;
     const sel = this.selected === null ? null : this.findSegment(this.selected);
@@ -1067,7 +1099,7 @@ export class TimelineView {
     const tierId = sel?.tier ?? null;
     const stack = this.history();
     try {
-      const out = await autoSegment({ textId: text.id, source, tierId });
+      const out = await autoSegment({ textId: text.id, source, tierId, granularity });
       if (out.ids.length === 0) {
         showToast({ tone: "info", lines: [out.skipped > 0 ? "Every stretch of speech already has a segment." : "No speech was found in this recording."] });
         return;

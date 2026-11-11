@@ -12,7 +12,13 @@
 //! hangover: stops and short closures inside a word stay inside it), runs
 //! too short to be a syllable are dropped, and each span is padded so a
 //! quiet onset such as the fricative of "three" is kept inside it. Pads
-//! never make two spans overlap.
+//! never close a pause the split rule kept: each side takes at most a
+//! quarter of it, so at least half the pause stays between two spans.
+//!
+//! Two [`Granularity`] presets: utterances split only at real pauses
+//! (~250 ms), words also at the short pauses between words said one by one
+//! (~80 ms), with finer frames and smaller pads. Snapping uses words, so a
+//! drawn edge inside a long utterance still finds the nearest word edge.
 
 use std::fs::File;
 use std::io::BufReader;
@@ -49,12 +55,46 @@ impl Default for Params {
 }
 
 impl Params {
+    /// Word-level settings: 10 ms frames, any pause of 80 ms or more splits,
+    /// 40 ms pads, runs under 80 ms dropped.
+    pub fn words() -> Params {
+        Params { frame_ms: 10.0, min_speech_ms: 80.0, min_silence_ms: 80.0, pad_ms: 40.0, ..Params::default() }
+    }
+
     /// A short stable name for these settings, for cache keys.
     pub fn key(&self) -> String {
         format!(
-            "e1-f{}-m{}-q{}-s{}-g{}-p{}",
+            "e2-f{}-m{}-q{}-s{}-g{}-p{}",
             self.frame_ms, self.margin_db, self.floor_quantile, self.min_speech_ms, self.min_silence_ms, self.pad_ms
         )
+    }
+}
+
+/// How finely speech is cut into spans.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Granularity {
+    /// Split only at real pauses, about a breath group each.
+    Utterances,
+    /// Split at the short pauses between words too.
+    Words,
+}
+
+impl Granularity {
+    /// The settings for this granularity.
+    pub fn params(self) -> Params {
+        match self {
+            Granularity::Utterances => Params::default(),
+            Granularity::Words => Params::words(),
+        }
+    }
+
+    /// The name the shell sends: `utterance` or `word`.
+    pub fn parse(name: &str) -> Option<Granularity> {
+        match name {
+            "utterance" => Some(Granularity::Utterances),
+            "word" => Some(Granularity::Words),
+            _ => None,
+        }
     }
 }
 
@@ -187,17 +227,17 @@ pub fn spans_from_levels(levels: &[f32], frame_ms: f64, params: Params, duration
     }
     joined.retain(|(s, e)| e - s >= params.min_speech_ms);
 
-    // Pad, clamped to the recording, and never into a neighbour: two pads
-    // that would meet share the gap at its middle.
+    // Pad, clamped to the recording, and never closing a pause: each side
+    // takes at most a quarter of the gap, so half of it stays silence.
     let mut out = Vec::with_capacity(joined.len());
     for i in 0..joined.len() {
         let (s, e) = joined[i];
         let lo = match i.checked_sub(1).map(|j| joined[j]) {
-            Some((_, prev_end)) => (s - params.pad_ms).max((prev_end + s) / 2.0),
+            Some((_, prev_end)) => s - params.pad_ms.min((s - prev_end) / 4.0),
             None => (s - params.pad_ms).max(0.0),
         };
         let hi = match joined.get(i + 1) {
-            Some(&(next_start, _)) => (e + params.pad_ms).min((e + next_start) / 2.0),
+            Some(&(next_start, _)) => e + params.pad_ms.min((next_start - e) / 4.0),
             None => (e + params.pad_ms).min(duration_ms),
         };
         out.push((lo, hi));
@@ -317,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn pads_never_overlap_neighbours() {
+    fn pads_never_close_a_pause() {
         let p = Params { pad_ms: 400.0, ..Params::default() };
         // Frames of 20 ms: speech 10..30 and 45..60 (a 300 ms gap).
         let mut levels = vec![-70.0f32; 80];
@@ -326,10 +366,59 @@ mod tests {
         }
         let spans = spans_from_levels(&levels, 20.0, p, 1600.0);
         assert_eq!(spans.len(), 2, "{spans:?}");
-        assert_eq!(spans[0].1, spans[1].0, "the pads meet in the middle of the gap: {spans:?}");
-        assert_eq!(spans[0].1, 750.0);
+        // Each side takes a quarter of the 300 ms gap; half of it stays.
+        assert_eq!((spans[0].1, spans[1].0), (675.0, 825.0), "{spans:?}");
         assert_eq!(spans[0].0, 0.0);
         assert_eq!(spans[1].1, 1600.0);
+        // The default pad over the shortest pause that splits still leaves a gap.
+        let mut levels = vec![-70.0f32; 80];
+        for i in (10..30).chain(43..60) {
+            levels[i] = -20.0;
+        }
+        let spans = spans_from_levels(&levels, 20.0, Params::default(), 1600.0);
+        assert_eq!(spans.len(), 2, "{spans:?}");
+        assert!(spans[1].0 - spans[0].1 >= 130.0, "{spans:?}");
+    }
+
+    /// Five 300 ms words, each pause `gap` ms, in a quiet room.
+    fn counting(name: &str, gap: f64) -> std::path::PathBuf {
+        let mut parts = vec![(400.0, 0.0)];
+        for i in 0..5 {
+            if i > 0 {
+                parts.push((gap, 0.0));
+            }
+            parts.push((300.0, 0.3));
+        }
+        parts.push((400.0, 0.0));
+        wav(name, 1, &parts, 0.002)
+    }
+
+    #[test]
+    fn words_split_at_short_pauses_that_utterances_keep() {
+        for gap in [120.0, 180.0] {
+            let path = counting(&format!("words{gap}"), gap);
+            let utt = speech_spans(&path, Granularity::Utterances.params()).unwrap();
+            assert_eq!(utt.len(), 1, "{gap}: {utt:?}");
+            let words = speech_spans(&path, Granularity::Words.params()).unwrap();
+            assert_eq!(words.len(), 5, "{gap}: {words:?}");
+            for (i, w) in words.iter().enumerate() {
+                let start = 400.0 + i as f64 * (300.0 + gap);
+                assert!(near(w.0, start - 30.0, 15.0) && near(w.1, start + 330.0, 15.0), "{gap}: {words:?}");
+            }
+            for pair in words.windows(2) {
+                assert!(pair[1].0 - pair[0].1 >= gap / 2.0 - 10.0, "a pause stays between words: {words:?}");
+            }
+            std::fs::remove_dir_all(path.parent().unwrap()).ok();
+        }
+    }
+
+    #[test]
+    fn a_quiet_onset_is_kept_at_word_granularity() {
+        let path = wav("onsetw", 1, &[(400.0, 0.0), (300.0, 0.3), (150.0, 0.0), (80.0, 0.02), (300.0, 0.4), (400.0, 0.0)], 0.001);
+        let spans = speech_spans(&path, Granularity::Words.params()).unwrap();
+        assert_eq!(spans.len(), 2, "{spans:?}");
+        assert!(spans[1].0 <= 850.0 - 10.0, "the second word starts before its onset: {spans:?}");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     #[test]
@@ -384,5 +473,9 @@ mod tests {
     fn the_key_names_every_setting() {
         assert_ne!(Params::default().key(), Params { pad_ms: 90.0, ..Params::default() }.key());
         assert_ne!(Params::default().key(), Params { margin_db: 10.0, ..Params::default() }.key());
+        assert_ne!(Granularity::Utterances.params().key(), Granularity::Words.params().key());
+        assert_eq!(Granularity::parse("word"), Some(Granularity::Words));
+        assert_eq!(Granularity::parse("utterance"), Some(Granularity::Utterances));
+        assert_eq!(Granularity::parse("x"), None);
     }
 }

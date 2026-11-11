@@ -65,3 +65,22 @@ test("a dragged edge snaps only when it moves outward from where it was", () => 
   // Never past a neighbour.
   assert.equal(snapDragged("end", 1900, 1800, spans, 1950), 1900);
 });
+
+test("inside a long utterance, a drawn edge snaps to the nearest word edge outward", () => {
+  // Word-level spans of "isa dalawa tatlo apat": the pauses between words
+  // are 150–300 ms, too short to split utterances but kept at word level.
+  const words: Span[] = [
+    [760, 1180],
+    [1340, 1900],
+    [2100, 2620],
+    [2800, 3200],
+  ];
+  // Drawing "tatlo" by eye, starting 60 ms late and ending 90 ms early.
+  assert.deepEqual(snapRange(2160, 2530, words), { startMs: 2100, endMs: 2620 });
+  // A start drawn in the pause before "tatlo" stays: it already includes the onset.
+  assert.equal(snapEdge("start", 2000, words), 2000);
+  // Dragging the end of "dalawa" out from 1700 to 1850 lands on its end, not on "tatlo".
+  assert.equal(snapDragged("end", 1850, 1700, words), 1900);
+  // Trimming the start of "apat" inward stays where it was put.
+  assert.equal(snapDragged("start", 2850, 2780, words), 2850);
+});
