@@ -607,3 +607,127 @@ fn a_text_inherits_its_sources_access() {
     assert!(!policy.permits(&txt), "a text with no access of its own inherits its source's");
     assert!(!policy.permits(&src));
 }
+
+/// Two synced projects and one fresh op on `a`, so a pull from `b` asks for
+/// exactly one scope, group and window. The tamper closure edits each
+/// response before `b` sees it; the pull's result is returned.
+fn tampered_pull(tamper: impl Fn(&mut Value)) -> Result<(), String> {
+    let mut rig = Rig::new();
+    let mut a = rig.project("prs_A");
+    let scope = "txt_01WIRETAMPERSCOPE00000000";
+    let base = 1_700_000_000_000u64;
+    let seed: Vec<Op> = (0..5u64)
+        .map(|i| Op {
+            id: wugs_model::new_id("op"),
+            hlc: format!("{:012x}-{:04x}-dvc_01WIREFORGEDDEVICE00000000", base + i * 70_000, 0),
+            txn: wugs_model::new_id("txn"),
+            intent: None,
+            actor: "prs_A".into(),
+            device: "dvc_01WIREFORGEDDEVICE00000000".into(),
+            session: None,
+            scope: scope.into(),
+            schema: 1,
+            verb: "create".into(),
+            entity: "segment".into(),
+            target: wugs_model::new_id("seg"),
+            field: None,
+            value: Value::obj(vec![("content", Value::str(&format!("s{i}")))]),
+            base: None,
+            heads: None,
+        })
+        .collect();
+    a.ingest(seed.clone()).unwrap();
+    let mut b = rig.joined("prs_B", &a);
+    b.ingest(seed).unwrap();
+    let extra = {
+        let mut op = a.log.read_all().unwrap().ops.pop().unwrap();
+        op.id = wugs_model::new_id("op");
+        op.txn = wugs_model::new_id("txn");
+        op.target = wugs_model::new_id("seg");
+        op
+    };
+    a.ingest(vec![extra]).unwrap();
+
+    let permissive = all();
+    let mut responder = Responder::new(&a, &permissive);
+    let mut req = Requester::new(&b.project_id);
+    while let Some(msg) = req.request() {
+        let mut resp = responder.handle(&msg).unwrap();
+        tamper(&mut resp);
+        req.respond(&mut b, &resp)?;
+    }
+    Ok(())
+}
+
+fn field_mut<'a>(v: &'a mut Value, key: &str) -> Option<&'a mut Value> {
+    if let Value::Obj(m) = v { m.get_mut(key) } else { None }
+}
+
+fn rename_scope_keys(resp: &mut Value, kind: &str, to: &str) {
+    if resp.get_str("t") != Some(kind) {
+        return;
+    }
+    if let Some(Value::Obj(scopes)) = field_mut(resp, "scopes") {
+        let renamed: Vec<(String, Value)> = scopes.iter().map(|(_, v)| (to.to_string(), v.clone())).collect();
+        scopes.clear();
+        scopes.extend(renamed);
+    }
+}
+
+#[test]
+fn groups_for_an_unasked_scope_are_refused() {
+    let err = tampered_pull(|resp| rename_scope_keys(resp, "groups", "txt_01WIRESOMEOTHERSCOPE00000")).unwrap_err();
+    assert!(err.contains("unasked scope"), "{err}");
+}
+
+#[test]
+fn windows_for_an_unasked_scope_are_refused() {
+    let err = tampered_pull(|resp| rename_scope_keys(resp, "windows", "txt_01WIRESOMEOTHERSCOPE00000")).unwrap_err();
+    assert!(err.contains("unasked scope"), "{err}");
+}
+
+#[test]
+fn an_op_of_an_unasked_scope_is_refused() {
+    let err = tampered_pull(|resp| {
+        if resp.get_str("t") != Some("ops") {
+            return;
+        }
+        if let Some(Value::Arr(items)) = field_mut(resp, "ops") {
+            for item in items {
+                if let Value::Obj(op) = item {
+                    op.insert("scope".into(), Value::str("txt_01WIRESOMEOTHERSCOPE00000"));
+                }
+            }
+        }
+    })
+    .unwrap_err();
+    assert!(err.contains("an op of scope"), "{err}");
+}
+
+#[test]
+fn a_txn_with_no_op_in_an_asked_window_is_refused() {
+    // Every op's hlc moves 256 windows ahead, so no txn anchors in an
+    // asked window; the batch must be refused whole.
+    let err = tampered_pull(|resp| {
+        if resp.get_str("t") != Some("ops") {
+            return;
+        }
+        if let Some(Value::Arr(items)) = field_mut(resp, "ops") {
+            for item in items {
+                if let Value::Obj(op) = item {
+                    let hlc = op.get("hlc").and_then(|v| if let Value::Str(s) = v { Some(s.clone()) } else { None }).unwrap();
+                    let (millis, rest) = hlc.split_once('-').unwrap();
+                    let moved = u64::from_str_radix(millis, 16).unwrap() + (256u64 << 16);
+                    op.insert("hlc".into(), Value::str(&format!("{moved:012x}-{rest}")));
+                }
+            }
+        }
+    })
+    .unwrap_err();
+    assert!(err.contains("no op in an asked window"), "{err}");
+}
+
+#[test]
+fn an_untampered_pull_still_converges() {
+    tampered_pull(|_| {}).unwrap();
+}

@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use wugs_core::{IngestReport, Project};
 use wugs_model::{json, Op, Value};
 
-use crate::{collect_ops, scopes, summary, SyncPolicy};
+use crate::{collect_ops, scopes, summary, window_of, SyncPolicy, GROUP_SHIFT};
 
 pub const PROTOCOL: f64 = 1.0;
 
@@ -296,12 +296,17 @@ impl Requester {
                 }
                 self.state = if differ.is_empty() { State::Done } else { State::Groups(differ) };
             }
-            (State::Groups(_), "groups") => {
+            (State::Groups(asked), "groups") => {
                 let Some(Value::Obj(scopes)) = resp.get("scopes") else {
                     return Err("groups without scopes".into());
                 };
                 let mut want: BTreeMap<String, Vec<u64>> = BTreeMap::new();
                 for (scope, theirs) in scopes {
+                    // The peer is authenticated, not trusted: a scope this
+                    // side never asked about must not enter the walk-down.
+                    if !asked.contains(scope) {
+                        return Err(format!("peer sent groups for unasked scope {scope}"));
+                    }
                     let theirs = parse_hash_map(theirs)?;
                     let mine = summary(&project.proj, scope)?.groups();
                     let differ: Vec<u64> = theirs
@@ -315,12 +320,18 @@ impl Requester {
                 }
                 self.state = if want.is_empty() { State::Done } else { State::Windows(want) };
             }
-            (State::Windows(_), "windows") => {
+            (State::Windows(asked), "windows") => {
                 let Some(Value::Obj(scopes)) = resp.get("scopes") else {
                     return Err("windows without scopes".into());
                 };
                 for (scope, theirs) in scopes {
+                    let Some(asked_groups) = asked.get(scope) else {
+                        return Err(format!("peer sent windows for unasked scope {scope}"));
+                    };
                     let theirs = parse_hash_map(theirs)?;
+                    if let Some(w) = theirs.keys().find(|w| !asked_groups.contains(&(*w >> GROUP_SHIFT))) {
+                        return Err(format!("peer sent window {w} outside the asked groups of {scope}"));
+                    }
                     let mine = summary(&project.proj, scope)?;
                     let want: BTreeSet<u64> = theirs
                         .iter()
@@ -343,9 +354,33 @@ impl Requester {
                 let Some(Value::Arr(items)) = resp.get("ops") else {
                     return Err("ops without ops".into());
                 };
-                let mut ops = Vec::with_capacity(items.len());
+                let (asked_scope, asked_windows) = self.queue.last().ok_or("ops response with nothing asked")?;
+                let asked_windows: BTreeSet<u64> = asked_windows.iter().copied().collect();
+                // The peer is authenticated, not trusted: the batch must be
+                // the requested scope, and every txn in it must anchor in an
+                // asked window (whole txns travel, so the other ops of an
+                // anchored txn may fall outside — that is the widening rule,
+                // checked here as the responder computes it).
+                let mut parsed = Vec::with_capacity(items.len());
+                let mut anchored: BTreeSet<&str> = BTreeSet::new();
                 for item in items {
                     let op = Op::from_json(&item.to_json())?;
+                    if op.scope != *asked_scope {
+                        return Err(format!("peer sent an op of scope {} to a request for {asked_scope}", op.scope));
+                    }
+                    parsed.push(op);
+                }
+                for op in &parsed {
+                    let w = window_of(&op.hlc).ok_or_else(|| format!("peer sent an op with unparseable hlc {}", op.hlc))?;
+                    if asked_windows.contains(&w) {
+                        anchored.insert(&op.txn);
+                    }
+                }
+                if let Some(op) = parsed.iter().find(|op| !anchored.contains(op.txn.as_str())) {
+                    return Err(format!("peer sent txn {} with no op in an asked window", op.txn));
+                }
+                let mut ops = Vec::with_capacity(parsed.len());
+                for op in parsed {
                     if project.proj.already_applied(&op.id)? {
                         self.ops_dropped_known += 1;
                         continue;
