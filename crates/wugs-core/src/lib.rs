@@ -206,8 +206,13 @@ impl Project {
     /// applied ops among them and re-parks pending ones as a no-op. Unlike a
     /// rebuild it does not refuse a corrupt line: the cache already holds
     /// what it held, and opening must not get worse because the log did.
+    /// An op that parses but that the cache cannot apply (a set with no field) rolls
+    /// the whole catch-up back and the project opens as it was before, so a
+    /// later build can catch it up; it never fails the open.
     fn catch_up(&mut self) -> Result<usize, String> {
-        let stats = self.apply_log(false)?;
+        let Ok(stats) = self.apply_log(false) else {
+            return Ok(0);
+        };
         // A crash inside a held txn's retry leaves its ops logged and its
         // hold recorded; the retry releases holds whose ops all applied.
         if stats.applied > 0 && self.proj.count("quarantine")? > 0 {
@@ -1678,6 +1683,28 @@ mod tests {
         let p = Project::open(&root, "prs_Alice").unwrap();
         assert_eq!(p.caught_up(), 1);
         assert_eq!(p.proj.field_str(&txt, "title").unwrap().unwrap(), "Retold");
+        drop(p);
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn an_op_the_cache_cannot_apply_never_fails_the_open() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let txt = p.create_text("Story").unwrap();
+        let file = p.log.log_root().join(txt.as_str()).join(format!("{}.jsonl", p.device()));
+        drop(p);
+        let _ = Project::open(&root, "prs_Alice").unwrap();
+        // An op that parses but that apply refuses (a set with no field).
+        let mut op = Op::from_json(fs::read_to_string(&file).unwrap().lines().last().unwrap()).unwrap();
+        op.id = wugs_model::new_id("op");
+        op.verb = "set".into();
+        op.field = None;
+        let line = op.to_json();
+        std::io::Write::write_all(&mut fs::OpenOptions::new().append(true).open(&file).unwrap(), format!("{line}\n").as_bytes()).unwrap();
+
+        let p = Project::open(&root, "prs_Alice").expect("the open goes ahead");
+        assert_eq!(p.caught_up(), 0, "the catch-up rolled back");
+        assert_eq!(p.proj.field_str(&txt, "title").unwrap().unwrap(), "Story", "the cache is as it was");
         drop(p);
         fs::remove_dir_all(&root).ok();
     }

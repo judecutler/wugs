@@ -185,11 +185,13 @@ impl OpStream {
                 if buf.last() == Some(&b'\n') {
                     self.ends[idx] += n as u64;
                 }
-                // As `lines()` did: the line ending is not part of the line,
-                // and bytes that are not UTF-8 make a line that fails to parse.
+                // The line ending is not part of the line. Bytes that are not
+                // UTF-8 make a bad line (`None`), never a repaired one: a lossy
+                // decode would let changed text through, into the cache and on
+                // to peers, where `lines()` used to refuse the whole log.
                 let text = buf.strip_suffix(b"\n").unwrap_or(&buf);
                 let text = text.strip_suffix(b"\r").unwrap_or(text);
-                Some(String::from_utf8_lossy(text).into_owned())
+                Some(std::str::from_utf8(text).ok().map(str::to_owned))
             };
             match line {
                 None => {
@@ -200,10 +202,10 @@ impl OpStream {
                     return Ok(());
                 }
                 Some(line) => {
-                    if line.trim().is_empty() {
+                    if line.as_deref().is_some_and(|l| l.trim().is_empty()) {
                         continue;
                     }
-                    match Op::from_json(&line) {
+                    match line.ok_or(()).and_then(|l| Op::from_json(&l).map_err(drop)) {
                         Ok(op) => {
                             if self.pending_bad[idx] {
                                 self.corrupt_lines += 1;
@@ -363,6 +365,28 @@ mod tests {
         assert_eq!(report.ops.len(), 1);
         assert_eq!(report.truncated_tails, 1);
         assert_eq!(report.corrupt_lines, 0);
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn a_line_with_invalid_utf8_is_a_bad_line_never_repaired() {
+        let root = temp_root();
+        let log = LogDir::new(&root);
+        let mut clock = Clock::new("dvc_A".into());
+        log.append(&mk_op(&mut clock, "lexicon", "dvc_A")).unwrap();
+        // A file re-saved as Latin-1: a valid op whose actor gained the byte
+        // 0xF6 («ö» in Latin-1) inside the JSON string.
+        let mut bad = mk_op(&mut clock, "lexicon", "dvc_A").to_json().into_bytes();
+        let at = bad.windows(9).position(|w| w == b"\"actor\":\"").unwrap() + 9;
+        bad.insert(at, 0xF6);
+        bad.push(b'\n');
+        let path = root.join("log").join("lexicon").join("dvc_A.jsonl");
+        OpenOptions::new().append(true).open(&path).unwrap().write_all(&bad).unwrap();
+        log.append(&mk_op(&mut clock, "lexicon", "dvc_A")).unwrap();
+        let report = log.read_all().unwrap();
+        assert_eq!(report.ops.len(), 2, "the good ops on either side still read");
+        assert_eq!(report.corrupt_lines, 1, "the invalid line counts as corrupt");
+        assert!(report.ops.iter().all(|o| !o.actor.contains('\u{FFFD}')), "nothing was repaired into the stream");
         fs::remove_dir_all(root).ok();
     }
 }
