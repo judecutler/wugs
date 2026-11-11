@@ -109,3 +109,18 @@ fn an_unknown_file_is_refused_in_words() {
     let err = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap_err();
     assert!(err.contains("not a file wugs can import"), "{err}");
 }
+
+#[test]
+fn nothing_is_written_inside_the_project_folder() {
+    let dir = TempDir::new();
+    let mut a = project(&dir, "a");
+    let text = session::create_text(&mut a, "Elicitation").unwrap();
+    let blobs = dir.0.join("a").join("blobs");
+    fs::create_dir_all(&blobs).unwrap();
+    for folder in [dir.0.join("a"), blobs] {
+        let err = interchange::seal_project(&mut a, &folder, "2026-11-11").unwrap_err();
+        assert!(err.contains("inside the project folder"), "{err}");
+        assert!(interchange::export_text(&mut a, &text, Format::Elan, &folder).is_err());
+        assert!(interchange::export_lexicon(&mut a, Format::Lift, &folder).is_err());
+    }
+}

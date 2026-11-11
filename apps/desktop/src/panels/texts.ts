@@ -29,6 +29,12 @@ const LEXICON_FORMATS: [LexiconFormat, string][] = [
 let textFormat: TextFormat = "elan";
 let lexiconFormat: LexiconFormat = "lift";
 let busy: string | null = null;
+// Every open copy of the panel, so the one showing when work ends redraws,
+// even if the panel was closed and reopened while it ran.
+const live = new Set<() => void>();
+const redrawAll = () => {
+  for (const draw of live) draw();
+};
 
 async function chooseFolder(title: string): Promise<string | null> {
   const folder = await pickFile({ directory: true, title });
@@ -36,20 +42,20 @@ async function chooseFolder(title: string): Promise<string | null> {
 }
 
 /** Run one import or export at a time, showing what it is doing on its button. */
-async function work(label: string, redraw: () => void, action: () => Promise<void>) {
+async function work(label: string, action: () => Promise<void>) {
   if (busy !== null) return;
   busy = label;
-  redraw();
+  redrawAll();
   try {
     await action();
   } catch (e) {
     showToast({ tone: "error", lines: [errorText(e)] });
   }
   busy = null;
-  redraw();
+  redrawAll();
 }
 
-async function importOne(redraw: () => void) {
+async function importOne() {
   const path = await pickFile({
     title: "Import a file from ELAN, FLEx, Praat or Toolbox",
     filters: [
@@ -58,37 +64,40 @@ async function importOne(redraw: () => void) {
     ],
   });
   if (typeof path !== "string") return;
-  await work("import", redraw, async () => {
+  await work("import", async () => {
     const r = await importFile({ path });
-    await reloadTexts();
-    if (r.lexicon) touchLexicon();
-    if (r.text !== null) await selectText(r.text);
+    // The report first: a failed refresh below must not hide that the import worked.
     showToast({ tone: "info", lines: [`Imported ${r.format}.`, ...r.lines] });
+    if (r.lexicon) touchLexicon();
+    await attempt(async () => {
+      await reloadTexts();
+      if (r.text !== null) await selectText(r.text);
+    });
   });
 }
 
-async function exportOne(textId: string, redraw: () => void) {
+async function exportOne(textId: string) {
   const folder = await chooseFolder("Choose where the exported text goes");
   if (folder === null) return;
-  await work("text", redraw, async () => {
+  await work("text", async () => {
     const r = await exportText({ textId, format: textFormat, folder });
     showToast({ tone: r.notes.length > 0 ? "warn" : "info", lines: [`Saved ${r.path}.`, ...r.notes] });
   });
 }
 
-async function exportLex(redraw: () => void) {
+async function exportLex() {
   const folder = await chooseFolder("Choose where the exported lexicon goes");
   if (folder === null) return;
-  await work("lexicon", redraw, async () => {
+  await work("lexicon", async () => {
     const r = await exportLexicon({ format: lexiconFormat, folder });
     showToast({ tone: "info", lines: [`Saved ${r.path}.`, ...r.notes] });
   });
 }
 
-async function seal(redraw: () => void) {
+async function seal() {
   const folder = await chooseFolder("Choose where the archive package goes");
   if (folder === null) return;
-  await work("seal", redraw, async () => {
+  await work("seal", async () => {
     const r = await sealProject({ folder, date: localDay(new Date()) });
     showToast({
       tone: r.restricted ? "warn" : "info",
@@ -162,7 +171,7 @@ export const textsPanel: PanelDef = {
             textContent: busy === "import" ? "Importing…" : "Import a file…",
             title: "ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm/.txt",
             disabled: busy !== null,
-            onclick: () => void importOne(draw),
+            onclick: () => void importOne(),
           }),
         ),
         h(
@@ -176,7 +185,7 @@ export const textsPanel: PanelDef = {
                 type: "button",
                 textContent: busy === "text" ? "Exporting…" : "Export…",
                 disabled: busy !== null,
-                onclick: () => void exportOne(text.id, draw),
+                onclick: () => void exportOne(text.id),
               }),
         ),
         h(
@@ -188,7 +197,7 @@ export const textsPanel: PanelDef = {
             type: "button",
             textContent: busy === "lexicon" ? "Exporting…" : "Export…",
             disabled: busy !== null,
-            onclick: () => void exportLex(draw),
+            onclick: () => void exportLex(),
           }),
         ),
         h(
@@ -199,12 +208,20 @@ export const textsPanel: PanelDef = {
             textContent: busy === "seal" ? "Sealing…" : "Seal a version for the archive…",
             title: "A self-describing package (BagIt) with every text, the lexicon, recordings and full history, for ELAR, PARADISEC or AILLA",
             disabled: busy !== null,
-            onclick: () => void seal(draw),
+            onclick: () => void seal(),
           }),
         ),
       );
       el.replaceChildren(form, list, share);
     };
-    return sliced(el, slice, draw);
+    const view = sliced(el, slice, draw);
+    live.add(draw);
+    return {
+      ...view,
+      dispose: () => {
+        live.delete(draw);
+        view.dispose?.();
+      },
+    };
   },
 };

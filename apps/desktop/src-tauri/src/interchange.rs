@@ -67,7 +67,7 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "db" | "sfm" | "lex" => return Some(Format::Toolbox),
         _ => {}
     }
-    let head = wugs_legacy::decode(&bytes[..bytes.len().min(4096)]).ok()?;
+    let head = sniff(&bytes[..bytes.len().min(4096)]);
     let head = head.trim_start_matches('\u{feff}').trim_start();
     if head.starts_with("\\_sh") {
         Some(Format::Toolbox)
@@ -76,6 +76,39 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
     } else {
         None
     }
+}
+
+/// The start of a file as text, for sniffing only: lossy, so a cut through
+/// a character never refuses the file.
+fn sniff(head: &[u8]) -> String {
+    let utf16 = |be: bool| {
+        let units: Vec<u16> = head[2..].chunks_exact(2).map(|c| if be { u16::from_be_bytes([c[0], c[1]]) } else { u16::from_le_bytes([c[0], c[1]]) }).collect();
+        String::from_utf16_lossy(&units)
+    };
+    match head {
+        [0xFF, 0xFE, ..] => utf16(false),
+        [0xFE, 0xFF, ..] => utf16(true),
+        _ => String::from_utf8_lossy(head).into_owned(),
+    }
+}
+
+/// XML formats declare UTF-8 or UTF-16; anything else is a damaged file,
+/// refused rather than read as Latin-1 (which would store garbled text).
+fn decode_xml(bytes: &[u8], name: &str) -> Result<String, String> {
+    let utf16 = |rest: &[u8], be: bool| {
+        if rest.len() % 2 != 0 {
+            return None;
+        }
+        let units: Vec<u16> = rest.chunks_exact(2).map(|c| if be { u16::from_be_bytes([c[0], c[1]]) } else { u16::from_le_bytes([c[0], c[1]]) }).collect();
+        String::from_utf16(&units).ok()
+    };
+    let text = match bytes {
+        [0xFF, 0xFE, rest @ ..] => utf16(rest, false),
+        [0xFE, 0xFF, rest @ ..] => utf16(rest, true),
+        [0xEF, 0xBB, 0xBF, rest @ ..] => std::str::from_utf8(rest).ok().map(str::to_string),
+        _ => std::str::from_utf8(bytes).ok().map(str::to_string),
+    };
+    text.ok_or_else(|| format!("{name} is not valid UTF-8 or UTF-16 text; it may be damaged, so nothing was imported"))
 }
 
 #[derive(Serialize, Debug)]
@@ -114,7 +147,12 @@ pub fn import_file(s: &mut Session, path: &str) -> Result<Imported, String> {
         )
     })?;
     let stem = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
-    let input = wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?;
+    let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let input = match format {
+        Format::Elan | Format::FlexText | Format::Lift => decode_xml(&bytes, &file_name)?,
+        // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16.
+        Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
+    };
     let input = input.trim_start_matches('\u{feff}');
     let p = session::project(s)?;
     let mut lines = Vec::new();
@@ -214,20 +252,22 @@ pub struct Exported {
 /// anything else (path separators included) replaced, never empty and never
 /// a name Windows reserves.
 pub fn file_stem(title: &str, fallback: &str) -> String {
+    // Only what a file system refuses or reads specially is replaced, so
+    // combining diacritics and every script stay as typed.
     let cleaned: String = title
         .chars()
-        .map(|c| if c.is_alphanumeric() || c == ' ' || c == '-' || c == '_' { c } else { '_' })
+        .map(|c| if c.is_control() || matches!(c, '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' | '.') { '_' } else { c })
         .collect();
     let mut stem: String = cleaned.trim().trim_matches('_').chars().take(60).collect();
-    stem = stem.trim().to_string();
+    stem = stem.trim_end().to_string();
     if stem.is_empty() {
         stem = fallback.to_string();
     }
-    const RESERVED: [&str; 22] = [
-        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1",
-        "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    ];
-    if RESERVED.contains(&stem.to_ascii_uppercase().as_str()) {
+    let upper = stem.to_uppercase();
+    let device = |prefix: &str| {
+        upper.strip_prefix(prefix).is_some_and(|rest| rest.chars().count() == 1 && rest.chars().all(|c| c.is_ascii_digit() || "¹²³".contains(c)))
+    };
+    if ["CON", "PRN", "AUX", "NUL"].contains(&upper.as_str()) || device("COM") || device("LPT") {
         stem.push('_');
     }
     stem
@@ -259,8 +299,22 @@ pub fn write_new(folder: &Path, stem: &str, ext: &str, contents: &[u8]) -> Resul
     Err(format!("{}: too many files named {stem}", folder.display()))
 }
 
+/// Exports and seals go outside the project folder: inside it, `cache/` is
+/// wiped on a rebuild and `blobs/` would be copied into every later seal.
+fn outside_project(s: &mut Session, folder: &Path) -> Result<(), String> {
+    let root = session::project_root(s)?;
+    let (Ok(root), Ok(chosen)) = (root.canonicalize(), folder.canonicalize()) else {
+        return Err(format!("{} is not a folder", folder.display()));
+    };
+    if chosen.starts_with(&root) {
+        return Err("That folder is inside the project folder. Choose one outside it, such as Documents or Desktop.".into());
+    }
+    Ok(())
+}
+
 /// Export one text as ELAN, FlexText or TextGrid into `folder`.
 pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path) -> Result<Exported, String> {
+    outside_project(s, folder)?;
     let p = session::project(s)?;
     if p.proj.entity_kind(text_id)?.as_deref() != Some("text") || p.proj.is_tombstoned(text_id)? {
         return Err(format!("no text {text_id}"));
@@ -286,6 +340,7 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
 
 /// Export the whole lexicon as LIFT or Toolbox into `folder`.
 pub fn export_lexicon(s: &mut Session, format: Format, folder: &Path) -> Result<Exported, String> {
+    outside_project(s, folder)?;
     let p = session::project(s)?;
     let contents = match format {
         Format::Lift => wugs_flex::export_lift(p)?,
@@ -313,6 +368,7 @@ pub fn seal_project(s: &mut Session, folder: &Path, date: &str) -> Result<Sealed
     if !folder.is_dir() {
         return Err(format!("{} is not a folder", folder.display()));
     }
+    outside_project(s, folder)?;
     let p = session::project(s)?;
     let date = crate::corrections::date_or_today(date);
     let mut out = folder.join(format!("wugs-sealed-{date}"));
@@ -342,7 +398,20 @@ mod tests {
         assert_eq!(file_stem("../../etc", "text"), "etc");
         assert_eq!(file_stem("", "text"), "text");
         assert_eq!(file_stem("con", "text"), "con_");
+        assert_eq!(file_stem("COM0", "text"), "COM0_");
+        assert_eq!(file_stem("lpt²", "text"), "lpt²_");
+        assert_eq!(file_stem("Component", "text"), "Component");
         assert_eq!(file_stem("Köpek ağacı", "text"), "Köpek ağacı");
+        assert_eq!(file_stem("Tɔ\u{300}ndɛ", "text"), "Tɔ\u{300}ndɛ", "combining marks stay");
+        assert_eq!(file_stem("notes. ", "text"), "notes", "no trailing dot or space");
+    }
+
+    #[test]
+    fn xml_must_be_utf8_or_utf16() {
+        assert_eq!(decode_xml("<a>ɔ̀</a>".as_bytes(), "x").unwrap(), "<a>ɔ̀</a>");
+        let le: Vec<u8> = [0xFF, 0xFE].into_iter().chain("<a/>".encode_utf16().flat_map(|u| u.to_le_bytes())).collect();
+        assert_eq!(decode_xml(&le, "x").unwrap(), "<a/>");
+        assert!(decode_xml(b"<a>\xE9</a>", "x.eaf").unwrap_err().contains("x.eaf"));
     }
 
     #[test]
@@ -352,5 +421,9 @@ mod tests {
         assert_eq!(detect(Path::new("dict.txt"), b"\\_sh v3.0  400  Dictionary\n"), Some(Format::Toolbox));
         assert_eq!(detect(Path::new("x.txt"), b"File type = \"ooTextFile\"\n"), Some(Format::TextGrid));
         assert_eq!(detect(Path::new("notes.txt"), b"hello"), None);
+        let mut utf16: Vec<u8> = vec![0xFF, 0xFE];
+        utf16.extend("\\_sh v3.0".encode_utf16().flat_map(|u| u.to_le_bytes()));
+        utf16.extend([0x3D, 0xD8]); // half a surrogate pair, cut at the sniffing limit
+        assert_eq!(detect(Path::new("dict.txt"), &utf16), Some(Format::Toolbox));
     }
 }
