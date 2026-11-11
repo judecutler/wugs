@@ -84,7 +84,16 @@ export async function enterProject(info: ProjectInfo) {
   showToast(null);
   selectSegment(null);
   rememberProject(localStorage, info.path);
-  setState({ kind: "open", info, texts: await listTexts(), text: null });
+  // The backend already has the project open, so a failed first read must
+  // not leave the closed screen claiming the open failed; the list comes
+  // back with the next reloadTexts (an import, a sync, a refresh).
+  let texts: TextRow[] = [];
+  try {
+    texts = await listTexts();
+  } catch (e) {
+    showToast({ tone: "warn", lines: [`The project opened, but its texts did not load: ${errorText(e)}`] });
+  }
+  setState({ kind: "open", info, texts, text: null });
   // The project's pins change what runs; a failure here only leaves the old view.
   void refreshCapabilities().catch(() => {});
 }
