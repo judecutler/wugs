@@ -23,6 +23,7 @@ pub mod conflicts;
 mod elicitation;
 mod gloss;
 mod lexicon;
+pub mod people;
 mod segments;
 pub mod settings;
 pub use wugs_validate::{Finding, Severity};

@@ -473,6 +473,16 @@ export const exportText = (args: { textId: string; format: TextFormat; folder: s
 export const exportLexicon = (args: { format: LexiconFormat; folder: string }) => invoke<Exported>("export_lexicon", args);
 /** `date`: today on this computer's calendar (YYYY-MM-DD), which names the package folder. */
 export const sealProject = (args: { folder: string; date: string }) => invoke<Sealed>("seal_project", args);
+// People and consent (roadmap 61): src-tauri/src/people.rs. Every command returns the whole view.
+/** A term's answer: true agreed, false refused, null not asked. */
+export type PeopleConsent = { id: string; covers: string; terms: [string, boolean | null][]; date: string; evidenceName: string | null; hasEvidence: boolean };
+export type PeoplePerson = { id: string; name: string; roles: string[]; consents: PeopleConsent[] };
+export type Coverable = { id: string; kind: "project" | "recording" | "text"; label: string };
+export type PeopleView = { people: PeoplePerson[]; coverable: Coverable[] };
+export type PeopleCommand =
+  | "people_view" | "person_add" | "person_set_name" | "person_set_roles" | "person_delete"
+  | "consent_add" | "consent_set_term" | "consent_set_covers" | "consent_set_date" | "consent_attach" | "consent_detach" | "consent_delete";
+export const peopleCommand = (command: PeopleCommand, args: Record<string, unknown> = {}) => invoke<PeopleView>(command, args);
 // Corrections export: src-tauri/src/corrections.rs (roadmap 57).
 /** `recordedNo`: a consent record says no to AI use; `restricted`: a restricted or community access level. Both start left out; the person decides. */
 /** `partial`: why this device may not know every consent record (a guest, records still arriving), or null. */
