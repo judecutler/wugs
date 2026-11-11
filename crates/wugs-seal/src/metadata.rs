@@ -156,6 +156,28 @@ pub fn access(project: &Project, log_scopes: &BTreeSet<String>) -> Result<(Strin
         .chain(scopes.iter().map(|(_, a)| a.as_str()))
         .any(|a| a != "open");
 
+    // Signed consent forms are blobs, so every seal copies them into
+    // `media/` beside the recordings. They are personal data: list each one
+    // by its media path, flagged restricted, so an archivist scanning
+    // `media/` can tell a consent form from a recording. Deleted records
+    // are listed too (their blob may still be in the store, and the copied
+    // log holds their ops either way).
+    let mut consent_forms = Vec::new();
+    for (c, deleted) in all_of_kind(project, "consent")? {
+        let Some(evidence) = p.field_str(&c, "evidence")? else { continue };
+        let Some(hex) = wugs_model::parse_blob_ref(&evidence) else { continue };
+        let mut fields = vec![("media", Value::Str(format!("media/{hex}"))), ("consent", Value::str(&c))];
+        if let Some(name) = p.field_str(&c, "x.evidence-name")? {
+            fields.push(("name", Value::Str(name)));
+        }
+        if let Some(person) = p.field_str(&c, "person")? {
+            fields.push(("person", Value::Str(person)));
+        }
+        fields.push(("access", Value::str("restricted")));
+        consent_forms.push(entry(fields, deleted));
+    }
+    let contains_restricted = contains_restricted || !consent_forms.is_empty();
+
     let records = |kind: &str| -> Result<Value, String> {
         let mut out = Vec::new();
         for id in live_of_kind(project, kind)? {
@@ -178,11 +200,13 @@ pub fn access(project: &Project, log_scopes: &BTreeSet<String>) -> Result<(Strin
             "media_access",
             Value::str(
                 "not derivable in this version: media blobs are not yet linked to sources, \
-                 so apply the most restrictive level listed here to media/",
+                 so apply the most restrictive level listed here to media/; \
+                 the files under consent_forms are signed consent forms (personal data)",
             ),
         ),
         ("people", records("person")?),
         ("consents", records("consent")?),
+        ("consent_forms", Value::Arr(consent_forms)),
     ])
     .to_json();
     Ok((json, contains_restricted))
