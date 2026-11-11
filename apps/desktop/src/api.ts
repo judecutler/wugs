@@ -426,12 +426,13 @@ export const assistDelete = (args: { id: string }) => invoke<void>("assist_delet
 /** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
 // Corrections export: src-tauri/src/corrections.rs (roadmap 57).
-/** `recordsOnly`: why only recordings a consent record allows may go (a guest device, records still arriving), or null. */
-export type CorrectionsSummary = { consented: number; unrecorded: number; unchecked: number; refused: number; restricted: number; unusable: number; recordsOnly: string | null };
+/** `recordedNo`: a consent record says no to AI use; `restricted`: a restricted or community access level. Both start left out; the person decides. */
+/** `partial`: why this device may not know every consent record (a guest, records still arriving), or null. */
+export type CorrectionsSummary = { ready: number; recordedNo: number; restricted: number; unchecked: number; unusable: number; partial: string | null };
 export type CorrectionsExported = { folder: string; written: number; problems: string[]; failed: number };
 export const correctionsSummary = () => invoke<CorrectionsSummary>("corrections_summary");
-/** `unrecorded`: the person confirmed they have consent where no consent record says. */
-export const correctionsExport = (args: { folder: string; unrecorded: boolean }) => invoke<CorrectionsExported>("corrections_export", args);
+/** `flagged`: also include clips the project's records speak against (a recorded no, a restricted level). */
+export const correctionsExport = (args: { folder: string; flagged: boolean }) => invoke<CorrectionsExported>("corrections_export", args);
 /** How assist_suggest says the model changed under the caller. */
 export const MODEL_CHANGED = "Phone transcription now uses ";
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { batchTargets, megabytes, progressLabel, suggestable, tint, tintTitle, correctionsLine, exportable } from "./logic.ts";
+import { batchTargets, megabytes, progressLabel, suggestable, tint, tintTitle, correctionsLine, exportable, flaggedLine } from "./logic.ts";
 
 test("every machine transcription is tinted, more strongly when unsure", () => {
   assert.equal(tint({ model: "m", confidence: 0.95 }), "unsure");
@@ -44,18 +44,18 @@ test("sizes read as people say them", () => {
   assert.equal(progressLabel(1024 * 1024, 0), "1.0 MB so far");
 });
 
-test("the export line says what is ready and what stays home", () => {
-  const none = { consented: 0, unrecorded: 0, unchecked: 0, refused: 0, restricted: 0, unusable: 0 };
+test("the export line matches what the button exports", () => {
+  const none = { ready: 0, recordedNo: 0, restricted: 0, unchecked: 0, unusable: 0 };
   assert.equal(correctionsLine(none), "No checked suggestions to export yet.");
-  assert.equal(correctionsLine({ ...none, consented: 1 }), "1 checked suggestion ready to export.");
-  assert.equal(
-    correctionsLine({ ...none, consented: 2, unrecorded: 3, unchecked: 1, refused: 4 }),
-    "5 checked suggestions ready to export. Staying here: 1 suggestion not checked yet, 4 refused by a consent record.",
-  );
+  assert.equal(correctionsLine({ ...none, ready: 1 }), "1 checked suggestion ready to export.");
+  assert.equal(correctionsLine({ ...none, ready: 2, restricted: 3, unchecked: 1 }), "5 checked suggestions: 2 ready, 3 left out unless you include them. Also: 1 suggestion not checked yet.");
+  assert.equal(correctionsLine({ ...none, ready: 1, unusable: 2 }), "1 checked suggestion ready to export. Also: 2 clips without a recording or times, which cannot be exported.");
 });
 
-test("suggestions no consent record speaks for go only on the person's word", () => {
-  const s = { consented: 2, unrecorded: 3, unchecked: 0, refused: 0, restricted: 0, unusable: 0 };
+test("what the records say against is told, and included only on the person's choice", () => {
+  const s = { ready: 2, recordedNo: 1, restricted: 3, unchecked: 0, unusable: 0 };
   assert.equal(exportable(s, false), 2);
-  assert.equal(exportable(s, true), 5);
+  assert.equal(exportable(s, true), 6);
+  assert.match(flaggedLine(s) ?? "", /1 has a consent record that does not allow AI use and 3 are marked restricted/);
+  assert.equal(flaggedLine({ ...s, recordedNo: 0, restricted: 0 }), null);
 });

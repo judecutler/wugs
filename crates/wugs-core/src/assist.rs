@@ -142,41 +142,63 @@ pub struct Correction {
     /// The segment's times moved after the suggestion, so `machine` was
     /// heard on a different span than the one `person` describes.
     pub retimed: bool,
-    /// A consent record covering the recording says AI use is fine. When
-    /// false, none says either way, and the person exporting answers for it.
-    pub consented: bool,
+    /// What the project's consent records say about AI use of this clip.
+    /// Information for the person exporting, never a gate: wugs records
+    /// what the linguist entered and leaves the ethics to them and their
+    /// review board.
+    pub consent: Consent,
+    /// The text (its own level, else its linked recording's) or the
+    /// recording heard has a restricted or community access level.
+    pub restricted: bool,
 }
 
-/// Every checked suggestion that may leave the project, and how many were
-/// held back and why.
+/// What consent records covering a clip's text, recording or project say
+/// about AI use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Consent {
+    /// Some record says `"AI-ok": true` and none says otherwise.
+    Yes,
+    /// No record speaks about AI use.
+    Unrecorded,
+    /// A record says anything but `"AI-ok": true`.
+    No,
+}
+
+impl Consent {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Consent::Yes => "recorded-yes",
+            Consent::Unrecorded => "not-recorded",
+            Consent::No => "recorded-no",
+        }
+    }
+}
+
+/// Every checked suggestion in the project, each with what its records say,
+/// and how many suggestions could not be paired.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Corrections {
     pub pairs: Vec<Correction>,
     /// Still unchecked: the machine's text is what the segment shows.
     pub unchecked: usize,
-    /// A consent record covering the recording or text says no AI use.
-    pub refused: usize,
-    /// The text or recording has a restricted or community access level.
-    pub restricted: usize,
     /// No recording or times to cut the audio from, or the segment was emptied.
     pub unusable: usize,
-    /// Consent records are still on their way (held in quarantine or waiting
-    /// on an op not yet received), so "no record says" cannot be trusted:
-    /// only pairs a record allows may go.
-    pub consent_incomplete: bool,
+    /// Consent records are still arriving here (people-scope ops held in
+    /// quarantine or waiting on an op not yet received), so a clip with no
+    /// record here may have one elsewhere. Reported, never a gate.
+    pub records_incomplete: bool,
 }
 
 impl Project {
     /// The checked machine suggestions in this project, for a corrections
     /// export. A segment counts once, with its newest suggestion, once a
     /// person's edit has answered it (`machine_mark` is clear) and it still
-    /// holds text. Held back: anything a consent record covering its text,
-    /// its recording or the whole project refuses for AI use (`"AI-ok":
-    /// false`), and anything whose access level is not open. Derived from
+    /// holds text. Each pair carries what consent records and access levels
+    /// say about it; which ones leave is the person's choice. Derived from
     /// the projection only; nothing is written.
     pub fn corrections(&self) -> Result<Corrections, String> {
         let mut out = Corrections {
-            consent_incomplete: !self.proj.held_op_ids(crate::SCOPE_PEOPLE)?.is_empty() || !self.proj.pending_op_ids(crate::SCOPE_PEOPLE)?.is_empty(),
+            records_incomplete: !self.proj.held_op_ids(crate::SCOPE_PEOPLE)?.is_empty() || !self.proj.pending_op_ids(crate::SCOPE_PEOPLE)?.is_empty(),
             ..Corrections::default()
         };
         let consent = self.ai_consent()?;
@@ -234,15 +256,15 @@ impl Project {
             let linked = self.proj.field_str(&text, "source")?;
             let mut covers = vec![text.as_str(), source.as_str(), self.project_id.as_str()];
             covers.extend(linked.as_deref());
-            if covers.iter().any(|c| consent.get(*c) == Some(&false)) {
-                out.refused += 1;
-                continue;
-            }
-            // Both what the transcription belongs to and the audio it describes must be open.
-            if self.text_access(&text)? != "open" || self.proj.field_str(&source, "access")?.is_some_and(|a| a != "open") {
-                out.restricted += 1;
-                continue;
-            }
+            let said = if covers.iter().any(|c| consent.get(*c) == Some(&false)) {
+                Consent::No
+            } else if covers.iter().any(|c| consent.get(*c) == Some(&true)) {
+                Consent::Yes
+            } else {
+                Consent::Unrecorded
+            };
+            // What the transcription belongs to, and the audio it describes.
+            let restricted = self.text_access(&text)? != "open" || self.proj.field_str(&source, "access")?.is_some_and(|a| a != "open");
             // Records from before the text was kept: the phones without pauses.
             let machine = match record.get("text").and_then(Value::as_str) {
                 Some(t) => t.to_string(),
@@ -257,7 +279,8 @@ impl Project {
             let heard_on = (record.get("start").and_then(Value::as_f64), record.get("end").and_then(Value::as_f64));
             out.pairs.push(Correction {
                 retimed: matches!(heard_on, (Some(s), Some(e)) if s != start_ms || e != end_ms),
-                consented: covers.iter().any(|c| consent.get(*c) == Some(&true)),
+                consent: said,
+                restricted,
                 segment: seg,
                 text,
                 source,

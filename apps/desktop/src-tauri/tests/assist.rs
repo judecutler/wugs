@@ -311,19 +311,14 @@ fn a_checked_suggestion_exports_as_a_clip_with_both_transcriptions() {
     session::edit_segment_content(&mut s, &text, &seg, "kɔ").unwrap();
 
     let sum = corrections::summary(&mut s, false).unwrap();
-    assert_eq!((sum.consented, sum.unrecorded, sum.unchecked), (0, 1, 0));
-    // Without the person's word for consent, a suggestion no record speaks for stays.
-    let (jobs, _) = corrections::prepare(&mut s, false, false).unwrap();
-    assert!(jobs.is_empty());
-    let (jobs, sum) = corrections::prepare(&mut s, false, true).unwrap();
+    assert_eq!((sum.ready, sum.recorded_no, sum.restricted, sum.unchecked), (1, 0, 0, 0));
+    // No consent record is no reason to hold a clip back: the person decides.
+    let (jobs, sum) = corrections::prepare(&mut s, false, false).unwrap();
     assert_eq!(jobs.len(), 1);
-    // A guest never receives consent records, so it cannot vouch for any.
-    let (none, as_guest) = corrections::prepare(&mut s, true, true).unwrap();
-    assert!(none.is_empty() && as_guest.records_only.is_some());
 
     let out = dir.0.join("out");
     fs::create_dir_all(&out).unwrap();
-    let done = corrections::write(&jobs, &sum, true, &out, "2026-11-10").unwrap();
+    let done = corrections::write(&jobs, &sum, &out, "2026-11-10").unwrap();
     assert_eq!((done.written, done.failed), (1, 0));
     let folder = PathBuf::from(&done.folder);
     assert_eq!(folder, out.join("wugs-corrections-2026-11-10"));
@@ -333,14 +328,15 @@ fn a_checked_suggestion_exports_as_a_clip_with_both_transcriptions() {
     assert_eq!(read("text.machine"), format!("{seg} ko\n"));
     assert_eq!(read("utt2model"), format!("{seg} test-model\n"));
     assert!(!folder.join("retimed").exists());
-    assert!(read("README.md").contains("confirmed they have the speakers' consent"));
-    assert!(read("README.md").contains("0 with no consent record and no confirmation"));
+    assert_eq!(read("utt2consent"), format!("{seg} not-recorded\n"));
+    assert!(read("README.md").contains("0 are covered by a consent record that allows AI use, 1 by none"));
+    assert!(!folder.join("restricted").exists());
     // One second of the recording at 16 kHz mono, 16-bit.
     let clip = fs::metadata(folder.join("wav").join(format!("{seg}.wav"))).unwrap().len();
     assert_eq!(clip, 44 + 16_000 * 2);
 
     // A second export the same day goes beside the first, never over it.
-    let again = corrections::write(&jobs, &sum, true, &out, "2026-11-10").unwrap();
+    let again = corrections::write(&jobs, &sum, &out, "2026-11-10").unwrap();
     assert_eq!(PathBuf::from(again.folder), out.join("wugs-corrections-2026-11-10-2"));
 }
 
@@ -358,13 +354,13 @@ fn an_untrusted_segment_id_never_names_a_file() {
     let heard = Recognition { phones: vec![phone("k", 0.0, 0.9)], confidence: 0.7 };
     assist::commit(&mut s, &text, &seg, &source, &spec("http://127.0.0.1:1", None), &heard).unwrap();
     session::edit_segment_content(&mut s, &text, &seg, "k").unwrap();
-    let (mut jobs, sum) = corrections::prepare(&mut s, false, true).unwrap();
+    let (mut jobs, sum) = corrections::prepare(&mut s, false, false).unwrap();
     let mut evil: Job = jobs[0].clone();
     evil.pair.segment = "/tmp/evil".into();
     jobs.push(evil);
     let out = dir.0.join("out");
     fs::create_dir_all(&out).unwrap();
-    let done = corrections::write(&jobs, &sum, true, &out, "2026-11-10").unwrap();
+    let done = corrections::write(&jobs, &sum, &out, "2026-11-10").unwrap();
     assert_eq!((done.written, done.failed), (1, 1));
     assert!(done.problems[0].contains("malformed id"));
     assert!(!Path::new("/tmp/evil.wav").exists());
