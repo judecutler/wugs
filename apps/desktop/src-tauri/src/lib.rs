@@ -14,6 +14,7 @@ pub mod praat;
 pub mod praat_analysis;
 pub mod segmentation;
 pub mod session;
+pub mod updater;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
@@ -1016,6 +1017,11 @@ pub fn run() {
         // Size, position and maximized state come back on the next launch; a
         // machine with no saved state keeps the size from tauri.conf.json.
         .plugin(tauri_plugin_window_state::Builder::default().build())
+        // Online: checks GitHub Releases only when the webview asks (the
+        // person's setting), downloads only on a click, verifies the
+        // minisign signature against tauri.conf.json's key. The webview has
+        // no updater permission; it goes through `updater::update_*`.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         // Recording needs the microphone, so the engine's own prompt is
         // skipped, but only for the app's own page: wry hands this handler
         // no origin, so the closure reads the webview's current URL.
@@ -1032,6 +1038,7 @@ pub fn run() {
         .manage(SessionThread::spawn())
         .manage(Reachable::default())
         .manage(Captures::default())
+        .manage(updater::Staged::default())
         .manage(assist::Downloads::default())
         .manage(assist::Worker::spawn())
         .setup(|app| {
@@ -1150,6 +1157,9 @@ pub fn run() {
             sync_now,
             sync_listen,
             discover_peers,
+            updater::update_check,
+            updater::update_download,
+            updater::update_install,
         ])
         .run(tauri::generate_context!())
         .expect("run the wugs desktop shell");

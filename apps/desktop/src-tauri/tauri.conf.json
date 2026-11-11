@@ -34,7 +34,14 @@
     "category": "Education",
     "shortDescription": "Local-first fieldwork linguistics",
     "longDescription": "wugs Tongues keeps a recording, its transcription, glosses and the dictionary in one connected, offline-first project with its edit history preserved.",
-    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"]
+    "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
+    "createUpdaterArtifacts": false
   },
-  "plugins": {}
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlFNTU2Q0I0NUYzNTZEOTMKUldTVGJUVmZ0R3hWbmxNaWtES01OTTh2eitBVTBUTUNtMXdUdXFyMEMxN1NIZVh4M004TVNPVE0K",
+      "endpoints": ["https://github.com/judecutler/wugs/releases/latest/download/latest.json"],
+      "requireSignedVersion": true
+    }
+  }
 }

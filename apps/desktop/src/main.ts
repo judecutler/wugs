@@ -9,6 +9,7 @@ import { autoOpen } from "./last-project";
 import { onDevicesChange, relocationBanner, wireDeviceEvents } from "./panels/devices";
 import { isPanelId, PANELS } from "./panels/registry";
 import { attachDock } from "./kits/workspace";
+import { autoChecks, checkForUpdates, setAutoChecks, setBeforeInstall, updateSlot } from "./updates/notice";
 import { activeKit, assistModelList, attempt, enterProject, getState, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
 const top = h("header", { className: "top" });
@@ -41,6 +42,22 @@ function renderTop() {
     ...(dock === null || kit === null ? [] : closedPanels(dock, kit)).map((id) => h("option", { value: id, textContent: PANELS[id].title })),
   );
   panels.disabled = panels.options.length === 1;
+  // Online. Per machine; checking never downloads anything.
+  const updates = h(
+    "select",
+    {
+      className: "updates-menu",
+      title: "Updates (Online: asks GitHub Releases)",
+      onchange: () => {
+        if (updates.value === "check") void checkForUpdates(true);
+        if (updates.value === "auto") setAutoChecks(!autoChecks());
+        renderTop();
+      },
+    },
+    h("option", { value: "", textContent: "Updates…" }),
+    h("option", { value: "check", textContent: "Check for updates now (Online)" }),
+    h("option", { value: "auto", textContent: autoChecks() ? "Stop checking at start (Online)" : "Check at start (Online)" }),
+  );
   top.replaceChildren(
     h("strong", { className: "brand", textContent: kit?.name ?? "wugs", title: kit === null ? "wugs" : `wugs: ${kit.name}${kit.subtitle === "" ? "" : `, ${kit.subtitle.toLowerCase()}`}` }),
     h("span", { className: "subtitle", textContent: kit?.subtitle ?? "" }),
@@ -55,6 +72,7 @@ function renderTop() {
         ? h("span", { className: s.info.conflicts > 0 ? "badge badge-hot" : "badge", textContent: `${s.info.conflicts} conflicts` })
         : null,
       panels,
+      updates,
       h("button", {
         textContent: "Reset layout",
         title: `Put every panel back where ${kit?.name ?? "the kit"} starts`,
@@ -143,7 +161,7 @@ async function reopenLast() {
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app !== null) {
-  app.replaceChildren(top, bannerSlot, host, toastSlot);
+  app.replaceChildren(top, updateSlot(), bannerSlot, host, toastSlot);
   subscribe(renderTop);
   subscribe(renderBanner);
   onDevicesChange(renderBanner);
@@ -156,6 +174,7 @@ if (app !== null) {
     const mounted = await mountDock(host, activeKit()!);
     attachDock(mounted);
     dock = mounted.api;
+    setBeforeInstall(mounted.flush);
     dock.onDidLayoutChange(renderTop);
     renderTop();
     await wireDeviceEvents();
@@ -163,5 +182,7 @@ if (app !== null) {
     // A reload leaves the old page's captures open on the Rust side; this page owns none.
     await captureReset().catch(() => 0);
     await reopenLast();
+    // After the window is up and the project is back; never awaited by anything.
+    void checkForUpdates(false);
   })();
 }

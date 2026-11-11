@@ -1,8 +1,21 @@
 name: Release
 
-# Tag v* -> draft GitHub release with the installers attached.
-# Manual run, or a PR that changes packaging -> installers as workflow
-# artifacts, no release.
+# Three stages, so the signing key never shares a job with code the build
+# runs (npm install scripts, Vite plugins, build.rs) and the write token never
+# shares one with the key (DECISIONS 2026-11-10):
+#
+#   build    every event; three OSes; contents: read, no secrets, no
+#            credentials in the checkout. Builds the installers and the
+#            updater payloads unsigned and uploads them as workflow artifacts.
+#   sign     v* tags only; the `release` environment (owner approval, the
+#            SIGNING_KEY secrets); contents: read. Installs only the pinned
+#            Tauri CLI from .github/signer, signs the downloaded payloads and
+#            uploads the .sig files.
+#   publish  v* tags only; contents: write, no signing secrets. Writes
+#            latest.json from the local files and attaches everything to a
+#            draft release.
+#
+# A manual run or a PR that changes packaging runs `build` only.
 on:
   workflow_dispatch:
   push:
@@ -10,71 +23,234 @@ on:
   pull_request:
     paths:
       - .github/workflows/release.yml
+      - .github/actions/desktop-setup/action.yml
+      - .github/scripts/updater_manifest.py
+      - .github/scripts/test_updater_manifest.py
+      - .github/signer/**
       - apps/desktop/src-tauri/tauri.conf.json
       - apps/desktop/src-tauri/Info.plist
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
-  installers:
+  build:
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
             args: ''
+            bundle: apps/desktop/src-tauri/target/release/bundle
           - os: macos-latest
             args: --target universal-apple-darwin
+            bundle: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle
           - os: ubuntu-22.04
             args: ''
+            bundle: apps/desktop/src-tauri/target/release/bundle
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - name: Install Tauri system dependencies
-        if: runner.os == 'Linux'
+      # No cache on the release path: nothing restored from another run
+      # (a PR's, say) may reach a build that gets signed.
+      - uses: ./.github/actions/desktop-setup
+        with:
+          cache: ${{ github.event_name == 'push' && 'false' || 'true' }}
+
+      # tauri.conf.json has createUpdaterArtifacts off, so this build needs
+      # no key; the payloads are made below and signed by the `sign` job.
+      - name: Build the installers
+        shell: bash
+        working-directory: apps/desktop
+        env:
+          ARGS: ${{ matrix.args }}
+        run: npm run tauri -- build $ARGS
+
+      # The files tauri-plugin-updater 2 installs, each signed as is:
+      # Windows the NSIS -setup.exe, macOS a gzipped tar whose top entry is
+      # the .app, Linux the AppImage and the .deb.
+      - name: Collect installers and updater payloads
+        shell: bash
+        env:
+          BUNDLE: ${{ matrix.bundle }}
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          set -euo pipefail
+          shopt -s nullglob
+          out="$RUNNER_TEMP/out"
+          mkdir -p "$out"
+          one() {
+            if [ "$#" -ne 1 ]; then
+              echo "::error::expected one file, found $# ($*)"
+              exit 1
+            fi
+            cp "$1" "$out/"
+          }
+          case "$RUNNER_OS" in
+            Windows)
+              one "$BUNDLE"/nsis/*-setup.exe ;;
+            macOS)
+              one "$BUNDLE"/dmg/*.dmg
+              apps=("$BUNDLE"/macos/*.app)
+              [ "${#apps[@]}" -eq 1 ] || { echo "::error::expected one .app, found ${#apps[@]}"; exit 1; }
+              version=$(node -p "require('./apps/desktop/src-tauri/tauri.conf.json').version")
+              name=$(basename "${apps[0]}" .app)
+              COPYFILE_DISABLE=1 tar -czf "$out/${name}_${version}_universal.app.tar.gz" -C "$BUNDLE/macos" "$name.app" ;;
+            Linux)
+              one "$BUNDLE"/appimage/*.AppImage
+              one "$BUNDLE"/deb/*.deb ;;
+          esac
+          ls -l "$out"
 
-      - uses: actions/setup-node@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: wugs-${{ runner.os }}
+          path: ${{ runner.temp }}/out/*
+          if-no-files-found: error
+
+  manifest-tests:
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - run: python3 -I -m unittest discover -s .github/scripts
+
+  sign:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-22.04
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/signer
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: apps/desktop/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      # Only the Tauri CLI, at the version and hashes in its lockfile, with
+      # install scripts off. The app's own dependencies never run here.
+      - name: Install the signer
+        working-directory: .github/signer
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          pattern: wugs-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/release
 
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri
-
-      - run: npm ci
-        working-directory: apps/desktop
-
-      - uses: tauri-apps/tauri-action@v0
+      # --app-version binds each signature to the tag's version (the app has
+      # requireSignedVersion on). The .dmg is not an updater payload.
+      - name: Sign the updater payloads
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          projectPath: apps/desktop
-          args: ${{ matrix.args }}
-          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
-          releaseName: wugs ${{ github.ref_name }}
-          releaseBody: Unsigned alpha build. See docs/INSTALL.md for the SmartScreen and Gatekeeper steps.
-          releaseDraft: true
-          prerelease: false
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.SIGNING_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          cli="$GITHUB_WORKSPACE/.github/signer/node_modules/.bin/tauri"
+          sigs="$RUNNER_TEMP/sigs"
+          mkdir -p "$sigs"
+          cd "$RUNNER_TEMP/release"
+          for f in *-setup.exe *.app.tar.gz *.AppImage *.deb; do
+            if [ ! -f "$f" ]; then
+              echo "::error::no updater payload matches $f"
+              exit 1
+            fi
+            "$cli" signer sign --app-version "$version" -- "$f" > /dev/null
+            mv "$f.sig" "$sigs/"
+          done
+          ls -l "$sigs"
 
-      - name: Upload installers as workflow artifacts
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: wugs-installers-${{ runner.os }}
-          path: |
-            apps/desktop/src-tauri/target/**/release/bundle/nsis/*.exe
-            apps/desktop/src-tauri/target/**/release/bundle/dmg/*.dmg
-            apps/desktop/src-tauri/target/**/release/bundle/appimage/*.AppImage
-            apps/desktop/src-tauri/target/**/release/bundle/deb/*.deb
+          name: wugs-signatures
+          path: ${{ runner.temp }}/sigs/*.sig
           if-no-files-found: error
+
+  publish:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [sign, manifest-tests]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # The builds' files and the signer's signatures land in separate folders
+      # first: a .sig or latest.json from a build (a compromised dependency can
+      # write anything there) is refused, so only the sign job's signatures
+      # reach the release.
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: wugs-{Windows,macOS,Linux}
+          merge-multiple: true
+          path: ${{ runner.temp }}/built
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: wugs-signatures
+          path: ${{ runner.temp }}/sigs
+
+      - name: Only signed files from the sign job
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/built"
+          if find . -name '*.sig' -o -name 'latest.json' | grep -q .; then
+            echo "::error::a build produced a .sig or latest.json; refusing it"
+            find . -name '*.sig' -o -name 'latest.json'
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/release"
+          cp -- "$RUNNER_TEMP"/built/* "$RUNNER_TEMP/release/"
+          cp -- "$RUNNER_TEMP"/sigs/*.sig "$RUNNER_TEMP/release/"
+
+      # The annotated tag's message becomes the release notes and the app's
+      # "What's new" (latest.json's notes). Kept in files, never in a step
+      # output, so no text in it can end a delimiter or reach an expression.
+      - name: Release notes from the tag message
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "+refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          git tag -l --format='%(contents:subject)%0a%0a%(contents:body)' "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          {
+            cat "$RUNNER_TEMP/notes.md"
+            echo
+            echo 'Installers are not code-signed yet (updates are). See docs/INSTALL.md for the SmartScreen and Gatekeeper steps.'
+          } > "$RUNNER_TEMP/body.md"
+
+      - name: Write latest.json
+        run: python3 -I .github/scripts/updater_manifest.py "$GITHUB_REF_NAME" "$RUNNER_TEMP/notes.md" apps/desktop/src-tauri/tauri.conf.json "$RUNNER_TEMP/release" "$GITHUB_REPOSITORY"
+
+      # A draft for this tag is updated (a re-run); a published release is
+      # never touched.
+      - name: Attach everything to the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          files=("$RUNNER_TEMP"/release/*)
+          if draft=$(gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null); then
+            if [ "$draft" != true ]; then
+              echo "::error::release $tag is already published; not changing it"
+              exit 1
+            fi
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/body.md"
+            gh release upload "$tag" --repo "$GITHUB_REPOSITORY" --clobber "${files[@]}"
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "wugs $tag" --notes-file "$RUNNER_TEMP/body.md" "${files[@]}"
+          fi

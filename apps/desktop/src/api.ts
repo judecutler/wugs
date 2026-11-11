@@ -7,6 +7,7 @@ import type { MorphSpec, Suggestion } from "./gloss/suggest";
 import type { Machine } from "./assist/logic";
 import type { Kit } from "./kits/logic";
 import type { Scope } from "./search/logic";
+import type { Available } from "./updates/logic";
 
 export type ProjectInfo = {
   projectId: string;
@@ -504,3 +505,11 @@ export const praatApply = (args: { text: string }) => invoke<{ changes: number; 
 export const praatDiscard = (args: { text: string }) => invoke<void>("praat_discard", args);
 export const acousticAnalysis = (args: { source: string; chunks: number[] }) =>
   invoke<import("./praat/analysis").Chunk[]>("acoustic_analysis", args);
+
+// In-app updates: src-tauri/src/updater.rs. Online.
+export type UpdateCheck = { currentVersion: string; available: Available | null };
+export const updateCheck = () => invoke<UpdateCheck>("update_check");
+export const updateDownload = () => invoke<void>("update_download");
+export const updateInstall = () => invoke<void>("update_install");
+export const onUpdateProgress = (f: (p: { done: number; total: number | null }) => void): Promise<UnlistenFn> =>
+  listen<{ done: number; total: number | null }>("update-progress", (ev) => f(ev.payload));

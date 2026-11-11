@@ -56,6 +56,9 @@ pub struct Pending {
     pub modified_ms: u64,
 }
 
+/// Holds the capture table locked; see [`Captures::none_open`].
+pub struct NoNewTakes<'a>(#[allow(dead_code)] MutexGuard<'a, HashMap<String, Capture>>);
+
 pub struct Captures {
     map: Mutex<HashMap<String, Capture>>,
     max_data: u64,
@@ -115,6 +118,15 @@ impl Captures {
 
     fn map(&self) -> Result<MutexGuard<'_, HashMap<String, Capture>>, String> {
         self.map.lock().map_err(|_| "capture state poisoned".to_string())
+    }
+
+    /// When no take is open (recording, or stopped and not yet saved, kept
+    /// or discarded), the capture table stays locked for as long as the
+    /// returned guard lives, so no take can begin meanwhile. The updater
+    /// holds it through install and restart. `None` means a take is open.
+    pub fn none_open(&self) -> Result<Option<NoNewTakes<'_>>, String> {
+        let map = self.map()?;
+        Ok(map.is_empty().then_some(NoNewTakes(map)))
     }
 
     /// Open a WAV under `root/recordings-pending/` and return its capture id.
