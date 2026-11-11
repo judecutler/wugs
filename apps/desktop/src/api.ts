@@ -376,6 +376,17 @@ export const lexiconSetSenseText = (args: { senseId: string; field: "definition"
 export const lexiconDeleteSense = (args: { senseId: string }) => invoke<EntryEdit>("lexicon_delete_sense", args);
 export const lexiconAssignDomain = (args: { senseId: string; domainId: string }) => invoke<EntryEdit>("lexicon_assign_domain", args);
 export const lexiconUnassignDomain = (args: { senseId: string; domainId: string }) => invoke<EntryEdit>("lexicon_unassign_domain", args);
+
+// Paradigms (roadmap 50): `axes` are a template's features and values (src/lexicon/paradigms.ts).
+export type ParadigmAxis = { feature: string; values: string[] };
+export type ParadigmForm = { id: string; form: string; features: Record<string, string> };
+export type ParadigmCell = { features: Record<string, string>; forms: ParadigmForm[] };
+export type ParadigmView = { lexeme: string; cells: ParadigmCell[]; others: ParadigmForm[] };
+export type ParadigmEdit = { paradigm: ParadigmView; notes: string[] };
+export const lexiconParadigm = (args: { id: string; axes: ParadigmAxis[] }) => invoke<ParadigmView>("lexicon_paradigm", args);
+export const lexiconFillCell = (args: { id: string; formId: string | null; features: Record<string, string>; surface: string; axes: ParadigmAxis[] }) =>
+  invoke<ParadigmEdit>("lexicon_fill_cell", args);
+export const lexiconDeleteForm = (args: { id: string; formId: string; axes: ParadigmAxis[] }) => invoke<ParadigmEdit>("lexicon_delete_form", args);
 export const domainsList = () => invoke<DomainItem[]>("domains_list");
 export const domainsLoadSil = () => invoke<DomainsLoaded>("domains_load_sil");
 

@@ -5,7 +5,8 @@
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use wugs_core::paradigms::{Dimension, InflectedForm};
 use wugs_core::{CommitResult, DomainRow, Project};
 use wugs_model::fold_key;
 
@@ -369,4 +370,109 @@ pub fn domains_load_sil(session: &mut Session) -> Result<DomainsLoaded, String> 
         already: r.already,
         notes: r.findings.iter().map(|f| format!("{}: {}", f.code, f.message)).collect(),
     })
+}
+
+// ---------------------------------------------------------------- paradigms (roadmap 50)
+
+/// One axis of the grid the panel shows: a feature and its values in order.
+/// The panel's templates (`src/lexicon/paradigms.ts`) decide them.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Axis {
+    pub feature: String,
+    pub values: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FormView {
+    pub id: String,
+    pub form: String,
+    pub features: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CellView {
+    pub features: BTreeMap<String, String>,
+    /// Usually one; two devices filling one cell before a sync leave two.
+    pub forms: Vec<FormView>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParadigmView {
+    pub lexeme: String,
+    /// Every combination of the axes' values, the first axis outermost.
+    pub cells: Vec<CellView>,
+    /// The entry's inflected forms that fit no cell of this grid.
+    pub others: Vec<FormView>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParadigmEdit {
+    pub paradigm: ParadigmView,
+    pub notes: Vec<String>,
+}
+
+fn form_view(f: InflectedForm) -> FormView {
+    FormView { id: f.id, form: f.form, features: f.features }
+}
+
+fn paradigm_of(p: &Project, lexeme: &str, axes: &[Axis]) -> Result<ParadigmView, String> {
+    let dims: Vec<Dimension> = axes.iter().map(|a| Dimension { feature: a.feature.clone(), values: a.values.clone() }).collect();
+    let grid = p.paradigm(lexeme, &dims)?;
+    Ok(ParadigmView {
+        lexeme: lexeme.to_string(),
+        cells: grid
+            .cells
+            .into_iter()
+            .map(|c| CellView { features: c.features, forms: c.forms.into_iter().map(form_view).collect() })
+            .collect(),
+        others: grid.others.into_iter().map(form_view).collect(),
+    })
+}
+
+/// The entry's live inflected form `form`, or an error naming what is wrong.
+fn form_of(p: &Project, lexeme: &str, form: &str) -> Result<(), String> {
+    require(p, form, "form")?;
+    if p.proj.field_str(form, "lexeme")?.as_deref() != Some(lexeme) {
+        return Err(format!("form {form} is not a form of {lexeme}"));
+    }
+    Ok(())
+}
+
+pub fn lexicon_paradigm(session: &mut Session, id: &str, axes: &[Axis]) -> Result<ParadigmView, String> {
+    paradigm_of(project(session)?, id, axes)
+}
+
+/// Type into a cell: a new inflected form with the cell's features when
+/// `form` is None, else a new surface for that form.
+pub fn lexicon_fill_cell(
+    session: &mut Session,
+    id: &str,
+    form: Option<&str>,
+    features: &BTreeMap<String, String>,
+    surface: &str,
+    axes: &[Axis],
+) -> Result<ParadigmEdit, String> {
+    let p = project(session)?;
+    let res = match form {
+        Some(form) => {
+            form_of(p, id, form)?;
+            p.set_form_surface(form, surface)?
+        }
+        None => {
+            let features: Vec<(&str, &str)> = features.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+            p.add_inflected_form(id, surface, &features)?.1
+        }
+    };
+    Ok(ParadigmEdit { paradigm: paradigm_of(p, id, axes)?, notes: lines(&res) })
+}
+
+pub fn lexicon_delete_form(session: &mut Session, id: &str, form: &str, axes: &[Axis]) -> Result<ParadigmEdit, String> {
+    let p = project(session)?;
+    form_of(p, id, form)?;
+    let res = p.delete_form(form)?;
+    Ok(ParadigmEdit { paradigm: paradigm_of(p, id, axes)?, notes: lines(&res) })
 }
