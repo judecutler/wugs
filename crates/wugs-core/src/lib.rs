@@ -2112,6 +2112,34 @@ mod tests {
     }
 
     #[test]
+    fn a_retry_that_crashed_after_its_log_append_is_released_at_open() {
+        let (root_a, mut alice) = temp_project("prs_Alice");
+        let (root_b, mut bob) = temp_project("prs_Bob");
+        let txt = alice.create_text("Shared").unwrap();
+        alice.add_segment(&txt, "tir_utt", 0, Some(0.0), Some(1000.0), "a").unwrap();
+        bob.ingest(alice.log.read_all().unwrap().ops).unwrap();
+        let bad = bob.add_segment(&txt, "tir_utt", 1, Some(500.0), Some(1500.0), "c").unwrap().0;
+        let bob_ops: Vec<Op> = bob.log.read_all().unwrap().ops.into_iter().filter(|o| o.device == bob.device()).collect();
+        assert_eq!(alice.ingest(bob_ops).unwrap().txns_held, 1);
+
+        // The retry got as far as the log append, then the process died:
+        // the hold, its spill file and the cache are as they were.
+        let (txn, held) = alice.proj.held_txns(None).unwrap().pop().unwrap();
+        alice.log.append_all(&held).unwrap();
+        drop(alice);
+
+        let alice = Project::open(&root_a, "prs_Alice").unwrap();
+        assert_eq!(alice.caught_up(), held.len());
+        assert!(alice.proj.entity_kind(&bad).unwrap().is_some(), "the logged segment is visible");
+        assert_eq!(alice.proj.count("quarantine").unwrap(), 0, "its hold is released");
+        assert_eq!(alice.proj.count("quarantine_ops").unwrap(), 0);
+        assert!(!root_a.join("quarantine").join(format!("{txn}.jsonl")).exists(), "its spill file is gone");
+        drop(alice);
+        fs::remove_dir_all(root_a).ok();
+        fs::remove_dir_all(root_b).ok();
+    }
+
+    #[test]
     fn held_txn_applies_once_its_fix_arrives() {
         let (root_a, mut alice) = temp_project("prs_Alice");
         let (root_b, mut bob) = temp_project("prs_Bob");
