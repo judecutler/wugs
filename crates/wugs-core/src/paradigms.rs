@@ -173,6 +173,12 @@ impl Project {
             }
             names.push(name);
         }
+        // The grid is the product of the axes, and the axes come from the
+        // caller, so an absurd request is refused before it is built.
+        let cells: usize = dims.iter().map(|d| d.values.len().max(1)).product();
+        if cells > 256 {
+            return Err(format!("a grid of {cells} cells is more than the 256 a paradigm draws"));
+        }
         let mut combos: Vec<BTreeMap<String, String>> = vec![BTreeMap::new()];
         for (d, name) in dims.iter().zip(&names) {
             combos = combos
@@ -275,6 +281,8 @@ mod tests {
         assert!(p.add_inflected_form(&lex, "evler", &[("number", "pl"), ("Number", "sg")]).is_err());
         let twice = vec![Dimension { feature: "number".into(), values: vec![] }; 2];
         assert!(p.paradigm(&lex, &twice).is_err());
+        let huge = Dimension { feature: "person".into(), values: (0..257).map(|i| i.to_string()).collect() };
+        assert!(p.paradigm(&lex, &[huge]).unwrap_err().contains("256"), "an absurd grid is refused unbuilt");
         assert_eq!(p.log.read_all().unwrap().ops.len(), before);
         std::fs::remove_dir_all(root).ok();
     }
