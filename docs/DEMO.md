@@ -30,7 +30,7 @@ Do these the day before. Two of them download large files.
 - Click **Undo**, then **Redo**. An undo never overwrites work done since.
 
 ### 4. Transcribe with a machine suggestion (1–2 min)
-- In **Speech assist**, click **Fill empty segments**. The model writes IPA into each empty segment, on this laptop. Suggestions are tinted yellow, and red where the model is unsure.
+- In **Speech assist**, under **Fill empty segments**, click **Suggest for N empty segments**. The model writes IPA into each empty segment, on this laptop. Suggestions are tinted yellow, and red where the model is unsure.
 - In **Transcribe**: press Enter to save and play the next segment, Tab to replay, and use the IPA palette. Correct one suggestion. Its tint goes away, because a person has now checked it.
 - Talking point: wugs asks for a *job* (phone transcription), not a model. Which model, or Automatic, is a setting. It can be pinned per project so a long campaign is never switched halfway.
 
