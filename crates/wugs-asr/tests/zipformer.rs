@@ -158,6 +158,39 @@ fn the_real_zipa_release_matches_onnxruntime() {
     }
 }
 
+/// Both plan paths across segment lengths on the real release, so the
+/// length where the symbolic plan stops paying is measured, not guessed.
+/// Each length is fresh on each path: the per-length side pays its plan
+/// build, the symbolic side only runs. Prints, asserts nothing.
+#[test]
+#[ignore]
+fn the_real_zipa_release_speed_by_length() {
+    let dir = PathBuf::from(std::env::var("WUGS_ZIPA_DIR").expect("set WUGS_ZIPA_DIR"));
+    let vocab = || Vocab::from_tokens_txt(&std::fs::read_to_string(dir.join("tokens.txt")).unwrap()).unwrap();
+    let rss = || {
+        let s = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+        let kb = |k: &str| s.lines().find(|l| l.starts_with(k)).and_then(|l| l.split_whitespace().nth(1)).unwrap_or("?").to_string();
+        format!("rss {} kB, peak {} kB", kb("VmRSS"), kb("VmHWM"))
+    };
+    let lengths = [150usize, 300, 500, 700, 1000, 1500, 2000, 3000];
+    {
+        let mut r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab()).unwrap();
+        r.drop_symbolic_plan();
+        for t in lengths {
+            let t0 = std::time::Instant::now();
+            r.log_probs_for_features(t, feats(t)).unwrap();
+            eprintln!("per-length {t} frames: {:?} (build + run); {}", t0.elapsed(), rss());
+        }
+    }
+    let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab()).unwrap();
+    assert!(r.has_symbolic_plan());
+    for t in lengths {
+        let t0 = std::time::Instant::now();
+        r.log_probs_for_features(t, feats(t)).unwrap();
+        eprintln!("symbolic {t} frames: {:?} (run); {}", t0.elapsed(), rss());
+    }
+}
+
 /// End to end on real speech: the whole wugs pipeline (WAV reading,
 /// filterbank, the adjusted graph under tract) against ZIPA's own
 /// inference script (lhotse + onnxruntime) on the sample recording in
