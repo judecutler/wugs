@@ -12,12 +12,20 @@ fn the_bundled_catalogue_parses() {
     assert_eq!(m.param_bool("normalize"), Some(true));
     assert_eq!(m.download_mb(), Some(640));
     assert_eq!(m.files.len(), 2);
-    assert_eq!(m.score(None), None);
+    assert_eq!(m.score(None), Some(0.21), "scored by wugs's evaluation");
+    assert!(m.evaluation.unwrap().benchmark.starts_with("prism-pfer"));
+}
+
+/// The bundled manifest without its evaluation, for tests that add their own.
+fn unscored() -> String {
+    let cut = BUNDLED.find("\n# wugs's own evaluation").expect("the evaluation block");
+    BUNDLED[..cut].to_string() + "\n"
 }
 
 fn with(replace: &str, by: &str) -> String {
-    assert!(BUNDLED.contains(replace), "fixture lost {replace:?}");
-    BUNDLED.replacen(replace, by, 1)
+    let base = unscored();
+    assert!(base.contains(replace), "fixture lost {replace:?}");
+    base.replacen(replace, by, 1)
 }
 
 #[test]
@@ -101,7 +109,7 @@ fn checksums_sizes_and_scores() {
     ))
     .unwrap_err()
     .contains("64 hex"));
-    let bad = BUNDLED.to_string() + "\n[evaluation]\nbenchmark = \"b\"\nper = { \"*\" = 7.0 }\n";
+    let bad = unscored() + "\n[evaluation]\nbenchmark = \"b\"\nper = { \"*\" = 7.0 }\n";
     assert!(parse(&bad).unwrap_err().contains("error rate"));
 }
 
