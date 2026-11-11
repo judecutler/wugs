@@ -390,3 +390,31 @@ fn a_retimed_or_unplaced_suggestion_is_flagged_or_left_out() {
     assert!(got.pairs.is_empty());
     assert_eq!(got.unusable, 1);
 }
+
+#[test]
+fn an_open_text_never_lets_a_restricted_recording_out() {
+    let mut rig = Rig::new();
+    let (mut a, _b, text, seg) = rig.pair();
+    let src = a.add_source("Recording", None, "audio", Some("restricted")).unwrap();
+    a.set_access(&text, "open").unwrap();
+    a.machine_transcribe(&text, &seg, &heard_from("kopek", &src)).unwrap();
+    a.edit_content(&text, &seg, "köpek").unwrap();
+    let c = a.corrections().unwrap();
+    assert!(c.pairs.is_empty());
+    assert_eq!(c.restricted, 1);
+}
+
+#[test]
+fn any_ai_term_but_true_is_a_refusal() {
+    let mut rig = Rig::new();
+    let (mut a, _b, text, seg) = rig.pair();
+    let src = a.add_source("Recording", None, "audio", None).unwrap();
+    a.machine_transcribe(&text, &seg, &heard_from("kopek", &src)).unwrap();
+    a.edit_content(&text, &seg, "köpek").unwrap();
+    let ana = a.add_person(Value::obj(vec![("full", Value::str("Ana"))]), Value::Arr(vec![]), "open").unwrap();
+    a.record_consent(&ana, &src, Value::obj(vec![("AI-ok", Value::str("no"))]), "2026-11-10").unwrap();
+    let c = a.corrections().unwrap();
+    assert!(c.pairs.is_empty());
+    assert_eq!(c.refused, 1);
+    assert!(!c.consent_incomplete);
+}

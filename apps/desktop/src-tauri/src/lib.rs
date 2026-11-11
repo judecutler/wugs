@@ -702,15 +702,23 @@ fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<as
 
 /// What a corrections export would hold now.
 #[tauri::command(async)]
-fn corrections_summary(s: State<SessionThread>) -> Result<corrections::Summary, String> {
-    s.run(corrections::summary)
+fn corrections_summary(s: State<SessionThread>, id: State<Identity>) -> Result<corrections::Summary, String> {
+    let key = id.key().ok();
+    s.run(move |s| {
+        let guest = session::is_guest(s, key.as_deref())?;
+        corrections::summary(s, guest)
+    })
 }
 
 /// Export the checked suggestions into a new folder inside `folder`.
 /// `unrecorded`: the person confirmed consent where no record says.
 #[tauri::command(async)]
-fn corrections_export(s: State<SessionThread>, folder: String, unrecorded: bool) -> Result<corrections::Exported, String> {
-    let (jobs, sum) = s.run(move |s| corrections::prepare(s, unrecorded))?;
+fn corrections_export(s: State<SessionThread>, id: State<Identity>, folder: String, unrecorded: bool) -> Result<corrections::Exported, String> {
+    let key = id.key().ok();
+    let (jobs, sum) = s.run(move |s| {
+        let guest = session::is_guest(s, key.as_deref())?;
+        corrections::prepare(s, guest, unrecorded)
+    })?;
     corrections::write(&jobs, &sum, unrecorded, std::path::Path::new(&folder), &corrections::today())
 }
 

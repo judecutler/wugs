@@ -426,7 +426,8 @@ export const assistDelete = (args: { id: string }) => invoke<void>("assist_delet
 /** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
 // Corrections export: src-tauri/src/corrections.rs (roadmap 57).
-export type CorrectionsSummary = { consented: number; unrecorded: number; unchecked: number; refused: number; restricted: number; unusable: number };
+/** `recordsOnly`: why only recordings a consent record allows may go (a guest device, records still arriving), or null. */
+export type CorrectionsSummary = { consented: number; unrecorded: number; unchecked: number; refused: number; restricted: number; unusable: number; recordsOnly: string | null };
 export type CorrectionsExported = { folder: string; written: number; problems: string[]; failed: number };
 export const correctionsSummary = () => invoke<CorrectionsSummary>("corrections_summary");
 /** `unrecorded`: the person confirmed they have consent where no consent record says. */

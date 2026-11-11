@@ -80,7 +80,9 @@ export const assistPanel: PanelDef = {
     const el = h("div", { className: "panel panel-assist" });
     let tierChoice: string | null = null;
     let corrections: CorrectionsSummary | null = null;
+    /** The person's word on consent, given for one project only. */
     let confirmed = false;
+    let countedFor: string | null = null;
     let exporting = false;
 
     function draw() {
@@ -221,10 +223,13 @@ export const assistPanel: PanelDef = {
     function correctionControls() {
       if (corrections === null) return h("p", { className: "as-note", textContent: "Counting…" });
       const c = corrections;
-      const count = exportable(c, confirmed);
+      const vouch = confirmed && c.recordsOnly === null;
+      const count = exportable(c, vouch);
       const consent = c.unrecorded === 0
         ? null
-        : h(
+        : c.recordsOnly !== null
+          ? h("p", { className: "as-note", textContent: c.recordsOnly })
+          : h(
             "label",
             { className: "as-note" },
             h("input", { type: "checkbox", checked: confirmed, onchange: (e: Event) => { confirmed = (e.target as HTMLInputElement).checked; draw(); } }),
@@ -251,7 +256,7 @@ export const assistPanel: PanelDef = {
       exporting = true;
       draw();
       try {
-        const r = await correctionsExport({ folder, unrecorded: confirmed });
+        const r = await correctionsExport({ folder, unrecorded: confirmed && corrections?.recordsOnly === null });
         showToast({
           tone: r.failed > 0 ? "warn" : "info",
           lines: [`Exported ${r.written} correction${r.written === 1 ? "" : "s"} to ${r.folder}.`, ...(r.failed > 0 ? [`${r.failed} could not be cut from the recording.`, ...r.problems] : [])],
@@ -267,7 +272,14 @@ export const assistPanel: PanelDef = {
     let counting = false;
     let again = false;
     async function refreshCorrections() {
-      if (getState().kind !== "open") return;
+      const st = getState();
+      if (st.kind !== "open") return;
+      // Another project: its consent is a new question, and the old count is not its own.
+      if (st.info.path !== countedFor) {
+        countedFor = st.info.path;
+        confirmed = false;
+        corrections = null;
+      }
       if (counting) {
         again = true;
         return;

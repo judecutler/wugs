@@ -160,6 +160,10 @@ pub struct Corrections {
     pub restricted: usize,
     /// No recording or times to cut the audio from, or the segment was emptied.
     pub unusable: usize,
+    /// Consent records are still on their way (held in quarantine or waiting
+    /// on an op not yet received), so "no record says" cannot be trusted:
+    /// only pairs a record allows may go.
+    pub consent_incomplete: bool,
 }
 
 impl Project {
@@ -171,7 +175,10 @@ impl Project {
     /// false`), and anything whose access level is not open. Derived from
     /// the projection only; nothing is written.
     pub fn corrections(&self) -> Result<Corrections, String> {
-        let mut out = Corrections::default();
+        let mut out = Corrections {
+            consent_incomplete: !self.proj.held_op_ids(crate::SCOPE_PEOPLE)?.is_empty() || !self.proj.pending_op_ids(crate::SCOPE_PEOPLE)?.is_empty(),
+            ..Corrections::default()
+        };
         let consent = self.ai_consent()?;
         // Each suggested segment's records, from one scan of the field index.
         let mut suggested: Vec<(String, Vec<String>)> = Vec::new();
@@ -199,6 +206,11 @@ impl Project {
             if self.proj.is_tombstoned(&text)? {
                 continue;
             }
+            if let Some(tier) = self.proj.field_str(&seg, "tier")? {
+                if self.proj.is_tombstoned(&tier)? {
+                    continue;
+                }
+            }
             if self.machine_mark(&seg)?.is_some() {
                 out.unchecked += 1;
                 continue;
@@ -210,16 +222,24 @@ impl Project {
                 out.unusable += 1;
                 continue;
             };
+            if self.proj.entity_kind(&source)?.as_deref() != Some("source") || self.proj.is_tombstoned(&source)? {
+                out.unusable += 1;
+                continue;
+            }
             if person.trim().is_empty() || end_ms <= start_ms {
                 out.unusable += 1;
                 continue;
             }
-            let covers = [text.as_str(), source.as_str(), self.project_id.as_str()];
+            // The text's own linked recording too, if it differs from the one heard.
+            let linked = self.proj.field_str(&text, "source")?;
+            let mut covers = vec![text.as_str(), source.as_str(), self.project_id.as_str()];
+            covers.extend(linked.as_deref());
             if covers.iter().any(|c| consent.get(*c) == Some(&false)) {
                 out.refused += 1;
                 continue;
             }
-            if self.access_of(&text, &source)? != "open" {
+            // Both what the transcription belongs to and the audio it describes must be open.
+            if self.text_access(&text)? != "open" || self.proj.field_str(&source, "access")?.is_some_and(|a| a != "open") {
                 out.restricted += 1;
                 continue;
             }
@@ -254,7 +274,8 @@ impl Project {
     }
 
     /// What live consent records say about AI use, per thing they cover:
-    /// false when any refuses, true when some allow and none refuses.
+    /// false when any refuses, true when some allow and none refuses. Any
+    /// `AI-ok` other than `true` (`false`, `"no"`, anything) is a refusal.
     fn ai_consent(&self) -> Result<std::collections::HashMap<String, bool>, String> {
         let mut said = std::collections::HashMap::new();
         for c in self.proj.entities_of_kind("consent")? {
@@ -263,17 +284,22 @@ impl Project {
             }
             let Some(covers) = self.proj.field_str(&c, "covers")? else { continue };
             let Some((terms, _)) = self.proj.field(&c, "terms")? else { continue };
-            let Some(Value::Bool(ok)) = terms.get("AI-ok") else { continue };
-            let entry = said.entry(covers).or_insert(*ok);
-            *entry = *entry && *ok;
+            let Some(term) = terms.get("AI-ok") else { continue };
+            let ok = matches!(term, Value::Bool(true));
+            let entry = said.entry(covers).or_insert(ok);
+            *entry = *entry && ok;
         }
         Ok(said)
     }
 
-    /// A text's access level, else its recording's, else open (DATA-MODEL §4).
-    fn access_of(&self, text: &str, source: &str) -> Result<String, String> {
-        for id in [text, source] {
-            if let Some(a) = self.proj.field_str(id, "access")? {
+    /// A text's effective access: its own level, else its linked source's,
+    /// else open (DATA-MODEL §4, the rule sync's `policy_from_access` uses).
+    fn text_access(&self, text: &str) -> Result<String, String> {
+        if let Some(a) = self.proj.field_str(text, "access")? {
+            return Ok(a);
+        }
+        if let Some(src) = self.proj.field_str(text, "source")? {
+            if let Some(a) = self.proj.field_str(&src, "access")? {
                 return Ok(a);
             }
         }
