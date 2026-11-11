@@ -92,10 +92,35 @@ fn recognizing_audio_runs_end_to_end() {
 }
 
 #[test]
+fn one_symbolic_plan_serves_every_length() {
+    let mut r = FbankRecognizer::load(&fixture("tiny-zipformer.onnx"), tokens()).unwrap();
+    assert!(r.has_symbolic_plan(), "the fp32 fixture should build the symbolic plan at load");
+    r.log_probs_for_features(173, feats(173)).unwrap();
+    r.log_probs_for_features(211, feats(211)).unwrap();
+    assert_eq!(r.per_length_plans(), 0, "no per-length plan was built");
+
+    // The point of the plan: a fresh length costs only the run. Timed
+    // against the fallback path in the same process, two fresh lengths
+    // per side; each side's first absorbs warm-up, compare the seconds.
+    for (fresh, label) in [(157usize, "symbolic"), (293, "symbolic")] {
+        let t0 = std::time::Instant::now();
+        r.log_probs_for_features(fresh, feats(fresh)).unwrap();
+        eprintln!("{label}: fresh length {fresh} in {:?}", t0.elapsed());
+    }
+    r.drop_symbolic_plan();
+    for (fresh, label) in [(158usize, "per-length"), (294, "per-length")] {
+        let t0 = std::time::Instant::now();
+        r.log_probs_for_features(fresh, feats(fresh)).unwrap();
+        eprintln!("{label}: fresh length {fresh} in {:?} (plan built)", t0.elapsed());
+    }
+}
+
+#[test]
 fn the_int8_release_format_runs_too() {
     // ZIPA's INT8 files quantize every MatMul (DynamicQuantizeLinear +
     // MatMulInteger); quantization rounds a little differently in tract.
     let r = FbankRecognizer::load(&fixture("tiny-zipformer.int8.onnx"), tokens()).unwrap();
+    eprintln!("int8 symbolic plan: {}", r.has_symbolic_plan());
     let (t, v, got) = r.log_probs_for_features(173, feats(173)).unwrap();
     let want = f32s("tiny-zipformer.int8.173.out.f32");
     let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
