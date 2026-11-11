@@ -72,6 +72,11 @@ select { font: inherit; border: 1px solid var(--line); border-radius: 4px; paddi
 .text-list li.selected { background: var(--accent); color: white; }
 .count { color: inherit; opacity: 0.6; font-variant-numeric: tabular-nums; }
 
+.share { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.share h3 { margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.share-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.share-label { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+
 .segments { width: 100%; border-collapse: collapse; }
 .segments th {
   text-align: left;

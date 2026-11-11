@@ -7253,16 +7253,38 @@ dependencies = [
  "wugs-auth",
  "wugs-blob",
  "wugs-core",
+ "wugs-elan",
+ "wugs-flex",
  "wugs-kit",
  "wugs-legacy",
  "wugs-model",
  "wugs-net",
  "wugs-package",
  "wugs-peaks",
+ "wugs-seal",
  "wugs-sync",
  "wugs-text",
  "wugs-unicode",
  "zeroize",
+]
+
+[[package]]
+name = "wugs-elan"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-model",
+ "wugs-projection",
+ "wugs-xml",
+]
+
+[[package]]
+name = "wugs-flex"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-model",
+ "wugs-xml",
 ]
 
 [[package]]
@@ -7325,6 +7347,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "wugs-seal"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-elan",
+ "wugs-flex",
+ "wugs-model",
+ "wugs-oplog",
+ "wugs-xml",
+]
+
+[[package]]
 name = "wugs-sqlite"
 version = "0.0.1"
 dependencies = [
@@ -7364,6 +7398,10 @@ dependencies = [
  "wugs-model",
  "wugs-projection",
 ]
+
+[[package]]
+name = "wugs-xml"
+version = "0.0.1"
 
 [[package]]
 name = "x11"

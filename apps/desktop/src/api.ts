@@ -461,6 +461,18 @@ export const assistCancel = (args: { id: string }) => invoke<void>("assist_cance
 export const assistDelete = (args: { id: string }) => invoke<void>("assist_delete", args);
 /** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
+// Import and export in other tools' formats: src-tauri/src/interchange.rs.
+export type TextFormat = "elan" | "flextext" | "textgrid";
+export type LexiconFormat = "lift" | "toolbox";
+/** `text`: the text to show afterwards; `lexicon`: the lexicon changed; `lines`: what happened, in words. */
+export type Imported = { format: string; text: string | null; lexicon: boolean; lines: string[] };
+export type Exported = { path: string; notes: string[] };
+export type Sealed = { path: string; files: number; bytes: number; texts: number; lexemes: number; restricted: boolean };
+export const importFile = (args: { path: string }) => invoke<Imported>("import_file", args);
+export const exportText = (args: { textId: string; format: TextFormat; folder: string }) => invoke<Exported>("export_text", args);
+export const exportLexicon = (args: { format: LexiconFormat; folder: string }) => invoke<Exported>("export_lexicon", args);
+/** `date`: today on this computer's calendar (YYYY-MM-DD), which names the package folder. */
+export const sealProject = (args: { folder: string; date: string }) => invoke<Sealed>("seal_project", args);
 // Corrections export: src-tauri/src/corrections.rs (roadmap 57).
 /** `recordedNo`: a consent record says no to AI use; `restricted`: a restricted or community access level. Both start left out; the person decides. */
 /** `partial`: why this device may not know every consent record (a guest, records still arriving), or null. */
