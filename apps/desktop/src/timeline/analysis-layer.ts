@@ -11,8 +11,17 @@ import type { Viewport } from "./viewport";
 const KEEP_CHUNKS = 60;
 
 const FALLBACK: Record<Kind, string> = { pitch: "#1f5fbf", intensity: "#c9a400", formants: "#c0392b" };
-/** A curve's colour from the design tokens (--pitch, --intensity, --formants). */
-const color = (kind: Kind): string => token(`--${kind}`, FALLBACK[kind]);
+/** Colours from the design tokens (--pitch, --intensity, --formants, --muted),
+ * read once: the draw loop runs every frame and must not query styles. */
+let palette: (Record<Kind, string> & { muted: string }) | null = null;
+const colors = () =>
+  (palette ??= {
+    pitch: token("--pitch", FALLBACK.pitch),
+    intensity: token("--intensity", FALLBACK.intensity),
+    formants: token("--formants", FALLBACK.formants),
+    muted: token("--muted", "#7a756c"),
+  });
+const color = (kind: Kind): string => colors()[kind];
 
 export class AnalysisLayer {
   private source: string | null = null;
@@ -184,7 +193,7 @@ export class AnalysisLayer {
 
   private note(ctx: CanvasRenderingContext2D, v: Viewport, top: number, text: string): void {
     ctx.font = "11px system-ui";
-    ctx.fillStyle = token("--muted", "#7a756c");
+    ctx.fillStyle = colors().muted;
     ctx.textAlign = "right";
     ctx.fillText(text, v.widthPx - 70, top + 12);
     ctx.textAlign = "left";

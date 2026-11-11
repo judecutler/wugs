@@ -59,8 +59,9 @@ function renderTop() {
     h("option", { value: "check", textContent: "Check for updates now (Online)" }),
     h("option", { value: "auto", textContent: autoChecks() ? "Stop checking at start (Online)" : "Check at start (Online)" }),
   );
+  const logo = brandLogo();
   top.replaceChildren(
-    ...[brandLogo()].filter((x): x is HTMLImageElement => x !== null),
+    ...(logo === null ? [] : [logo]),
     h("strong", { className: "brand", textContent: kit?.name ?? "wugs", title: kit === null ? "wugs" : `wugs: ${kit.name}${kit.subtitle === "" ? "" : `, ${kit.subtitle.toLowerCase()}`}` }),
     h("span", { className: "subtitle", textContent: kit?.subtitle ?? "" }),
     who,

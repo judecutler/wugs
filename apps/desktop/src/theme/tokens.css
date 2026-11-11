@@ -2,7 +2,8 @@
  * The UI revamp (roadmap 60) changes values here, not across the
  * stylesheet; a kit can later override any of them on :root. The canvas
  * views (timeline, analysis overlays, level meter) read the same tokens
- * through src/theme/tokens.ts. */
+ * through src/theme/tokens.ts, once per view: a token the canvas reads must
+ * be a literal, never a var() (getComputedStyle returns var() unresolved). */
 :root {
   /* surfaces */
   --bg: #fbfaf7;              /* the workspace behind panels */
