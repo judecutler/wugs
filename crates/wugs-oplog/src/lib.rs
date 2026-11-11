@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, BufWriter, Seek, SeekFrom, Write};
 use std::path::PathBuf;
 
 use wugs_model::Op;
@@ -95,6 +95,13 @@ impl LogDir {
     /// Each per-device file is append-ordered by that device's clock, so a
     /// k-way merge over files yields the global order without sorting.
     pub fn stream_all(&self) -> std::io::Result<OpStream> {
+        self.stream_from(&HashMap::new())
+    }
+
+    /// `stream_all` with each file read from a byte offset (`OpStream::ends`
+    /// of an earlier read, keyed `<scope dir>/<file>`): what was appended
+    /// since. An offset past a file's end reads that file whole.
+    pub fn stream_from(&self, starts: &HashMap<String, u64>) -> std::io::Result<OpStream> {
         let mut paths = Vec::new();
         let log_root = self.log_root();
         if log_root.exists() {
@@ -106,7 +113,13 @@ impl LogDir {
                 for file_entry in fs::read_dir(&scope_dir)? {
                     let path = file_entry?.path();
                     if path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
-                        paths.push(path);
+                        let key = format!(
+                            "{}/{}",
+                            scope_entry_name(&scope_dir),
+                            path.file_name().and_then(|n| n.to_str()).unwrap_or("")
+                        );
+                        let start = starts.get(&key).copied().unwrap_or(0);
+                        paths.push((key, path, start));
                     }
                 }
             }
@@ -115,9 +128,17 @@ impl LogDir {
     }
 }
 
+fn scope_entry_name(dir: &std::path::Path) -> &str {
+    dir.file_name().and_then(|n| n.to_str()).unwrap_or("")
+}
+
 /// K-way merged streaming reader over per-device log files.
 pub struct OpStream {
-    readers: Vec<std::io::Lines<BufReader<File>>>,
+    readers: Vec<BufReader<File>>,
+    keys: Vec<String>,
+    /// Per file, the byte offset just past its last newline-ended line read
+    /// so far: a torn tail is never counted as read.
+    ends: Vec<u64>,
     pending_bad: Vec<bool>,
     /// (hlc, id, reader index) min-heap
     heap: std::collections::BinaryHeap<std::cmp::Reverse<(String, String, usize)>>,
@@ -127,17 +148,24 @@ pub struct OpStream {
 }
 
 impl OpStream {
-    fn open(paths: Vec<PathBuf>) -> std::io::Result<OpStream> {
+    fn open(paths: Vec<(String, PathBuf, u64)>) -> std::io::Result<OpStream> {
         let mut s = OpStream {
             readers: Vec::with_capacity(paths.len()),
+            keys: Vec::with_capacity(paths.len()),
+            ends: Vec::with_capacity(paths.len()),
             pending_bad: vec![false; paths.len()],
             heap: std::collections::BinaryHeap::new(),
             current: Vec::with_capacity(paths.len()),
             corrupt_lines: 0,
             truncated_tails: 0,
         };
-        for path in paths {
-            s.readers.push(BufReader::new(File::open(path)?).lines());
+        for (key, path, start) in paths {
+            let mut f = File::open(path)?;
+            let start = if start <= f.metadata()?.len() { start } else { 0 };
+            f.seek(SeekFrom::Start(start))?;
+            s.readers.push(BufReader::new(f));
+            s.keys.push(key);
+            s.ends.push(start);
             s.current.push(None);
         }
         for i in 0..s.readers.len() {
@@ -147,8 +175,23 @@ impl OpStream {
     }
 
     fn refill(&mut self, idx: usize) -> std::io::Result<()> {
+        let mut buf = Vec::new();
         loop {
-            match self.readers[idx].next() {
+            buf.clear();
+            let n = self.readers[idx].read_until(b'\n', &mut buf)?;
+            let line = if n == 0 {
+                None
+            } else {
+                if buf.last() == Some(&b'\n') {
+                    self.ends[idx] += n as u64;
+                }
+                // As `lines()` did: the line ending is not part of the line,
+                // and bytes that are not UTF-8 make a line that fails to parse.
+                let text = buf.strip_suffix(b"\n").unwrap_or(&buf);
+                let text = text.strip_suffix(b"\r").unwrap_or(text);
+                Some(String::from_utf8_lossy(text).into_owned())
+            };
+            match line {
                 None => {
                     if self.pending_bad[idx] {
                         self.truncated_tails += 1;
@@ -157,7 +200,6 @@ impl OpStream {
                     return Ok(());
                 }
                 Some(line) => {
-                    let line = line?;
                     if line.trim().is_empty() {
                         continue;
                     }
@@ -185,6 +227,12 @@ impl OpStream {
                 }
             }
         }
+    }
+
+    /// Per file (`<scope dir>/<file>`), where the lines read so far end;
+    /// complete once `next_op` has returned `None`.
+    pub fn ends(&self) -> impl Iterator<Item = (&str, u64)> {
+        self.keys.iter().map(String::as_str).zip(self.ends.iter().copied())
     }
 
     pub fn next_op(&mut self) -> std::io::Result<Option<Op>> {
@@ -262,6 +310,40 @@ mod tests {
         for w in report.ops.windows(2) {
             assert!((w[0].hlc.as_str(), w[0].id.as_str()) <= (w[1].hlc.as_str(), w[1].id.as_str()));
         }
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn stream_from_reads_what_was_appended_since_and_never_a_torn_tail() {
+        let root = temp_root();
+        let log = LogDir::new(&root);
+        let mut clock = Clock::new("dvc_A".into());
+        log.append(&mk_op(&mut clock, "lexicon", "dvc_A")).unwrap();
+        let mut first = log.stream_all().unwrap();
+        while first.next_op().unwrap().is_some() {}
+        let ends: HashMap<String, u64> = first.ends().map(|(k, e)| (k.to_string(), e)).collect();
+        let path = root.join("log").join("lexicon").join("dvc_A.jsonl");
+        assert_eq!(ends["lexicon/dvc_A.jsonl"], fs::metadata(&path).unwrap().len());
+
+        let later = mk_op(&mut clock, "lexicon", "dvc_A");
+        log.append(&later).unwrap();
+        let mut f = OpenOptions::new().append(true).open(&path).unwrap();
+        f.write_all(b"{\"id\":\"op_trunc").unwrap();
+        drop(f);
+        let mut since = log.stream_from(&ends).unwrap();
+        assert_eq!(since.next_op().unwrap().map(|o| o.id), Some(later.id));
+        assert!(since.next_op().unwrap().is_none());
+        assert_eq!(since.truncated_tails, 1);
+        let end = since.ends().next().unwrap().1;
+        assert_eq!(end, fs::metadata(&path).unwrap().len() - b"{\"id\":\"op_trunc".len() as u64, "the torn tail is not counted as read");
+
+        let past_the_end = HashMap::from([("lexicon/dvc_A.jsonl".to_string(), u64::MAX)]);
+        let mut whole = log.stream_from(&past_the_end).unwrap();
+        let mut n = 0;
+        while whole.next_op().unwrap().is_some() {
+            n += 1;
+        }
+        assert_eq!(n, 2, "an end past the file reads it whole");
         fs::remove_dir_all(root).ok();
     }
 

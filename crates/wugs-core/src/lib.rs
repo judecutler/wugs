@@ -199,11 +199,13 @@ impl Project {
 
     /// Apply every log op the cache lacks, in log order, in one transaction:
     /// a crash between a commit's log append and its savepoint release
-    /// leaves ops in the log that the cache never saw. `Projection::apply`
-    /// skips applied ops and re-parks pending ones as a no-op, so this is
-    /// the replay itself on a warm cache. Unlike a rebuild it does not
-    /// refuse a corrupt line: the cache already holds what it held, and
-    /// opening must not get worse because the log did.
+    /// leaves ops in the log that the cache never saw. It is the replay run
+    /// on a warm cache from where the last replay or catch-up stopped
+    /// reading each file (`Projection::log_ends`), so it reads what the
+    /// last session wrote, not the whole log; `Projection::apply` skips the
+    /// applied ops among them and re-parks pending ones as a no-op. Unlike a
+    /// rebuild it does not refuse a corrupt line: the cache already holds
+    /// what it held, and opening must not get worse because the log did.
     fn catch_up(&mut self) -> Result<usize, String> {
         let stats = self.apply_log(false)?;
         // A crash inside a held txn's retry leaves its ops logged and its
@@ -214,8 +216,11 @@ impl Project {
         Ok(stats.applied)
     }
 
-    fn apply_log(&mut self, refuse_corrupt: bool) -> Result<ApplyStats, String> {
-        let mut stream = self.log.stream_all().map_err(|e| e.to_string())?;
+    /// A rebuild reads every file whole; a catch-up
+    /// reads from the recorded ends.
+    fn apply_log(&mut self, rebuild: bool) -> Result<ApplyStats, String> {
+        let starts = if rebuild { Default::default() } else { self.proj.log_ends()? };
+        let mut stream = self.log.stream_from(&starts).map_err(|e| e.to_string())?;
         let mut stats = ApplyStats::default();
         self.proj.begin()?;
         let mut applied = Ok(());
@@ -236,11 +241,14 @@ impl Project {
                 self.clock.absorb(&h);
             }
         }
-        if applied.is_ok() && refuse_corrupt && stream.corrupt_lines > 0 {
+        if applied.is_ok() && rebuild && stream.corrupt_lines > 0 {
             applied = Err(format!(
                 "log corruption: {} bad non-tail lines — refusing to replay silently",
                 stream.corrupt_lines
             ));
+        }
+        if applied.is_ok() {
+            applied = stream.ends().try_for_each(|(file, end)| self.proj.set_log_end(file, end));
         }
         if let Err(e) = applied {
             self.proj.rollback()?;
@@ -1606,6 +1614,12 @@ mod tests {
         let txt = p.create_text("Story").unwrap();
         let seg = p.add_segment(&txt, "tir_utt", 0, Some(0.0), Some(900.0), "first").unwrap().0;
         p.edit_content(&txt, &seg, "typed").unwrap();
+        drop(p);
+        // The reopen records where it read each file to; the crash below
+        // appends past that, in files the catch-up reads only the end of.
+        let mut p = Project::open(&root, "prs_Alice").unwrap();
+        assert_eq!(p.caught_up(), 0);
+        p.edit_content(&txt, &seg, "typed once more").unwrap();
 
         let mut t = p.intent("set-title");
         t.set("text", &txt, &txt, "title", Value::str("Story, retold")).unwrap();
