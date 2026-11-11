@@ -35,7 +35,7 @@
     "shortDescription": "Local-first fieldwork linguistics",
     "longDescription": "wugs Tongues keeps a recording, its transcription, glosses and the dictionary in one connected, offline-first project with its edit history preserved.",
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": false
   },
   "plugins": {
     "updater": {

@@ -640,6 +640,30 @@ fn capture_rejects_bad_input_and_only_discard_deletes() {
     assert!(session::list_sources(&mut s).unwrap().is_empty());
 }
 
+/// The updater's guard: refused while a take is open (even one stopped and
+/// unsaved), and while it is held no take can begin.
+#[test]
+fn no_take_begins_while_the_updater_holds_the_capture_table() {
+    let (_dir, mut s) = created("prs_Alice");
+    let caps = std::sync::Arc::new(Captures::default());
+    let root = session::project_root(&mut s).unwrap();
+    let id = caps.begin(&root, 8_000, 1).unwrap();
+    caps.finish(&id).unwrap();
+    assert!(caps.none_open().unwrap().is_none(), "a stopped, unsaved take still blocks");
+    caps.discard(&id).unwrap();
+
+    let guard = caps.none_open().unwrap().expect("no take is open");
+    let (began, done) = std::sync::mpsc::channel();
+    let (c, r) = (caps.clone(), root.clone());
+    let t = std::thread::spawn(move || began.send(c.begin(&r, 8_000, 1)).unwrap());
+    assert!(done.recv_timeout(std::time::Duration::from_millis(200)).is_err(), "begin waits while the guard is held");
+    drop(guard);
+    let id = done.recv().unwrap().unwrap();
+    t.join().unwrap();
+    assert!(caps.none_open().unwrap().is_none());
+    caps.discard(&id).unwrap();
+}
+
 #[test]
 fn nothing_sweeps_old_pending_recordings() {
     let (dir, mut s) = created("prs_Alice");

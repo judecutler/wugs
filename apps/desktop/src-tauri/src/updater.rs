@@ -3,16 +3,18 @@
 //! announced update and its downloaded bytes on this side. Nothing downloads
 //! until the person asks, the plugin verifies the minisign signature against
 //! the public key in tauri.conf.json, and installing refuses while a
-//! recording is open.
+//! recording is open. Before the process goes, the session thread finishes
+//! its queued commands and closes the project.
 
 use std::sync::Mutex;
 use std::time::Duration;
 
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 use crate::capture::Captures;
+use crate::SessionThread;
 
 /// Same words as the window-close guard in `src/capture/take.ts`.
 pub const RECORDING_BLOCKS: &str = "A recording is in progress, stop it first";
@@ -67,11 +69,35 @@ fn remote_size(url: &str) -> Option<u64> {
     response.headers().get("content-length")?.to_str().ok()?.parse().ok()
 }
 
+/// Let the session thread finish every command already queued, then close
+/// the project (its SQLite cache and the per-project lock) so nothing is cut
+/// off mid-write when the process exits for the update.
+fn close_session(thread: &SessionThread) {
+    thread
+        .run(|s| {
+            *s = None;
+            Ok(())
+        })
+        .ok();
+}
+
 /// Ask the release endpoint once; `available` is set only when it is newer.
 #[tauri::command]
 pub async fn update_check(app: AppHandle, staged: State<'_, Staged>) -> Result<Checked, String> {
     let current_version = app.package_info().version.to_string();
-    let updater = app.updater().map_err(|e| e.to_string())?;
+    // On Windows `install` starts the installer and calls process::exit
+    // itself, after this hook. It replaces the plugin's default hook, so it
+    // runs that one's cleanup too.
+    let thread = app.state::<SessionThread>().inner().clone();
+    let handle = app.clone();
+    let updater = app
+        .updater_builder()
+        .on_before_exit(move || {
+            close_session(&thread);
+            handle.cleanup_before_exit();
+        })
+        .build()
+        .map_err(|e| e.to_string())?;
     let Some(update) = updater.check().await.map_err(|e| e.to_string())? else {
         *lock(&staged)? = None;
         return Ok(Checked { current_version, available: None });
@@ -120,13 +146,15 @@ pub async fn update_download(app: AppHandle, staged: State<'_, Staged>) -> Resul
 }
 
 /// Install the downloaded update and start the new version. Refused while a
-/// recording is open. On Windows the installer takes over and this process
-/// exits inside `install`; elsewhere the app restarts here.
+/// recording is open, and no recording can start until the process is gone:
+/// the capture table stays locked through install and restart. On Windows
+/// the installer takes over and this process exits inside `install` (after
+/// the hook set in `update_check`); elsewhere the app restarts here.
 #[tauri::command]
-pub fn update_install(app: AppHandle, staged: State<'_, Staged>, captures: State<'_, Captures>) -> Result<(), String> {
-    if captures.open_count()? > 0 {
+pub fn update_install(app: AppHandle, staged: State<'_, Staged>, captures: State<'_, Captures>, thread: State<'_, SessionThread>) -> Result<(), String> {
+    let Some(_no_new_takes) = captures.none_open()? else {
         return Err(RECORDING_BLOCKS.into());
-    }
+    };
     {
         let slot = lock(&staged)?;
         let Some((update, Some(bytes))) = slot.as_ref() else {
@@ -134,6 +162,7 @@ pub fn update_install(app: AppHandle, staged: State<'_, Staged>, captures: State
         };
         update.install(bytes).map_err(|e| e.to_string())?;
     }
+    close_session(&thread);
     app.restart()
 }
 
@@ -159,9 +188,11 @@ mod tests {
         serde_json::from_str(text).expect("valid JSON")
     }
 
-    /// The shipped config checks GitHub's latest release, verifies with the
-    /// owner's key and builds signed updater artifacts; the override the
-    /// unsigned CI builds pass turns only the artifacts off.
+    /// The shipped config checks GitHub's latest release and verifies with
+    /// the owner's key. The build never signs: `tauri build` would need the
+    /// key in the environment of every build script, so the release
+    /// workflow's separate `sign` job signs the payloads (DECISIONS
+    /// 2026-11-10).
     #[test]
     fn shipped_config_points_at_github_with_the_release_key() {
         let conf = config(include_str!("../tauri.conf.json"));
@@ -169,8 +200,6 @@ mod tests {
         assert_eq!(updater["endpoints"], serde_json::json!(["https://github.com/judecutler/wugs/releases/latest/download/latest.json"]));
         assert!(updater["pubkey"].as_str().is_some_and(|k| k.starts_with("dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWdu")));
         assert_eq!(updater["requireSignedVersion"], true);
-        assert_eq!(conf["bundle"]["createUpdaterArtifacts"], true);
-        let unsigned = config(include_str!("../tauri.unsigned.conf.json"));
-        assert_eq!(unsigned, serde_json::json!({ "bundle": { "createUpdaterArtifacts": false } }));
+        assert_eq!(conf["bundle"]["createUpdaterArtifacts"], false);
     }
 }

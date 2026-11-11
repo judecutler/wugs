@@ -53,14 +53,15 @@ async function download() {
     return;
   }
   dispatch({ type: "download" });
-  const unlisten = await onUpdateProgress((p) => dispatch({ type: "progress", done: p.done, total: p.total }));
+  let unlisten: (() => void) | null = null;
   try {
+    unlisten = await onUpdateProgress((p) => dispatch({ type: "progress", done: p.done, total: p.total }));
     await updateDownload();
   } catch (e) {
     dispatch({ type: "failed", message: `The download failed: ${errorText(e)}` });
     return;
   } finally {
-    unlisten();
+    unlisten?.();
   }
   dispatch({ type: "downloaded", message: null });
   await install();
