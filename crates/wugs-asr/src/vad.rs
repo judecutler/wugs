@@ -64,7 +64,7 @@ impl Params {
     /// A short stable name for these settings, for cache keys.
     pub fn key(&self) -> String {
         format!(
-            "e2-f{}-m{}-q{}-s{}-g{}-p{}",
+            "e3-f{}-m{}-q{}-s{}-g{}-p{}",
             self.frame_ms, self.margin_db, self.floor_quantile, self.min_speech_ms, self.min_silence_ms, self.pad_ms
         )
     }
@@ -97,6 +97,15 @@ impl Granularity {
         }
     }
 }
+
+/// How far from the noise floor up to the speech level (the 95th
+/// percentile frame) the speech threshold sits, at least; see
+/// [`spans_from_levels`].
+const RELATIVE_SHARE: f32 = 0.55;
+
+/// How far an edge may reach outward over quiet speech (a soft onset or
+/// release) beyond the loud core, before padding.
+const EDGE_REACH_MS: f64 = 200.0;
 
 /// Levels at or below this are digital silence; the floor never goes lower,
 /// or a recording with zeroed stretches would call its breaths speech.
@@ -190,7 +199,12 @@ pub fn spans_from_levels(levels: &[f32], frame_ms: f64, params: Params, duration
     // in, they would pull the floor down and make the hiss look like speech.
     let audible = &sorted[sorted.partition_point(|&l| l <= FLOOR_DB)..];
     let floor = if audible.is_empty() { FLOOR_DB } else { quantile(audible, params.floor_quantile).max(FLOOR_DB) };
-    let threshold = floor + params.margin_db;
+    // Fixed dB over the floor alone fails on real recordings: room echo and
+    // a phone's gain control keep the dips between words 15-25 dB above the
+    // lead-in hiss, so every gap read as speech (Tagalog counting, Windows
+    // hand check, 2026-11-10). The threshold also sits a share of the way
+    // from the floor up to the speech level, so the dips fall below it.
+    let threshold = (floor + params.margin_db).max(floor + RELATIVE_SHARE * (loud - floor));
     let fm = frame_ms;
 
     // Speech runs, in frames.
@@ -227,16 +241,40 @@ pub fn spans_from_levels(levels: &[f32], frame_ms: f64, params: Params, duration
     }
     joined.retain(|(s, e)| e - s >= params.min_speech_ms);
 
-    // Pad, clamped to the recording, and never closing a pause: each side
-    // takes at most a quarter of the gap, so half of it stays silence.
-    let mut out = Vec::with_capacity(joined.len());
-    for i in 0..joined.len() {
-        let (s, e) = joined[i];
-        let lo = match i.checked_sub(1).map(|j| joined[j]) {
+    // Soft edges: the threshold above finds the loud core of each word, so a
+    // quiet onset or release (a fricative, a breathy vowel) can sit below
+    // it. Each edge reaches outward over frames still clearly above the
+    // room (floor + margin), up to EDGE_REACH_MS, then the padding follows.
+    let low = floor + params.margin_db;
+    let reach = |from_ms: f64, step: isize| -> f64 {
+        let mut i = (from_ms / fm).floor() as isize + if step < 0 { -1 } else { 0 };
+        let mut got = 0.0;
+        while got < EDGE_REACH_MS && i >= 0 && (i as usize) < levels.len() && levels[i as usize] > low {
+            got += fm;
+            i += step;
+        }
+        got
+    };
+    // First reach over quiet speech (each side at most a third of the gap
+    // between cores, so a dip that never falls to the room's level still
+    // leaves a third of it), then pad by at most a quarter of what is left.
+    let n = joined.len();
+    let gap_before = |i: usize| if i == 0 { f64::INFINITY } else { joined[i].0 - joined[i - 1].1 };
+    let gap_after = |i: usize| if i + 1 == n { f64::INFINITY } else { joined[i + 1].0 - joined[i].1 };
+    let reached: Vec<(f64, f64)> = (0..n)
+        .map(|i| {
+            let (s, e) = joined[i];
+            (s - reach(s, -1).min(gap_before(i) / 3.0), e + reach(e, 1).min(gap_after(i) / 3.0))
+        })
+        .collect();
+    let mut out = Vec::with_capacity(n);
+    for i in 0..n {
+        let (s, e) = reached[i];
+        let lo = match i.checked_sub(1).map(|j| reached[j]) {
             Some((_, prev_end)) => s - params.pad_ms.min((s - prev_end) / 4.0),
             None => (s - params.pad_ms).max(0.0),
         };
-        let hi = match joined.get(i + 1) {
+        let hi = match reached.get(i + 1) {
             Some(&(next_start, _)) => e + params.pad_ms.min((next_start - e) / 4.0),
             None => (e + params.pad_ms).min(duration_ms),
         };
@@ -410,6 +448,18 @@ mod tests {
             }
             std::fs::remove_dir_all(path.parent().unwrap()).ok();
         }
+    }
+
+    #[test]
+    fn words_split_where_the_dips_stay_well_above_the_room() {
+        // A real phone recording (Tagalog counting, hand check 2026-11-10):
+        // the lead-in hiss sits near -60 dB but echo keeps the dips between
+        // words near -40 dB, 20 dB over the floor. Three words with such dips.
+        let dip = 0.012;
+        let path = wav("echo", 1, &[(500.0, 0.0), (350.0, 0.3), (150.0, dip), (350.0, 0.3), (150.0, dip), (350.0, 0.3), (400.0, 0.0)], 0.001);
+        let spans = speech_spans(&path, Granularity::Words.params()).unwrap();
+        assert_eq!(spans.len(), 3, "{spans:?}");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     #[test]
