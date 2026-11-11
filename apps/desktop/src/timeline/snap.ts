@@ -14,23 +14,22 @@ export type Span = readonly [number, number];
 export const SNAP_MS = 250;
 
 /**
- * Where an edge at `ms` lands. A start goes to the latest speech start at or
- * before it within `tolMs`; an end to the earliest speech end at or after it.
- * `bound` keeps the jump off a neighbour: a start never goes before it, an
- * end never past it. No candidate, no move.
+ * Where an edge at `ms` lands. Only an edge that falls inside a stretch of
+ * speech moves: a start to that stretch's start, an end to its end, when
+ * that is within `tolMs`. An edge in a pause stays, so a box drawn over one
+ * word never grows over the word before or after it (word spans are short,
+ * so "the nearest start within 250 ms" would often be the previous word's).
+ * `bound` keeps the jump off a neighbouring segment. No candidate, no move.
  */
 export function snapEdge(edge: "start" | "end", ms: number, spans: readonly Span[], tolMs = SNAP_MS, bound?: number): number {
-  let best = ms;
-  let bestDist = Infinity;
   for (const [s, e] of spans) {
+    if (!(ms > s && ms < e)) continue;
     const point = edge === "start" ? s : e;
-    const dist = edge === "start" ? ms - point : point - ms;
-    if (dist < 0 || dist > tolMs || dist >= bestDist) continue;
-    if (bound !== undefined && (edge === "start" ? point < bound : point > bound)) continue;
-    best = point;
-    bestDist = dist;
+    if (Math.abs(ms - point) > tolMs) return ms;
+    if (bound !== undefined && (edge === "start" ? point < bound : point > bound)) return ms;
+    return point;
   }
-  return best;
+  return ms;
 }
 
 /**

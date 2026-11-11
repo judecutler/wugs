@@ -108,7 +108,8 @@ impl Project {
             return Err(if checks.len() == 1 {
                 "That segment was edited since (here, in another panel or on another device), so this step was skipped to keep that work.".to_string()
             } else {
-                format!("{changed} of the segments were edited since (here, in another panel or on another device), so this step was skipped to keep that work.")
+                let (noun, verb) = if changed == 1 { ("segment", "was") } else { ("segments", "were") };
+                format!("{changed} {noun} {verb} edited since (here, in another panel or on another device), so this step was skipped to keep that work.")
             });
         }
         for c in checks {
@@ -467,7 +468,10 @@ mod tests {
         p.require_unchanged(&checks).unwrap();
         // Transcribed elsewhere (the Transcribe panel), then words made (Gloss).
         p.edit_content(&txt, &b, "geldi").unwrap();
-        assert!(p.require_unchanged(&checks).unwrap_err().contains("edited since"));
+        assert!(p.require_unchanged(&checks).unwrap_err().starts_with("1 segment was edited since"));
+        p.edit_content(&txt, &a, "köpek").unwrap();
+        assert!(p.require_unchanged(&checks).unwrap_err().starts_with("2 segments were edited since"));
+        p.edit_content(&txt, &a, "").unwrap();
         let (gone, kept, res) = p.delete_unchanged_segments(&txt, &checks).unwrap();
         assert_eq!((gone, kept, res.ops), (vec![a.clone()], vec![b.clone()], 1), "only the untouched one goes");
         assert_eq!(row(&p, &b), (1000.0, 2000.0, "geldi".into(), false));
