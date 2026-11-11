@@ -84,3 +84,12 @@ test("inside a long utterance, a drawn edge snaps to the nearest word edge outwa
   // Trimming the start of "apat" inward stays where it was put.
   assert.equal(snapDragged("start", 2850, 2780, words), 2850);
 });
+
+test("an edge snaps only to the word it falls in, never over a neighbouring word", () => {
+  const words: Span[] = [[1000, 1150], [1250, 1400], [1500, 1700]];
+  assert.equal(snapEdge("start", 1200, words), 1200, "a start in a pause stays");
+  assert.deepEqual(snapRange(1210, 1440, words), { startMs: 1210, endMs: 1440 }, "a box over word 2 keeps its pause edges");
+  assert.equal(snapEdge("end", 1450, words), 1450);
+  assert.equal(snapEdge("start", 1300, words), 1250, "a start inside word 2 goes to its start");
+  assert.equal(snapEdge("end", 1600, words), 1700, "an end inside word 3 goes to its end");
+});

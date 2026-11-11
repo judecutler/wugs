@@ -9,10 +9,10 @@ const lane = [
   { id: "b", startMs: 1200, endMs: 2000 },
 ];
 
-test("no recording: neither Split nor Merge, and the reason says so", () => {
+test("no recording: no Split (it cuts at the playhead), but Merge needs no audio", () => {
   const r = editRules(false, lane[1]!, lane);
   assert.equal(r.split, "Load a recording first.");
-  assert.equal(r.merge, "Load a recording first.");
+  assert.equal(r.merge, null);
 });
 
 test("no selected (or untimed) segment: neither", () => {

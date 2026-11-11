@@ -24,21 +24,23 @@ export function nextTimed(lane: readonly Timed[], segId: string): string | null 
 }
 
 /**
- * What Split and Merge can do: both need a recording and a selected timed
- * segment; Merge also needs a timed next segment on the same track.
+ * What Split and Merge can do: both need a selected timed segment; Split
+ * also needs a recording (it cuts at the playhead), Merge a timed next
+ * segment on the same track.
  * `selected` is the selected segment, `lane` the segments of its track.
  */
 export function editRules(hasRecording: boolean, selected: Timed | null, lane: readonly Timed[]): EditRules {
-  if (!hasRecording) {
-    const why = "Load a recording first.";
-    return { split: why, merge: why, next: null };
-  }
   if (selected === null || selected.startMs === null || selected.endMs === null) {
     const why = "Select a segment on the timeline first.";
-    return { split: why, merge: why, next: null };
+    return { split: hasRecording ? why : "Load a recording first.", merge: why, next: null };
   }
   const next = nextTimed(lane, selected.id);
-  return { split: null, merge: next === null ? "There is no next segment on this track to merge with." : null, next };
+  return {
+    // Split cuts at the playhead, which needs the recording; merging needs no audio.
+    split: hasRecording ? null : "Load a recording first.",
+    merge: next === null ? "There is no next segment on this track to merge with." : null,
+    next,
+  };
 }
 
 /** How Auto-segment cuts a recording: one segment per utterance or per word. */

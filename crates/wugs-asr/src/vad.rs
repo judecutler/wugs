@@ -4,16 +4,21 @@
 //!
 //! Energy-based: the recording is read once, streamed in fixed buffers
 //! (an hours-long WAV is never held in memory), mixed to mono, and measured
-//! in short frames as RMS level in dBFS. A frame is speech when it is a
+//! in short frames as RMS level in dBFS. A frame is speech when it is both a
 //! margin above the recording's own noise floor (a low percentile of the
-//! frame levels, digital silence left out), so a hissy field recording and
-//! a clean studio one both work. With no contrast at all, a recording is
+//! frame levels, digital silence left out) and at least 55% of the way from
+//! that floor up to the local speech level (the 95th percentile within
+//! 1.5 s), so a hissy field recording and a clean studio one both work,
+//! echoey dips between words still count as pauses, and a soft speaker is
+//! judged against their own loudness. With no contrast at all, a recording is
 //! speech throughout only when it is loud (room tone is not speech). Speech runs separated by less than a real pause are joined (the
 //! hangover: stops and short closures inside a word stay inside it), runs
 //! too short to be a syllable are dropped, and each span is padded so a
-//! quiet onset such as the fricative of "three" is kept inside it. Pads
-//! never close a pause the split rule kept: each side takes at most a
-//! quarter of it, so at least half the pause stays between two spans.
+//! quiet onset such as the fricative of "three" is kept inside it: each edge
+//! first reaches outward over frames still above floor + margin (soft onsets
+//! and releases, up to 200 ms, at most a third of the gap per side), then is
+//! padded by at most a quarter of what is left. So at least a sixth of every
+//! pause the split rule kept stays between two spans.
 //!
 //! Two [`Granularity`] presets: utterances split only at real pauses
 //! (~250 ms), words also at the short pauses between words said one by one
@@ -64,8 +69,8 @@ impl Params {
     /// A short stable name for these settings, for cache keys.
     pub fn key(&self) -> String {
         format!(
-            "e3-f{}-m{}-q{}-s{}-g{}-p{}",
-            self.frame_ms, self.margin_db, self.floor_quantile, self.min_speech_ms, self.min_silence_ms, self.pad_ms
+            "e4-f{}-m{}-q{}-s{}-g{}-p{}-r{}-w{}-e{}",
+            self.frame_ms, self.margin_db, self.floor_quantile, self.min_speech_ms, self.min_silence_ms, self.pad_ms, RELATIVE_SHARE, LOCAL_MS, EDGE_REACH_MS
         )
     }
 }
@@ -102,6 +107,31 @@ impl Granularity {
 /// percentile frame) the speech threshold sits, at least; see
 /// [`spans_from_levels`].
 const RELATIVE_SHARE: f32 = 0.55;
+
+/// The speech level for the relative threshold is the 95th percentile of
+/// the frames within this many ms either side.
+const LOCAL_MS: f64 = 1500.0;
+
+/// Each frame's local speech level: the 95th percentile of the audible frames
+/// within LOCAL_MS either side, worked out once per block of frames (a
+/// quarter second) so hours of audio stay cheap.
+fn local_loud(levels: &[f32], frame_ms: f64, floor: f32) -> Vec<f32> {
+    let n = levels.len();
+    let half = ((LOCAL_MS / frame_ms).round() as usize).max(1);
+    let block = ((250.0 / frame_ms).round() as usize).max(1);
+    let mut out = vec![floor; n];
+    let mut start = 0;
+    while start < n {
+        let end = (start + block).min(n);
+        let (lo, hi) = (start.saturating_sub(half), (end + half).min(n));
+        let mut window: Vec<f32> = levels[lo..hi].to_vec();
+        window.sort_by(f32::total_cmp);
+        let level = quantile(&window, 0.95).max(floor);
+        out[start..end].fill(level);
+        start = end;
+    }
+    out
+}
 
 /// How far an edge may reach outward over quiet speech (a soft onset or
 /// release) beyond the loud core, before padding.
@@ -203,15 +233,19 @@ pub fn spans_from_levels(levels: &[f32], frame_ms: f64, params: Params, duration
     // a phone's gain control keep the dips between words 15-25 dB above the
     // lead-in hiss, so every gap read as speech (Tagalog counting, Windows
     // hand check, 2026-11-10). The threshold also sits a share of the way
-    // from the floor up to the speech level, so the dips fall below it.
-    let threshold = (floor + params.margin_db).max(floor + RELATIVE_SHARE * (loud - floor));
+    // from the floor up to the speech level, so the dips fall below it. The
+    // speech level is measured locally (LOCAL_MS around each frame), so a
+    // soft speaker far from the mic is judged against their own loudness,
+    // not a close-miked interviewer's.
     let fm = frame_ms;
+    let local = local_loud(levels, fm, floor);
+    let threshold_at = |i: usize| (floor + params.margin_db).max(floor + RELATIVE_SHARE * (local[i] - floor));
 
     // Speech runs, in frames.
     let mut runs: Vec<(usize, usize)> = Vec::new();
     let mut open: Option<usize> = None;
     for (i, &l) in levels.iter().enumerate() {
-        match (l > threshold, open) {
+        match (l > threshold_at(i), open) {
             (true, None) => open = Some(i),
             (false, Some(s)) => {
                 runs.push((s, i));
@@ -247,7 +281,7 @@ pub fn spans_from_levels(levels: &[f32], frame_ms: f64, params: Params, duration
     // room (floor + margin), up to EDGE_REACH_MS, then the padding follows.
     let low = floor + params.margin_db;
     let reach = |from_ms: f64, step: isize| -> f64 {
-        let mut i = (from_ms / fm).floor() as isize + if step < 0 { -1 } else { 0 };
+        let mut i = (from_ms / fm).round() as isize + if step < 0 { -1 } else { 0 };
         let mut got = 0.0;
         while got < EDGE_REACH_MS && i >= 0 && (i as usize) < levels.len() && levels[i as usize] > low {
             got += fm;
@@ -448,6 +482,17 @@ mod tests {
             }
             std::fs::remove_dir_all(path.parent().unwrap()).ok();
         }
+    }
+
+    #[test]
+    fn a_soft_speaker_twenty_db_below_the_interviewer_is_still_found() {
+        // Interviewer close to the mic, consultant 20 dB softer, turns 2 s apart.
+        let path = wav("twospeakers", 1, &[(500.0, 0.0), (1500.0, 0.4), (2000.0, 0.0), (1500.0, 0.04), (500.0, 0.0)], 0.001);
+        let spans = speech_spans(&path, Params::default()).unwrap();
+        assert_eq!(spans.len(), 2, "both turns: {spans:?}");
+        let words = speech_spans(&path, Granularity::Words.params()).unwrap();
+        assert!(words.iter().any(|(s, _)| *s > 3500.0), "the soft turn at word level too: {words:?}");
+        std::fs::remove_dir_all(path.parent().unwrap()).ok();
     }
 
     #[test]
