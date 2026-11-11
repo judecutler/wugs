@@ -214,15 +214,39 @@ pub struct OnnxCtcRaw {
 
 /// The hearer for a model package, by its runtime adapter.
 pub fn hearer(app_data: &Path, m: &Manifest) -> Result<Box<dyn Hearer>, String> {
+    let dir = model_dir(app_data, &m.id)?;
     match m.model.runtime.as_str() {
         "onnx-ctc-raw" => Ok(Box::new(OnnxCtcRaw {
-            dir: model_dir(app_data, &m.id)?,
+            dir,
             onnx: m.param_file("onnx")?.to_string(),
             vocab: m.param_file("vocab")?.to_string(),
             normalize: m.param_bool("normalize").unwrap_or(false),
             loaded: None,
         })),
+        "onnx-ctc-fbank" => Ok(Box::new(OnnxCtcFbank { dir, onnx: m.param_file("onnx")?.to_string(), tokens: m.param_file("tokens")?.to_string(), loaded: None })),
         other => Err(format!("{} needs the {other} runtime, which this version of wugs does not have", m.name)),
+    }
+}
+
+/// A downloaded `onnx-ctc-fbank` model (Zipformer-style: 80-bin Kaldi
+/// filterbank features in, CTC log probabilities out; ZIPA), loaded on
+/// first use.
+pub struct OnnxCtcFbank {
+    dir: PathBuf,
+    onnx: String,
+    tokens: String,
+    loaded: Option<wugs_asr::fbank_ctc::FbankRecognizer>,
+}
+
+impl Hearer for OnnxCtcFbank {
+    fn hear(&mut self, wav: &Path, start_ms: f64, end_ms: f64) -> Result<Recognition, String> {
+        if self.loaded.is_none() {
+            let text = fs::read_to_string(self.dir.join(&self.tokens)).map_err(|e| format!("read the model's tokens: {e}"))?;
+            let vocab = Vocab::from_tokens_txt(&text).map_err(|e| e.to_string())?;
+            self.loaded = Some(wugs_asr::fbank_ctc::FbankRecognizer::load(&self.dir.join(&self.onnx), vocab).map_err(|e| e.to_string())?);
+        }
+        let audio = wugs_asr::read_span(wav, start_ms, end_ms).map_err(|e| e.to_string())?;
+        self.loaded.as_ref().expect("loaded above").recognize(&audio).map_err(|e| e.to_string())
     }
 }
 

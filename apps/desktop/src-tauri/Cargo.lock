@@ -6917,6 +6917,7 @@ dependencies = [
 name = "wugs-asr"
 version = "0.0.1"
 dependencies = [
+ "realfft",
  "rubato",
  "serde_json",
  "tract-onnx",
