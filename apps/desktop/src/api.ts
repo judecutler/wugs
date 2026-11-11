@@ -2,6 +2,7 @@
 // src-tauri/src/session.rs, which serialize with camelCase field names.
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import type { SegmentCheck, SegmentState } from "./timeline/undo";
 import type { MorphSpec, Suggestion } from "./gloss/suggest";
 import type { Machine } from "./assist/logic";
 import type { Kit } from "./kits/logic";
@@ -67,6 +68,8 @@ export const conflictCount = () => invoke<number>("conflict_count");
 export type AddedSegment = {
   id: string;
   findings: string[];
+  /** The segments as the edit left them (a split: first, then second), for an undo's check. */
+  states: SegmentState[];
 };
 
 export const addSegment = (args: {
@@ -77,15 +80,47 @@ export const addSegment = (args: {
   content: string;
 }) => invoke<AddedSegment>("add_segment", args);
 
-export const editSegmentContent = (args: { textId: string; segmentId: string; content: string }) =>
+/** With `expect` (a timeline undo or redo), refused when it no longer holds: the segment was edited since. */
+export const editSegmentContent = (args: { textId: string; segmentId: string; content: string; expect?: SegmentCheck[] }) =>
   invoke<EditResult>("edit_segment_content", args);
 
-/** Writes only the edges given. Resolves with the commit's findings (warnings; never a block). */
-export const setSegmentTimes = (args: { textId: string; segmentId: string; startMs?: number; endMs?: number }) =>
+/** Writes only the edges given. Resolves with the commit's findings (warnings; never a block). `expect` as for editSegmentContent. */
+export const setSegmentTimes = (args: { textId: string; segmentId: string; startMs?: number; endMs?: number; expect?: SegmentCheck[] }) =>
   invoke<string[]>("set_segment_times", args);
 
 export const deleteSegment = (args: { textId: string; segmentId: string }) =>
   invoke<string[]>("delete_segment", args);
+
+/** `states`: the touched segments after the edit; `before`: as they were (merge only). */
+export type SegmentsEdit = { findings: string[]; states: SegmentState[]; before: SegmentState[] };
+export type DeletedSegments = { deleted: string[]; kept: string[]; findings: string[] };
+
+/** The timeline's undo and redo, one txn each. Deletes only segments whose
+ * check still holds: with `keepChanged`, the edited ones are kept and the
+ * rest go; without, any change refuses the whole step. */
+export const deleteSegments = (args: { textId: string; expect: SegmentCheck[]; keepChanged: boolean }) => invoke<DeletedSegments>("delete_segments", args);
+export const restoreSegments = (args: { textId: string; segmentIds: string[] }) => invoke<SegmentsEdit>("restore_segments", args);
+
+/** Cut at `atMs`; the transcription stays on the first part. Returns the new part. */
+export const splitSegment = (args: { textId: string; segmentId: string; atMs: number }) => invoke<AddedSegment>("split_segment", args);
+/** Join a segment with the next one on its tier (states: first, then second). `expect` as for editSegmentContent. */
+export const mergeSegments = (args: { textId: string; firstId: string; secondId: string; expect?: SegmentCheck[] }) => invoke<SegmentsEdit>("merge_segments", args);
+/** Take a merge back, or redo a split, in one txn: restore the second part, move the first's end back, and put its text back when given. */
+export const unmergeSegments = (args: {
+  textId: string;
+  firstId: string;
+  secondId: string;
+  firstEndMs: number;
+  firstContent: string | null;
+  expect: SegmentCheck[];
+}) => invoke<SegmentsEdit>("unmerge_segments", args);
+
+/** Where speech starts and ends in a recording, `[startMs, endMs]` in time order (cached per recording). */
+export const speechSpans = (args: { source: string }) => invoke<[number, number][]>("speech_spans", args);
+
+export type AutoSegmented = { ids: string[]; skipped: number; tier: string; findings: string[]; states: SegmentState[] };
+/** One machine segment per stretch of speech not already covered on the tier (the utterance tier when null). */
+export const autoSegment = (args: { textId: string; source: string; tierId: string | null }) => invoke<AutoSegmented>("auto_segment", args);
 
 export type TierTemplate = "transcription" | "translation" | "notes" | "custom";
 
@@ -439,7 +474,7 @@ export const MODEL_CHANGED = "Phone transcription now uses ";
 
 // Capabilities: src-tauri/src/capability.rs (roadmap 53). Feature code asks for a
 // job; what powers it is chosen here (this computer's choice, the project's pin).
-export type ProviderRow = { id: string; name: string; kind: "model" | "program"; ready: boolean; note: string; score: number | null };
+export type ProviderRow = { id: string; name: string; kind: "model" | "program" | "built-in"; ready: boolean; note: string; score: number | null };
 export type CapabilityView = {
   id: string;
   title: string;

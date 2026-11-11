@@ -6,19 +6,28 @@ import { AnalysisLayer } from "./analysis-layer";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   addSegment,
+  autoSegment,
   deleteSegment,
+  deleteSegments,
   editSegmentContent,
   errorText,
+  mergeSegments,
+  restoreSegments,
   setSegmentTimes,
+  speechSpans,
+  splitSegment,
+  unmergeSegments,
   type PeaksInfo,
   type SegmentRow,
   type TextDetail,
 } from "../api";
 import { h } from "../dom";
 import * as playback from "../playback";
-import { getSelection, refreshConflicts, refreshText, reloadTexts, selectSegment, setMediaSource, showToast, subscribeSelection } from "../store";
+import { getSelection, getState, refreshConflicts, refreshText, reloadTexts, selectSegment, setMediaSource, showToast, subscribeSelection } from "../store";
 import { tint } from "../assist/logic";
 import { crossedDragThreshold, dragEdge, grabOffset, hitTest, DRAG_PX, type Edge, type Hit } from "./gestures";
+import { laneBounds, snapDragged, snapRange, type Span } from "./snap";
+import { checkOf, edgeEntry, UndoHistory, type SegmentCheck, type UndoEntry, type UndoStack } from "./undo";
 import { StripCache } from "./strips";
 import {
   clamp,
@@ -40,6 +49,16 @@ export const TIER_H = 48;
 /** The shortest segment a create-drag makes, ms. */
 const MIN_SEGMENT_MS = 20;
 const MAX_DRAWN_CHANNELS = 2;
+/** One keyboard nudge of a segment edge, ms. */
+const NUDGE_MS = 10;
+
+/** Timeline edits of the open project, one stack per text. Outlives the
+ * view (it is rebuilt when no text is open); another project starts empty. */
+export const timelineHistory = new UndoHistory();
+
+const warnFindings = (lines: string[]) => {
+  if (lines.length > 0) showToast({ tone: "warn", lines });
+};
 
 export type Lane = { tierId: string | null; name: string; segments: SegmentRow[] };
 
@@ -143,6 +162,15 @@ export class TimelineView {
   private resizeDraft: ResizeDraft | null = null;
   private hoverCursor = "";
   private editing: SegmentRow | null = null;
+  /** Speech spans of the loaded recording, for snapping; empty until ready. */
+  private spans: Span[] = [];
+  private spansFor: string | null = null;
+  /** Alt held during the current gesture: snapping off. */
+  private altHeld = false;
+  private nudging = false;
+  /** Edits still waiting on their command: an undo or redo waits for them,
+   * so the entry an edit records is on the stack before Ctrl+Z can run. */
+  private inflight = new Set<Promise<void>>();
 
   private stats = new FrameStats();
   showPerf = false;
@@ -152,7 +180,7 @@ export class TimelineView {
   private raf = 0;
   private observer: ResizeObserver;
   private windowMoves: (ev: MouseEvent) => void = () => {};
-  private windowUps: () => void = () => {};
+  private windowUps: (ev: MouseEvent) => void = () => {};
   private colors = { line: "#dcd8cf", ink: "#1f1d1a", muted: "#7a756c", accent: "#2e5e4e", wave: "#4a7a68", box: "#ffffff", warn: "#8a5a00" };
 
   constructor() {
@@ -247,6 +275,17 @@ export class TimelineView {
     this.strips = info !== null && sourceId !== null ? new StripCache(sourceId, info.sampleRate, info.durationMs) : null;
     playback.setSource(info !== null ? convertFileSrc(info.mediaPath) : null);
     setMediaSource(info !== null ? sourceId : null);
+    // Spans for snapping come in the background, computed once per
+    // recording; until they arrive, edges simply do not snap.
+    this.spans = [];
+    this.spansFor = info !== null ? sourceId : null;
+    if (info !== null && sourceId !== null) {
+      speechSpans({ source: sourceId })
+        .then((spans) => {
+          if (this.spansFor === sourceId) this.spans = spans;
+        })
+        .catch(() => {});
+    }
     this.fitDuration();
     const v = this.vp();
     this.setVp({ ...v, t0Ms: 0, pxPerSec: fitPxPerSec(v) });
@@ -293,6 +332,7 @@ export class TimelineView {
       const channels = Math.min(this.info.channels, MAX_DRAWN_CHANNELS);
       for (let c = 0; c < channels; c++) this.strips.prefetch(v, c);
       this.drawWave(v, channels);
+      this.drawSpeech(v);
       this.analysis.draw(this.ctx, v, RULER_H, WAVE_H);
     } else {
       ctx.fillStyle = this.colors.muted;
@@ -341,6 +381,19 @@ export class TimelineView {
     ctx.stroke();
   }
 
+  /** A thin band along the waveform's foot where speech was found: the
+   * edges a drawn or dragged segment snaps to. */
+  private drawSpeech(v: Viewport): void {
+    const ctx = this.ctx;
+    const end = v.t0Ms + visibleSpanMs(v);
+    ctx.fillStyle = "rgba(46, 94, 78, 0.35)";
+    for (const [s, e] of this.spans) {
+      if (e < v.t0Ms || s > end) continue;
+      const x0 = timeToX(v, s);
+      ctx.fillRect(x0, RULER_H + WAVE_H - 4, Math.max(1, timeToX(v, e) - x0), 3);
+    }
+  }
+
   private drawRuler(v: Viewport): void {
     const ctx = this.ctx;
     const step = RULER_STEPS.find((s) => (s.ms / 1000) * v.pxPerSec >= 70) ?? { ms: 600_000, decimals: 0 };
@@ -377,8 +430,9 @@ export class TimelineView {
         this.drawSegment(v, draft !== null && draft.id === seg.id ? { ...seg, ...draft } : seg, top);
       }
       if (this.drag?.kind === "create" && this.drag.lane === i) {
-        const x0 = timeToX(v, Math.min(this.drag.anchorMs, this.drag.currentMs));
-        const x1 = timeToX(v, Math.max(this.drag.anchorMs, this.drag.currentMs));
+        const r = this.createRange(i, this.drag.anchorMs, this.drag.currentMs);
+        const x0 = timeToX(v, r.startMs);
+        const x1 = timeToX(v, r.endMs);
         ctx.fillStyle = "rgba(46, 94, 78, 0.18)";
         ctx.fillRect(x0, top + 4, x1 - x0, TIER_H - 8);
       }
@@ -497,6 +551,7 @@ export class TimelineView {
     }, { passive: false });
 
     this.canvas.addEventListener("mousedown", (ev) => {
+      this.altHeld = ev.altKey;
       if (this.editing !== null) this.closeEditor(true);
       this.element.focus();
       const { x, y } = pos(ev);
@@ -541,6 +596,7 @@ export class TimelineView {
         return;
       }
       this.interacted = true;
+      this.altHeld = ev.altKey;
       const tMs = Math.max(0, xToTime(this.vp(), x));
       switch (drag.kind) {
         case "maybe-pan":
@@ -565,7 +621,15 @@ export class TimelineView {
           if (seg === null || seg.startMs === null || seg.endMs === null) break;
           // Optimistic: the box follows the mouse on a copy; the intent
           // commits on release and the store refresh squares everything up.
-          const { startMs, endMs } = dragEdge(drag.edge, seg.startMs, seg.endMs, tMs, drag.offsetMs, MIN_SEGMENT_MS);
+          let { startMs, endMs } = dragEdge(drag.edge, seg.startMs, seg.endMs, tMs, drag.offsetMs, MIN_SEGMENT_MS);
+          if (!this.altHeld) {
+            // Pull the moved edge out to where speech starts or ends, never
+            // onto a neighbour; Alt drags freely.
+            const b = laneBounds(this.laneOf(seg)?.segments ?? [], seg.startMs, seg.endMs, seg.id);
+            // Only outward of where the edge was: trimming inward stays put.
+            if (drag.edge === "start") startMs = Math.min(snapDragged("start", startMs, seg.startMs, this.spans, b.lo), endMs - MIN_SEGMENT_MS);
+            else endMs = Math.max(snapDragged("end", endMs, seg.endMs, this.spans, b.hi), startMs + MIN_SEGMENT_MS);
+          }
           this.resizeDraft = { id: drag.id, startMs, endMs };
           break;
         }
@@ -573,7 +637,8 @@ export class TimelineView {
     };
     window.addEventListener("mousemove", this.windowMoves);
 
-    this.windowUps = () => {
+    this.windowUps = (ev: MouseEvent) => {
+      this.altHeld = ev.altKey;
       const drag = this.drag;
       this.drag = null;
       if (drag === null) return;
@@ -582,10 +647,10 @@ export class TimelineView {
           this.seek(drag.downMs);
           break;
         case "create":
-          void this.commitCreate(drag.lane, drag.anchorMs, drag.currentMs);
+          void this.track(this.commitCreate(drag.lane, drag.anchorMs, drag.currentMs));
           break;
         case "resize":
-          if (drag.active) void this.commitResize(drag.edge);
+          if (drag.active) void this.track(this.commitResize(drag.edge));
           break;
         case "pan":
         case "maybe-create":
@@ -619,7 +684,29 @@ export class TimelineView {
   private wireKeys(): void {
     this.element.addEventListener("keydown", (ev) => {
       if (this.editing !== null) return;
-      if (ev.key === " ") {
+      const mod = ev.ctrlKey || ev.metaKey;
+      if (mod && !ev.altKey && (ev.key === "z" || ev.key === "Z")) {
+        ev.preventDefault();
+        void (ev.shiftKey ? this.redo() : this.undo());
+        return;
+      }
+      if (mod && !ev.altKey && (ev.key === "y" || ev.key === "Y")) {
+        ev.preventDefault();
+        void this.redo();
+        return;
+      }
+      if (mod || ev.altKey) return;
+      if (ev.code === "BracketLeft" || ev.code === "BracketRight") {
+        // [ ] move the start, Shift+[ ] the end, by NUDGE_MS.
+        ev.preventDefault();
+        void this.track(this.nudge(ev.shiftKey ? "end" : "start", ev.code === "BracketLeft" ? -NUDGE_MS : NUDGE_MS));
+      } else if (ev.key === "s" || ev.key === "S") {
+        ev.preventDefault();
+        void this.splitAtPlayhead();
+      } else if (ev.key === "m" || ev.key === "M") {
+        ev.preventDefault();
+        void this.mergeWithNext();
+      } else if (ev.key === " ") {
         ev.preventDefault();
         this.togglePlay();
       } else if ((ev.key === "Delete" || ev.key === "Backspace") && this.selected !== null) {
@@ -674,12 +761,25 @@ export class TimelineView {
     const text = this.text;
     const lane = this.lanes[laneIdx];
     if (text === null || lane === undefined) return;
-    const startMs = Math.round(Math.min(aMs, bMs));
-    const endMs = Math.round(Math.max(aMs, bMs));
-    if (endMs - startMs < MIN_SEGMENT_MS) return;
+    if (Math.abs(bMs - aMs) < MIN_SEGMENT_MS) return;
+    const range = this.createRange(laneIdx, aMs, bMs);
+    const startMs = Math.round(range.startMs);
+    const endMs = Math.round(range.endMs);
+    const stack = this.history();
     try {
       const added = await addSegment({ textId: text.id, tierId: lane.tierId, startMs, endMs, content: "" });
       if (added.findings.length > 0) showToast({ tone: "warn", lines: added.findings });
+      const ids = [added.id];
+      // Undo deletes it only while it is as drawn: typed into or retimed
+      // since (anywhere), the undo is refused instead.
+      let expect = added.states.map((st) => checkOf(st));
+      stack?.push({
+        label: "draw segment",
+        undo: async () => void (await deleteSegments({ textId: text.id, expect, keepChanged: false })),
+        redo: async () => {
+          expect = (await restoreSegments({ textId: text.id, segmentIds: ids })).states.map((st) => checkOf(st));
+        },
+      });
       await reloadTexts();
       await refreshText();
       this.select(added.id);
@@ -694,13 +794,14 @@ export class TimelineView {
     const draft = this.resizeDraft;
     const text = this.text;
     if (text === null || draft === null) return;
+    const before = this.findSegment(draft.id);
+    const was = edge === "start" ? before?.startMs : before?.endMs;
+    const now = Math.round(edge === "start" ? draft.startMs : draft.endMs);
+    const stack = this.history();
     try {
-      const findings = await setSegmentTimes({
-        textId: text.id,
-        segmentId: draft.id,
-        ...(edge === "start" ? { startMs: Math.round(draft.startMs) } : { endMs: Math.round(draft.endMs) }),
-      });
+      const findings = await setSegmentTimes({ textId: text.id, segmentId: draft.id, ...(edge === "start" ? { startMs: now } : { endMs: now }) });
       if (findings.length > 0) showToast({ tone: "warn", lines: findings });
+      if (was !== null && was !== undefined) this.rememberRetime(stack, text.id, draft.id, edge, was, now);
       await refreshText();
       await refreshConflicts();
     } catch (e) {
@@ -713,17 +814,27 @@ export class TimelineView {
     }
   }
 
-  /** One-click confirm; the log keeps history, so there is no undo stack
-   * to build and nothing is lost for good. */
+  /** One-click confirm, and Undo brings it back (a restore). */
   private askDelete(segId: string): void {
     const label = this.findSegment(segId)?.content ?? "";
     const doDelete = async () => {
       this.confirmBar.hidden = true;
       const text = this.text;
       if (text === null) return;
+      const stack = this.history();
       try {
         const findings = await deleteSegment({ textId: text.id, segmentId: segId });
         if (findings.length > 0) showToast({ tone: "warn", lines: findings });
+        const ids = [segId];
+        // Redo deletes it again only while it is as the undo brought it back.
+        let expect: SegmentCheck[] = [];
+        stack?.push({
+          label: "delete segment",
+          undo: async () => {
+            expect = (await restoreSegments({ textId: text.id, segmentIds: ids })).states.map((st) => checkOf(st));
+          },
+          redo: async () => void (await deleteSegments({ textId: text.id, expect, keepChanged: false })),
+        });
         this.select(null);
         await reloadTexts();
         await refreshText();
@@ -733,10 +844,276 @@ export class TimelineView {
     };
     this.confirmBar.replaceChildren(
       h("span", { textContent: label === "" ? "Delete this segment?" : `Delete “${label.slice(0, 40)}”?` }),
-      h("button", { className: "danger", textContent: "Delete", onclick: () => void doDelete() }),
+      h("button", { className: "danger", textContent: "Delete", onclick: () => void this.track(doDelete()) }),
       h("button", { textContent: "Keep", onclick: () => (this.confirmBar.hidden = true) }),
     );
     this.confirmBar.hidden = false;
+  }
+
+  private laneOf(seg: SegmentRow): Lane | null {
+    return this.lanes.find((l) => l.segments.some((s) => s.id === seg.id)) ?? null;
+  }
+
+  /** A drawn range, snapped outward to speech edges unless Alt is held. */
+  private createRange(laneIdx: number, aMs: number, bMs: number): { startMs: number; endMs: number } {
+    const lo = Math.min(aMs, bMs);
+    const hi = Math.max(aMs, bMs);
+    if (this.altHeld) return { startMs: lo, endMs: hi };
+    return snapRange(lo, hi, this.spans, laneBounds(this.lanes[laneIdx]?.segments ?? [], lo, hi));
+  }
+
+  // ------------------------------------------------------- undo and redo
+
+  /** This text's undo stack, or null when no text is open. */
+  history(): UndoStack | null {
+    const s = getState();
+    if (s.kind !== "open" || this.text === null) return null;
+    return timelineHistory.stack(s.info.projectId, this.text.id);
+  }
+
+  /** Run an edit so that undo and redo wait for it (see `inflight`). */
+  private track(edit: Promise<void>): Promise<void> {
+    this.inflight.add(edit);
+    const done = () => void this.inflight.delete(edit);
+    edit.then(done, done);
+    return edit;
+  }
+
+  /** Record an edge move on `stack` (taken before the edit's await, so a
+   * text switch meanwhile cannot put it on another text's stack). Its undo
+   * writes `was` back only while the edge is still at `now`. */
+  private rememberRetime(stack: UndoStack | null, textId: string, segId: string, edge: Edge, was: number, now: number, key: string | null = null): void {
+    const write = async (ms: number, expectMs: number) => {
+      const expect: SegmentCheck[] = [{ id: segId, deleted: false, ...(edge === "start" ? { startMs: expectMs } : { endMs: expectMs }) }];
+      await setSegmentTimes({ textId, segmentId: segId, ...(edge === "start" ? { startMs: ms } : { endMs: ms }), expect });
+    };
+    stack?.push(edgeEntry("move edge", was, now, write), key);
+  }
+
+  private async afterEdit(): Promise<void> {
+    await reloadTexts();
+    await refreshText();
+    await refreshConflicts();
+  }
+
+  async undo(): Promise<void> {
+    await this.step("undo");
+  }
+
+  async redo(): Promise<void> {
+    await this.step("redo");
+  }
+
+  private async step(which: "undo" | "redo"): Promise<void> {
+    const stack = this.history();
+    if (stack === null) return;
+    // An edit whose command is still running records its entry when it
+    // returns; wait for it, so this step takes that edit, not the one before.
+    await Promise.all([...this.inflight]);
+    const label = which === "undo" ? stack.undoLabel() : stack.redoLabel();
+    try {
+      if ((which === "undo" ? await stack.undo() : await stack.redo()) === null) return;
+      await this.afterEdit();
+    } catch (e) {
+      showToast({ tone: "warn", lines: [`Did not ${which} ${label ?? "that edit"}: ${errorText(e)}`] });
+      await this.afterEdit();
+    }
+  }
+
+  private selectedSegment(): SegmentRow | null {
+    const id = this.selected;
+    const seg = id === null ? null : this.findSegment(id);
+    if (seg === null || seg.startMs === null || seg.endMs === null) {
+      showToast({ tone: "info", lines: ["Select a segment on the timeline first."] });
+      return null;
+    }
+    return seg;
+  }
+
+  /** Cut the selected segment at the playhead; its text stays on the first part. */
+  async splitAtPlayhead(): Promise<void> {
+    await this.track(this.split());
+  }
+
+  private async split(): Promise<void> {
+    const text = this.text;
+    const seg = this.selectedSegment();
+    if (text === null || seg === null || seg.startMs === null || seg.endMs === null) return;
+    const at = Math.round(playback.currentMs());
+    if (!(at > seg.startMs + MIN_SEGMENT_MS / 2 && at < seg.endMs - MIN_SEGMENT_MS / 2)) {
+      showToast({ tone: "info", lines: ["Put the playhead inside the selected segment (click the waveform), then split."] });
+      return;
+    }
+    const stack = this.history();
+    const first = seg.id;
+    try {
+      const added = await splitSegment({ textId: text.id, segmentId: first, atMs: at });
+      warnFindings(added.findings);
+      const second = added.id;
+      // Undo merges the parts back while the new part is untouched (empty,
+      // no words, same times) and the cut is where it was; the merge then
+      // changes no text. Redo takes them apart again in one txn.
+      let [a, b] = added.states;
+      if (a === undefined || b === undefined) throw new Error("the split did not report both parts");
+      let mergedEnd: number | null = null;
+      stack?.push({
+        label: "split",
+        undo: async () => {
+          const r = await mergeSegments({ textId: text.id, firstId: first, secondId: second, expect: [checkOf(a!, ["deleted", "endMs"]), checkOf(b!)] });
+          mergedEnd = r.states[0]?.endMs ?? null;
+        },
+        redo: async () => {
+          const cut = a!.endMs;
+          if (mergedEnd === null || cut === null) throw new Error("nothing to split again");
+          const expect: SegmentCheck[] = [{ id: first, deleted: false, endMs: mergedEnd }, { id: second, deleted: true }];
+          const r = await unmergeSegments({ textId: text.id, firstId: first, secondId: second, firstEndMs: cut, firstContent: null, expect });
+          [a, b] = r.states;
+        },
+      });
+      await this.afterEdit();
+    } catch (e) {
+      showToast({ tone: "error", lines: [errorText(e)] });
+      await refreshText();
+    }
+  }
+
+  /** Join the selected segment with the next timed one on its track. */
+  async mergeWithNext(): Promise<void> {
+    await this.track(this.merge());
+  }
+
+  private async merge(): Promise<void> {
+    const text = this.text;
+    const seg = this.selectedSegment();
+    if (text === null || seg === null || seg.endMs === null) return;
+    const lane = this.laneOf(seg);
+    // Only timed neighbours: the core merges in time order and has no place for an untimed one.
+    const ordered = (lane?.segments ?? [])
+      .filter((s) => s.startMs !== null && s.endMs !== null)
+      .sort((a, b) => a.startMs! - b.startMs! || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const next = ordered[ordered.findIndex((s) => s.id === seg.id) + 1];
+    if (next === undefined) {
+      showToast({ tone: "info", lines: ["There is no next segment on this track to merge with."] });
+      return;
+    }
+    const stack = this.history();
+    const [first, second] = [seg.id, next.id];
+    try {
+      const r = await mergeSegments({ textId: text.id, firstId: first, secondId: second });
+      warnFindings(r.findings);
+      // The first part as it was (from the backend, not the possibly stale
+      // view), and both parts after each step, for the checks.
+      const was = r.before[0];
+      let [a, b] = r.states;
+      if (was === undefined || was.endMs === null || a === undefined || b === undefined) throw new Error("the merge did not report both parts");
+      const wasEnd = was.endMs;
+      stack?.push({
+        label: "merge",
+        undo: async () => {
+          const expect = [checkOf(a!, ["deleted", "endMs", "content"]), { id: second, deleted: true }];
+          const u = await unmergeSegments({ textId: text.id, firstId: first, secondId: second, firstEndMs: wasEnd, firstContent: was.content, expect });
+          [a, b] = u.states;
+        },
+        redo: async () => {
+          const m = await mergeSegments({ textId: text.id, firstId: first, secondId: second, expect: [checkOf(a!, ["deleted", "endMs", "content"]), checkOf(b!)] });
+          [a, b] = m.states;
+        },
+      });
+      await this.afterEdit();
+    } catch (e) {
+      showToast({ tone: "error", lines: [errorText(e)] });
+      await refreshText();
+    }
+  }
+
+  /** Move one edge of the selected segment by `deltaMs` (keyboard). Quick
+   * repeats on one edge undo as one step. */
+  private async nudge(edge: Edge, deltaMs: number): Promise<void> {
+    const text = this.text;
+    const id = this.selected;
+    const seg = id === null ? null : this.findSegment(id);
+    if (this.nudging || text === null || seg === null || seg.startMs === null || seg.endMs === null) return;
+    const was = edge === "start" ? seg.startMs : seg.endMs;
+    const now =
+      edge === "start" ? Math.max(0, Math.min(seg.startMs + deltaMs, seg.endMs - MIN_SEGMENT_MS)) : Math.max(seg.startMs + MIN_SEGMENT_MS, seg.endMs + deltaMs);
+    if (now === was) return;
+    this.nudging = true;
+    const stack = this.history();
+    try {
+      warnFindings(await setSegmentTimes({ textId: text.id, segmentId: seg.id, ...(edge === "start" ? { startMs: now } : { endMs: now }) }));
+      this.rememberRetime(stack, text.id, seg.id, edge, was, now, `${seg.id}:${edge}`);
+      await refreshText();
+    } catch (e) {
+      showToast({ tone: "error", lines: [errorText(e)] });
+    } finally {
+      this.nudging = false;
+    }
+  }
+
+  /**
+   * One segment per stretch of speech in `source`'s recording, on the
+   * selected segment's track (else the utterance track), leaving stretches
+   * the person already covered alone. Undo takes them all back.
+   */
+  async autoSegment(source: string): Promise<void> {
+    await this.track(this.autoSegmentNow(source));
+  }
+
+  private async autoSegmentNow(source: string): Promise<void> {
+    const text = this.text;
+    if (text === null) return;
+    const sel = this.selected === null ? null : this.findSegment(this.selected);
+    // No selection: null, and the session picks the utterance tier it uses everywhere.
+    const tierId = sel?.tier ?? null;
+    const stack = this.history();
+    try {
+      const out = await autoSegment({ textId: text.id, source, tierId });
+      if (out.ids.length === 0) {
+        showToast({ tone: "info", lines: [out.skipped > 0 ? "Every stretch of speech already has a segment." : "No speech was found in this recording."] });
+        return;
+      }
+      const ids = out.ids;
+      // Undo deletes the segments still as Auto-segment made them; any
+      // typed into, retimed or broken into words since (anywhere) stay, and
+      // a toast says how many. Redo brings back what the undo took.
+      let live = out.states.map((st) => checkOf(st));
+      let taken: string[] = [];
+      const entry: UndoEntry = {
+        label: "auto-segment",
+        undo: async () => {
+          const r = await deleteSegments({ textId: text.id, expect: live, keepChanged: true });
+          if (r.deleted.length === 0) throw new Error("every segment it made was edited since, so none was taken back.");
+          taken = r.deleted;
+          if (r.kept.length > 0) {
+            const [d, k] = [r.deleted.length, r.kept.length];
+            showToast({ tone: "info", lines: [`Took back ${d} segment${d === 1 ? "" : "s"}; kept ${k} edited since, so that work is not lost.`] });
+          }
+        },
+        redo: async () => {
+          live = (await restoreSegments({ textId: text.id, segmentIds: taken })).states.map((st) => checkOf(st));
+        },
+      };
+      stack?.push(entry);
+      await this.afterEdit();
+      showToast({
+        tone: "info",
+        lines: [
+          `Added ${ids.length} segment${ids.length === 1 ? "" : "s"}.` +
+            (out.skipped > 0 ? ` ${out.skipped} stretch${out.skipped === 1 ? " was" : "es were"} already covered and left alone.` : ""),
+          ...out.findings,
+        ],
+        action: {
+          label: "Undo",
+          run: () => {
+            if (stack !== null && stack === this.history() && stack.isNewest(entry)) void this.undo();
+            else showToast({ tone: "info", lines: ["Later edits came after it; use Undo on the timeline to step back to it."] });
+          },
+        },
+      });
+    } catch (e) {
+      showToast({ tone: "error", lines: [errorText(e)] });
+      await refreshText();
+    }
   }
 
   private findSegment(id: string): SegmentRow | null {
@@ -767,6 +1144,8 @@ export class TimelineView {
         ev.preventDefault();
         this.closeEditor(true);
       } else if (ev.key === "Escape") {
+        // Kept here: the timeline's own Escape would deselect the segment.
+        ev.stopPropagation();
         this.closeEditor(false);
       }
     };
@@ -782,10 +1161,19 @@ export class TimelineView {
     this.editBox.hidden = true;
     const text = this.text;
     if (!save || text === null || value === seg.content) return;
+    const was = seg.content;
     seg.content = value;
-    void (async () => {
+    const stack = this.history();
+    void this.track((async () => {
       try {
         const result = await editSegmentContent({ textId: text.id, segmentId: seg.id, content: value });
+        // Each way writes only over the text the other way left: typed
+        // over since (Transcribe, another device), the step is refused.
+        let shown = result.content;
+        const write = async (content: string) => {
+          shown = (await editSegmentContent({ textId: text.id, segmentId: seg.id, content, expect: [{ id: seg.id, deleted: false, content: shown }] })).content;
+        };
+        stack?.push({ label: "text edit", undo: () => write(was), redo: () => write(value) });
         // The merged value can differ when another device's edit folded in.
         seg.content = result.content;
         if (result.findings.length > 0) showToast({ tone: "warn", lines: result.findings });
@@ -795,6 +1183,6 @@ export class TimelineView {
         showToast({ tone: "error", lines: [errorText(e)] });
         await refreshText();
       }
-    })();
+    })());
   }
 }

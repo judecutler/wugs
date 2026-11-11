@@ -81,6 +81,18 @@ function renderToast() {
           "div",
           { className: `toast toast-${toast.tone}`, role: "status" },
           h("div", {}, ...toast.lines.map((line) => h("div", { textContent: line }))),
+          ...(toast.action === undefined
+            ? []
+            : [
+                h("button", {
+                  className: "dismiss",
+                  textContent: toast.action.label,
+                  onclick: () => {
+                    showToast(null);
+                    toast.action?.run();
+                  },
+                }),
+              ]),
           h("button", { className: "dismiss", textContent: "Dismiss", onclick: () => showToast(null) }),
         ),
   );
