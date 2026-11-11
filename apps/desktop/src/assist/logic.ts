@@ -43,3 +43,25 @@ export function progressLabel(done: number, total: number): string {
   if (total <= 0) return `${megabytes(done)} so far`;
   return `${megabytes(done)} of ${megabytes(total)} (${Math.floor((done / total) * 100)}%)`;
 }
+
+type Summary = { consented: number; unrecorded: number; unchecked: number; refused: number; restricted: number; unusable: number };
+
+/** How many checked suggestions an export holds, given the person's word on consent. */
+export function exportable(s: Summary, confirmed: boolean): number {
+  return s.consented + (confirmed ? s.unrecorded : 0);
+}
+
+const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
+
+/** One line on what is ready to export and what stays home, in words. */
+export function correctionsLine(s: Summary): string {
+  const ready = s.consented + s.unrecorded;
+  const held = [
+    s.unchecked > 0 ? `${n(s.unchecked, "suggestion")} not checked yet` : null,
+    s.refused > 0 ? `${s.refused} refused by a consent record` : null,
+    s.restricted > 0 ? `${s.restricted} restricted` : null,
+    s.unusable > 0 ? `${s.unusable} without a recording` : null,
+  ].filter((x) => x !== null);
+  const head = ready === 0 ? "No checked suggestions to export yet." : `${n(ready, "checked suggestion")} ready to export.`;
+  return held.length === 0 ? head : `${head} Staying here: ${held.join(", ")}.`;
+}

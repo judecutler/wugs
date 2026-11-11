@@ -2,6 +2,7 @@ pub mod assist;
 pub mod capability;
 pub mod capture;
 pub mod conflicts;
+pub mod corrections;
 pub mod elicit;
 pub mod gloss;
 pub mod identity;
@@ -682,9 +683,9 @@ fn assist_delete(dir: State<AppData>, downloads: State<assist::Downloads>, worke
 #[tauri::command(async)]
 fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<assist::Worker>, text: String, segment: String, source: String, expect: String) -> Result<assist::Suggested, String> {
     let cap = capability::Capability::PhoneTranscription;
-    let (t, seg) = (text.clone(), segment.clone());
+    let (t, seg, src) = (text.clone(), segment.clone(), source.clone());
     let (target, pin) = s.run(move |s| {
-        let target = assist::target(s, &t, &seg, &source)?;
+        let target = assist::target(s, &t, &seg, &src)?;
         let pin = capability::project_pin(session::project(s)?, cap)?;
         Ok((target, pin))
     })?;
@@ -696,7 +697,29 @@ fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<as
     }
     let app_data = dir.0.clone();
     let heard = worker.hear(&spec.id, move || assist::hearer(&app_data, spec), target.wav, target.start_ms, target.end_ms)?;
-    s.run(move |s| assist::commit(s, &text, &segment, spec, &heard))
+    s.run(move |s| assist::commit(s, &text, &segment, &source, spec, &heard))
+}
+
+/// What a corrections export would hold now.
+#[tauri::command(async)]
+fn corrections_summary(s: State<SessionThread>, id: State<Identity>) -> Result<corrections::Summary, String> {
+    let key = id.key().ok();
+    s.run(move |s| {
+        let guest = session::is_guest(s, key.as_deref())?;
+        corrections::summary(s, guest)
+    })
+}
+
+/// Export the checked suggestions into a new folder inside `folder`.
+/// `unrecorded`: the person confirmed consent where no record says.
+#[tauri::command(async)]
+fn corrections_export(s: State<SessionThread>, id: State<Identity>, folder: String, unrecorded: bool) -> Result<corrections::Exported, String> {
+    let key = id.key().ok();
+    let (jobs, sum) = s.run(move |s| {
+        let guest = session::is_guest(s, key.as_deref())?;
+        corrections::prepare(s, guest, unrecorded)
+    })?;
+    corrections::write(&jobs, &sum, unrecorded, std::path::Path::new(&folder), &corrections::today())
 }
 
 /// The start of `assist_suggest`'s refusal when the model changed under a run.
@@ -952,6 +975,8 @@ pub fn run() {
             assist_cancel,
             assist_delete,
             assist_suggest,
+            corrections_summary,
+            corrections_export,
             capabilities,
             capability_choose,
             capability_pin,

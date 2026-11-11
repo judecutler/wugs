@@ -425,6 +425,13 @@ export const assistCancel = (args: { id: string }) => invoke<void>("assist_cance
 export const assistDelete = (args: { id: string }) => invoke<void>("assist_delete", args);
 /** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
+// Corrections export: src-tauri/src/corrections.rs (roadmap 57).
+/** `recordsOnly`: why only recordings a consent record allows may go (a guest device, records still arriving), or null. */
+export type CorrectionsSummary = { consented: number; unrecorded: number; unchecked: number; refused: number; restricted: number; unusable: number; recordsOnly: string | null };
+export type CorrectionsExported = { folder: string; written: number; problems: string[]; failed: number };
+export const correctionsSummary = () => invoke<CorrectionsSummary>("corrections_summary");
+/** `unrecorded`: the person confirmed they have consent where no consent record says. */
+export const correctionsExport = (args: { folder: string; unrecorded: boolean }) => invoke<CorrectionsExported>("corrections_export", args);
 /** How assist_suggest says the model changed under the caller. */
 export const MODEL_CHANGED = "Phone transcription now uses ";
 

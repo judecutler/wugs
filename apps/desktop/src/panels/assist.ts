@@ -3,8 +3,9 @@
 // the project's pin), then fill empty segments with what it hears. Everything runs on this
 // computer; the recording never leaves it. Machine transcriptions stay
 // tinted until someone edits them (src/assist/logic.ts).
-import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, errorText, MODEL_CHANGED, type AssistModel, type CapabilityView } from "../api";
-import { batchTargets, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
+import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
+import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, correctionsExport, correctionsSummary, errorText, MODEL_CHANGED, type AssistModel, type CapabilityView, type CorrectionsSummary } from "../api";
+import { batchTargets, correctionsLine, exportable, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
 import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
 import { emptyState, h } from "../dom";
 import { assistModelList, capability, getState, mediaSource, refreshCapabilities, refreshText, setAssistModels, showToast } from "../store";
@@ -78,6 +79,11 @@ export const assistPanel: PanelDef = {
   create(): PanelView {
     const el = h("div", { className: "panel panel-assist" });
     let tierChoice: string | null = null;
+    let corrections: CorrectionsSummary | null = null;
+    /** The person's word on consent, given for one project only. */
+    let confirmed = false;
+    let countedFor: string | null = null;
+    let exporting = false;
 
     function draw() {
       const models = assistModelList().filter((m) => m.capability === CAP);
@@ -98,6 +104,7 @@ export const assistPanel: PanelDef = {
         ...(phones === null ? [] : [h("h4", { textContent: "Which model" }), chooser(phones, s.kind === "open")]),
         h("h4", { textContent: "Fill empty segments" }),
         batchControls(s, phones),
+        ...(s.kind === "open" ? [h("h4", { textContent: "Share corrections" }), correctionControls()] : []),
       );
     }
 
@@ -212,6 +219,85 @@ export const assistPanel: PanelDef = {
       );
     }
 
+    /** Export what people checked, so models can be tested on (and learn from) the languages documented here. */
+    function correctionControls() {
+      if (corrections === null) return h("p", { className: "as-note", textContent: "Counting…" });
+      const c = corrections;
+      const vouch = confirmed && c.recordsOnly === null;
+      const count = exportable(c, vouch);
+      const consent = c.unrecorded === 0
+        ? null
+        : c.recordsOnly !== null
+          ? h("p", { className: "as-note", textContent: c.recordsOnly })
+          : h(
+            "label",
+            { className: "as-note" },
+            h("input", { type: "checkbox", checked: confirmed, onchange: (e: Event) => { confirmed = (e.target as HTMLInputElement).checked; draw(); } }),
+            ` I have the speakers' consent to use ${c.unrecorded === 1 ? "this recording" : `these ${c.unrecorded} recordings`} for training and testing speech models (no consent record in this project says either way).`,
+          );
+      return h(
+        "div",
+        { className: "as-choice" },
+        h("p", { className: "as-note", textContent: "Each suggestion you checked pairs what the model heard with what you wrote. Exported as a folder of clips, it measures how well models do on this language and can help train better ones. Nothing is sent anywhere: you choose where the folder goes." }),
+        h("p", { className: "as-note", textContent: correctionsLine(c) }),
+        consent,
+        h("div", { className: "as-actions" }, h("button", {
+          type: "button",
+          textContent: exporting ? "Exporting…" : count === 0 ? "Export corrections" : `Export ${count} correction${count === 1 ? "" : "s"}…`,
+          disabled: count === 0 || exporting,
+          onclick: () => void exportCorrections(),
+        })),
+      );
+    }
+
+    async function exportCorrections() {
+      const folder = await pickDirectory({ directory: true, title: "Choose where the corrections folder goes" });
+      if (typeof folder !== "string") return;
+      exporting = true;
+      draw();
+      try {
+        const r = await correctionsExport({ folder, unrecorded: confirmed && corrections?.recordsOnly === null });
+        showToast({
+          tone: r.failed > 0 ? "warn" : "info",
+          lines: [`Exported ${r.written} correction${r.written === 1 ? "" : "s"} to ${r.folder}.`, ...(r.failed > 0 ? [`${r.failed} could not be cut from the recording.`, ...r.problems] : [])],
+        });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      exporting = false;
+      draw();
+    }
+
+    /** Recount after a render, one count at a time; a render during a count asks for one more. */
+    let counting = false;
+    let again = false;
+    async function refreshCorrections() {
+      const st = getState();
+      if (st.kind !== "open") return;
+      // Another project: its consent is a new question, and the old count is not its own.
+      if (st.info.path !== countedFor) {
+        countedFor = st.info.path;
+        confirmed = false;
+        corrections = null;
+      }
+      if (counting) {
+        again = true;
+        return;
+      }
+      counting = true;
+      try {
+        corrections = await correctionsSummary();
+      } catch {
+        corrections = null;
+      }
+      counting = false;
+      draw();
+      if (again) {
+        again = false;
+        void refreshCorrections();
+      }
+    }
+
     async function act(f: () => Promise<void>) {
       try {
         await f();
@@ -227,6 +313,7 @@ export const assistPanel: PanelDef = {
         return;
       }
       draw();
+      void refreshCorrections();
     }
     return { element: el, render };
   },

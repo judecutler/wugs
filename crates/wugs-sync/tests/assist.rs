@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use wugs_core::assist::{record_field, MachineTranscript, MACHINE_INTENT};
 use wugs_core::{Engines, Project};
+use wugs_model::Value;
 use wugs_sync::{sync_pair, SyncPolicy};
 
 struct Rig {
@@ -65,6 +66,7 @@ fn heard(text: &str, confidence: f64) -> MachineTranscript {
         model: "test-model".into(),
         confidence,
         phones: text.chars().filter(|c| !c.is_whitespace()).map(|c| (c.to_string(), confidence)).collect(),
+        source: None,
     }
 }
 
@@ -302,4 +304,117 @@ fn a_segment_empty_only_as_one_side_of_a_conflict_is_refused() {
             assert!(err.contains("conflict"), "{err}");
         }
     }
+}
+
+fn heard_from(text: &str, source: &str) -> MachineTranscript {
+    MachineTranscript { source: Some(source.into()), ..heard(text, 0.4) }
+}
+
+#[test]
+fn a_checked_suggestion_becomes_a_correction_pair() {
+    let mut rig = Rig::new();
+    let (mut a, mut b, text, seg) = rig.pair();
+    let src = a.add_source("Recording", None, "audio", None).unwrap();
+    a.machine_transcribe(&text, &seg, &heard_from("kopek ler", &src)).unwrap();
+    let c = a.corrections().unwrap();
+    assert!(c.pairs.is_empty(), "unchecked suggestions stay home");
+    assert_eq!(c.unchecked, 1);
+
+    // The person fixes it on the other device; both see the pair.
+    sync(&mut a, &mut b);
+    b.edit_content(&text, &seg, "köpekler").unwrap();
+    sync(&mut a, &mut b);
+    for p in [&a, &b] {
+        let c = p.corrections().unwrap();
+        assert_eq!(c.unchecked, 0);
+        let pair = &c.pairs[..];
+        assert_eq!(pair.len(), 1);
+        assert_eq!((pair[0].machine.as_str(), pair[0].person.as_str()), ("kopek ler", "köpekler"));
+        assert_eq!((pair[0].source.as_str(), pair[0].start_ms, pair[0].end_ms), (src.as_str(), 0.0, 1500.0));
+        assert_eq!(pair[0].model, "test-model");
+        assert!(!pair[0].retimed && !pair[0].consented);
+    }
+}
+
+#[test]
+fn consent_and_access_hold_corrections_back() {
+    let mut rig = Rig::new();
+    let (mut a, _b, text, seg) = rig.pair();
+    let src = a.add_source("Recording", None, "audio", None).unwrap();
+    a.machine_transcribe(&text, &seg, &heard_from("kopek", &src)).unwrap();
+    a.edit_content(&text, &seg, "köpek").unwrap();
+    let ana = a.add_person(Value::obj(vec![("full", Value::str("Ana"))]), Value::Arr(vec![]), "open").unwrap();
+
+    a.record_consent(&ana, &src, Value::obj(vec![("AI-ok", Value::Bool(true))]), "2026-11-10").unwrap();
+    assert!(a.corrections().unwrap().pairs[0].consented);
+
+    // One refusal anywhere that covers it (here the whole project) wins.
+    let project = a.project_id.clone();
+    a.record_consent(&ana, &project, Value::obj(vec![("AI-ok", Value::Bool(false))]), "2026-11-10").unwrap();
+    let c = a.corrections().unwrap();
+    assert!(c.pairs.is_empty());
+    assert_eq!(c.refused, 1);
+
+    // A restricted recording stays home too.
+    let mut rig2 = Rig::new();
+    let (mut a, _b, text, seg) = rig2.pair();
+    let src = a.add_source("Recording", None, "audio", Some("restricted")).unwrap();
+    a.machine_transcribe(&text, &seg, &heard_from("kopek", &src)).unwrap();
+    a.edit_content(&text, &seg, "köpek").unwrap();
+    let c = a.corrections().unwrap();
+    assert!(c.pairs.is_empty());
+    assert_eq!(c.restricted, 1);
+}
+
+#[test]
+fn a_retimed_or_unplaced_suggestion_is_flagged_or_left_out() {
+    let mut rig = Rig::new();
+    let (mut a, _b, text, seg) = rig.pair();
+    let src = a.add_source("Recording", None, "audio", None).unwrap();
+    a.machine_transcribe(&text, &seg, &heard_from("kopek", &src)).unwrap();
+    a.set_segment_times(&text, &seg, Some(100.0), None).unwrap();
+    a.edit_content(&text, &seg, "köpek").unwrap();
+    let pair = a.corrections().unwrap().pairs.remove(0);
+    assert!(pair.retimed, "heard on 0–1500, now 100–1500");
+    assert_eq!(pair.start_ms, 100.0);
+
+    // A suggestion that never said which recording it heard (written
+    // before records kept it), in a text linked to none: nothing to cut.
+    let mut c = Project::open_with(rig.root(), "prs_Cy", Engines::default()).unwrap();
+    let t = c.create_text("Other").unwrap();
+    let (tier, _) = c.add_tier("utterance", "time-aligned", Some("transcription"), None).unwrap();
+    let (s, _) = c.add_segment(&t, &tier, 0, Some(0.0), Some(900.0), "").unwrap();
+    c.machine_transcribe(&t, &s, &heard("ab", 0.5)).unwrap();
+    c.edit_content(&t, &s, "abc").unwrap();
+    let got = c.corrections().unwrap();
+    assert!(got.pairs.is_empty());
+    assert_eq!(got.unusable, 1);
+}
+
+#[test]
+fn an_open_text_never_lets_a_restricted_recording_out() {
+    let mut rig = Rig::new();
+    let (mut a, _b, text, seg) = rig.pair();
+    let src = a.add_source("Recording", None, "audio", Some("restricted")).unwrap();
+    a.set_access(&text, "open").unwrap();
+    a.machine_transcribe(&text, &seg, &heard_from("kopek", &src)).unwrap();
+    a.edit_content(&text, &seg, "köpek").unwrap();
+    let c = a.corrections().unwrap();
+    assert!(c.pairs.is_empty());
+    assert_eq!(c.restricted, 1);
+}
+
+#[test]
+fn any_ai_term_but_true_is_a_refusal() {
+    let mut rig = Rig::new();
+    let (mut a, _b, text, seg) = rig.pair();
+    let src = a.add_source("Recording", None, "audio", None).unwrap();
+    a.machine_transcribe(&text, &seg, &heard_from("kopek", &src)).unwrap();
+    a.edit_content(&text, &seg, "köpek").unwrap();
+    let ana = a.add_person(Value::obj(vec![("full", Value::str("Ana"))]), Value::Arr(vec![]), "open").unwrap();
+    a.record_consent(&ana, &src, Value::obj(vec![("AI-ok", Value::str("no"))]), "2026-11-10").unwrap();
+    let c = a.corrections().unwrap();
+    assert!(c.pairs.is_empty());
+    assert_eq!(c.refused, 1);
+    assert!(!c.consent_incomplete);
 }

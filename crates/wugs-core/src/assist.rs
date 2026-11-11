@@ -32,6 +32,9 @@ pub struct MachineTranscript {
     pub confidence: f64,
     /// Each phone with its own confidence, in order.
     pub phones: Vec<(String, f64)>,
+    /// The source whose recording the model heard, kept in the record so a
+    /// corrections export knows which audio the segment's times point into.
+    pub source: Option<String>,
 }
 
 /// A segment whose transcription is still the machine's.
@@ -65,6 +68,8 @@ impl Project {
         // text history; a plain set would sit outside it, and the next merged
         // edit would add the whole text again. Write into the history there.
         let has_history = !self.proj.text_updates(segment, "content")?.is_empty();
+        // The span the model heard, so an export can tell when it moved since.
+        let span = [("start", self.proj.field_num(segment, "start")?), ("end", self.proj.field_num(segment, "end")?)];
         let mut t = self.intent(MACHINE_INTENT);
         if has_history {
             t.text_edit("segment", segment, text, "content", &m.text)?;
@@ -73,12 +78,22 @@ impl Project {
         }
         let content_op = t.ops.last().expect("the content op was just written").id.clone();
         let phones = m.phones.iter().map(|(p, c)| Value::Arr(vec![Value::str(p), Value::Num(clamp(*c))])).collect();
-        let asr = Value::obj(vec![
+        let mut record = vec![
             ("model", Value::str(&m.model)),
             ("confidence", Value::Num(clamp(m.confidence))),
             ("op", Value::str(&content_op)),
             ("phones", Value::Arr(phones)),
-        ]);
+            ("text", Value::str(&m.text)),
+        ];
+        if let Some(source) = &m.source {
+            record.push(("source", Value::str(source)));
+        }
+        for (k, ms) in span {
+            if let Some(ms) = ms {
+                record.push((k, Value::Num(ms)));
+            }
+        }
+        let asr = Value::obj(record);
         t.set("segment", segment, text, &record_field(&content_op), asr)?;
         t.commit()
     }
@@ -103,5 +118,191 @@ impl Project {
             }
         }
         Ok(mark)
+    }
+}
+
+/// One machine suggestion a person has since checked: what the model heard
+/// and what the transcription says now. Pairs like this are the
+/// human-in-the-loop data (`docs/design/PACKAGES.md` §3): a benchmark set
+/// for the languages people document, or fine-tuning data.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Correction {
+    pub segment: String,
+    pub text: String,
+    /// The source whose recording the segment's times point into.
+    pub source: String,
+    pub start_ms: f64,
+    pub end_ms: f64,
+    pub model: String,
+    pub confidence: f64,
+    /// What the model heard.
+    pub machine: String,
+    /// What the person settled on (possibly the machine's text, kept).
+    pub person: String,
+    /// The segment's times moved after the suggestion, so `machine` was
+    /// heard on a different span than the one `person` describes.
+    pub retimed: bool,
+    /// A consent record covering the recording says AI use is fine. When
+    /// false, none says either way, and the person exporting answers for it.
+    pub consented: bool,
+}
+
+/// Every checked suggestion that may leave the project, and how many were
+/// held back and why.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Corrections {
+    pub pairs: Vec<Correction>,
+    /// Still unchecked: the machine's text is what the segment shows.
+    pub unchecked: usize,
+    /// A consent record covering the recording or text says no AI use.
+    pub refused: usize,
+    /// The text or recording has a restricted or community access level.
+    pub restricted: usize,
+    /// No recording or times to cut the audio from, or the segment was emptied.
+    pub unusable: usize,
+    /// Consent records are still on their way (held in quarantine or waiting
+    /// on an op not yet received), so "no record says" cannot be trusted:
+    /// only pairs a record allows may go.
+    pub consent_incomplete: bool,
+}
+
+impl Project {
+    /// The checked machine suggestions in this project, for a corrections
+    /// export. A segment counts once, with its newest suggestion, once a
+    /// person's edit has answered it (`machine_mark` is clear) and it still
+    /// holds text. Held back: anything a consent record covering its text,
+    /// its recording or the whole project refuses for AI use (`"AI-ok":
+    /// false`), and anything whose access level is not open. Derived from
+    /// the projection only; nothing is written.
+    pub fn corrections(&self) -> Result<Corrections, String> {
+        let mut out = Corrections {
+            consent_incomplete: !self.proj.held_op_ids(crate::SCOPE_PEOPLE)?.is_empty() || !self.proj.pending_op_ids(crate::SCOPE_PEOPLE)?.is_empty(),
+            ..Corrections::default()
+        };
+        let consent = self.ai_consent()?;
+        // Each suggested segment's records, from one scan of the field index.
+        let mut suggested: Vec<(String, Vec<String>)> = Vec::new();
+        for (seg, field) in self.proj.fields_with_prefix("x.asr:")? {
+            match suggested.last_mut() {
+                Some((s, fields)) if *s == seg => fields.push(field),
+                _ => suggested.push((seg, vec![field])),
+            }
+        }
+        for (seg, fields) in suggested {
+            if self.proj.entity_kind(&seg)?.as_deref() != Some("segment") || self.proj.is_tombstoned(&seg)? {
+                continue;
+            }
+            // The newest suggestion this segment ever got.
+            let mut newest: Option<(String, Value)> = None;
+            for field in fields {
+                if let Some((record, hlc)) = self.proj.field(&seg, &field)? {
+                    if newest.as_ref().is_none_or(|(h, _)| hlc > *h) {
+                        newest = Some((hlc, record));
+                    }
+                }
+            }
+            let Some((_, record)) = newest else { continue };
+            let Some(text) = self.proj.field_str(&seg, "text")? else { continue };
+            if self.proj.is_tombstoned(&text)? {
+                continue;
+            }
+            if let Some(tier) = self.proj.field_str(&seg, "tier")? {
+                if self.proj.is_tombstoned(&tier)? {
+                    continue;
+                }
+            }
+            if self.machine_mark(&seg)?.is_some() {
+                out.unchecked += 1;
+                continue;
+            }
+            let person = self.proj.field_str(&seg, "content")?.unwrap_or_default();
+            let source = record.get("source").and_then(Value::as_str).map(str::to_string).or(self.proj.field_str(&text, "source")?);
+            let times = (self.proj.field_num(&seg, "start")?, self.proj.field_num(&seg, "end")?);
+            let (Some(source), (Some(start_ms), Some(end_ms))) = (source, times) else {
+                out.unusable += 1;
+                continue;
+            };
+            if self.proj.entity_kind(&source)?.as_deref() != Some("source") || self.proj.is_tombstoned(&source)? {
+                out.unusable += 1;
+                continue;
+            }
+            if person.trim().is_empty() || end_ms <= start_ms {
+                out.unusable += 1;
+                continue;
+            }
+            // The text's own linked recording too, if it differs from the one heard.
+            let linked = self.proj.field_str(&text, "source")?;
+            let mut covers = vec![text.as_str(), source.as_str(), self.project_id.as_str()];
+            covers.extend(linked.as_deref());
+            if covers.iter().any(|c| consent.get(*c) == Some(&false)) {
+                out.refused += 1;
+                continue;
+            }
+            // Both what the transcription belongs to and the audio it describes must be open.
+            if self.text_access(&text)? != "open" || self.proj.field_str(&source, "access")?.is_some_and(|a| a != "open") {
+                out.restricted += 1;
+                continue;
+            }
+            // Records from before the text was kept: the phones without pauses.
+            let machine = match record.get("text").and_then(Value::as_str) {
+                Some(t) => t.to_string(),
+                None => match record.get("phones") {
+                    Some(Value::Arr(phones)) => phones.iter().filter_map(|p| match p {
+                        Value::Arr(pair) => pair.first().and_then(Value::as_str),
+                        _ => None,
+                    }).collect(),
+                    _ => String::new(),
+                },
+            };
+            let heard_on = (record.get("start").and_then(Value::as_f64), record.get("end").and_then(Value::as_f64));
+            out.pairs.push(Correction {
+                retimed: matches!(heard_on, (Some(s), Some(e)) if s != start_ms || e != end_ms),
+                consented: covers.iter().any(|c| consent.get(*c) == Some(&true)),
+                segment: seg,
+                text,
+                source,
+                start_ms,
+                end_ms,
+                model: record.get("model").and_then(Value::as_str).unwrap_or_default().to_string(),
+                confidence: record.get("confidence").and_then(Value::as_f64).unwrap_or(0.0),
+                machine,
+                person,
+            });
+        }
+        out.pairs.sort_by(|a, b| a.text.cmp(&b.text).then(a.start_ms.total_cmp(&b.start_ms)).then(a.segment.cmp(&b.segment)));
+        Ok(out)
+    }
+
+    /// What live consent records say about AI use, per thing they cover:
+    /// false when any refuses, true when some allow and none refuses. Any
+    /// `AI-ok` other than `true` (`false`, `"no"`, anything) is a refusal.
+    fn ai_consent(&self) -> Result<std::collections::HashMap<String, bool>, String> {
+        let mut said = std::collections::HashMap::new();
+        for c in self.proj.entities_of_kind("consent")? {
+            if self.proj.is_tombstoned(&c)? {
+                continue;
+            }
+            let Some(covers) = self.proj.field_str(&c, "covers")? else { continue };
+            let Some((terms, _)) = self.proj.field(&c, "terms")? else { continue };
+            let Some(term) = terms.get("AI-ok") else { continue };
+            let ok = matches!(term, Value::Bool(true));
+            let entry = said.entry(covers).or_insert(ok);
+            *entry = *entry && ok;
+        }
+        Ok(said)
+    }
+
+    /// A text's effective access: its own level, else its linked source's,
+    /// else open (DATA-MODEL §4, the rule sync's `policy_from_access` uses).
+    fn text_access(&self, text: &str) -> Result<String, String> {
+        if let Some(a) = self.proj.field_str(text, "access")? {
+            return Ok(a);
+        }
+        if let Some(src) = self.proj.field_str(text, "source")? {
+            if let Some(a) = self.proj.field_str(&src, "access")? {
+                return Ok(a);
+            }
+        }
+        Ok("open".into())
     }
 }
