@@ -44,24 +44,31 @@ export function progressLabel(done: number, total: number): string {
   return `${megabytes(done)} of ${megabytes(total)} (${Math.floor((done / total) * 100)}%)`;
 }
 
-type Summary = { consented: number; unrecorded: number; unchecked: number; refused: number; restricted: number; unusable: number };
+type Summary = { ready: number; recordedNo: number; restricted: number; unchecked: number; unusable: number };
 
-/** How many checked suggestions an export holds, given the person's word on consent. */
-export function exportable(s: Summary, confirmed: boolean): number {
-  return s.consented + (confirmed ? s.unrecorded : 0);
+/** How many clips an export holds: the ready ones, plus those the records speak against when the person includes them. */
+export function exportable(s: Summary, includeFlagged: boolean): number {
+  return s.ready + (includeFlagged ? s.recordedNo + s.restricted : 0);
 }
 
 const n = (k: number, one: string, many = `${one}s`) => `${k} ${k === 1 ? one : many}`;
 
-/** One line on what is ready to export and what stays home, in words. */
+/** One line on what is ready to export and what is not, in words. */
 export function correctionsLine(s: Summary): string {
-  const ready = s.consented + s.unrecorded;
-  const held = [
+  const ready = s.ready + s.recordedNo + s.restricted;
+  const not = [
     s.unchecked > 0 ? `${n(s.unchecked, "suggestion")} not checked yet` : null,
-    s.refused > 0 ? `${s.refused} refused by a consent record` : null,
-    s.restricted > 0 ? `${s.restricted} restricted` : null,
     s.unusable > 0 ? `${s.unusable} without a recording` : null,
   ].filter((x) => x !== null);
   const head = ready === 0 ? "No checked suggestions to export yet." : `${n(ready, "checked suggestion")} ready to export.`;
-  return held.length === 0 ? head : `${head} Staying here: ${held.join(", ")}.`;
+  return not.length === 0 ? head : `${head} Not yet: ${not.join(", ")}.`;
+}
+
+/** What the project's own records say against some clips, or null when nothing does. */
+export function flaggedLine(s: Summary): string | null {
+  const parts = [
+    s.recordedNo > 0 ? `${s.recordedNo} ${s.recordedNo === 1 ? "has a consent record" : "have consent records"} that ${s.recordedNo === 1 ? "does" : "do"} not allow AI use` : null,
+    s.restricted > 0 ? `${s.restricted} ${s.restricted === 1 ? "is" : "are"} marked restricted` : null,
+  ].filter((x) => x !== null);
+  return parts.length === 0 ? null : `In this project's records, ${parts.join(" and ")}. They are left out unless you include them; the datasheet notes what the records say.`;
 }

@@ -854,15 +854,6 @@ fn load_roster(p: &Project) -> Result<(RosterFile, Roster), String> {
     Ok((file, roster))
 }
 
-/// Whether this device is on the project's roster as a guest. A project
-/// with no roster, or a device without a key, has no guests.
-pub fn is_guest(session: &mut Session, key: Option<&DeviceKey>) -> Result<bool, String> {
-    let p = project(session)?;
-    let (Some(key), true) = (key, RosterFile::in_project(&p.root).exists()) else { return Ok(false) };
-    let (_, roster) = load_roster(p)?;
-    Ok(matches!(roster.state().standing(&key.public()), Standing::Guest))
-}
-
 /// A project made before sync auth, or never paired, has no roster: this
 /// device founds it. Either way this device must then be a member.
 fn found_roster(p: &Project, key: &DeviceKey, label: &str) -> Result<(), String> {

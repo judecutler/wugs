@@ -5,7 +5,7 @@
 // tinted until someone edits them (src/assist/logic.ts).
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, correctionsExport, correctionsSummary, errorText, MODEL_CHANGED, type AssistModel, type CapabilityView, type CorrectionsSummary } from "../api";
-import { batchTargets, correctionsLine, exportable, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
+import { batchTargets, correctionsLine, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
 import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
 import { emptyState, h } from "../dom";
 import { assistModelList, capability, getState, mediaSource, refreshCapabilities, refreshText, setAssistModels, showToast } from "../store";
@@ -80,8 +80,8 @@ export const assistPanel: PanelDef = {
     const el = h("div", { className: "panel panel-assist" });
     let tierChoice: string | null = null;
     let corrections: CorrectionsSummary | null = null;
-    /** The person's word on consent, given for one project only. */
-    let confirmed = false;
+    /** Include clips the project's records speak against: chosen per project. */
+    let includeFlagged = false;
     let countedFor: string | null = null;
     let exporting = false;
 
@@ -223,17 +223,20 @@ export const assistPanel: PanelDef = {
     function correctionControls() {
       if (corrections === null) return h("p", { className: "as-note", textContent: "Counting…" });
       const c = corrections;
-      const vouch = confirmed && c.recordsOnly === null;
-      const count = exportable(c, vouch);
-      const consent = c.unrecorded === 0
+      const count = exportable(c, includeFlagged);
+      const flagged = flaggedLine(c);
+      const consent = flagged === null
         ? null
-        : c.recordsOnly !== null
-          ? h("p", { className: "as-note", textContent: c.recordsOnly })
-          : h(
-            "label",
-            { className: "as-note" },
-            h("input", { type: "checkbox", checked: confirmed, onchange: (e: Event) => { confirmed = (e.target as HTMLInputElement).checked; draw(); } }),
-            ` I have the speakers' consent to use ${c.unrecorded === 1 ? "this recording" : `these ${c.unrecorded} recordings`} for training and testing speech models (no consent record in this project says either way).`,
+        : h(
+            "div",
+            {},
+            h("p", { className: "as-note", textContent: flagged }),
+            h(
+              "label",
+              { className: "as-note" },
+              h("input", { type: "checkbox", checked: includeFlagged, onchange: (e: Event) => { includeFlagged = (e.target as HTMLInputElement).checked; draw(); } }),
+              " Include them",
+            ),
           );
       return h(
         "div",
@@ -256,7 +259,7 @@ export const assistPanel: PanelDef = {
       exporting = true;
       draw();
       try {
-        const r = await correctionsExport({ folder, unrecorded: confirmed && corrections?.recordsOnly === null });
+        const r = await correctionsExport({ folder, flagged: includeFlagged });
         showToast({
           tone: r.failed > 0 ? "warn" : "info",
           lines: [`Exported ${r.written} correction${r.written === 1 ? "" : "s"} to ${r.folder}.`, ...(r.failed > 0 ? [`${r.failed} could not be cut from the recording.`, ...r.problems] : [])],
@@ -277,7 +280,7 @@ export const assistPanel: PanelDef = {
       // Another project: its consent is a new question, and the old count is not its own.
       if (st.info.path !== countedFor) {
         countedFor = st.info.path;
-        confirmed = false;
+        includeFlagged = false;
         corrections = null;
       }
       if (counting) {

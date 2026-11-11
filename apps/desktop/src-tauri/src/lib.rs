@@ -702,24 +702,16 @@ fn assist_suggest(s: State<SessionThread>, dir: State<AppData>, worker: State<as
 
 /// What a corrections export would hold now.
 #[tauri::command(async)]
-fn corrections_summary(s: State<SessionThread>, id: State<Identity>) -> Result<corrections::Summary, String> {
-    let key = id.key().ok();
-    s.run(move |s| {
-        let guest = session::is_guest(s, key.as_deref())?;
-        corrections::summary(s, guest)
-    })
+fn corrections_summary(s: State<SessionThread>) -> Result<corrections::Summary, String> {
+    s.run(corrections::summary)
 }
 
 /// Export the checked suggestions into a new folder inside `folder`.
-/// `unrecorded`: the person confirmed consent where no record says.
+/// `flagged`: also include those the project's records speak against.
 #[tauri::command(async)]
-fn corrections_export(s: State<SessionThread>, id: State<Identity>, folder: String, unrecorded: bool) -> Result<corrections::Exported, String> {
-    let key = id.key().ok();
-    let (jobs, sum) = s.run(move |s| {
-        let guest = session::is_guest(s, key.as_deref())?;
-        corrections::prepare(s, guest, unrecorded)
-    })?;
-    corrections::write(&jobs, &sum, unrecorded, std::path::Path::new(&folder), &corrections::today())
+fn corrections_export(s: State<SessionThread>, folder: String, flagged: bool) -> Result<corrections::Exported, String> {
+    let (jobs, sum) = s.run(move |s| corrections::prepare(s, flagged))?;
+    corrections::write(&jobs, &sum, std::path::Path::new(&folder), &corrections::today())
 }
 
 /// The start of `assist_suggest`'s refusal when the model changed under a run.
