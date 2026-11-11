@@ -132,7 +132,7 @@ A tool you turn on but do not place in the layout starts closed. Open it from **
 
 The order of the list matters:
 
-- The first placement fills the workspace. It has only `panel`, with no `place` and no `of`.
+- The first placement fills the workspace. It needs only `panel`, with no `place` and no `of` (a starting size is allowed).
 - Every later placement needs both `place` and `of`, and `of` must name a panel placed earlier in the list.
 
 A size is only a starting size. The workspace shares the rest of the space among the panels.

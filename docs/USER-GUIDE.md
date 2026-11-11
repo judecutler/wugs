@@ -45,7 +45,7 @@ To work on an existing recording:
 
 wugs reads WAV, M4A (AAC or Apple Lossless), MP3, FLAC, Ogg Vorbis, and AIFF. It decodes compressed files to WAV, the format archives ask for, and keeps the WAV in the project. It does not keep the original compressed file. The recording loads on the timeline when the import finishes.
 
-wugs cannot read Opus, WMA, AMR, or video files other than MP4. Convert those to WAV first. Recordings with three or more channels are mixed to mono.
+wugs cannot read Opus, WMA, AMR, or video files other than MP4. Convert those to WAV first. A compressed recording with three or more channels is mixed to mono when it is decoded; a WAV keeps its channels, and the timeline draws the first two.
 
 To show a recording that is already in the project, pick it from the recording list in the Timeline toolbar.
 
@@ -295,7 +295,7 @@ The **Elicit** panel collects words with a speaker in two ways. Every answer bec
 
 The progress bar counts answered concepts. Use **To do**, **Done**, and **All** to filter the list.
 
-- If the word already exists in the lexicon, wugs offers **Use «word»**. Click it to link the existing entry instead of adding a second one.
+- If the word already exists in the lexicon, wugs offers **Use** with the entry's lemma and gloss. Click it to link the existing entry instead of adding a second one.
 - To take an answer back, click the × on its chip. The entry stays in the lexicon.
 - If a concept does not apply to the language, click **N/A**. Any text in the gloss field is kept as the reason.
 - Press **Enter** on an empty word field to skip ahead without answering.
@@ -485,6 +485,7 @@ wugs is young. These limits are known and stated so that you can plan around the
 - Recording in the app is not verified on Linux.
 - wugs decodes compressed audio to WAV on import. It does not read Opus, WMA, AMR, or most video files.
 - Auto-segment uses loudness only and has no sensitivity setting.
+- On Linux, some window managers take Alt+drag for moving windows, so free edge placement may need a different setup there.
 - Timeline undo is per text and lasts only until wugs closes.
 - The Speech assist models take no language hint and no phone set for your language.
 - The Praat overlays use fixed settings and draw no spectrogram.
