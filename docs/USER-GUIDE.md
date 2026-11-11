@@ -63,7 +63,7 @@ If you are not ready to name it, click **Keep for later**. To throw the take awa
 
 wugs saves the recording to disk every few seconds while you record. If the computer crashes or loses power, you lose at most the last five seconds. While a recording is in progress or unsaved, wugs does not let you open another project or close the window.
 
-Recording works on Windows and macOS. On Linux, the system's web view may not allow recording. In that case the Media panel says "This system's web view cannot record audio", and you import a file instead.
+Recording is meant to work on Windows and macOS. On Linux, the system's web view may not allow recording. In that case the Media panel says "This system's web view cannot record audio", and you import a file instead.
 
 ## Segment the recording
 
@@ -257,7 +257,7 @@ The segment needs start and end times for this. If it has none, give it times on
 
 ## Build the lexicon
 
-The **Lexicon** panel lists entries on the left and edits the selected entry on the right.
+The **Lexicon** panel has a list of entries beside an editor for the selected entry.
 
 ### Add and edit entries
 
@@ -420,15 +420,16 @@ On a computer that already has the project:
 
 1. Open the **Devices** panel.
 2. To let the new device read but never send changes, select **Guest (reads open material only, never sends)**.
-3. Click **Show pairing code**. The panel shows an eight-digit code, this computer's network port, and when the code expires.
+3. Click **Show pairing code**. The panel shows an eight-digit code, the network port, and when the code expires.
 
 On the new computer:
 
 1. Type your **researcher id** in the top bar.
 2. Open the **Devices** panel and go to **Join a project**.
-3. Type the address and the code from the first computer.
-4. Click **Choose a folder and join**, and choose an empty folder.
-5. Sync with the first computer to bring the project over.
+3. Under **Address**, type the first computer's network address and the port it shows, as `host:port`, for example `192.168.1.20:41234`.
+4. Under **Code**, type the eight-digit code.
+5. Click **Choose a folder and join**, and choose an empty folder.
+6. Sync with the first computer to bring the project over.
 
 A guest sees only material whose access is open, and never sends changes back.
 
@@ -437,7 +438,7 @@ A guest sees only material whose access is open, and never sends changes back.
 1. On one computer, click **Make this device reachable**.
 2. On the other, click **Find devices**, then click **Sync** beside the device it finds.
 
-If **Find devices** finds nothing, type the other computer's address in the field under **Sync** and click **Sync now**.
+If **Find devices** finds nothing, type the other computer's address as `host:port` in the field under **Sync** and click **Sync now**.
 
 If a computer is lost or stolen, click **Mark lost…** beside it on another computer, then **Mark lost**. A device marked lost can never sync again.
 
@@ -466,7 +467,7 @@ To stop the check, open **Updates…** in the top bar and choose **Stop checking
 | Problem | What to do |
 | --- | --- |
 | A panel is missing. | Click **Show panel…** in the top bar, or **Reset layout**. |
-| A message appears at the bottom of the window. | Read it. It says what failed. Edits already saved are kept, because wugs writes each edit to the project when you make it. Click **Dismiss** to close the message. |
+| An error message appears. | Read it. It says what failed. Edits already saved are kept, because wugs writes each edit to the project when you make it. Click **Dismiss** to close the message. |
 | **Recovered recordings** appears in the Media panel. | wugs found recordings that were still on disk when the app last closed. Type a name and click **Import** to keep one. Click **Discard**, then **Really discard?**, to throw it away. Nothing happens until you choose. |
 | wugs says the project folder was moved or copied. | If you moved the folder, click **I moved it**. If it is a copy and the original is still in use, click **Create fresh device identity**, so the two folders sync as two devices. |
 | Auto-segment makes one long segment. | The recording has few pauses. Choose **by word**, or drag on a track lane to draw segments. |
@@ -485,7 +486,7 @@ wugs is young. These limits are known and stated so that you can plan around the
 - wugs decodes compressed audio to WAV on import. It does not read Opus, WMA, AMR, or most video files.
 - Auto-segment uses loudness only and has no sensitivity setting.
 - Timeline undo is per text and lasts only until wugs closes.
-- Speech assist has a language-independent phone model only. It has no language hint, and it reads WAV recordings only.
+- The Speech assist models take no language hint and no phone set for your language.
 - The Praat overlays use fixed settings and draw no spectrogram.
 - The lexicon has no editor yet for variants, examples, or cross-references.
 - The Elicit panel has no paradigms, no session planning, no audio per answer, and no lists of your own.
