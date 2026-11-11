@@ -227,7 +227,7 @@ fn a_suggestion_is_heard_and_written_as_the_machine() {
     let heard = Recognition { phones: vec![phone("k", 0.0, 0.9), phone("o", 40.0, 0.3), phone("p", 400.0, 0.6)], confidence: 0.6 };
     let fixed = heard.clone();
     let got = worker.hear("m", move || Ok(Box::new(Fixed(fixed)) as Box<dyn Hearer>), target.wav, target.start_ms, target.end_ms).unwrap();
-    let done = assist::commit(&mut s, &text, &seg, &spec("http://127.0.0.1:1", None), &got).unwrap();
+    let done = assist::commit(&mut s, &text, &seg, &source, &spec("http://127.0.0.1:1", None), &got).unwrap();
     assert_eq!(done.content, "ko p");
     let row = session::get_text(&mut s, &text).unwrap().segments.into_iter().find(|r| r.id == seg).unwrap();
     assert_eq!(row.content, "ko p");
@@ -246,7 +246,7 @@ fn a_suggestion_is_heard_and_written_as_the_machine() {
 #[test]
 fn hearing_nothing_writes_nothing() {
     let (_dir, mut s, _source, text, seg) = project();
-    let done = assist::commit(&mut s, &text, &seg, &spec("http://127.0.0.1:1", None), &Recognition { phones: vec![], confidence: 0.0 }).unwrap();
+    let done = assist::commit(&mut s, &text, &seg, "src_none", &spec("http://127.0.0.1:1", None), &Recognition { phones: vec![], confidence: 0.0 }).unwrap();
     assert_eq!(done.content, "");
     assert!(!done.notes.is_empty());
     let row = session::get_text(&mut s, &text).unwrap().segments.into_iter().find(|r| r.id == seg).unwrap();
@@ -299,4 +299,50 @@ fn the_fbank_runtime_hears_through_the_catalogue_adapter() {
     let mut h = assist::hearer(&dir.0, m).unwrap();
     let heard = h.hear(&file, 200.0, 1700.0).unwrap();
     assert!(heard.phones.iter().all(|p| p.end_ms <= 1500.0 + 1e-6));
+}
+
+#[test]
+fn a_checked_suggestion_exports_as_a_clip_with_both_transcriptions() {
+    use wugs_desktop::corrections;
+    let (dir, mut s, source, text, seg) = project();
+    let heard = Recognition { phones: vec![phone("k", 0.0, 0.9), phone("o", 40.0, 0.5)], confidence: 0.7 };
+    assist::commit(&mut s, &text, &seg, &source, &spec("http://127.0.0.1:1", None), &heard).unwrap();
+    assert_eq!(corrections::summary(&mut s).unwrap().unchecked, 1, "nothing leaves until a person checks it");
+    session::edit_segment_content(&mut s, &text, &seg, "kɔ").unwrap();
+
+    let sum = corrections::summary(&mut s).unwrap();
+    assert_eq!((sum.consented, sum.unrecorded, sum.unchecked), (0, 1, 0));
+    // Without the person's word for consent, a suggestion no record speaks for stays.
+    let (jobs, _) = corrections::prepare(&mut s, false).unwrap();
+    assert!(jobs.is_empty());
+    let (jobs, sum) = corrections::prepare(&mut s, true).unwrap();
+    assert_eq!(jobs.len(), 1);
+
+    let out = dir.0.join("out");
+    fs::create_dir_all(&out).unwrap();
+    let done = corrections::write(&jobs, &sum, true, &out, "2026-11-10").unwrap();
+    assert_eq!((done.written, done.failed), (1, 0));
+    let folder = PathBuf::from(&done.folder);
+    assert_eq!(folder, out.join("wugs-corrections-2026-11-10"));
+    let read = |f: &str| fs::read_to_string(folder.join(f)).unwrap();
+    assert_eq!(read("wav.scp"), format!("{seg} wav/{seg}.wav\n"));
+    assert_eq!(read("text.good"), format!("{seg} kɔ\n"));
+    assert_eq!(read("text.machine"), format!("{seg} ko\n"));
+    assert_eq!(read("utt2model"), format!("{seg} test-model\n"));
+    assert!(!folder.join("retimed").exists());
+    assert!(read("README.md").contains("confirmed they have the speakers' consent"));
+    // One second of the recording at 16 kHz mono, 16-bit.
+    let clip = fs::metadata(folder.join("wav").join(format!("{seg}.wav"))).unwrap().len();
+    assert_eq!(clip, 44 + 16_000 * 2);
+
+    // A second export the same day goes beside the first, never over it.
+    let again = corrections::write(&jobs, &sum, true, &out, "2026-11-10").unwrap();
+    assert_eq!(PathBuf::from(again.folder), out.join("wugs-corrections-2026-11-10-2"));
+}
+
+#[test]
+fn today_is_a_calendar_date() {
+    let d = wugs_desktop::corrections::today();
+    assert_eq!(d.len(), 10);
+    assert!(d.as_str() >= "2026-01-01" && d.as_bytes()[4] == b'-' && d.as_bytes()[7] == b'-', "{d}");
 }

@@ -1271,6 +1271,19 @@ impl Projection {
         Ok(out)
     }
 
+    /// Every `(target, field)` whose field name starts with `prefix` (such as
+    /// `x.asr:`), from one range scan of the field index.
+    pub fn fields_with_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>, String> {
+        let mut s = self.db.prepare("SELECT target, field FROM fields WHERE field >= ?1 AND field < ?2 ORDER BY target, field")?;
+        s.bind_text(1, prefix)?;
+        s.bind_text(2, &format!("{prefix}\u{10FFFF}"))?;
+        let mut out = Vec::new();
+        while s.step()? {
+            out.push((s.col_text(0), s.col_text(1)));
+        }
+        Ok(out)
+    }
+
     /// Full-text search over the language-bearing fields. The query is
     /// user text, never FTS syntax: each whitespace token becomes a quoted
     /// prefix term, so punctuation and operators cannot error or widen the

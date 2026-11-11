@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { batchTargets, megabytes, progressLabel, suggestable, tint, tintTitle } from "./logic.ts";
+import { batchTargets, megabytes, progressLabel, suggestable, tint, tintTitle, correctionsLine, exportable } from "./logic.ts";
 
 test("every machine transcription is tinted, more strongly when unsure", () => {
   assert.equal(tint({ model: "m", confidence: 0.95 }), "unsure");
@@ -42,4 +42,20 @@ test("sizes read as people say them", () => {
   assert.equal(megabytes(640 * 1024 * 1024), "640 MB");
   assert.equal(progressLabel(320 * 1024 * 1024, 640 * 1024 * 1024), "320 MB of 640 MB (50%)");
   assert.equal(progressLabel(1024 * 1024, 0), "1.0 MB so far");
+});
+
+test("the export line says what is ready and what stays home", () => {
+  const none = { consented: 0, unrecorded: 0, unchecked: 0, refused: 0, restricted: 0, unusable: 0 };
+  assert.equal(correctionsLine(none), "No checked suggestions to export yet.");
+  assert.equal(correctionsLine({ ...none, consented: 1 }), "1 checked suggestion ready to export.");
+  assert.equal(
+    correctionsLine({ ...none, consented: 2, unrecorded: 3, unchecked: 1, refused: 4 }),
+    "5 checked suggestions ready to export. Staying here: 1 suggestion not checked yet, 4 refused by a consent record.",
+  );
+});
+
+test("suggestions no consent record speaks for go only on the person's word", () => {
+  const s = { consented: 2, unrecorded: 3, unchecked: 0, refused: 0, restricted: 0, unusable: 0 };
+  assert.equal(exportable(s, false), 2);
+  assert.equal(exportable(s, true), 5);
 });

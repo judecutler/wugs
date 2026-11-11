@@ -415,7 +415,7 @@ pub struct Suggested {
 }
 
 /// Write what the model heard into the segment, as the machine.
-pub fn commit(session: &mut crate::session::Session, text: &str, segment: &str, model: &Manifest, heard: &Recognition) -> Result<Suggested, String> {
+pub fn commit(session: &mut crate::session::Session, text: &str, segment: &str, source: &str, model: &Manifest, heard: &Recognition) -> Result<Suggested, String> {
     let content = heard.text();
     if content.is_empty() {
         return Ok(Suggested { content, model: model.name.clone(), confidence: 0.0, notes: vec!["The model heard no speech in this segment.".into()] });
@@ -426,6 +426,7 @@ pub fn commit(session: &mut crate::session::Session, text: &str, segment: &str, 
         model: model.id.clone(),
         confidence: heard.confidence as f64,
         phones: heard.phones.iter().map(|ph| (ph.symbol.clone(), ph.confidence as f64)).collect(),
+        source: Some(source.to_string()),
     };
     let res = p.machine_transcribe(text, segment, &transcript)?;
     Ok(Suggested { content, model: model.name.clone(), confidence: heard.confidence as f64, notes: crate::session::finding_lines(&res) })
