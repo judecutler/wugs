@@ -3,7 +3,7 @@
 // translation line up under the transcription. The project's earlier analyses
 // are one keypress away: Enter on an empty word accepts the ghost suggestion.
 import {
-  addSegment, addTier, editSegmentContent, errorText, glossAddLexeme, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossTokenize,
+  addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossTokenize,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
@@ -16,7 +16,7 @@ import { breakdownChanged, formatBreakdown, marked, parseBreakdown, type MorphTy
 import { tokenState } from "../gloss/state";
 import { applyNeedsConfirm, applyOthersLabel, describe, matchCase } from "../gloss/suggest";
 import { forms } from "../gloss/tokenizer";
-import { needsTranslationTrack, translationLines } from "../gloss/translation";
+import { isPaired, NEW_TRACK, translationLines } from "../gloss/translation";
 import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { provide } from "../palette/registry";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -564,7 +564,12 @@ export const glossPanel: PanelDef = {
     function translationBlock(text: NonNullable<ReturnType<typeof selected>>): HTMLElement {
       const { segment, text: detail } = text;
       const box = h("div", { className: "gl-free" }, h("h3", { textContent: "Free translation" }));
-      if (needsTranslationTrack(detail.tiers)) {
+      if (segment.parent) {
+        box.append(h("p", { className: "note", textContent: "This segment belongs to another one (a translation or a dependent annotation), so it has no translation of its own." }));
+        return box;
+      }
+      const lines = translationLines(segment, detail.segments, detail.tiers);
+      if (lines.length === 0) {
         const add = h("button", { type: "button", textContent: "Add translation track" });
         add.onclick = () => {
           void addTier({ template: "translation", name: null }).then(() => refreshText(), (e) => showToast({ tone: "error", lines: [errorText(e)] }));
@@ -572,14 +577,10 @@ export const glossPanel: PanelDef = {
         box.append(h("p", { className: "note", textContent: "No translation track yet. A translation lives on its own track, lined up in time with the utterance." }), add);
         return box;
       }
-      if (segment.startMs === null || segment.endMs === null) {
-        box.append(h("p", { className: "note", textContent: "This segment has no times, so no translation can line up with it. Give it times on the Timeline." }));
-        return box;
-      }
-      for (const line of translationLines(segment, detail.segments, detail.tiers)) {
+      for (const line of lines) {
         const cell = `t:${line.tier.id}`;
         const stored = line.segment?.content ?? "";
-        const input = h("input", { className: "gl-free-input", value: drafts.get(cell) ?? stored, spellcheck: false, placeholder: line.segment === null ? "Type a translation. It becomes a segment over this one." : "" });
+        const input = h("input", { className: "gl-free-input", value: drafts.get(cell) ?? stored, spellcheck: false, placeholder: line.segment === null ? (isPaired(line.tier) ? "Type a translation of this sentence." : "Type a translation. It becomes a segment over this one.") : "" });
         input.dataset.cell = cell;
         const commit = () => {
           const draft = drafts.get(cell);
@@ -592,7 +593,9 @@ export const glossPanel: PanelDef = {
                 })
               : draft.trim() === ""
                 ? Promise.resolve()
-                : addSegment({ textId: detail.id, tierId: line.tier.id, startMs: segment.startMs, endMs: segment.endMs, content: draft }).then(() => undefined);
+                : isPaired(line.tier)
+                  ? addTranslation({ textId: detail.id, tierId: line.tier.id === NEW_TRACK ? null : line.tier.id, segmentId: segment.id, content: draft }).then(() => undefined)
+                  : addSegment({ textId: detail.id, tierId: line.tier.id, startMs: segment.startMs, endMs: segment.endMs, content: draft }).then(() => undefined);
           void job.then(() => refreshConflicts()).then(() => refreshText(), (e) => {
             drafts.set(cell, draft);
             showToast({ tone: "error", lines: [errorText(e)] });

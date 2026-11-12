@@ -241,6 +241,14 @@ pub(crate) fn each_segment(
             if !wanted.contains(&tier) {
                 continue;
             }
+            // A translation whose sentence was deleted goes with it.
+            if translations {
+                if let Some(parent) = p.proj.field_str(&seg, "parent")?.filter(|v| !v.is_empty()) {
+                    if p.proj.is_tombstoned(&parent)? {
+                        continue;
+                    }
+                }
+            }
             let content = p.proj.field_str(&seg, "content")?.unwrap_or_default();
             let mut tokens: Vec<String> = if translations { Vec::new() } else { p.proj.members(&seg)? };
             // FLEx keeps punctuation as tokens of their own; they are not words.

@@ -344,16 +344,21 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 return Err(format!("{file_name} has no text in its «{}» column; nothing was imported", table.text_column));
             }
             let tier = session::utterance_tier(p)?;
+            let mut translation_tier: Option<String> = None;
             // Texts already here by title, looked up once rather than per document.
             let mut by_title: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
             for t in p.proj.entities_of_kind("text")? {
                 by_title.entry(p.proj.field_str(&t, "title")?.unwrap_or_default()).or_default().push(t);
             }
-            let (mut made, mut matched, mut segments, mut first) = (0usize, 0usize, 0usize, None);
+            let (mut made, mut matched, mut segments, mut translations, mut first) = (0usize, 0usize, 0usize, 0usize, None);
             for (title, rows) in &table.documents {
                 let title = p.proj.nfc(title.as_deref().unwrap_or(&stem));
-                let rows: Vec<(String, Vec<(String, String)>)> = rows.iter().filter(|r| !r.text.trim().is_empty()).map(|r| (p.proj.nfc(r.text.trim()), r.extras.iter().map(|(n, v)| (n.clone(), p.proj.nfc(v))).collect())).collect();
-                let units: Vec<String> = rows.iter().map(|(t, _)| t.clone()).collect();
+                let rows: Vec<(String, String, Vec<(String, String)>)> = rows
+                    .iter()
+                    .filter(|r| !r.text.trim().is_empty())
+                    .map(|r| (p.proj.nfc(r.text.trim()), p.proj.nfc(r.translation.trim()), r.extras.iter().map(|(n, v)| (n.clone(), p.proj.nfc(v))).collect()))
+                    .collect();
+                let units: Vec<String> = rows.iter().map(|(t, _, _)| t.clone()).collect();
                 let candidates = by_title.get(&title).cloned().unwrap_or_default();
                 let text = match same_text_among(p, &candidates, &units)? {
                     Some(t) => {
@@ -361,10 +366,16 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                         t
                     }
                     None => {
-                        let refs: Vec<(&str, Vec<(String, String)>)> = rows.iter().map(|(t, x)| (t.as_str(), x.clone())).collect();
+                        let refs: Vec<wugs_core::WrittenRow> = rows.iter().map(|(t, tr, x)| wugs_core::WrittenRow { text: t, translation: tr, extras: x.clone() }).collect();
                         made += 1;
                         segments += refs.len();
-                        let id = p.import_written_rows(&title, &tier, &refs)?.0;
+                        translations += rows.iter().filter(|(_, tr, _)| !tr.is_empty()).count();
+                        // The track is found or made once, and only when a new text carries a translation.
+                        if translation_tier.is_none() && rows.iter().any(|(_, tr, _)| !tr.is_empty()) {
+                            let column = table.translation_column.as_deref().unwrap_or_default();
+                            translation_tier = Some(session::translation_track(p, &tier, crate::table_text::specific_translation(column))?);
+                        }
+                        let id = p.import_written_rows(&title, &tier, translation_tier.as_deref(), &refs)?.0;
                         by_title.entry(title.clone()).or_default().push(id.clone());
                         id
                     }
@@ -378,6 +389,9 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 d => format!("«{}»", d as char),
             };
             lines.push(format!("{} with {} from the column «{}»{}, cells separated by {sep}.", plural(made, "new text", "new texts"), plural(segments, "segment", "segments"), table.text_column, table.group_column.as_ref().map(|g| format!(", one text per «{g}»")).unwrap_or_default()));
+            if let (Some(column), true) = (&table.translation_column, translations > 0) {
+                lines.push(format!("{} from the column «{column}», each paired with its sentence on a translation track.", plural(translations, "translation", "translations")));
+            }
             if table.ungrouped > 0 {
                 lines.push(format!("{} had no «{}» and went into «{stem}».", plural(table.ungrouped, "row", "rows"), table.group_column.clone().unwrap_or_default()));
             }

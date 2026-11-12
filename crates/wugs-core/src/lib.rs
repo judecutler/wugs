@@ -39,6 +39,17 @@ pub const SCOPE_LEXICON: &str = "lexicon";
 pub const SCOPE_CONFIG: &str = "project";
 pub const SCOPE_PEOPLE: &str = "people";
 
+/// One row of a written text for [`Project::import_written_rows`].
+#[derive(Debug, Clone, Default)]
+pub struct WrittenRow<'a> {
+    /// The segment's text.
+    pub text: &'a str,
+    /// Its translation, or empty.
+    pub translation: &'a str,
+    /// `(x.<name>, value)` cells kept on the segment.
+    pub extras: Vec<(String, String)>,
+}
+
 pub struct Project {
     pub root: PathBuf,
     text_peer: u64,
@@ -1082,28 +1093,75 @@ impl Project {
     /// A written text in one txn (a corpus document): the text and one
     /// untimed segment per unit on `tier`, in order. Empty units are left out.
     pub fn import_written_text(&mut self, title: &str, tier: &str, units: &[&str]) -> Result<(String, CommitResult), String> {
-        let rows: Vec<(&str, Vec<(String, String)>)> = units.iter().map(|u| (*u, Vec::new())).collect();
-        self.import_written_rows(title, tier, &rows)
+        let rows: Vec<WrittenRow> = units.iter().map(|u| WrittenRow { text: u, translation: "", extras: Vec::new() }).collect();
+        self.import_written_rows(title, tier, None, &rows)
     }
 
     /// A written text from rows of a table: each row's text is a segment,
     /// and its other cells are kept on the segment as `x.<name>` fields
     /// (names as given, e.g. `x.csv.speaker`), so nothing in the file is lost.
+    /// A row's translation, when there is one and `translation_tier` is
+    /// given, is a segment on that tier whose `parent` is the row's segment
+    /// (as FlexText's free translations are), so untimed rows still pair;
+    /// the tier must be a symbolic association of `tier` (see
+    /// [`Project::add_translation_tier`]), the shape ELAN exports.
     /// Empty rows are skipped; one txn for the whole text.
-    pub fn import_written_rows(&mut self, title: &str, tier: &str, rows: &[(&str, Vec<(String, String)>)]) -> Result<(String, CommitResult), String> {
+    pub fn import_written_rows(&mut self, title: &str, tier: &str, translation_tier: Option<&str>, rows: &[WrittenRow]) -> Result<(String, CommitResult), String> {
         self.require(tier, "tier")?;
+        if let Some(tt) = translation_tier {
+            self.require_paired_tier(tt, tier)?;
+        }
         let mut t = self.intent("import-written-text");
         let id = t.create_scope_root("text", "txt", vec![("title", Value::str(title))]);
-        for (i, (unit, extras)) in rows.iter().map(|(u, x)| (u.trim(), x)).filter(|(u, _)| !u.is_empty()).enumerate() {
+        for (i, row) in rows.iter().filter(|r| !r.text.trim().is_empty()).enumerate() {
             let pos = wugs_model::pos_seq(i);
-            let mut fields = vec![("text", Value::str(&id)), ("tier", Value::str(tier)), ("pos", Value::str(&pos)), ("content", Value::str(unit))];
-            for (name, value) in extras {
+            let mut fields = vec![("text", Value::str(&id)), ("tier", Value::str(tier)), ("pos", Value::str(&pos)), ("content", Value::str(row.text.trim()))];
+            for (name, value) in &row.extras {
                 if name.starts_with("x.") && !value.is_empty() {
                     fields.push((name.as_str(), Value::str(value)));
                 }
             }
-            t.create("segment", "seg", &id, fields);
+            let seg = t.create("segment", "seg", &id, fields);
+            let translation = row.translation.trim();
+            if let (Some(tt), false) = (translation_tier, translation.is_empty()) {
+                t.create(
+                    "segment",
+                    "seg",
+                    &id,
+                    vec![("text", Value::str(&id)), ("tier", Value::str(tt)), ("pos", Value::str(&pos)), ("content", Value::str(translation)), ("parent", Value::str(&seg))],
+                );
+            }
         }
+        let res = t.commit()?;
+        Ok((id, res))
+    }
+
+    /// A translation of `segment` on `tier`: an untimed segment whose
+    /// `parent` is that segment (as FlexText's free translations and a
+    /// table's translation column are), so an untimed sentence still has
+    /// its translation. `tier` must be a symbolic association of the
+    /// segment's own tier; a segment with a live translation there already
+    /// is refused (edit that one). Plain: a new segment closes nothing.
+    pub fn add_translation(&mut self, text: &str, tier: &str, segment: &str, index: usize, content: &str) -> Result<(String, CommitResult), String> {
+        self.require_in_text(segment, "segment", text)?;
+        let own = self.proj.field_str(segment, "tier")?.unwrap_or_default();
+        self.require_paired_tier(tier, &own)?;
+        let content = content.trim();
+        if content.is_empty() {
+            return Err("a translation needs some text".into());
+        }
+        for other in self.proj.children_by_ref("parent", segment, "segment")? {
+            if self.proj.field_str(&other, "tier")?.as_deref() == Some(tier) {
+                return Err("this sentence already has a translation on that track; edit it instead".into());
+            }
+        }
+        let mut t = self.intent("add-translation");
+        let id = t.create(
+            "segment",
+            "seg",
+            text,
+            vec![("text", Value::str(text)), ("tier", Value::str(tier)), ("pos", Value::str(&wugs_model::pos_seq(index))), ("content", Value::str(content)), ("parent", Value::str(segment))],
+        );
         let res = t.commit()?;
         Ok((id, res))
     }
@@ -1204,6 +1262,34 @@ impl Project {
         let id = t.create("tier", "tir", SCOPE_CONFIG, fields);
         let res = t.commit()?;
         Ok((id, res))
+    }
+
+    /// A translation track paired with `parent_tier`: a symbolic
+    /// association (one translation per segment, linked by the segment's
+    /// `parent`, as ELAN and FlexText hold them) with role `translation`.
+    pub fn add_translation_tier(&mut self, name: &str, parent_tier: &str) -> Result<(String, CommitResult), String> {
+        self.require(parent_tier, "tier")?;
+        if name.trim().is_empty() {
+            return Err("a tier needs a name".into());
+        }
+        let mut t = self.intent("add-tier");
+        let id = t.create(
+            "tier",
+            "tir",
+            SCOPE_CONFIG,
+            vec![("name", Value::str(name.trim())), ("kind", Value::str("symbolic-association")), ("role", Value::str("translation")), ("parent", Value::str(parent_tier))],
+        );
+        let res = t.commit()?;
+        Ok((id, res))
+    }
+
+    /// `tier` is a live symbolic association of `parent_tier`.
+    fn require_paired_tier(&self, tier: &str, parent_tier: &str) -> Result<(), String> {
+        self.require(tier, "tier")?;
+        if self.proj.field_str(tier, "kind")?.as_deref() != Some("symbolic-association") || self.proj.field_str(tier, "parent")?.as_deref() != Some(parent_tier) {
+            return Err(format!("tier {tier} is not a translation track of tier {parent_tier}"));
+        }
+        Ok(())
     }
 
     /// Break a segment into tokens, one per form, in order. A segment that
@@ -2575,6 +2661,40 @@ mod tests {
         let contents: Vec<_> = segs.iter().map(|s| p.proj.field_str(s, "content").unwrap().unwrap()).collect();
         assert_eq!(contents, ["One.", "Two words."]);
         assert!(p.import_written_text("X", &txt, &["a"]).is_err(), "a tier, not a text");
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn written_rows_pair_their_translations_by_parent() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let (tier, _) = p.add_tier("utterance", "time-aligned", Some("transcription"), None).unwrap();
+        let (timed, _) = p.add_tier("translation", "time-aligned", Some("translation"), None).unwrap();
+        let (free, _) = p.add_translation_tier("translation", &tier).unwrap();
+        let rows = [
+            WrittenRow { text: "kesi bara", translation: "the dog runs", extras: vec![("x.csv.speaker".into(), "A".into())] },
+            WrittenRow { text: "  ", translation: "orphan", extras: Vec::new() },
+            WrittenRow { text: "lo", translation: " ", extras: Vec::new() },
+        ];
+        let (txt, _) = p.import_written_rows("Sentences", &tier, Some(&free), &rows).unwrap();
+        let segs = p.proj.ordered_children("text", &txt, "segment").unwrap();
+        let on = |t: &str| segs.iter().filter(|s| p.proj.field_str(s, "tier").unwrap().as_deref() == Some(t)).cloned().collect::<Vec<_>>();
+        let (main, translations) = (on(&tier), on(&free));
+        assert_eq!(main.len(), 2, "the empty row is skipped");
+        assert_eq!(translations.len(), 1, "an empty translation makes no segment, nor does an empty row's");
+        assert_eq!(p.proj.field_str(&translations[0], "content").unwrap().as_deref(), Some("the dog runs"));
+        assert_eq!(p.proj.field_str(&translations[0], "parent").unwrap().as_deref(), Some(main[0].as_str()));
+        assert_eq!(p.proj.field_str(&main[0], "x.csv.speaker").unwrap().as_deref(), Some("A"));
+        assert!(p.import_written_rows("Y", &tier, Some(&txt), &rows).is_err(), "a translation tier must be a tier");
+        assert!(p.import_written_rows("Y", &tier, Some(&timed), &rows).is_err(), "a time-aligned track cannot hold paired translations");
+        let lo = main[1].clone();
+        assert!(p.add_translation(&txt, &timed, &lo, 9, "a").is_err(), "not a paired track");
+        let (added, _) = p.add_translation(&txt, &free, &lo, 9, " a ").unwrap();
+        assert!(p.add_translation(&txt, &free, &lo, 10, "b").is_err(), "one translation per sentence per track");
+        assert_eq!(p.proj.field_str(&added, "parent").unwrap().as_deref(), Some(lo.as_str()));
+        assert_eq!(p.proj.field_str(&added, "content").unwrap().as_deref(), Some("a"));
+        assert!(p.add_translation(&txt, &free, &lo, 10, "  ").is_err(), "empty");
+        assert!(p.add_translation(&txt, &lo, &lo, 10, "x").is_err(), "a tier");
+        assert!(p.add_translation(&txt, &free, &txt, 10, "x").is_err(), "a segment of the text");
         fs::remove_dir_all(root).ok();
     }
 

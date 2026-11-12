@@ -215,6 +215,11 @@ fn add_segment(
 }
 
 #[tauri::command(async)]
+fn add_translation(s: State<SessionThread>, text_id: String, tier_id: Option<String>, segment_id: String, content: String) -> Result<String, String> {
+    s.run(move |s| session::add_translation(s, &text_id, tier_id.as_deref(), &segment_id, &content))
+}
+
+#[tauri::command(async)]
 fn set_segment_times(
     s: State<SessionThread>,
     text_id: String,
@@ -1411,6 +1416,7 @@ pub fn run() {
             export_lexicon,
             seal_project,
             add_segment,
+            add_translation,
             edit_segment_content,
             set_segment_times,
             delete_segment,
