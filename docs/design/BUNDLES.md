@@ -26,8 +26,10 @@ version = "0.1.0"
 license = "MPL-2.0"        # the kit's own files; each required package has its own
 source = "https://github.com/…"
 
-[kit]                      # unchanged: name, tools, layout, wug, templates
+[kit]                      # unchanged: id, name, version, tools, layout, wug, templates
+id = "org.wugs.scrolls"    # [package] repeats id and version; the two must agree
 name = "Scrolls"
+version = "0.1.0"
 subtitle = "Corpus"
 
 [bundle]
@@ -36,7 +38,7 @@ summary = "Concordance, frequency lists, keywords and a tagger for any corpus."
 
 [[requires]]               # one per package the kit relies on
 type = "model"             # model | dataset | integration | plugin (after item 36)
-id = "udpipe1-ud-2.5-english-ewt"
+id = "udpipe1-ud-2.5-english-ewt"   # package ids are lowercase: they name folders
 version = "1.0.0"
 files_sha256 = "…"         # the package's file list as the index records it (below)
 capability = "morphosyntax"    # models: the job it does here (features, not models)
@@ -58,7 +60,7 @@ Rules:
 - **Requirements pin a version and `files_sha256`.** `files_sha256` is the SHA-256 of the package's file list in canonical form: one line per file (`<sha256> <size> <path>`, sorted by path, LF, UTF-8). This is exactly what the index records per version, so a client can check a requirement against the index, or against the files on disk, with no other format. When the person installs what the bundle recommends, it installs what its author tested. When they choose another provider for a capability, that is their choice, made on the install screen.
 - **Model requirements are recommendations.** They name a capability as well as a model, so the capability layer can still let the person choose another provider or pin one per project. A bundle never makes a feature depend on one model (CLAUDE.md, "features, not models").
 - **Versions sit side by side.** Packages install to `<app data>/packages/<type>/<id>/<version>/`, so two kits that need different versions of one model can both be installed (the current `models/<id>/` moves there with the index, row 37).
-- **The package format grows to match.** `wugs-package` reads only `type = "model"` today. It gains `kit`, `dataset` and `integration`, each with its own checks, and the kit's `[package]` table replaces the identity keys now in `[kit]` (a kit file without `[package]` is read as today, so existing user kits keep working).
+- **The package format grows to match.** `wugs-package` reads only `type = "model"` today. It gains `kit`, `dataset` and `integration`, each with its own checks, and a kit file's `[package]` sits beside `[kit]`: it may repeat `[kit]`'s id and version and must agree with them, and form edits keep the two in step (a kit file without `[package]` is read as today, so existing user kits keep working). Ids and versions name folders, so a package id is lowercase and a version is letters, digits, `.`, `-`, `+` and `_`. A kit's `source` is an `https://` page; a model manifest's `source` names where its weights come from (`hf:`, `github:`), and the two meet when the index lists both by URL. Duplicating a kit keeps its licence and drops its `source` and `authors`, so a copy is never shared under the original's name.
 - **Projects never depend on bundles.** A project's data stays in its op log. A project may record which bundle and version it was made with, and may pin capability providers (both are settings, as capability pins are today). Removing a bundle never changes a project. It only means that its panels are no longer offered.
 
 ## 3. Two ways to ship one
@@ -113,7 +115,7 @@ Scrolls (row 41, `docs/design/SCROLLS.md`) ships built in. It is still written a
 
 ## 8. Order of work
 
-1. `[package]`, `[bundle]`, `[[requires]]` and `[examples]` in `wugs-kit` and `wugs-package` (parse and check, every problem listed with line and column, as today); the canonical file-list hash; side-by-side package folders. The built-in kits are rewritten to use them.
+1. *Built 2026-11-12 except the side-by-side folders, which move with the index (row 37): `[package]` in a kit file may repeat `[kit]`'s id and version and must agree with them; the built-in kits carry `[package]` and `[bundle]` but no `[[requires]]` yet, because their word lists, domains and sample ship inside the app rather than as packages.* `[package]`, `[bundle]`, `[[requires]]` and `[examples]` in `wugs-kit` and `wugs-package` (parse and check, every problem listed with line and column, as today); the canonical file-list hash; side-by-side package folders. The built-in kits are rewritten to use them.
 2. `.wugskit` read and write: staged extraction under the rules in §3, hash checks, the install screen, uninstall.
 3. Integration manifests and the adapters: UDPipe 1 as a known program first (offline), then the REST-JSON adapter with the project opt-in.
 4. The index (row 37) lists kit packages with their requirements; "Publish" (row 54).

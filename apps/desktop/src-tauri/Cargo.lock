@@ -7820,6 +7820,7 @@ name = "wugs-package"
 version = "0.0.1"
 dependencies = [
  "serde",
+ "sha2 0.10.9",
  "toml 1.2.1+spec-1.1.0",
 ]
 

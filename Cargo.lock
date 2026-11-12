@@ -3137,6 +3137,7 @@ name = "wugs-package"
 version = "0.0.1"
 dependencies = [
  "serde",
+ "sha2",
  "toml",
 ]
 
