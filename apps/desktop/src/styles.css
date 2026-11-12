@@ -341,7 +341,7 @@ form.inline input { flex: 1; min-width: 0; }
 .hits li.active { outline: 1px solid var(--muted); }
 .hit-group { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: var(--muted); }
 .scopes { display: flex; gap: 4px; margin: 4px 0; }
-.scopes button[aria-pressed="true"] { font-weight: 600; background: var(--panel); }
+.scopes button[aria-pressed="true"], .scopes button[aria-checked="true"] { font-weight: 600; background: var(--panel); }
 .hit-kind { color: var(--muted); font-size: 11px; min-width: 96px; }
 .snippet mark { background: var(--highlight); color: inherit; }
 /* Files dragged over the window: one target for the whole window. */
@@ -963,3 +963,19 @@ body::before {
 .tour-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
 .tour-actions .welcome-link { margin-right: auto; }
 @media (prefers-reduced-motion: reduce) { .tour-ring { transition: none; } }
+
+/* Concordance (roadmap 71): keyword in the middle, context either side;
+   the analysis and the text under it, so it reads in a narrow side panel too. */
+.cc-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.cc-query { flex: 1 1 100%; min-width: 0; }
+.panel-concordance .scopes { flex-wrap: wrap; }
+.cc-count { margin: 6px 0; }
+.cc-rows { display: flex; flex-direction: column; }
+.cc-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "play left key right" ". meta meta meta"; align-items: baseline; column-gap: 6px; padding: 4px; border-radius: var(--radius-sm); cursor: pointer; font-family: var(--font-ipa, inherit); }
+.cc-row:hover, .cc-row:focus-visible { background: var(--accent-soft); outline: none; }
+.cc-play { grid-area: play; width: 22px; height: 20px; font-size: 10px; }
+.cc-left { grid-area: left; text-align: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; unicode-bidi: plaintext; }
+.cc-key { grid-area: key; color: var(--ink); font-weight: 600; }
+.cc-right { grid-area: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cc-meta { grid-area: meta; display: flex; gap: 8px; justify-content: space-between; font-family: var(--font-ui, inherit); font-size: var(--text-xs); color: var(--muted); min-width: 0; }
+.cc-meta span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

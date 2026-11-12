@@ -20,6 +20,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "lexicon",
   "elicit",
   "search",
+  "concordance",                   # every occurrence in context (keyword in the middle)
   "assist",                        # speech assist: machine phone transcription
   "people",                        # speakers and what each agreed to (optional)
 ]
@@ -34,6 +35,7 @@ panels = [
   { panel = "lexicon", place = "right", of = "timeline", width = 320 },
   { panel = "elicit", place = "tab", of = "lexicon" },
   { panel = "search", place = "tab", of = "lexicon" },
+  { panel = "concordance", place = "tab", of = "lexicon" },
   { panel = "assist", place = "tab", of = "lexicon" },
   { panel = "people", place = "tab", of = "lexicon" },
   { panel = "devices", place = "tab", of = "lexicon" },

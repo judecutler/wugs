@@ -517,6 +517,14 @@
     open_project: () => projectInfo,
     create_project: () => projectInfo,
     open_sample: () => projectInfo,
+    concordance: ({ query }) => ({
+      total: 3,
+      hits: [
+        { textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, breakdown: "ni-kani", glosses: "1SG-count" },
+        { textId: "t-fox", textTitle: "The fox and the well", segmentId: "f03", tierId: "tier-utt", startMs: 5100, endMs: 7900, words: ["wuno", "tekal", "nikani", "ra", "ŋai", "liwa"], at: 2, breakdown: "ni-kani", glosses: "1SG-count" },
+        { textId: "t-greet", textTitle: "Greetings at the market", segmentId: "g07", tierId: "tier-utt", startMs: 12000, endMs: 13600, words: ["senu", "paki", "nikani"], at: 2, breakdown: "ni-kani", glosses: "1SG-count" },
+      ],
+    }),
     list_texts: () => texts,
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),
     conflict_count: () => conflicts.length,

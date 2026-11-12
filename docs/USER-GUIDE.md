@@ -470,6 +470,16 @@ Type in the **Search** panel. Choose **All**, **Texts**, or **Lexicon** to narro
 
 Search ignores accents in both directions, so `e` finds `é`.
 
+
+## See every occurrence in context
+
+The **Concordance** panel lists every place a word is used, one line per occurrence, with the word in the middle and what was said before and after it. It is a tab beside Lexicon. If your layout predates it, press **Ctrl+K** and choose **Show Concordance**.
+
+1. Choose what to look for: **Words** as transcribed, **Morphs**, **Glosses** (such as PL or 1SG), or words of **Translations**.
+2. Type it. Capital letters do not matter, but diacritics do: ŋa never finds na. Use `*` for any letters (`ni*` finds every word starting with ni) and `?` for one letter.
+3. Sort the lines **By the word before** or **By the word after** to see patterns, as in a concordancer such as AntConc.
+
+Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to open it and play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
 ## Work with other devices
 
 Two or more computers can share one project. They sync directly over the local network, with no server.
