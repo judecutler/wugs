@@ -239,7 +239,7 @@ export const peaksQuery = (args: {
 export const saveLayout = (args: { kit: string; layout: string }) => invoke<void>("save_layout", args);
 export const loadLayout = (args: { kit: string }) => invoke<string | null>("load_layout", args);
 
-// Kits: src-tauri/src/kits.rs. The bundled kit is read-only; user kits are
+// Kits: src-tauri/src/kits.rs. The built-in kits are read-only; user kits are
 // files in app data. Problems in a kit come back as one error, a line each.
 export type KitEntry = { kit: Kit; bundled: boolean };
 export type KitsView = { active: string; kits: KitEntry[]; broken: { file: string; problems: string[] }[] };
