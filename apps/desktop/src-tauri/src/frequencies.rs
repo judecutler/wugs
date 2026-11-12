@@ -11,14 +11,14 @@
 //! most often (the first met on a tie), so `Kesi` and `kesi` count together
 //! under whichever the texts use more.
 //!
-//! Cost: one pass over every segment, token and morph, like a concordance
-//! query; the typed `tokens` table (SCROLLS.md §2) replaces it for large corpora.
+//! Cost: words and translation words come from the projection's corpus index
+//! (one ordered read); morphs and glosses still read every token and morph.
 
 use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::concordance::{bare, each_segment, morphs_of, Kind};
+use crate::concordance::{Read, bare, each_segment, morphs_of, Kind};
 use crate::session::{project, Session};
 
 #[derive(Debug, Serialize)]
@@ -101,7 +101,7 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, siz
             t.texts.push(text.to_string());
         }
     };
-    each_segment(p, kind == Kind::Translation, text, |seg| {
+    each_segment(p, Read::of(kind), text, |seg| {
         match kind {
             Kind::Word | Kind::Translation => {
                 let words: Vec<(String, String)> = seg
