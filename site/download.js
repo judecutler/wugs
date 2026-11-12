@@ -6,7 +6,10 @@ export function detectSystem(nav) {
   const hint = `${nav.userAgentData?.platform ?? ""} ${nav.platform ?? ""} ${nav.userAgent ?? ""}`;
   if (/android|iphone|ipad|ipod/i.test(hint)) return "mobile";
   if (/win/i.test(hint)) return "windows";
-  if (/mac/i.test(hint)) return "mac";
+  // iPadOS reports itself as a Mac; a touch screen gives it away.
+  if (/mac/i.test(hint)) return (nav.maxTouchPoints ?? 0) > 1 ? "mobile" : "mac";
+  // The Linux builds are x86_64 only.
+  if (/aarch64|arm/i.test(hint)) return "unknown";
   if (/linux|x11|cros/i.test(hint)) return "linux";
   return "unknown";
 }
@@ -48,10 +51,10 @@ function render(release) {
   const others = document.querySelector("[data-others]");
   if (!primary || !meta || !others) return;
 
-  if (release === null) {
+  if (release === null || release === undefined) {
     primary.textContent = "See releases on GitHub";
     primary.href = RELEASES;
-    meta.textContent = "The first public version is on its way.";
+    meta.textContent = release === null ? "The first public version is on its way." : "Could not check for the newest version just now.";
     return;
   }
 
@@ -70,8 +73,8 @@ function render(release) {
   const rows = [
     ["windows", "Windows 10 or 11", files.windows, "Installer"],
     ["mac", "macOS 11 or newer", files.mac, "Disk image"],
-    ["linux", "Linux", files.linux, "AppImage"],
-    ["linux", "Debian, Ubuntu", files.linuxDeb, ".deb package"],
+    ["linux", "Linux (x86_64)", files.linux, "AppImage"],
+    ["linux", "Debian, Ubuntu 22.04+", files.linuxDeb, ".deb package"],
   ].filter(([, , asset]) => asset);
   others.replaceChildren(
     ...rows.map(([, label, asset, kind]) => {
@@ -84,19 +87,25 @@ function render(release) {
       return a;
     }),
   );
-  if (rows.length === 0) others.textContent = "This release has no installers yet.";
+  const all = document.createElement("a");
+  all.className = "system";
+  all.href = RELEASES;
+  all.innerHTML = `<span class="system-name">Every version</span><span class="system-kind">All releases on GitHub</span>`;
+  others.append(all);
 
   // Open the first-run steps for the visitor's own system.
   document.querySelector(`details[data-system="${system}"]`)?.setAttribute("open", "");
 }
 
 async function main() {
-  let release = null;
+  // null: no release published yet. undefined: offline or rate-limited.
+  let release;
   try {
     const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } });
     if (r.ok) release = await r.json();
+    else if (r.status === 404) release = null;
   } catch {
-    // Offline or rate-limited: the buttons fall back to the releases page.
+    // Leave it undefined: the buttons fall back to the releases page.
   }
   render(release);
 }

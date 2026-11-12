@@ -24,7 +24,9 @@ Windows needs the WebView2 runtime. Windows 10 and 11 already include it, and th
 ## First run on macOS
 
 1. Open the `.dmg` and drag wugs to Applications.
-2. The first launch says wugs cannot be opened because the developer cannot be verified. Right-click (or Control-click) the app, choose **Open**, then **Open** again. Alternatively open **System Settings, Privacy & Security**, scroll to the message about wugs and click **Open Anyway**.
+2. The first launch says Apple could not verify wugs. Choose **Done**, open **System Settings, Privacy & Security**, scroll to the message about wugs and click **Open Anyway** (on macOS 14 and older, right-clicking the app and choosing **Open** also works).
+
+The app is ad-hoc signed (`signingIdentity: "-"` in `tauri.conf.json`). Without any signature, an Apple silicon Mac calls a downloaded app damaged and offers no way to open it.
 
 ## First run on Linux
 

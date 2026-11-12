@@ -8,6 +8,8 @@ test("the visitor's system comes from what the browser reports", () => {
   assert.equal(detectSystem({ platform: "Linux x86_64", userAgent: "X11; Linux x86_64" }), "linux");
   assert.equal(detectSystem({ platform: "iPhone", userAgent: "iPhone; CPU iPhone OS 18_0 like Mac OS X" }), "mobile");
   assert.equal(detectSystem({ platform: "Linux armv8l", userAgent: "Linux; Android 15" }), "mobile");
+  assert.equal(detectSystem({ platform: "MacIntel", userAgent: "Macintosh", maxTouchPoints: 5 }), "mobile");
+  assert.equal(detectSystem({ platform: "Linux aarch64", userAgent: "X11; Linux aarch64" }), "unknown");
   assert.equal(detectSystem({}), "unknown");
 });
 
