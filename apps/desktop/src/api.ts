@@ -63,6 +63,8 @@ type ProjectArgs = { path: string; researcher: string };
 
 export const openProject = (args: ProjectArgs) => invoke<ProjectInfo>("open_project", args);
 export const createProject = (args: ProjectArgs) => invoke<ProjectInfo>("create_project", args);
+/** The sample project (roadmap 68), built the first time in this computer's app data. */
+export const openSample = (args: { researcher: string }) => invoke<ProjectInfo>("open_sample", args);
 export const listTexts = () => invoke<TextRow[]>("list_texts");
 export const getText = (args: { textId: string }) => invoke<TextDetail>("get_text", args);
 export const createText = (args: { title: string }) => invoke<string>("create_text", args);

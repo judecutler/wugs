@@ -14,7 +14,8 @@ void getVersion()
   .then((v) => (appVersion = v))
   .catch(() => {});
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
-import { captureReset, createProject, errorText, feedbackRetry, kitsList, onAssistDownload, openProject } from "./api";
+import { captureReset, createProject, errorText, feedbackRetry, kitsList, onAssistDownload, openProject, openSample } from "./api";
+import { startTour, tourDone } from "./tour/tour";
 import { reloadModels } from "./panels/assist";
 import { closeBlocker, refuseProjectChange } from "./capture/session.ts";
 import { closedPanels, layoutKit, mountDock, offers, showPanel } from "./dock";
@@ -35,7 +36,7 @@ import { provide } from "./palette/registry";
 import { openPalette, openShortcuts, wirePalette } from "./palette/ui";
 import type { Command } from "./palette/logic";
 import { autoChecks, checkForUpdates, setAutoChecks, setBeforeInstall, updateSlot } from "./updates/notice";
-import { activeKit, assistModelList, attempt, enterProject, getState, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
+import { activeKit, assistModelList, attempt, enterProject, getState, selectSegment, selectText, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
 const top = h("header", { className: "top" });
 /** A redraw held back while a menu was open (renderTop never rebuilds under one). */
@@ -303,6 +304,8 @@ function shellCommands(): Command[] {
     ...PATTERNS.map((p) => ({ id: `pattern:${p.id}`, title: `Pattern: ${p.label}`, group: "Look", words: ["background", p.note], run: () => choosePattern(localStorage, p.id) })),
     { id: "project:open", title: "Open another project…", group: "Project", words: ["folder"], run: () => void pickProject("open") },
     { id: "project:create", title: "Create a project…", group: "Project", words: ["new"], run: () => void pickProject("create") },
+    { id: "project:sample", title: "Open the sample project", group: "Project", words: ["example", "demo", "try", "practice"], run: () => void enterSample() },
+    { id: "app:tour", title: "Take the tour", group: "Help", words: ["introduction", "guide", "start", "learn"], disabled: noProject, run: () => startTour((id) => showOrFocus(id as PanelId)) },
     { id: "app:updates", title: "Check for updates", group: "wugs", words: ["version", "upgrade"], run: () => void checkForUpdates(true) },
   ];
 }
@@ -333,6 +336,7 @@ function renderWelcome() {
       setResearcher,
       create: () => void pickProject("create"),
       open: () => void pickProject("open"),
+      sample: () => void enterSample(),
       reopen:
         last === ""
           ? null
@@ -418,6 +422,25 @@ async function pickProject(mode: "open" | "create") {
   if (typeof path !== "string") return;
   await attempt(async () => {
     await enterProject(await (mode === "open" ? openProject : createProject)({ path, researcher: who }));
+  });
+}
+
+/** Open the sample project, show its text, and give the tour the first time. */
+async function enterSample() {
+  if (refuseProjectChange()) return;
+  await attempt(async () => {
+    await enterProject(await openSample({ researcher: researcher() }));
+    const s = getState();
+    const first = s.kind === "open" ? s.texts[0] : undefined;
+    if (first !== undefined) await selectText(first.id);
+    // The first utterance selected, so Transcribe and Gloss show it at once.
+    const now = getState();
+    if (now.kind === "open" && now.text !== null) {
+      const text = now.text;
+      const seg = text.segments.find((x) => text.tiers.some((t) => t.id === x.tier && t.utterance === true) && x.content !== "");
+      if (seg !== undefined) selectSegment({ textId: text.id, tierId: seg.tier, segmentId: seg.id });
+    }
+    if (!tourDone(localStorage)) window.setTimeout(() => startTour((id) => showOrFocus(id as PanelId)), 600);
   });
 }
 

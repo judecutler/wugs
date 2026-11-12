@@ -516,6 +516,7 @@
   window.__WUGS_FIXTURES__ = {
     open_project: () => projectInfo,
     create_project: () => projectInfo,
+    open_sample: () => projectInfo,
     list_texts: () => texts,
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),
     conflict_count: () => conflicts.length,

@@ -336,6 +336,18 @@ def main():
                 failures.append("? did not open the shortcuts sheet")
             run.page.keyboard.press("Escape")
 
+            # The first-run tour over the workspace (roadmap 68): two of its stops.
+            run.page.evaluate("async () => (await import('/src/tour/tour.ts')).startTour(() => {})")
+            run.page.wait_for_timeout(400)
+            run.shot("state-tour")
+            run.page.keyboard.press("ArrowRight")
+            run.page.keyboard.press("ArrowRight")
+            run.page.wait_for_timeout(400)
+            run.shot("state-tour-gloss")
+            run.page.keyboard.press("Escape")
+            if run.page.locator(".tour-layer").count() != 0:
+                failures.append("Escape did not end the tour")
+
             run.page.click(".settings-button")
             # Pattern tiles are CSS masks that load on first use.
             run.page.wait_for_load_state("networkidle")
