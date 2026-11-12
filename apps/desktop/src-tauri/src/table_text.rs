@@ -9,9 +9,10 @@
 //! - **Documents:** when a header is named document, doc, text_id, file, title
 //!   or source, rows are grouped into one text per value, in the order the
 //!   values first appear, titled by the value; else the file is one text.
-//! - **The translation column** is the first other header named translation
-//!   (or starting so, `Translation (English)`), free translation, free,
-//!   translated, english or meaning; its cell becomes the row's translation,
+//! - **The translation column** is the first other header named translation,
+//!   free translation, free, translated, english or meaning, else one naming
+//!   a translation (`Translation (English)`, not `translation status`), and
+//!   not a column of yes/no marks; its cell becomes the row's translation,
 //!   a segment on a translation track paired with the row's segment. A
 //!   gloss column stays a kept column: it may hold morpheme glosses.
 //! - **Every other column is kept** on its row's segment as `x.csv.<header>`
@@ -27,7 +28,7 @@ const TEXT_NAMES: [&str; 12] = ["sentence", "utterance", "transcription", "text"
 /// Columns that hold a translation of the text, never the text itself when guessing.
 const TRANSLATION_NAMES: [&str; 6] = ["gloss", "translation", "free", "english", "meaning", "translit"];
 /// Names of the translation column, most preferred first (`translation…` also matches by prefix).
-const TRANSLATION_COLUMN: [&str; 6] = ["translation", "free translation", "free", "translated", "english", "meaning"];
+const TRANSLATION_COLUMN: [&str; 7] = ["translation", "translations", "free translation", "free", "translated", "english", "meaning"];
 const GROUP_NAMES: [&str; 6] = ["document", "doc", "text_id", "file", "title", "source"];
 
 #[derive(Debug, PartialEq)]
@@ -111,6 +112,27 @@ fn tab_quoted(body: &str) -> bool {
     !opening.is_empty() && opening.iter().all(|c| c.len() > 1 && c.ends_with('"'))
 }
 
+/// A header naming one translation among others (`Translation (English)`,
+/// `translation_es`), which gets a track of its own name; None for the
+/// plain names and for headers about translations rather than holding one
+/// (`translation status`, `Translation notes`).
+pub fn specific_translation(header: &str) -> Option<&str> {
+    let lower = header.trim().to_lowercase();
+    let rest = lower.strip_prefix("translation")?;
+    let about = ["status", "note", "check", "done", "flag", "comment", "by", "date", "who", "ok"];
+    let words: Vec<&str> = rest.split(|c: char| !c.is_alphanumeric()).filter(|w| !w.is_empty()).collect();
+    if words.is_empty() || rest.starts_with(|c: char| c.is_alphanumeric()) || words.iter().any(|w| about.iter().any(|a| w == a || (a.len() >= 4 && w.starts_with(a)))) {
+        return None;
+    }
+    Some(header.trim())
+}
+
+/// Whether every non-empty cell is a yes/no mark (`yes`, `no`, `x`, `true`, `✓`).
+fn flags(cells: &[&str]) -> bool {
+    let non_empty: Vec<String> = cells.iter().filter(|c| !c.is_empty()).map(|c| c.to_lowercase()).collect();
+    !non_empty.is_empty() && non_empty.iter().all(|c| matches!(c.as_str(), "yes" | "no" | "y" | "n" | "x" | "true" | "false" | "done" | "✓" | "✔"))
+}
+
 /// Whether every non-empty cell is a number or a time (`12`, `0:04.5`, `3.2`).
 fn numeric(cells: &[&str]) -> bool {
     let non_empty: Vec<&&str> = cells.iter().filter(|c| !c.is_empty()).collect();
@@ -179,8 +201,8 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
     let translation_at = TRANSLATION_COLUMN
         .iter()
         .filter_map(|n| named(n))
-        .chain(raw.iter().position(|h| h.to_lowercase().starts_with("translation")))
-        .find(|&c| c != text_at && Some(c) != group_at && !numeric(&column(c)));
+        .chain((0..raw.len()).filter(|&c| specific_translation(&raw[c]).is_some()))
+        .find(|&c| c != text_at && Some(c) != group_at && !numeric(&column(c)) && !flags(&column(c)));
     // Excel's trailing columns with no header and nothing in them are dropped.
     let kept: Vec<usize> = (0..raw.len()).filter(|&c| c != text_at && Some(c) != group_at && Some(c) != translation_at && !(raw[c].is_empty() && records.iter().all(|r| r[c].is_empty()))).collect();
     let mut documents: Vec<(Option<String>, Vec<Row>)> = Vec::new();
@@ -275,6 +297,14 @@ mod tests {
         assert_eq!(parse("english,meaning\nthe dog,a dog\n", false).unwrap().translation_column.as_deref(), Some("meaning"));
         let t = parse("word,gloss\nkesi,dog\n", false).unwrap();
         assert_eq!((t.translation_column, t.kept), (None, vec!["gloss".to_string()]));
+        // Headers about translations, and yes/no columns, stay kept columns.
+        assert_eq!(parse("text,translation status,Translation (es)\nkesi,done,perro\n", false).unwrap().translation_column.as_deref(), Some("Translation (es)"));
+        assert_eq!(parse("text,translated\nkesi,yes\nlo,no\n", false).unwrap().translation_column, None);
+        assert_eq!(specific_translation("Translation (English)"), Some("Translation (English)"));
+        assert_eq!(specific_translation("translation_es"), Some("translation_es"));
+        for plain in ["translation", "Translation notes", "translations", "translation checked", "translated by"] {
+            assert_eq!(specific_translation(plain), None, "{plain}");
+        }
         // With no preferred text name the longer column is the text, the translation-named one never.
         assert_eq!(parse("id,translation,line\n1,a very long translation here,kesi\n", false).unwrap().text_column, "line");
     }

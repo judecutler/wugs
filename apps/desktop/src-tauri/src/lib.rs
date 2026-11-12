@@ -215,8 +215,8 @@ fn add_segment(
 }
 
 #[tauri::command(async)]
-fn add_translation(s: State<SessionThread>, text_id: String, tier_id: String, segment_id: String, content: String) -> Result<String, String> {
-    s.run(move |s| session::add_translation(s, &text_id, &tier_id, &segment_id, &content))
+fn add_translation(s: State<SessionThread>, text_id: String, tier_id: Option<String>, segment_id: String, content: String) -> Result<String, String> {
+    s.run(move |s| session::add_translation(s, &text_id, tier_id.as_deref(), &segment_id, &content))
 }
 
 #[tauri::command(async)]

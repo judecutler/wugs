@@ -206,6 +206,7 @@ fn a_translation_column_lands_on_a_translation_track() {
     let text = texts(&mut a)[0].0.clone();
     let detail = session::get_text(&mut a, &text).unwrap();
     let track = detail.tiers.iter().find(|t| t.role.as_deref() == Some("translation")).expect("a translation track is made");
+    assert_eq!((track.kind.as_deref(), track.parent.as_ref()), (Some("symbolic-association"), detail.segments.iter().find(|s| s.content == "lo").map(|s| &s.tier)), "paired with the sentences' tier");
     let sentence = detail.segments.iter().find(|s| s.content == "kesi bara").unwrap();
     let translation = detail.segments.iter().find(|s| s.tier == track.id).unwrap();
     assert_eq!((translation.content.as_str(), translation.parent.as_deref()), ("the dog runs", Some(sentence.id.as_str())));
@@ -214,9 +215,28 @@ fn a_translation_column_lands_on_a_translation_track() {
     fs::write(&g, "text,free\nbara,runs\n").unwrap();
     interchange::import_file(&mut a, g.to_str().unwrap()).unwrap();
     let lo = detail.segments.iter().find(|s| s.content == "lo").unwrap().id.clone();
-    let added = session::add_translation(&mut a, &text, &track.id, &lo, "small").unwrap();
+    let added = session::add_translation(&mut a, &text, Some(&track.id), &lo, "small").unwrap();
     let p = a.as_mut().unwrap();
     let tracks: Vec<String> = p.proj.entities_of_kind("tier").unwrap().into_iter().filter(|t| p.proj.field_str(t, "role").unwrap().as_deref() == Some("translation")).collect();
     assert_eq!(tracks, [track.id.clone()]);
     assert_eq!(p.proj.field_str(&added, "parent").unwrap().as_deref(), Some(lo.as_str()));
+    assert!(session::add_translation(&mut a, &text, None, &lo, "again").is_err(), "one translation per sentence per track");
+    assert_eq!(texts(&mut a).iter().find(|t| t.0 == text).unwrap().2, 2, "translations are not counted as segments");
+    // A specific header gets its own track; generic ones share the first.
+    let h = dir.0.join("spanish.csv");
+    fs::write(&h, "text,Translation (Spanish)\nmopa,perro\n").unwrap();
+    interchange::import_file(&mut a, h.to_str().unwrap()).unwrap();
+    let p = a.as_mut().unwrap();
+    let names: Vec<String> = p.proj.entities_of_kind("tier").unwrap().into_iter().filter(|t| p.proj.field_str(t, "role").unwrap().as_deref() == Some("translation")).map(|t| p.proj.field_str(&t, "name").unwrap().unwrap()).collect();
+    assert_eq!(names, ["translation", "Translation (Spanish)"]);
+    // The text goes out to ELAN and comes back with its translations paired.
+    let out = dir.0.join("out");
+    fs::create_dir_all(&out).unwrap();
+    let file = interchange::export_text(&mut a, &text, Format::Elan, &out).unwrap();
+    let mut b = project(&dir, "b");
+    let back = interchange::import_file(&mut b, &file.path).unwrap();
+    let detail = session::get_text(&mut b, back.text.as_ref().unwrap()).unwrap();
+    let sentence = detail.segments.iter().find(|s| s.content == "kesi bara").expect("the sentence came back");
+    let translation = detail.segments.iter().find(|s| s.content == "the dog runs").expect("the translation came back");
+    assert_eq!(translation.parent.as_deref(), Some(sentence.id.as_str()));
 }

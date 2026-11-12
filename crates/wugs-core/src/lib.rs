@@ -1102,12 +1102,14 @@ impl Project {
     /// (names as given, e.g. `x.csv.speaker`), so nothing in the file is lost.
     /// A row's translation, when there is one and `translation_tier` is
     /// given, is a segment on that tier whose `parent` is the row's segment
-    /// (as FlexText's free translations are), so untimed rows still pair.
+    /// (as FlexText's free translations are), so untimed rows still pair;
+    /// the tier must be a symbolic association of `tier` (see
+    /// [`Project::add_translation_tier`]), the shape ELAN exports.
     /// Empty rows are skipped; one txn for the whole text.
     pub fn import_written_rows(&mut self, title: &str, tier: &str, translation_tier: Option<&str>, rows: &[WrittenRow]) -> Result<(String, CommitResult), String> {
         self.require(tier, "tier")?;
         if let Some(tt) = translation_tier {
-            self.require(tt, "tier")?;
+            self.require_paired_tier(tt, tier)?;
         }
         let mut t = self.intent("import-written-text");
         let id = t.create_scope_root("text", "txt", vec![("title", Value::str(title))]);
@@ -1137,13 +1139,21 @@ impl Project {
     /// A translation of `segment` on `tier`: an untimed segment whose
     /// `parent` is that segment (as FlexText's free translations and a
     /// table's translation column are), so an untimed sentence still has
-    /// its translation. Plain: a new segment closes nothing.
+    /// its translation. `tier` must be a symbolic association of the
+    /// segment's own tier; a segment with a live translation there already
+    /// is refused (edit that one). Plain: a new segment closes nothing.
     pub fn add_translation(&mut self, text: &str, tier: &str, segment: &str, index: usize, content: &str) -> Result<(String, CommitResult), String> {
         self.require_in_text(segment, "segment", text)?;
-        self.require(tier, "tier")?;
+        let own = self.proj.field_str(segment, "tier")?.unwrap_or_default();
+        self.require_paired_tier(tier, &own)?;
         let content = content.trim();
         if content.is_empty() {
             return Err("a translation needs some text".into());
+        }
+        for other in self.proj.children_by_ref("parent", segment, "segment")? {
+            if self.proj.field_str(&other, "tier")?.as_deref() == Some(tier) {
+                return Err("this sentence already has a translation on that track; edit it instead".into());
+            }
         }
         let mut t = self.intent("add-translation");
         let id = t.create(
@@ -1252,6 +1262,34 @@ impl Project {
         let id = t.create("tier", "tir", SCOPE_CONFIG, fields);
         let res = t.commit()?;
         Ok((id, res))
+    }
+
+    /// A translation track paired with `parent_tier`: a symbolic
+    /// association (one translation per segment, linked by the segment's
+    /// `parent`, as ELAN and FlexText hold them) with role `translation`.
+    pub fn add_translation_tier(&mut self, name: &str, parent_tier: &str) -> Result<(String, CommitResult), String> {
+        self.require(parent_tier, "tier")?;
+        if name.trim().is_empty() {
+            return Err("a tier needs a name".into());
+        }
+        let mut t = self.intent("add-tier");
+        let id = t.create(
+            "tier",
+            "tir",
+            SCOPE_CONFIG,
+            vec![("name", Value::str(name.trim())), ("kind", Value::str("symbolic-association")), ("role", Value::str("translation")), ("parent", Value::str(parent_tier))],
+        );
+        let res = t.commit()?;
+        Ok((id, res))
+    }
+
+    /// `tier` is a live symbolic association of `parent_tier`.
+    fn require_paired_tier(&self, tier: &str, parent_tier: &str) -> Result<(), String> {
+        self.require(tier, "tier")?;
+        if self.proj.field_str(tier, "kind")?.as_deref() != Some("symbolic-association") || self.proj.field_str(tier, "parent")?.as_deref() != Some(parent_tier) {
+            return Err(format!("tier {tier} is not a translation track of tier {parent_tier}"));
+        }
+        Ok(())
     }
 
     /// Break a segment into tokens, one per form, in order. A segment that
@@ -2630,7 +2668,8 @@ mod tests {
     fn written_rows_pair_their_translations_by_parent() {
         let (root, mut p) = temp_project("prs_Alice");
         let (tier, _) = p.add_tier("utterance", "time-aligned", Some("transcription"), None).unwrap();
-        let (free, _) = p.add_tier("translation", "time-aligned", Some("translation"), None).unwrap();
+        let (timed, _) = p.add_tier("translation", "time-aligned", Some("translation"), None).unwrap();
+        let (free, _) = p.add_translation_tier("translation", &tier).unwrap();
         let rows = [
             WrittenRow { text: "kesi bara", translation: "the dog runs", extras: vec![("x.csv.speaker".into(), "A".into())] },
             WrittenRow { text: "  ", translation: "orphan", extras: Vec::new() },
@@ -2646,8 +2685,11 @@ mod tests {
         assert_eq!(p.proj.field_str(&translations[0], "parent").unwrap().as_deref(), Some(main[0].as_str()));
         assert_eq!(p.proj.field_str(&main[0], "x.csv.speaker").unwrap().as_deref(), Some("A"));
         assert!(p.import_written_rows("Y", &tier, Some(&txt), &rows).is_err(), "a translation tier must be a tier");
+        assert!(p.import_written_rows("Y", &tier, Some(&timed), &rows).is_err(), "a time-aligned track cannot hold paired translations");
         let lo = main[1].clone();
+        assert!(p.add_translation(&txt, &timed, &lo, 9, "a").is_err(), "not a paired track");
         let (added, _) = p.add_translation(&txt, &free, &lo, 9, " a ").unwrap();
+        assert!(p.add_translation(&txt, &free, &lo, 10, "b").is_err(), "one translation per sentence per track");
         assert_eq!(p.proj.field_str(&added, "parent").unwrap().as_deref(), Some(lo.as_str()));
         assert_eq!(p.proj.field_str(&added, "content").unwrap().as_deref(), Some("a"));
         assert!(p.add_translation(&txt, &free, &lo, 10, "  ").is_err(), "empty");

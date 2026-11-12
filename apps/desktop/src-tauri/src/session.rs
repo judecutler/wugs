@@ -128,8 +128,11 @@ pub struct TierRow {
     pub name: String,
     pub kind: Option<String>,
     /// What the tier is for (`transcription`, `translation`, `note`, …); core never reads it.
+    /// FlexText's free-translation tier reads as `translation`.
     pub role: Option<String>,
     pub language: Option<String>,
+    /// The tier a symbolic tier depends on (a paired translation track's sentences).
+    pub parent: Option<String>,
     /// The session's utterance tier: where segments go when no tier is named.
     pub utterance: bool,
 }
@@ -309,7 +312,16 @@ pub fn list_texts(session: &mut Session) -> Result<Vec<TextRow>, String> {
         rows.push(TextRow {
             title: p.proj.field_str(&id, "title")?.unwrap_or_default(),
             kind: p.proj.field_str(&id, "kind")?,
-            segments: p.proj.children_by_ref("text", &id, "segment")?.len(),
+            // Translations paired with a sentence are not counted again.
+            segments: {
+                let mut n = 0;
+                for seg in p.proj.children_by_ref("text", &id, "segment")? {
+                    if p.proj.field_str(&seg, "parent")?.filter(|v| !v.is_empty()).is_none() {
+                        n += 1;
+                    }
+                }
+                n
+            },
             recording: linked_recording(p, &id)?,
             id,
         });
@@ -389,8 +401,9 @@ pub fn get_text(session: &mut Session, text_id: &str) -> Result<TextDetail, Stri
         tiers.push(TierRow {
             name: p.proj.field_str(&id, "name")?.unwrap_or_else(|| id.clone()),
             kind: p.proj.field_str(&id, "kind")?,
-            role: p.proj.field_str(&id, "role")?,
+            role: tier_role(p, &id)?,
             language: p.proj.field_str(&id, "language")?,
+            parent: p.proj.field_str(&id, "parent")?.filter(|v| !v.is_empty()),
             utterance: p.proj.field_str(&id, "origin")?.as_deref() == Some(UTTERANCE_ORIGIN),
             id,
         });
@@ -426,13 +439,49 @@ pub fn add_segment(
     Ok(AddedSegment { id, findings: finding_lines(&res), states })
 }
 
-/// A translation of `segment_id` on the translation track `tier_id`: an
-/// untimed segment whose `parent` is that segment, so it pairs with an
-/// untimed sentence (a table's or a FlexText's) the way time pairs the rest.
-pub fn add_translation(session: &mut Session, text_id: &str, tier_id: &str, segment_id: &str, content: &str) -> Result<String, String> {
+/// A translation of an untimed (or any) segment: an untimed segment whose
+/// `parent` is `segment_id`, on the paired track `tier_id`, or with none
+/// given on the segment's own tier's translation track (made when missing).
+pub fn add_translation(session: &mut Session, text_id: &str, tier_id: Option<&str>, segment_id: &str, content: &str) -> Result<String, String> {
     let p = project(session)?;
+    let tier = match tier_id {
+        Some(t) => t.to_string(),
+        None => {
+            let own = p.proj.field_str(segment_id, "tier")?.ok_or_else(|| format!("no segment {segment_id}"))?;
+            translation_track(p, &own, None)?
+        }
+    };
     let index = next_pos_index(p, text_id)?;
-    Ok(p.add_translation(text_id, tier_id, segment_id, index, content)?.0)
+    Ok(p.add_translation(text_id, &tier, segment_id, index, content)?.0)
+}
+
+/// A tier's role as the app reads it: its own, or `translation` for
+/// FlexText's free-translation tier, which carries none.
+pub(crate) fn tier_role(p: &Project, tier: &str) -> Result<Option<String>, String> {
+    if let Some(role) = p.proj.field_str(tier, "role")? {
+        return Ok(Some(role));
+    }
+    Ok((p.proj.field_str(tier, "origin")?.as_deref() == Some(wugs_flex::flextext::TIER_FREE)).then(|| "translation".to_string()))
+}
+
+/// The translation track paired with `sentences` (a symbolic association
+/// of it whose role reads `translation`). `named` picks the track of that
+/// name (case ignored) and makes it when missing, so `Translation (English)`
+/// and `Translation (Spanish)` columns keep their own tracks; with no name
+/// the first by id is used, made as "translation" when there is none.
+pub(crate) fn translation_track(p: &mut Project, sentences: &str, named: Option<&str>) -> Result<String, String> {
+    for t in p.proj.entities_of_kind("tier")? {
+        let paired = p.proj.field_str(&t, "kind")?.as_deref() == Some("symbolic-association") && p.proj.field_str(&t, "parent")?.as_deref() == Some(sentences);
+        if !paired || tier_role(p, &t)?.as_deref() != Some("translation") {
+            continue;
+        }
+        match named {
+            Some(n) if p.proj.field_str(&t, "name")?.unwrap_or_default().to_lowercase() == n.trim().to_lowercase() => return Ok(t),
+            Some(_) => {}
+            None => return Ok(t),
+        }
+    }
+    Ok(p.add_translation_tier(named.unwrap_or("translation"), sentences)?.0)
 }
 
 /// Retime one or both edges. An omitted edge is not written, so a drag of
@@ -561,7 +610,7 @@ pub fn add_tier(session: &mut Session, template: &str, name: Option<&str>) -> Re
     let name = name.map(str::trim).filter(|n| !n.is_empty()).unwrap_or(template);
     let p = project(session)?;
     let (id, _) = p.add_tier(name, "time-aligned", *role, None)?;
-    Ok(TierRow { id, name: name.to_string(), kind: Some("time-aligned".to_string()), role: role.map(str::to_string), language: None, utterance: false })
+    Ok(TierRow { id, name: name.to_string(), kind: Some("time-aligned".to_string()), role: role.map(str::to_string), language: None, parent: None, utterance: false })
 }
 
 /// One past the largest existing pos, so a new segment sorts last even when
