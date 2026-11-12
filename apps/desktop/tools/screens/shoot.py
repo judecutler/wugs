@@ -291,6 +291,15 @@ def main():
             run.shot("state-toast")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
 
+            # Reach for the Timeline group's tabs: they rise and push its content down.
+            box = run.page.locator(".panel-timeline").bounding_box()
+            if box is not None:
+                run.page.mouse.move(box["x"] + 40, box["y"] - 6)
+                run.page.wait_for_timeout(600)
+                run.shot("state-tabs-risen")
+                run.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 200)
+                run.page.wait_for_timeout(800)
+
             run.page.get_by_role("button", name="Feedback").click()
             run.page.locator(".feedback-message").fill("The timeline froze after I imported a long recording.")
             run.page.locator(".feedback-details summary").click()
