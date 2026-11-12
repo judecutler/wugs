@@ -41,7 +41,7 @@ export function primaryChoice(system, files, v, releasesUrl) {
   }
   // A release published before its installers were attached.
   if (!Object.values(files).some(Boolean)) {
-    return { text: "See releases on GitHub", href: releasesUrl, meta: `Version ${v} is still being prepared. Check back in a few minutes.` };
+    return { text: "See releases on GitHub", href: releasesUrl, meta: `Version ${v} is still being prepared. Check back later today.` };
   }
   if (system === "mobile") {
     return { text: "See all downloads", href: "#systems", meta: `Version ${v} is for Windows, macOS and Linux. Open this page on your laptop.` };

@@ -54,4 +54,6 @@ test("the main button offers the visitor's installer, or says why it cannot", ()
   assert.equal(empty.href, "R");
   assert.match(empty.meta, /still being prepared/);
   assert.equal(primaryChoice("unknown", files, "0.1.0", "R").href, "#systems");
+  assert.match(primaryChoice("mobile", installers({ assets: [] }), "0.1.0", "R").meta, /still being prepared/);
+  assert.equal(primaryChoice("mobile", files, "0.1.0", "R").text, "See all downloads");
 });
