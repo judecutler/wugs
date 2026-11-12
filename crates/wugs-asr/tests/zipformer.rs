@@ -120,7 +120,7 @@ fn the_int8_release_format_runs_too() {
     // ZIPA's INT8 files quantize every MatMul (DynamicQuantizeLinear +
     // MatMulInteger); quantization rounds a little differently in tract.
     let r = FbankRecognizer::load(&fixture("tiny-zipformer.int8.onnx"), tokens()).unwrap();
-    eprintln!("int8 symbolic plan: {}", r.has_symbolic_plan());
+    assert!(r.has_symbolic_plan(), "the int8 fixture builds the symbolic plan too");
     let (t, v, got) = r.log_probs_for_features(173, feats(173)).unwrap();
     let want = f32s("tiny-zipformer.int8.173.out.f32");
     let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);

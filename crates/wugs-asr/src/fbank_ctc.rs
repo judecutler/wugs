@@ -436,28 +436,54 @@ fn drop_padding_masks(graph: &mut GraphProto) -> Result<(), Error> {
     };
 
     // An arange over frames: input[0] chains through broadcast ops to a
-    // `Range(0, length, 1)` whose length is x_lens-derived.
-    let is_frame_arange = |name: &str| -> bool {
+    // `Range(0, length, 1)`; returns that length.
+    let frame_arange_length = |name: &str| -> Option<String> {
         let mut t = name.to_string();
         for _ in 0..8 {
-            let Some(&i) = by_output.get(t.as_str()) else { return false };
-            let n = &graph.node[i];
+            let n = &graph.node[*by_output.get(t.as_str())?];
             match n.op_type.as_str() {
                 "Expand" | "Unsqueeze" | "Cast" => t = n.input[0].clone(),
                 "Range" => {
                     let scalar = |input: &String| constants.get(input).and_then(int_values).filter(|v| v.len() == 1).map(|v| v[0]);
-                    return scalar(&n.input[0]) == Some(0) && scalar(&n.input[2]) == Some(1) && reaches_x_lens(&n.input[1]);
+                    return (scalar(&n.input[0]) == Some(0) && scalar(&n.input[2]) == Some(1)).then(|| n.input[1].clone());
                 }
-                _ => return false,
+                _ => return None,
             }
         }
-        false
+        None
+    };
+    // The tensor under shape-only wrappers, so `Unsqueeze(Cast(b))` is `b`.
+    let bare = |name: &str| -> String {
+        let mut t = name.to_string();
+        while let Some(&i) = by_output.get(t.as_str()) {
+            let n = &graph.node[i];
+            if !matches!(n.op_type.as_str(), "Cast" | "Unsqueeze" | "Squeeze") {
+                break;
+            }
+            t = n.input[0].clone();
+        }
+        t
+    };
+    // A pad mask compares the arange with the very lengths it counts to
+    // (`arange(max(lens)) >= lens`), and only then is it all false for an
+    // unpadded input; `arange(n) >= n - 1` would also trace to x_lens.
+    let compares_with_own_length = |length: &str, lens: &str| -> bool {
+        let (length, lens) = (bare(length), bare(lens));
+        length == lens
+            || by_output.get(length.as_str()).is_some_and(|&i| {
+                let n = &graph.node[i];
+                n.op_type == "ReduceMax" && bare(&n.input[0]) == lens
+            })
     };
 
     let masks: Vec<String> = graph
         .node
         .iter()
-        .filter(|n| n.op_type == "GreaterOrEqual" && is_frame_arange(&n.input[0]) && reaches_x_lens(&n.input[1]))
+        .filter(|n| {
+            n.op_type == "GreaterOrEqual"
+                && reaches_x_lens(&n.input[1])
+                && frame_arange_length(&n.input[0]).is_some_and(|l| reaches_x_lens(&l) && compares_with_own_length(&l, &n.input[1]))
+        })
         .map(|n| n.output[0].clone())
         .collect();
     if masks.is_empty() {
@@ -665,8 +691,11 @@ fn rewrite_flatten_reshapes(graph: &mut GraphProto) {
             continue;
         }
         let Some(&[axis]) = constants.get(&gather.input[1]).and_then(int_values).as_deref() else { continue };
-        if rank_of(graph, &constants, &n.input[0], 0) == Some(axis as usize + 1) {
-            flattens.push((i, axis as usize));
+        // A negative axis, or rank-1 data (nothing before the last dim to
+        // multiply), is left alone.
+        let Ok(axis) = usize::try_from(axis) else { continue };
+        if axis >= 1 && rank_of(graph, &constants, &n.input[0], 0) == Some(axis + 1) {
+            flattens.push((i, axis));
         }
     }
     let flattens: HashMap<usize, usize> = flattens.into_iter().collect();
