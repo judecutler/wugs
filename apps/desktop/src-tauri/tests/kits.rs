@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use wugs_desktop::kits::{self, WugDto, BUNDLED_ID};
+use wugs_desktop::kits::{self, WugDto, BUNDLED_ID, SCROLLS_ID};
 use wugs_desktop::layout;
 
 fn app_data() -> PathBuf {
@@ -15,9 +15,12 @@ fn a_fresh_install_has_tongues_active() {
     let dir = app_data();
     let view = kits::list(&dir).unwrap();
     assert_eq!(view.active, BUNDLED_ID);
-    assert_eq!(view.kits.len(), 1);
-    assert!(view.kits[0].bundled);
+    // Tongues and Scrolls are built in, Tongues first.
+    assert_eq!(view.kits.len(), 2);
+    assert!(view.kits.iter().all(|k| k.bundled));
     assert_eq!(view.kits[0].kit.name, "Tongues");
+    assert_eq!(view.kits[1].kit.id, SCROLLS_ID);
+    assert_eq!(view.kits[1].kit.name, "Scrolls");
     assert!(view.broken.is_empty());
 }
 
@@ -59,7 +62,7 @@ fn duplicate_edit_and_activate() {
             .iter()
             .map(|k| k.kit.id.as_str())
             .collect::<Vec<_>>(),
-        [BUNDLED_ID, "my-field-kit"]
+        [BUNDLED_ID, SCROLLS_ID, "my-field-kit"]
     );
 
     // A second copy under the same name gets its own id.
@@ -152,7 +155,7 @@ fn unusable_files_are_listed_as_broken_not_dropped() {
     fs::write(kits_dir.join(format!("{BUNDLED_ID}.toml")), kits::BUNDLED).unwrap();
     fs::write(kits_dir.join("notes.txt"), "not a kit").unwrap();
     let view = kits::list(&dir).unwrap();
-    assert_eq!(view.kits.len(), 1);
+    assert_eq!(view.kits.len(), 2);
     let files: Vec<_> = view.broken.iter().map(|b| b.file.as_str()).collect();
     assert_eq!(
         files,
@@ -278,8 +281,22 @@ fn a_kits_wug_is_carried_saved_and_checked() {
         .unwrap_err()
         .contains("six hex digits"));
     assert_eq!(
-        kits::list(&dir).unwrap().kits[1].kit,
+        kits::list(&dir).unwrap().kits[2].kit,
         mine,
         "a refused save writes nothing"
     );
+}
+
+#[test]
+fn scrolls_is_built_in_switchable_and_read_only() {
+    let dir = app_data();
+    kits::set_active(&dir, SCROLLS_ID).unwrap();
+    assert_eq!(kits::list(&dir).unwrap().active, SCROLLS_ID);
+    assert!(kits::code(&dir, SCROLLS_ID).unwrap().contains("Corpus"));
+    assert!(kits::save_code(&dir, SCROLLS_ID, kits::SCROLLS).is_err());
+    assert!(kits::delete(&dir, SCROLLS_ID).is_err());
+    // A copy of Scrolls is the user's to change.
+    let mine = kits::duplicate(&dir, SCROLLS_ID, "My corpus kit").unwrap();
+    assert!(!mine.bundled);
+    assert!(mine.kit.tools.iter().any(|t| t == "concordance"));
 }

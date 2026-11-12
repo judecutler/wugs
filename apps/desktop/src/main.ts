@@ -29,25 +29,25 @@ import { autoOpen, lastProject } from "./last-project";
 import { folderName, welcomeView } from "./welcome";
 import { onDevicesChange, relocationBanner, wireDeviceEvents } from "./panels/devices";
 import { PANELS, type PanelId } from "./panels/registry";
-import { attachDock } from "./kits/workspace";
+import { attachDock, useKit } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
 import { openSettings } from "./settings/panel";
 import { provide } from "./palette/registry";
 import { openPalette, openShortcuts, wirePalette } from "./palette/ui";
 import type { Command } from "./palette/logic";
 import { autoChecks, checkForUpdates, setAutoChecks, setBeforeInstall, updateSlot } from "./updates/notice";
-import { activeKit, assistModelList, attempt, enterProject, getState, selectSegment, selectText, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
+import { activeKit, assistModelList, attempt, enterProject, getKits, getState, selectSegment, selectText, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
 const top = h("header", { className: "top" });
 /** A redraw held back while a menu was open (renderTop never rebuilds under one). */
 let topPending = false;
 top.addEventListener("menu-closed", (e) => {
   if (!topPending) return;
-  const { label, focus } = (e as CustomEvent<{ label: string; focus: boolean }>).detail;
+  const { key, focus } = (e as CustomEvent<{ key: string; focus: boolean }>).detail;
   queueMicrotask(() => {
     renderTop();
     // The rebuilt bar has new buttons: give focus back to the menu it came from.
-    if (focus) [...top.querySelectorAll<HTMLButtonElement>(".menu-button")].find((b) => b.textContent === label)?.focus();
+    if (focus) menuNamed(key)?.focus();
   });
 });
 const bannerSlot = h("div", { className: "relocation-slot" });
@@ -66,6 +66,9 @@ let signedFor = "";
 /** The chip's id is being changed. */
 let editingId = false;
 
+/** The top bar's menu button with this key (`menuButton`'s `key`). */
+const menuNamed = (key: string): HTMLButtonElement | undefined => [...top.querySelectorAll<HTMLButtonElement>(".menu-button")].find((b) => b.dataset.menu === key);
+
 function renderTop() {
   // Never rebuild the bar under an open menu; it redraws when the menu closes.
   if (top.querySelector(".menu-list") !== null) {
@@ -76,9 +79,10 @@ function renderTop() {
   // Typing in the bar's id field must not be redrawn under the person.
   if (top.contains(document.activeElement) && document.activeElement instanceof HTMLInputElement) return;
   // A redraw replaces every button: keyboard focus goes back to the same menu.
-  const focusedMenu = top.contains(document.activeElement) && document.activeElement?.classList.contains("menu-button") ? document.activeElement.textContent : null;
+  const active = document.activeElement;
+  const focusedMenu = top.contains(active) && active instanceof HTMLElement && active.classList.contains("menu-button") ? (active.dataset.menu ?? null) : null;
   queueMicrotask(() => {
-    if (focusedMenu !== null && !top.contains(document.activeElement)) [...top.querySelectorAll<HTMLButtonElement>(".menu-button")].find((b) => b.textContent === focusedMenu)?.focus();
+    if (focusedMenu !== null && !top.contains(document.activeElement)) menuNamed(focusedMenu)?.focus();
   });
   const s = getState();
   const kit = activeKit();
@@ -161,8 +165,7 @@ function renderTop() {
       if (visits?.away()) art.classList.add("wug-away");
       return art;
     })()),
-    h("strong", { className: "brand", textContent: kit?.name ?? "wugs", title: kit === null ? "wugs" : `wugs: ${kit.name}${kit.subtitle === "" ? "" : `, ${kit.subtitle.toLowerCase()}`}` }),
-    h("span", { className: "subtitle", textContent: kit?.subtitle ?? "" }),
+    kitSwitcher(),
     s.kind === "open"
       ? h(
           "span",
@@ -277,6 +280,47 @@ function openFeedbackForm(): void {
   });
 }
 
+/** The kit's name in the top bar is the kit switcher (roadmap 73): one click
+ * between Tongues, Scrolls and any installed kit, over the same project. */
+function kitSwitcher(): HTMLElement {
+  const kit = activeKit();
+  const all = getKits()?.kits ?? [];
+  const label = kit?.name ?? "wugs";
+  const menu = menuButton(
+    label,
+    () => [
+      { heading: "Switch kit" },
+      ...all.map((k) => ({
+        label: k.kit.subtitle === "" ? k.kit.name : `${k.kit.name} · ${k.kit.subtitle}`,
+        radio: true,
+        checked: k.kit.id === kit?.id,
+        run: () => {
+          if (k.kit.id !== kit?.id) void switchKit(k.kit.id);
+        },
+      })),
+      "separator",
+      { label: "Manage kits…", run: () => showOrFocus("kits") },
+    ],
+    { className: "kit-switcher", key: "kit", title: `${label}: switch kit (same project, other tools)` },
+  );
+  return h("span", { className: "brand-kit" }, menu, h("span", { className: "subtitle", textContent: kit?.subtitle ?? "" }));
+}
+
+async function switchKit(id: string) {
+  // Another kit may not offer the Media panel, which holds a take's Stop and Save.
+  if (closeBlocker() !== null) {
+    showToast({ tone: "error", lines: ["A recording is in progress. Stop and save it before switching kits."] });
+    return;
+  }
+  await attempt(async () => {
+    await useKit(id, false);
+    const now = activeKit();
+    if (now === null) return;
+    const same = getState().kind === "open" ? " Your project and its data are the same; only the tools changed." : "";
+    showToast({ tone: "info", lines: [`Now in ${now.name}.${same}`] });
+  });
+}
+
 /** The shell's own commands for the palette: panels, look, project, help. */
 function shellCommands(): Command[] {
   const kit = activeKit();
@@ -290,6 +334,9 @@ function shellCommands(): Command[] {
           .map((id) => ({ id: `panel:${id}`, title: `Show ${PANELS[id].title}`, group: "Panels", words: ["open", "go to", "panel", "tab"], disabled: noProject, run: () => showOrFocus(id) }));
   return [
     ...panels,
+    ...(getKits()?.kits ?? [])
+      .filter((k) => k.kit.id !== kit?.id)
+      .map((k) => ({ id: `kit:${k.kit.id}`, title: `Switch to ${k.kit.name}`, group: "Kits", words: ["kit", k.kit.subtitle, "workspace"], run: () => void switchKit(k.kit.id) })),
     { id: "app:settings", title: "Open Settings", group: "wugs", words: ["preferences", "options", "theme", "pattern"], run: openSettingsSheet },
     { id: "app:shortcuts", title: "Show keyboard shortcuts", group: "Help", keys: "?", words: ["keys", "hotkeys"], run: openShortcuts },
     { id: "app:feedback", title: "Send feedback", group: "Help", words: ["bug", "problem", "report", "contact"], run: openFeedbackForm },
@@ -306,7 +353,7 @@ function shellCommands(): Command[] {
     { id: "project:open", title: "Open another project…", group: "Project", words: ["folder"], run: () => void pickProject("open") },
     { id: "project:create", title: "Create a project…", group: "Project", words: ["new"], run: () => void pickProject("create") },
     { id: "project:sample", title: "Open the sample project", group: "Project", words: ["example", "demo", "try", "practice"], run: () => void enterSample() },
-    { id: "app:tour", title: "Take the tour", group: "Help", words: ["introduction", "guide", "start", "learn"], disabled: noProject, run: () => startTour((id) => showOrFocus(id as PanelId)) },
+    { id: "app:tour", title: "Take the tour", group: "Help", words: ["introduction", "guide", "start", "learn"], disabled: () => noProject() ?? (kit !== null && !kit.tools.includes("timeline") ? `The tour shows Tongues; ${kit.name} has no Timeline` : null), run: () => startTour((id) => showOrFocus(id as PanelId)) },
     { id: "app:updates", title: "Check for updates", group: "wugs", words: ["version", "upgrade"], run: () => void checkForUpdates(true) },
   ];
 }

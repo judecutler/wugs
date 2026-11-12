@@ -337,6 +337,7 @@
     active: tongues.id,
     kits: [
       { kit: tongues, bundled: true },
+      ...(window.__WUGS_SCREENS__.scrolls ? [{ kit: window.__WUGS_SCREENS__.scrolls, bundled: true }] : []),
       { kit: sprint, bundled: false },
     ],
     broken: [{ file: "old-transcription.toml", problems: ["line 14, column 1: unknown section [scripts]; kits cannot carry scripts", "line 3, column 6: id must be letters, digits, dots and dashes"] }],
@@ -541,7 +542,7 @@
     feedback_keep: () => "01JC0000000000000000000000",
     feedback_deliver: () => ({ sent: true, waiting: 0, problem: null, configured: true }),
     kit_code: kitCode,
-    kit_set_active: () => null,
+    kit_set_active: ({ id }) => ((kitsView.active = id), null),
     capture_reset: () => 0,
     capture_recovered_list: () => [{ id: "take-20261108-1742", bytes: 5_760_044, durationMs: 60_000, modifiedMs: DAY - 20 * 3600_000 }],
     device_identity: () => ({ publicKey: "ed25519:7f3a9c51d0e8b2a4c6f19e3d7b5a0c2e4f6a8b1d3c5e7f9a0b2c4d6e8f1a3b5c", fingerprint: "K7QF 2M9X 4TRA", store: "keychain", fallbackReason: null }),

@@ -5,7 +5,7 @@ import { assistSuggest, editSegmentContent, errorText, type SegmentRow, type Tie
 import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
-import { capability, getSelection, getState, mediaSource, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
+import { activeKit, capability, getSelection, getState, mediaSource, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
 import { IPA_GROUPS } from "../transcribe/ipa";
 import { createFieldController, type FieldController } from "../transcribe/field";
 import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, neighbor, renderWindow, tierSegments } from "../transcribe/logic";
@@ -252,7 +252,9 @@ export const transcribePanel: PanelDef = {
       if (!force && ready && next === stamp) return;
       stamp = next;
 
-      hint.textContent = playback.hasSource() ? "" : "Load a recording on the Timeline to hear segments.";
+      // A kit without the Timeline (Scrolls) has nowhere to load one: no hint there.
+      const timeline = activeKit()?.tools.includes("timeline") ?? true;
+      hint.textContent = playback.hasSource() || !timeline ? "" : "Load a recording on the Timeline to hear segments.";
       const selIndex = selId === null ? 0 : ordered.findIndex((x) => x.id === selId);
       const [from, to] = renderWindow(ordered.length, selIndex, WINDOW_ROWS);
       moving = true;

@@ -730,6 +730,11 @@ button.welcome-link:hover { text-decoration: underline; }
   display: flex; flex-direction: column;
   animation: menu-in 120ms ease-out;
 }
+/* The kit switcher sits at the bar's left edge: its list opens rightward. */
+.brand-kit .menu-list {
+  left: 0;
+  right: auto;
+}
 @keyframes menu-in { from { opacity: 0; transform: translateY(-4px); } }
 .menu-item {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
@@ -979,6 +984,10 @@ body::before {
 .cc-right { grid-area: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cc-meta { grid-area: meta; display: flex; gap: 8px; justify-content: space-between; font-family: var(--font-ui, inherit); font-size: var(--text-xs); color: var(--muted); min-width: 0; }
 .cc-meta span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* The kit switcher (roadmap 73): the kit's name in the top bar opens the list of kits. */
+.brand-kit { display: flex; align-items: baseline; gap: 8px; }
+.menu-button.kit-switcher { font-family: var(--font-display); font-weight: 400; font-size: 20px; line-height: 1; padding: 2px 4px; color: var(--ink); }
 /* A right-to-left row: the grid runs from the right, so what came before the
    keyword sits on its right; that side is cut at its far (right) end. */
 .cc-row[dir="rtl"] .cc-left { direction: ltr; text-align: left; }

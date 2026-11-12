@@ -38,7 +38,7 @@ export function score(query: string, text: string): number {
 }
 
 /** Groups that are about the whole app rather than the work at hand. */
-const GENERAL = new Set(["Panels", "Look", "Workspace", "Project", "wugs", "Help"]);
+const GENERAL = new Set(["Panels", "Look", "Workspace", "Project", "Kits", "wugs", "Help"]);
 
 export const fold = (s: string): string => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 

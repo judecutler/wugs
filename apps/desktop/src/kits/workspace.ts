@@ -23,14 +23,16 @@ export async function reloadKits() {
   }
 }
 
-/** Make `id` the kit in use and show its workspace. The Kits panel, where
- * the switch was made, stays open in the new workspace. */
-export async function useKit(id: string) {
+/** Make `id` the kit in use and show its workspace. A switch made in the
+ * Kits panel keeps that panel open in the new workspace; one made from the
+ * top bar's kit switcher (roadmap 73) shows the kit as it starts. */
+export async function useKit(id: string, keepKitsPanel = true) {
   await kitSetActive({ id });
   setKits(await kitsList());
   const kit = activeKit();
   if (dock === null || kit === null) return;
   await dock.switchKit(kit);
+  if (!keepKitsPanel) return;
   if (dock.api.getPanel("kits") === undefined) showPanel(dock.api, "kits");
   dock.api.getPanel("kits")?.api.setActive();
 }
