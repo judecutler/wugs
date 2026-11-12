@@ -6,33 +6,34 @@
  * be a literal, never a var() (getComputedStyle returns var() unresolved). */
 :root {
   /* surfaces */
-  --bg: #fbfaf7;              /* the workspace behind panels */
-  --panel: #f1efe9;           /* bars, headers, hovered rows */
-  --surface-raised: #ffffff;  /* inputs, buttons, popovers, segment boxes */
-  --chrome: #ece6da;
-  --line: #dcd8cf;
+  --bg: #fff8de;              /* the workspace behind panels: the brand cream */
+  --panel: #f8eecb;           /* bars, headers, hovered rows */
+  --surface-raised: #fffdf4;  /* inputs, buttons, popovers, segment boxes */
+  --chrome: #f3e7bd;
+  --line: #e7dbb2;
 
   /* text */
-  --ink: #1f1d1a;
-  --muted: #7a756c;
-  --chrome-ink: #4a443b;
+  --ink: #1b1a17;
+  --muted: #6b6453;           /* 4.8:1 or better on every surface */
+  --chrome-ink: #4a4436;
   --on-accent: #ffffff;       /* text on an accent, warn or error fill */
 
   /* brand and state */
-  --accent: #2e5e4e;
-  --accent-soft: #e7efe9;     /* selected rows, active toggles */
+  --accent: #00718a;          /* text, links, focus: the brand blue deepened to 5:1 */
+  --accent-bright: #00c1e3;   /* the brand blue itself: the wug, fills, large marks, never text */
+  --accent-soft: #d6f3f9;     /* selected rows, active toggles */
   --warn: #8a5a00;
   --warn-soft: #f6ecd6;
   --error: #9b2c2c;
-  --highlight: #f3e2b3;       /* search hits */
-  --notice-soft: #f3efe4;     /* a row of news under a toolbar */
+  --highlight: #ffe58a;       /* search hits */
+  --notice-soft: #fdf2c4;     /* a row of news under a toolbar */
 
   /* machine suggestions (speech assist) */
   --machine-unsure: rgba(214, 170, 40, 0.28);
   --machine-very-unsure: rgba(196, 64, 48, 0.22);
 
   /* canvas: timeline, analysis overlays, recording meter */
-  --wave: #4a7a68;
+  --wave: #00819a;
   --pitch: #1f5fbf;
   --intensity: #c9a400;
   --formants: #c0392b;
@@ -57,5 +58,5 @@
   --focus-ring: 2px solid var(--accent);
 
   /* brand assets: public/brand/README.md */
-  --logo-height: 20px;
+  --logo-height: 28px;
 }
