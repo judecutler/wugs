@@ -108,7 +108,7 @@ pub fn segments(text: &str) -> (Vec<String>, Cut) {
             Some(c) if tight(c) => 1,
             _ => 1 + b.split_whitespace().next().map_or(0, |w| w.chars().count()),
         };
-        !ends_sentence(a) && !aligned(a) && !aligned(b) && !labelled(b) && !numbered(b) && len(a) <= width && len(a) + next > width
+        !ends_sentence(a) && !aligned(a) && !aligned(b) && len(a) <= width && len(a) + next > width
     };
     let (mut open, mut breaks, mut capitals, mut commas) = (0, 0, 0, 0);
     for p in &paragraphs {
@@ -129,7 +129,9 @@ pub fn segments(text: &str) -> (Vec<String>, Cut) {
         let mut run: Vec<&str> = Vec::new();
         for (i, line) in p.iter().enumerate() {
             run.push(line);
-            let joins = wrapped && p.get(i + 1).is_some_and(|next| wrapped_before(line, next));
+            // In a list of turns or examples, the next labelled or numbered line starts anew.
+            let listed = |l: &str| labelled(l) || numbered(l);
+            let joins = wrapped && p.get(i + 1).is_some_and(|next| wrapped_before(line, next) && !(listed(next) && listed(run[0])));
             if !joins {
                 let joined = join_lines(&run);
                 // A run with no sentence mark at all is lines, not a wrapped sentence.
@@ -208,8 +210,8 @@ fn sentences(para: &str) -> Vec<String> {
             while end < chars.len() && (FINAL.contains(&chars[end]) || CLOSERS.contains(&chars[end])) {
                 end += 1;
             }
-            let next_upper = chars[end..].iter().find(|c| !c.is_whitespace()).is_some_and(|c| c.is_uppercase());
-            if c == '.' && abbreviation(&chars[start..i], next_upper) {
+            let next: String = chars[end..].iter().skip_while(|c| c.is_whitespace()).take_while(|c| !c.is_whitespace()).collect();
+            if c == '.' && abbreviation(&chars[start..i], &next) {
                 i = end;
                 continue;
             }
@@ -249,19 +251,33 @@ fn push(out: &mut Vec<String>, piece: &[char]) {
     }
 }
 
-const ABBREVIATIONS: [&str; 26] = [
-    "dr", "mr", "mrs", "ms", "prof", "st", "nr", "no", "ca", "usw", "bzw", "vgl", "cf", "al", "ex", "pp", "sect", "fig", "vs", "etc", "pos", "adj", "adv", "pron", "jr", "sr",
-];
+const ABBREVIATIONS: [&str; 20] = ["dr", "mr", "mrs", "ms", "prof", "st", "ca", "bzw", "vgl", "cf", "al", "vs", "pos", "adj", "adv", "pron", "jr", "sr", "e.g", "i.e"];
+/// Abbreviations that hold only before a number (`Fig. 3`, `No. 5`, `pp. 12`).
+const BEFORE_NUMBER: [&str; 6] = ["no", "nr", "pp", "fig", "sect", "ex"];
+/// English words that start a sentence after a number (`Table 3. They`), so
+/// the number before them is not an ordinal.
+const STARTERS: [&str; 13] = ["the", "this", "that", "these", "it", "they", "we", "he", "she", "in", "a", "there", "then"];
 
 /// Whether the word just before a full stop marks an abbreviation, not a
-/// sentence end: one letter, a listed abbreviation, or one or two digits
-/// before a capitalised word (an ordinal: `3. Oktober`).
-fn abbreviation(before: &[char], next_upper: bool) -> bool {
-    let word: String = before.iter().rev().take_while(|c| !c.is_whitespace() && !matches!(c, '(' | '[' | '"' | '\'' | '«')).collect::<Vec<_>>().into_iter().rev().collect();
+/// sentence end: an initial, a listed abbreviation, or one or two digits
+/// before a capitalised word that is not an English sentence opener (an
+/// ordinal: `3. Oktober`).
+fn abbreviation(before: &[char], next: &str) -> bool {
+    let words: Vec<String> = before.iter().collect::<String>().split_whitespace().map(|w| w.trim_start_matches(['(', '[', '"', '\'', '«']).to_string()).collect();
+    let Some(word) = words.last() else { return false };
+    let lower = word.to_lowercase();
     let n = word.chars().count();
-    (n == 1 && word.chars().all(char::is_alphabetic))
-        || (next_upper && (1..=2).contains(&n) && word.chars().all(|c| c.is_ascii_digit()))
-        || ABBREVIATIONS.contains(&word.to_lowercase().as_str())
+    let next_upper = next.chars().next().is_some_and(char::is_uppercase);
+    let next_digit = next.chars().next().is_some_and(|c| c.is_ascii_digit());
+    // A lone capital is an initial after a capitalised word or at the start
+    // (`J. Smith`, `Speaker A.`), not after `and I.` or `plan B.`.
+    let initial = n == 1
+        && word.chars().all(char::is_alphabetic)
+        && (word.chars().all(char::is_lowercase) || words.len() < 2 || words[words.len() - 2].chars().next().is_some_and(char::is_uppercase));
+    initial
+        || ABBREVIATIONS.contains(&lower.as_str())
+        || (next_digit && BEFORE_NUMBER.contains(&lower.as_str()))
+        || (next_upper && (1..=2).contains(&n) && word.chars().all(|c| c.is_ascii_digit()) && !STARTERS.contains(&next.to_lowercase().trim_end_matches([',', '.']).as_ref()))
 }
 
 /// A line that opens with a timestamp (`[00:01]`, `0:04`) or a speaker label (`A:`, `MARIA: `).
@@ -365,6 +381,18 @@ mod tests {
         assert_eq!(cut(ts).len(), 3);
         let verse = "the wind was cold upon the hill,\nthe river ran beneath the trees,\nand all the birds were singing still,\nupon the long and silver seas.\n";
         assert_eq!(cut(verse).len(), 4);
+    }
+
+    #[test]
+    fn prose_still_ends_its_sentences() {
+        assert_eq!(cut("We used word lists, etc. The recordings came later. She said no. Then he asked. See Fig. 3 and No. 5 in Table 3. They agree. It was just me and I. Then plan B. We left.\n\nx"), ["We used word lists, etc.", "The recordings came later.", "She said no.", "Then he asked.", "See Fig. 3 and No. 5 in Table 3.", "They agree.", "It was just me and I.", "Then plan B.", "We left.", "x"]);
+        // A label-looking line inside wrapped prose joins like any other.
+        for text in [
+            "The analysis of the clause\ngiven in the example sentence\n(3) shows that the verb agrees\nwith its subject, and so on.\nThen the most common cases are\nlisted as follows: vowel\nharmony, assimilation and\nelision.\n",
+            "The analysis of the clause given\nin the example sentence (3) shows\nthat the verb agrees with its\nsubject, and so on. Then the most\ncommon cases are listed as\nfollows: vowel harmony,\nassimilation and elision.\n",
+        ] {
+            assert_eq!(cut(text).len(), 2, "{:?}", cut(text));
+        }
     }
 
     #[test]
