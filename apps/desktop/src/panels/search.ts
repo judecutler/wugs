@@ -12,10 +12,10 @@ function snippet(text: string): HTMLElement {
   return out;
 }
 
-/** Open the hit's text, then select the exact segment so the timeline and Transcribe follow. */
 /** A segment with times can be heard from Search (roadmap 72). */
 const hearable = (r: SearchRow) => navigable(r) && r.kind === "segment" && r.textId !== null && r.tierId !== null && r.startMs !== null && r.endMs !== null;
 
+/** Open the hit's text, then select the exact segment so the timeline and Transcribe follow. */
 async function jump(r: SearchRow) {
   if (r.textId === null) return;
   await selectText(r.textId);
