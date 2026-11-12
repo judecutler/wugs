@@ -43,6 +43,35 @@ pub struct KitDto {
     pub active: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wug: Option<WugDto>,
+    /// The kit as a shareable bundle, read from the file; never written
+    /// from the form (the form leaves those tables as they are).
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub bundle: Option<BundleDto>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleDto {
+    pub license: String,
+    pub source: String,
+    pub authors: Vec<String>,
+    pub summary: String,
+    pub requires: Vec<RequirementDto>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub examples: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequirementDto {
+    pub kind: String,
+    pub id: String,
+    pub version: String,
+    pub files_sha256: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capability: Option<String>,
+    pub recommended: bool,
+    pub why: String,
 }
 
 /// The shell's `WugLook`. Colours are checked by `wugs_kit` on every save,
@@ -120,6 +149,26 @@ impl From<&Kit> for KitDto {
                 accessories: w.accessories.clone(),
                 colours: w.colours.clone(),
             }),
+            bundle: k.bundle.as_ref().map(|b| BundleDto {
+                license: b.license.clone(),
+                source: b.source.clone(),
+                authors: b.authors.clone(),
+                summary: b.summary.clone(),
+                requires: b
+                    .requires
+                    .iter()
+                    .map(|r| RequirementDto {
+                        kind: r.kind.clone(),
+                        id: r.id.clone(),
+                        version: r.version.clone(),
+                        files_sha256: r.files_sha256.clone(),
+                        capability: r.capability.clone(),
+                        recommended: r.recommended,
+                        why: r.why.clone(),
+                    })
+                    .collect(),
+                examples: b.examples.clone(),
+            }),
         }
     }
 }
@@ -160,6 +209,8 @@ impl KitDto {
                 accessories: w.accessories.clone(),
                 colours: w.colours.clone(),
             }),
+            // Bundle tables are never written from the form.
+            bundle: None,
         })
     }
 }

@@ -113,7 +113,7 @@ Scrolls (row 41, `docs/design/SCROLLS.md`) ships built in. It is still written a
 
 ## 8. Order of work
 
-1. `[package]`, `[bundle]`, `[[requires]]` and `[examples]` in `wugs-kit` and `wugs-package` (parse and check, every problem listed with line and column, as today); the canonical file-list hash; side-by-side package folders. The built-in kits are rewritten to use them.
+1. *Built 2026-11-12 except the side-by-side folders, which move with the index (row 37): `[package]` in a kit file may repeat `[kit]`'s id and version and must agree with them; the built-in kits carry `[package]` and `[bundle]` but no `[[requires]]` yet, because their word lists, domains and sample ship inside the app rather than as packages.* `[package]`, `[bundle]`, `[[requires]]` and `[examples]` in `wugs-kit` and `wugs-package` (parse and check, every problem listed with line and column, as today); the canonical file-list hash; side-by-side package folders. The built-in kits are rewritten to use them.
 2. `.wugskit` read and write: staged extraction under the rules in §3, hash checks, the install screen, uninstall.
 3. Integration manifests and the adapters: UDPipe 1 as a known program first (offline), then the REST-JSON adapter with the project opt-in.
 4. The index (row 37) lists kit packages with their requirements; "Publish" (row 54).

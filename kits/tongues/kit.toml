@@ -2,6 +2,18 @@
 # A kit is a recipe, not a container: it presets which tools open, how the
 # workspace is laid out, and project template defaults. Tools live in the platform.
 
+[package]                          # the kit as a shareable package (docs/design/BUNDLES.md)
+type = "kit"
+license = "MPL-2.0"
+source = "https://github.com/judecutler/wugs"
+
+[bundle]
+authors = ["The wugs project"]
+summary = "Record, segment, transcribe and gloss fieldwork, with the lexicon and consent records beside them."
+# [[requires]] lists the packages a kit relies on, each pinned by version
+# and files_sha256. The built-in kits need none yet: their word lists and
+# domains ship inside the app.
+
 [kit]
 id = "org.wugs.tongues"
 name = "Tongues"

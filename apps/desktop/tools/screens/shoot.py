@@ -103,6 +103,11 @@ def bundled_kit(name="tongues"):
         "version": k["kit"]["version"], "description": k["kit"].get("description", ""),
         "tools": k["tools"]["enabled"], "layout": k["layout"]["panels"], "active": k["layout"].get("active", []),
         **({"wug": k["wug"]} if "wug" in k else {}),
+        **({"bundle": {
+            "license": k.get("package", {}).get("license", ""), "source": k.get("package", {}).get("source", ""),
+            "authors": k.get("bundle", {}).get("authors", []), "summary": k.get("bundle", {}).get("summary", ""),
+            "requires": [], **({"examples": k["examples"]["project"]} if "examples" in k else {}),
+        }} if "package" in k or "bundle" in k else {}),
     }
 
 
@@ -333,6 +338,13 @@ def main():
             run.page.locator(".menu-list [role=menuitemradio]", has_text="Scrolls").click()
             run.page.wait_for_timeout(900)
             run.shot("state-scrolls")
+            # A built-in kit shown as a package (roadmap 74).
+            run.front("kits", "Kits")
+            run.page.locator(".panel-kits .kit-name", has_text="Scrolls").first.click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-kit-bundle", run.page.locator(".panel-kits"))
+            if run.page.locator(".panel-kits .kit-bundle li").count() == 0:
+                failures.append("a built-in kit did not show itself as a package")
             # Frequencies (Scrolls): a row opens the Concordance on that word.
             run.front("frequencies", "Frequencies")
             run.page.wait_for_timeout(400)

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addsFor, describeLayout, kitNotes, placementsFrom, withoutPanel, type Kit, type Placement, type SerializedLayout } from "./logic.ts";
+import { addsFor, bundleLines, describeLayout, kitNotes, placementsFrom, withoutPanel, type Kit, type Placement, type SerializedLayout } from "./logic.ts";
 
 const tongues: Placement[] = [
   { panel: "timeline" },
@@ -170,4 +170,23 @@ test("notes name what this version cannot give", () => {
     "Places panels the kit does not turn on, so they stay closed: search.",
     "Places panels this version does not have: map.",
   ]);
+});
+
+test("a bundle reads in words", () => {
+  const lines = bundleLines({
+    license: "MPL-2.0",
+    source: "https://github.com/x/kit",
+    authors: ["A. Linguist"],
+    summary: "Corpus tools.",
+    requires: [{ kind: "model", id: "udpipe1-en", version: "1.0", filesSha256: "a".repeat(64), capability: "morphosyntax", recommended: true, why: "Tags English" }],
+    examples: "examples/sample/",
+  });
+  assert.deepEqual(lines, [
+    "Corpus tools.",
+    "By A. Linguist; licence MPL-2.0.",
+    "Published at https://github.com/x/kit",
+    "Model udpipe1-en 1.0 for morphosyntax (recommended; another provider can be chosen): Tags English",
+    "Comes with an example project (examples/sample/).",
+  ]);
+  assert.ok(bundleLines({ license: "", source: "", authors: [], summary: "", requires: [] }).includes("Relies on no other packages."));
 });
