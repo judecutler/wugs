@@ -101,10 +101,56 @@ fn sealing_makes_a_new_package_each_time() {
 }
 
 #[test]
+fn a_plain_text_comes_in_a_sentence_per_segment_and_goes_out_a_line_per_segment() {
+    let dir = TempDir::new();
+    let mut a = project(&dir, "a");
+    let f = dir.0.join("Fox essay.txt");
+    fs::write(&f, "The fox came. It drank from the well!\n\nThen it left.\n").unwrap();
+    let imported = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    let text = imported.text.clone().unwrap();
+    let detail = session::get_text(&mut a, &text).unwrap();
+    assert_eq!(detail.title, "Fox essay");
+    let contents: Vec<String> = detail.segments.iter().map(|s| s.content.clone()).collect();
+    assert_eq!(contents, ["The fox came.", "It drank from the well!", "Then it left."], "{:?}", imported.lines);
+    // The same file again adds nothing.
+    let again = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert_eq!(again.text.as_deref(), Some(text.as_str()));
+    assert_eq!(texts(&mut a).len(), 1);
+    // Out as a line per segment, which reads back as the same text.
+    let out = dir.0.join("out");
+    fs::create_dir_all(&out).unwrap();
+    let file = interchange::export_text(&mut a, &text, Format::PlainText, &out).unwrap();
+    assert_eq!(fs::read_to_string(&file.path).unwrap(), "The fox came.\nIt drank from the well!\nThen it left.\n");
+    let mut b = project(&dir, "b");
+    let back = interchange::import_file(&mut b, &file.path).unwrap();
+    assert_eq!(session::get_text(&mut b, &back.text.unwrap()).unwrap().segments.len(), 3);
+    // Export goes in time order, whatever order the segments were drawn in.
+    let drawn = session::create_text(&mut a, "Drawn").unwrap();
+    session::add_segment(&mut a, &drawn, None, Some(5000.0), Some(6000.0), "second in time").unwrap();
+    session::add_segment(&mut a, &drawn, None, Some(0.0), Some(1000.0), "first in time").unwrap();
+    let file = interchange::export_text(&mut a, &drawn, Format::PlainText, &out).unwrap();
+    assert_eq!(fs::read_to_string(&file.path).unwrap(), "first in time\nsecond in time\n");
+    // An NFD file name and text match their NFC import.
+    let nfd = dir.0.join("Cafe\u{301}.txt");
+    fs::write(&nfd, "Cafe\u{301} au lait.\n").unwrap();
+    let one = interchange::import_file(&mut a, nfd.to_str().unwrap()).unwrap().text;
+    let two = interchange::import_file(&mut a, nfd.to_str().unwrap()).unwrap().text;
+    assert_eq!(one, two, "re-import matched in NFC");
+    // UTF-16 with no byte-order mark is refused, not stored as NULs.
+    let utf16 = dir.0.join("u16.txt");
+    fs::write(&utf16, "Hello there.".encode_utf16().flat_map(|u| u.to_le_bytes()).collect::<Vec<u8>>()).unwrap();
+    assert!(interchange::import_file(&mut a, utf16.to_str().unwrap()).is_err());
+    // A damaged file is refused, not garbled.
+    let bad = dir.0.join("bad.txt");
+    fs::write(&bad, b"caf\xE9").unwrap();
+    assert!(interchange::import_file(&mut a, bad.to_str().unwrap()).is_err());
+}
+
+#[test]
 fn an_unknown_file_is_refused_in_words() {
     let dir = TempDir::new();
     let mut a = project(&dir, "a");
-    let f = dir.0.join("notes.txt");
+    let f = dir.0.join("notes.md");
     fs::write(&f, "just some notes").unwrap();
     let err = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap_err();
     assert!(err.contains("not a file wugs can import"), "{err}");

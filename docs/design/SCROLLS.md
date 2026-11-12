@@ -90,7 +90,7 @@ Panels that both kits use (Search, Concordance, Texts, Conflicts, Devices, Kits)
 ## 5. Order of work
 
 1. **Kit switcher (row 73)** and a built-in Scrolls kit offering Texts, Concordance, Search, Gloss, Lexicon and Transcribe, so Scrolls exists and can be switched to.
-2. **Corpus import with the typed `tokens` table:** plain text and CSV with sentence and token splitting, and CoNLL-U with every column, multi-word ranges, empty nodes and comments kept (round-trip fidelity test). One txn per document; the `wugs-bench` corpus gate (§2) set up before import ships.
+2. *First form built (2026-11-12, roadmap 41): plain `.txt` in a txn per document, segments untokenized, no typed table yet; the Concordance and Frequencies split words on read, which serves fieldwork-scale corpora. The typed table and the `wugs-bench` corpus gate come before CSV, CoNLL-U and TEI, the formats that bring corpora large enough to need them.* **Corpus import with the typed `tokens` table:** plain text and CSV with sentence and token splitting, and CoNLL-U with every column, multi-word ranges, empty nodes and comments kept (round-trip fidelity test). One txn per document; the `wugs-bench` corpus gate (§2) set up before import ships.
 3. **Frequency list panel** (word, lemma, tag; per document, or the whole corpus, filtered by metadata), with copy and export, on the typed table.
 4. **`morphosyntax` capability:** the built-in tokenizer, then UDPipe 1 (offline), then the opt-in UDPipe 2 REST provider; a sentence's analysis in one field; machine marks; Mark checked; the tree validator.
 5. **CQP-subset queries** in the concordance; export to CWB for real `cqp`.

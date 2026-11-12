@@ -1079,6 +1079,29 @@ impl Project {
         Ok(id)
     }
 
+    /// A written text in one txn (a corpus document): the text and one
+    /// untimed segment per unit on `tier`, in order. Empty units are left out.
+    pub fn import_written_text(&mut self, title: &str, tier: &str, units: &[&str]) -> Result<(String, CommitResult), String> {
+        self.require(tier, "tier")?;
+        let mut t = self.intent("import-written-text");
+        let id = t.create_scope_root("text", "txt", vec![("title", Value::str(title))]);
+        for (i, unit) in units.iter().map(|u| u.trim()).filter(|u| !u.is_empty()).enumerate() {
+            t.create(
+                "segment",
+                "seg",
+                &id,
+                vec![
+                    ("text", Value::str(&id)),
+                    ("tier", Value::str(tier)),
+                    ("pos", Value::str(&wugs_model::pos_seq(i))),
+                    ("content", Value::str(unit)),
+                ],
+            );
+        }
+        let res = t.commit()?;
+        Ok((id, res))
+    }
+
     /// Returns the new segment's id together with the commit's findings, so
     /// a UI can surface warnings (e.g. tier-overlap) on adds, not only edits.
     pub fn add_segment(
@@ -2531,6 +2554,22 @@ mod tests {
         for &(text, ok) in wugs_model::REF_VECTORS {
             assert_eq!(check_blob_ref(text).is_ok(), ok, "{text:?}");
         }
+    }
+
+    #[test]
+    fn a_written_text_comes_in_one_txn() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let (tier, _) = p.add_tier("utterance", "time-aligned", Some("transcription"), None).unwrap();
+        let before = p.log.read_all().unwrap().ops.len();
+        let (txt, _) = p.import_written_text("Essay", &tier, &["One.", "  ", "Two words."]).unwrap();
+        let ops = p.log.read_all().unwrap().ops;
+        let txns: std::collections::BTreeSet<_> = ops[before..].iter().map(|o| o.txn.clone()).collect();
+        assert_eq!(txns.len(), 1, "one txn");
+        let segs = p.proj.ordered_children("text", &txt, "segment").unwrap();
+        let contents: Vec<_> = segs.iter().map(|s| p.proj.field_str(s, "content").unwrap().unwrap()).collect();
+        assert_eq!(contents, ["One.", "Two words."]);
+        assert!(p.import_written_text("X", &txt, &["a"]).is_err(), "a tier, not a text");
+        fs::remove_dir_all(root).ok();
     }
 
     #[test]

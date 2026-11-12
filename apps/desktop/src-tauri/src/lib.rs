@@ -16,6 +16,7 @@ pub mod kits;
 pub mod layout;
 pub mod lexicon;
 pub mod people;
+pub mod plaintext;
 pub mod listen;
 pub mod praat;
 pub mod praat_analysis;

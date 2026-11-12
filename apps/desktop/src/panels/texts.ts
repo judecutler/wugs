@@ -19,6 +19,7 @@ const TEXT_FORMATS: [TextFormat, string][] = [
   ["elan", "ELAN (.eaf)"],
   ["flextext", "FLEx (.flextext)"],
   ["textgrid", "Praat (.TextGrid)"],
+  ["plaintext", "Plain text, a line per segment (.txt)"],
 ];
 const LEXICON_FORMATS: [LexiconFormat, string][] = [
   ["lift", "LIFT (FLEx, WeSay)"],
@@ -57,9 +58,9 @@ async function work(label: string, action: () => Promise<void>) {
 
 async function importOne() {
   const path = await pickFile({
-    title: "Import a file from ELAN, FLEx, Praat or Toolbox",
+    title: "Import a file from ELAN, FLEx, Praat or Toolbox, or plain text",
     filters: [
-      { name: "ELAN, FLEx, Praat, Toolbox", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "txt"] },
+      { name: "ELAN, FLEx, Praat, Toolbox, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "txt"] },
       { name: "All files", extensions: ["*"] },
     ],
   });
@@ -169,7 +170,7 @@ export const textsPanel: PanelDef = {
           h("button", {
             type: "button",
             textContent: busy === "import" ? "Importing…" : "Import a file…",
-            title: "ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm/.txt",
+            title: "ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, or plain text .txt (a segment per sentence)",
             disabled: busy !== null,
             onclick: () => void importOne(),
           }),
