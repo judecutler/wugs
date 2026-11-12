@@ -6,7 +6,9 @@
 //
 // Bindings (wrangler.toml): AI (Workers AI), ASKED (Analytics Engine, the
 // "most asked" report; written only when the person agreed), LIMITER (per
-// address) and EVERYONE (all addresses together), both optional. Vars: MODEL, GUIDE_URL. Optional: PROVIDER = "deepseek"
+// address) and EVERYONE (addresses together, per Cloudflare location),
+// BUDGET (a Durable Object counting today's questions against
+// DAILY_QUESTIONS, the one cap that holds worldwide), all optional. Vars: MODEL, GUIDE_URL. Optional: PROVIDER = "deepseek"
 // with the secret DEEPSEEK_API_KEY answers through DeepSeek instead.
 
 import { search, sections } from "./guide.js";
@@ -44,6 +46,9 @@ async function route(request, env) {
     const { success } = await env.EVERYONE.limit({ key: "all" });
     if (!success) return json(429, { error: "Lots of people are asking just now. Try again in a minute." });
   }
+  if (env.BUDGET && !(await withinBudget(env))) {
+    return json(429, { error: "Help has answered all it can for today. Try again tomorrow, or ask a person with Feedback." });
+  }
   let body;
   try {
     body = await request.json();
@@ -56,6 +61,7 @@ async function route(request, env) {
   const guide = await guideSections(env, ask.version);
   const picked = search(guide, [...ask.history.filter((t) => t.role === "user").map((t) => t.content), ask.question].join("\n"));
   const answer = await complete(env, messages(picked, ask));
+  if (answer === "") return json(502, { error: "The help service could not put an answer together. Try asking another way, or use Feedback." });
   if (ask.share && env.ASKED) {
     try {
       env.ASKED.writeDataPoint({
@@ -81,8 +87,13 @@ export function parseAsk(body) {
     .filter((t) => t !== null && typeof t === "object" && (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
     .slice(-MAX_TURNS)
     .map((t) => ({ role: t.role, content: t.content.slice(0, MAX_TURN_CHARS) }));
-  // Oldest turns go first when the whole history is too long.
-  while (history.reduce((n, t) => n + t.content.length, 0) > MAX_HISTORY_CHARS) history.shift();
+  // Oldest turns go first when the whole history is too long, a question
+  // with its answer, so the history never opens with an orphaned answer.
+  while (history.reduce((n, t) => n + t.content.length, 0) > MAX_HISTORY_CHARS) {
+    history.shift();
+    if (history[0]?.role === "assistant") history.shift();
+  }
+  if (history[0]?.role === "assistant") history.shift();
   const version = typeof body.version === "string" && VERSION.test(body.version) ? body.version : null;
   return { question, history, version, share: body.share === true };
 }
@@ -116,7 +127,11 @@ async function complete(env, msgs) {
     const data = await r.json();
     return answerText(data);
   }
-  const out = await env.AI.run(env.MODEL, { messages: msgs, max_tokens: 600, temperature: 0.2 });
+  const input = { messages: msgs, max_tokens: 600, temperature: 0.2 };
+  // Reasoning models (GLM, Kimi) think by default and can spend the whole
+  // budget on it, leaving no answer; NO_THINKING turns that off.
+  if (env.NO_THINKING === "true") input.chat_template_kwargs = { enable_thinking: false };
+  const out = await env.AI.run(env.MODEL, input);
   return answerText(out);
 }
 
@@ -126,7 +141,7 @@ async function complete(env, msgs) {
 export function answerText(out) {
   const raw = out?.response ?? out?.choices?.[0]?.message?.content ?? "";
   return String(typeof raw === "string" ? raw : JSON.stringify(raw))
-    .replace(/<think>[\s\S]*?<\/think>/gu, "")
+    .replace(/<think>[\s\S]*?(?:<\/think>|$)/gu, "")
     .trim();
 }
 
@@ -148,6 +163,36 @@ const guides = new Map();
 /** The guide's sections for the asker's version (the tag `v<version>`),
  * falling back to `main` when that tag has no guide. A new guide reaches the
  * bot within the hour, with no redeploy. */
+// Versions come from the asker, so the map is kept small.
+const MAX_GUIDES = 16;
+function remember(url, found) {
+  guides.delete(url);
+  guides.set(url, { at: Date.now(), sections: found });
+  while (guides.size > MAX_GUIDES) guides.delete(guides.keys().next().value);
+}
+
+/** Counts one question against today's budget (UTC day). */
+async function withinBudget(env) {
+  const day = new Date().toISOString().slice(0, 10);
+  const stub = env.BUDGET.get(env.BUDGET.idFromName(day));
+  const r = await stub.fetch(`https://budget/take?limit=${Number(env.DAILY_QUESTIONS ?? 250)}`);
+  return (await r.json()).ok === true;
+}
+
+/** Today's question count, one object per UTC day. */
+export class Budget {
+  constructor(state) {
+    this.state = state;
+  }
+  async fetch(request) {
+    const limit = Number(new URL(request.url).searchParams.get("limit"));
+    const n = (await this.state.storage.get("n")) ?? 0;
+    if (n >= limit) return Response.json({ ok: false, n });
+    await this.state.storage.put("n", n + 1);
+    return Response.json({ ok: true, n: n + 1 });
+  }
+}
+
 async function guideSections(env, version) {
   const refs = version === null ? ["main"] : [`v${version}`, "main"];
   for (const ref of refs) {
@@ -157,10 +202,20 @@ async function guideSections(env, version) {
       if (kept.sections === null) continue;
       return kept.sections;
     }
-    const r = await fetch(url);
+    let r;
+    try {
+      r = await fetch(url);
+    } catch {
+      r = null;
+    }
+    if (r === null || (!r.ok && r.status !== 404)) {
+      // GitHub is down or limiting: an hour-old guide beats no answer.
+      if (kept?.sections) return kept.sections;
+      continue;
+    }
     // A version with no guide is remembered too, so it is not asked for again.
     const found = r.ok ? sections(await r.text()) : null;
-    if (r.ok || r.status === 404) guides.set(url, { at: Date.now(), sections: found });
+    remember(url, found);
     if (found !== null) return found;
   }
   throw new Error("user guide unreachable");

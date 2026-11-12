@@ -40,7 +40,7 @@ jobs:
         run: |
           set -o pipefail
           npx --yes wrangler@4.161.0 deploy 2>&1 | tee deploy.log
-          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1)
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1 || true)
           if [ -z "$url" ]; then echo "::error::wrangler printed no workers.dev address"; exit 1; fi
           {
             echo "## Help bot deployed"

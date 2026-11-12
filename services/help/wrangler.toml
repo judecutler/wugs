@@ -7,6 +7,11 @@ workers_dev = true
 [vars]
 # Any Workers AI text-generation model. GLM-4.7-Flash: about 30 neurons a question, ~300 a day free.
 MODEL = "@cf/zai-org/glm-4.7-flash"
+# GLM thinks before answering unless told not to; off, a question costs ~30 neurons.
+NO_THINKING = "true"
+# At most this many questions a day in all (UTC), counted by BUDGET: the
+# free 10,000 neurons cover roughly 300.
+DAILY_QUESTIONS = "250"
 # Where the user guide is read from; {ref} is the asker's version tag, else main.
 GUIDE_URL = "https://raw.githubusercontent.com/judecutler/wugs/{ref}/docs/USER-GUIDE.md"
 
@@ -30,7 +35,8 @@ namespace_id = "4742"
 [observability]
 enabled = true
 
-# Everyone together: at most 20 questions a minute, so one abuser cannot drain the day.
+# Everyone together, per Cloudflare location (the limiter is local): at most 20 a
+# minute. BUDGET below is the cap that holds worldwide.
 [[ratelimits]]
 name = "EVERYONE"
 namespace_id = "4743"
@@ -38,3 +44,12 @@ namespace_id = "4743"
   [ratelimits.simple]
   limit = 20
   period = 60
+
+# Today's question count (one object per UTC day).
+[[durable_objects.bindings]]
+name = "BUDGET"
+class_name = "Budget"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Budget"]

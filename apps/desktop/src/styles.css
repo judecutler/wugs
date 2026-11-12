@@ -816,7 +816,8 @@ body::before {
 /* The visiting wug (src/wug-peek.ts). The box's bottom edge is the card's
    top edge, so the wug looks as if it stands behind the panel. */
 .brand-wug { display: inline-block; transition: transform 260ms ease-in, opacity 260ms ease-in; }
-.brand-wug.wug-away { transform: translateY(14px) rotate(-8deg); opacity: 0; }
+.brand-wug.wug-away, .brand-wug.wug-hopping { transform: translateY(14px) rotate(-8deg); opacity: 0; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .wug-peek { position: fixed; z-index: 800; overflow: hidden; pointer-events: none; cursor: default; }
 /* Only the drawn wug, and only while it is up, can be touched. */
 .wug-peek.up:not(.leaving) svg { pointer-events: visiblePainted; }

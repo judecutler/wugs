@@ -6,6 +6,9 @@ import { hopFrames } from "./logic";
 
 const FLIGHT_MS = 620;
 let flying: Animation | null = null;
+let hoppingUntil = 0;
+/** Whether the top bar's wug is out of its corner for a jump (a redraw keeps it so). */
+export const hopping = (): boolean => Date.now() < hoppingUntil;
 
 /** `logo` is looked up when the jump starts: opening the panel redraws the top bar. */
 export function hopInto(logo: () => Element | null, to: HTMLElement): void {
@@ -20,7 +23,9 @@ export function hopInto(logo: () => Element | null, to: HTMLElement): void {
   flyer.innerHTML = wugSvg(currentWug(), "");
   Object.assign(flyer.style, { left: "0px", top: "0px", width: `${a.width}px`, height: `${a.width}px` });
   document.body.append(flyer);
-  from?.classList.add("wug-away");
+  // Its own class: the visiting wug (src/wug-peek.ts) owns `wug-away`.
+  from?.classList.add("wug-hopping");
+  hoppingUntil = Date.now() + FLIGHT_MS + 900;
   to.classList.add("wug-landing");
   const frames = hopFrames({ x: a.left, y: a.top, width: a.width, height: a.height }, { x: b.left, y: b.top, width: b.width, height: b.height }, 16);
   const keyframes: Keyframe[] = frames.map((f) => ({
@@ -31,11 +36,13 @@ export function hopInto(logo: () => Element | null, to: HTMLElement): void {
   flying = anim;
   const done = () => {
     flyer.remove();
+    // A newer jump owns the target now.
+    if (flying !== anim) return;
     to.classList.remove("wug-landing");
     to.classList.add("wug-landed");
     window.setTimeout(() => to.classList.remove("wug-landed"), 400);
-    window.setTimeout(() => logo()?.classList.remove("wug-away"), 900);
-    if (flying === anim) flying = null;
+    window.setTimeout(() => logo()?.classList.remove("wug-hopping"), 900);
+    flying = null;
   };
   anim.onfinish = done;
   anim.oncancel = done;

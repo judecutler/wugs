@@ -32,7 +32,7 @@ import { isPanelId, PANELS, type PanelId } from "./panels/registry";
 import { SHOW_PANEL } from "./panels/panel";
 import { attachDock, useKit } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
-import { hopInto } from "./help/hop";
+import { hopInto, hopping } from "./help/hop";
 import { helpView } from "./help/view";
 import { helpPanelView, setHelpFeedback } from "./panels/help";
 import { openSettings } from "./settings/panel";
@@ -167,6 +167,7 @@ function renderTop() {
       const art = wugArt("brand-wug", `${kit?.name ?? "wugs"} wug`);
       // Out on a visit: a redraw must not put a second wug in the corner.
       if (visits?.away()) art.classList.add("wug-away");
+      if (hopping()) art.classList.add("wug-hopping");
       return art;
     })()),
     kitSwitcher(),
@@ -316,6 +317,23 @@ function openHelpCard(logo: () => Element | null): void {
     if (e.key === "Escape" && !e.isComposing && e.keyCode !== 229) {
       e.stopImmediatePropagation();
       close();
+    }
+    if (e.key === "Tab") {
+      // The keyboard stays inside the card while it is open.
+      const stops = [...card.querySelectorAll<HTMLElement>("textarea, input, button:not(:disabled)")];
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      if (first === undefined || last === undefined) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!card.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   };
   function close() {

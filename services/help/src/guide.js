@@ -50,9 +50,17 @@ export function stem(w) {
   if (/(?:ss|us|is)$/u.test(w)) return w;
   if (/(?:ches|shes|sses|xes|zes)$/u.test(w)) return w.slice(0, -2);
   if (/ies$/u.test(w) && w.length > 4) return `${w.slice(0, -3)}y`;
-  if (/ing$/u.test(w) && w.length > 5) return w.slice(0, -3);
-  if (/ed$/u.test(w) && w.length > 4) return w.slice(0, -2);
-  if (/s$/u.test(w)) return w.slice(0, -1);
+  if (/ing$/u.test(w) && w.length > 5) w = w.slice(0, -3);
+  else if (/ed$/u.test(w) && w.length > 4) w = w.slice(0, -2);
+  else if (/s$/u.test(w)) w = w.slice(0, -1);
+  return tidy(w);
+}
+
+/** The tail the rules leave: `deleting`→`delet` and `delete` meet at
+ * `delet`, `running`→`runn` becomes `run`. */
+function tidy(w) {
+  if (w.length >= 4 && w.endsWith("e")) w = w.slice(0, -1);
+  if (/([bdfgklmnprt])\1$/u.test(w)) w = w.slice(0, -1);
   return w;
 }
 

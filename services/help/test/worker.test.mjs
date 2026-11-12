@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
 import { anchor, search, sections, stem, words } from "../src/guide.js";
-import worker, { answerText, cutBytes, MAX_HISTORY_CHARS, MAX_QUESTION_CHARS, messages, parseAsk } from "../src/index.js";
+import worker, { Budget, answerText, cutBytes, MAX_HISTORY_CHARS, MAX_QUESTION_CHARS, messages, parseAsk } from "../src/index.js";
 
 const GUIDE = readFileSync(new URL("../../../docs/USER-GUIDE.md", import.meta.url), "utf8");
 const ALL = sections(GUIDE);
@@ -25,11 +25,16 @@ test("plurals and -ing forms meet", () => {
     assert.equal(stem(a), stem(b), `${a} meets ${b}`);
   }
   assert.equal(stem("gloss"), "gloss");
+  for (const [a, b] of [["deleting", "delete"], ["typing", "type"], ["created", "create"], ["saving", "save"], ["caches", "cache"], ["running", "run"]]) {
+    assert.equal(stem(a), stem(b), `${a} meets ${b}`);
+  }
 });
 
 test("answers from either response shape, without a reasoning block", () => {
   assert.equal(answerText({ response: " Hi " }), "Hi");
   assert.equal(answerText({ choices: [{ message: { content: "<think>hmm</think>\nPress S." } }] }), "Press S.");
+  assert.equal(answerText({ choices: [{ message: { content: "Press S.", reasoning_content: "the person wants" } }] }), "Press S.", "reasoning in its own field stays out");
+  assert.equal(answerText({ choices: [{ message: { content: "<think>still going" } }] }), "", "an unclosed reasoning block is dropped");
   assert.equal(answerText(null), "");
 });
 
@@ -45,6 +50,8 @@ test("the whole history is capped, oldest turns first", () => {
   const ok = parseAsk({ question: "q", history: Array.from({ length: 6 }, (_, i) => ({ role: "user", content: `${i}${long}` })) });
   assert.ok(ok.history.reduce((n, t) => n + t.content.length, 0) <= MAX_HISTORY_CHARS);
   assert.ok(ok.history.at(-1).content.startsWith("5"), "the newest turn stays");
+  const paired = parseAsk({ question: "q", history: [0, 1, 2, 3].flatMap((i) => [{ role: "user", content: `q${i}${long}` }, { role: "assistant", content: `a${i}` }]) });
+  assert.equal(paired.history[0].role, "user", "never opens with an orphaned answer");
 });
 
 for (const [question, expected] of [
@@ -154,6 +161,43 @@ test("a lost report row never loses the answer", async () => {
   const e = { ...env(), ASKED: { writeDataPoint: () => { throw new Error("too big"); } } };
   const r = await worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify({ question: "split", share: true }) }), e);
   assert.equal(r.status, 200);
+});
+
+test("thinking is turned off when asked, and an empty answer is an error", async () => {
+  const e = { ...env(), NO_THINKING: "true", AI: { run: async (_m, input) => (ran.push(input), { choices: [{ message: { content: "" } }] }) } };
+  const r = await worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify({ question: "split" }) }), e);
+  assert.deepEqual(ran[0].chat_template_kwargs, { enable_thinking: false });
+  assert.equal(r.status, 502);
+});
+
+test("the daily budget refuses past its limit", async () => {
+  let n = 0;
+  const budget = { idFromName: (d) => d, get: () => ({ fetch: async (u) => Response.json({ ok: ++n <= Number(new URL(u).searchParams.get("limit")) }) }) };
+  const e = { ...env(), BUDGET: budget, DAILY_QUESTIONS: "1" };
+  const go = () => worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify({ question: "split" }) }), e);
+  assert.equal((await go()).status, 200);
+  assert.equal((await go()).status, 429);
+});
+
+test("the Budget object counts per day", async () => {
+  const store = new Map();
+  const b = new Budget({ storage: { get: async (k) => store.get(k), put: async (k, v) => store.set(k, v) } });
+  const take = async () => (await (await b.fetch(new Request("https://budget/take?limit=2"))).json()).ok;
+  assert.deepEqual([await take(), await take(), await take()], [true, true, false]);
+});
+
+test("an hour-old guide is used when GitHub fails", async () => {
+  const e = env();
+  const go = () => worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify({ question: "split" }) }), e);
+  assert.equal((await go()).status, 200);
+  const realNow = Date.now;
+  Date.now = () => realNow() + 2 * 3600_000;
+  globalThis.fetch = async () => new Response("rate limited", { status: 429 });
+  try {
+    assert.equal((await go()).status, 200, "the stale guide still answers");
+  } finally {
+    Date.now = realNow;
+  }
 });
 
 test("everyone together is limited too", async () => {
