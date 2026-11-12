@@ -1,4 +1,4 @@
-//! Installed kits: the bundled Tongues kit, compiled in and read-only, and
+//! Installed kits: the built-in kits (Tongues, Scrolls), compiled in and read-only, and
 //! the user's own kits, one `kits/<id>.toml` each in app data. The active
 //! kit is a per-machine choice in `kits/active`. Manifests are read and
 //! rewritten by `wugs-kit`; this module only stores them.
@@ -244,7 +244,7 @@ pub fn list(app_data: &Path) -> Result<KitsView, String> {
                 kit.id
             )]),
             Ok(kit) if reserved(&kit.id) => fail(vec![format!(
-                "{:?} is reserved for the built-in kit; give this kit its own id",
+                "{:?} is reserved for a built-in kit; give this kit its own id",
                 kit.id
             )]),
             Ok(kit) => users.push(KitEntry {

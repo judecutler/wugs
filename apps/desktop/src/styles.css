@@ -730,6 +730,11 @@ button.welcome-link:hover { text-decoration: underline; }
   display: flex; flex-direction: column;
   animation: menu-in 120ms ease-out;
 }
+/* The kit switcher sits at the bar's left edge: its list opens rightward. */
+.brand-kit .menu-list {
+  left: 0;
+  right: auto;
+}
 @keyframes menu-in { from { opacity: 0; transform: translateY(-4px); } }
 .menu-item {
   display: flex; flex-direction: column; align-items: flex-start; gap: 1px;

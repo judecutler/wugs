@@ -10,12 +10,16 @@ export type MenuItem =
   | { heading: string }
   | "separator";
 
-export function menuButton(label: string, items: () => MenuItem[], opts: { title?: string; className?: string } = {}): HTMLElement {
+/** `key` names the menu for focus after a redraw; it defaults to the label,
+ * so give one when the label can change (the kit switcher). */
+export function menuButton(label: string, items: () => MenuItem[], opts: { title?: string; className?: string; key?: string } = {}): HTMLElement {
   const button = h("button", {
     className: `menu-button ${opts.className ?? ""}`.trim(),
     textContent: label,
     title: opts.title ?? "",
   });
+  const key = opts.key ?? label;
+  button.dataset.menu = key;
   button.setAttribute("aria-haspopup", "menu");
   button.setAttribute("aria-expanded", "false");
   const wrap = h("span", { className: "menu-wrap" }, button);
@@ -28,7 +32,7 @@ export function menuButton(label: string, items: () => MenuItem[], opts: { title
     button.setAttribute("aria-expanded", "false");
     document.removeEventListener("pointerdown", onOutside, true);
     if (focusButton) button.focus();
-    wrap.dispatchEvent(new CustomEvent("menu-closed", { bubbles: true, detail: { label, focus: focusButton } }));
+    wrap.dispatchEvent(new CustomEvent("menu-closed", { bubbles: true, detail: { key, focus: focusButton } }));
   };
   const onOutside = (e: Event) => {
     if (!wrap.contains(e.target as Node)) close(false);
