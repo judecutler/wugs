@@ -716,11 +716,24 @@ fn concretize_gather_indices(model: &mut TypedModel) -> Result<(), Error> {
         .filter(|n| n.op_is::<GatherElements>())
         .map(|n| (n.id, n.inputs[1], n.name.clone()))
         .collect();
+    let i64 = || tract_onnx::tract_core::ops::cast::cast(DatumType::I64);
     for (id, outlet, name) in gathers {
         if model.outlet_fact(outlet).map_err(model_err)?.datum_type != DatumType::TDim {
             continue;
         }
-        let wire = model.wire_node(format!("{name}.wugs_i64"), tract_onnx::tract_core::ops::cast::cast(DatumType::I64), &[outlet]).map_err(model_err)?[0];
+        // The indices are row offsets (heads × T) plus columns (T) broadcast
+        // to heads × T × T: cast the two small inputs and add in i64, or
+        // the add itself evaluates that many dim expressions every run (41
+        // of 49 s at 15 s on the test model).
+        let producer = model.node(outlet.node);
+        let wire = if producer.op_is::<tract_onnx::tract_core::ops::binary::TypedBinOp>() && producer.inputs.len() == 2 && producer.op().name() == "Add" {
+            let (op, ins) = (producer.op.clone(), producer.inputs.clone());
+            let a = model.wire_node(format!("{name}.wugs_rows_i64"), i64(), &[ins[0]]).map_err(model_err)?[0];
+            let b = model.wire_node(format!("{name}.wugs_cols_i64"), i64(), &[ins[1]]).map_err(model_err)?[0];
+            model.wire_node(format!("{name}.wugs_add_i64"), op, &[a, b]).map_err(model_err)?[0]
+        } else {
+            model.wire_node(format!("{name}.wugs_i64"), i64(), &[outlet]).map_err(model_err)?[0]
+        };
         model.add_edge(wire, InletId::new(id, 1)).map_err(model_err)?;
     }
     Ok(())
