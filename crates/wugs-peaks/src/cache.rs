@@ -169,8 +169,11 @@ impl Peaks {
         static SAVES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let n = SAVES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let tmp = path.with_extension(format!("wpk.tmp{}-{n}", std::process::id()));
-        fs::write(&tmp, self.to_bytes())?;
-        fs::rename(&tmp, &path)?;
+        let written = fs::write(&tmp, self.to_bytes()).and_then(|()| fs::rename(&tmp, &path));
+        if let Err(e) = written {
+            let _ = fs::remove_file(&tmp);
+            return Err(e.into());
+        }
         Ok(path)
     }
 
