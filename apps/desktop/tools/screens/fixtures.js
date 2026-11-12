@@ -528,6 +528,18 @@
     }),
     list_texts: () => texts,
     link_recording: () => null,
+    keywords: () => ({
+      focusTokens: 23,
+      referenceTokens: 42,
+      types: 6,
+      rows: [
+        { item: "nikani", focus: 9, reference: 2, logLikelihood: 11.8, logRatio: 2.86, percentDiff: 722 },
+        { item: "toruma", focus: 4, reference: 0, logLikelihood: 7.71, logRatio: 3.87, percentDiff: 1361 },
+        { item: "liwa", focus: 1, reference: 0, logLikelihood: 1.93, logRatio: 1.87, percentDiff: 265 },
+        { item: "ŋai", focus: 3, reference: 16, logLikelihood: -2.6, logRatio: -1.34, percentDiff: -60 },
+        { item: "kesi", focus: 0, reference: 11, logLikelihood: -9.0, logRatio: -3.97, percentDiff: -94 },
+      ],
+    }),
     collocates: ({ node }) => ({
       node: node === "" ? 0 : 23,
       tokens: 65,

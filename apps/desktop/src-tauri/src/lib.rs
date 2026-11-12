@@ -4,6 +4,7 @@ pub mod capture;
 pub mod concordance;
 pub mod collocates;
 pub mod frequencies;
+pub mod keywords;
 pub mod conflicts;
 pub mod convert;
 pub mod corrections;
@@ -139,6 +140,12 @@ fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, 
 #[tauri::command(async)]
 fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>) -> Result<frequencies::Frequencies, String> {
     s.run(move |s| frequencies::frequencies(s, kind, text_id.as_deref()))
+}
+
+/// Which words one text uses more or less than the rest (Scrolls' keywords).
+#[tauri::command(async)]
+fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: String, min_focus: usize) -> Result<keywords::Keywords, String> {
+    s.run(move |s| keywords::keywords(s, kind, &text_id, min_focus))
 }
 
 /// Which words keep company with a word (Scrolls' collocates).
@@ -1395,6 +1402,7 @@ pub fn run() {
             media_overview,
             frequencies,
             collocates,
+            keywords,
             get_text,
             create_text,
             import_file,
