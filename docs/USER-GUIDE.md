@@ -37,6 +37,12 @@ Click **Settings** in the top bar for the rest. A panel slides in from the right
 - **Workspace:** **Always show panel tabs** keeps the dividers up. Now and then the kit's wug peeks over the top of the panel you are working in; it never comes while you type, hold the mouse button, drag, play audio or record, and it hides when you touch it. To stop its visits, turn off **Let the wug visit**. A panel you closed is listed under **Closed panels**; click it to bring it back. **Reset layout** puts every panel back where Tongues starts.
 - **Updates:** see [Keep wugs up to date](#keep-wugs-up-to-date).
 
+### Find any action
+
+Press **Ctrl+K** (**⌘K** on a Mac), or click **Find an action** in the top bar. Type a few letters of what you want, such as "split", "night" or "lexicon", then press **Enter**. The list covers opening panels, colours and patterns, timeline actions, copying an example, and the Project menu. Each row shows its key, if it has one. An action that cannot run yet stays in the list, greyed, and says why.
+
+Press **?** anywhere outside a text field to see every keyboard shortcut.
+
 ## Bring in a recording
 
 ### Import an audio file
