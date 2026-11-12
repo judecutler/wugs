@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cards, duration, normalized, wavePath } from "./logic.ts";
+import { cardDrag, cards, duration, normalized, wavePath } from "./logic.ts";
 
 test("cards are the recordings with audio, marked for the text on screen", () => {
   const sources = [
@@ -38,4 +38,13 @@ test("the waveform path goes along the maxima and back along the minima", () => 
 test("peaks are scaled so the loudest reaches the edge", () => {
   assert.deepEqual(normalized([-100, -50], [200, 0]), { mins: [-0.5, -0.25], maxs: [1, 0] });
   assert.deepEqual(normalized([0], [0]), { mins: [0], maxs: [0] });
+});
+
+test("a card drag is live from its start until its end, and lapses", () => {
+  assert.equal(cardDrag.active(0), false);
+  cardDrag.start(1000);
+  assert.equal(cardDrag.active(2000), true);
+  assert.equal(cardDrag.active(70_000), false, "a lost dragend never leaves the guard open");
+  cardDrag.end();
+  assert.equal(cardDrag.active(2000), false);
 });

@@ -39,7 +39,9 @@ export const timelinePanel: PanelDef = {
     });
     el.addEventListener("drop", (e) => {
       el.classList.remove("is-drop-target");
-      if (!carries(e) || view === null) return;
+      // The window's guard ran first (capture) and let this through only for a
+      // live card drag, then ended the drag: here the type is enough.
+      if (!(e.dataTransfer?.types.includes(CARD_TYPE) ?? false) || view === null) return;
       e.preventDefault();
       const id = e.dataTransfer?.getData(CARD_TYPE) ?? "";
       if (sources.some((x) => x.id === id)) void pickSource(id);

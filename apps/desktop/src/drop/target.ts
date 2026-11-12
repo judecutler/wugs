@@ -119,10 +119,13 @@ export function dropTarget(): HTMLElement {
     },
     true,
   );
+  // Any drop or drag end ends a card drag, even one whose card was redrawn away.
+  window.addEventListener("dragend", () => cardDrag.end(), true);
   window.addEventListener(
     "drop",
     (e) => {
       const act = action(e);
+      cardDrag.end();
       if (act === "pass") return;
       claim(e);
       if (act === "refuse") return;

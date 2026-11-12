@@ -63,14 +63,17 @@ export const CARD_TYPE = "application/x-wugs-recording";
 
 /** Whether a media bin card is being dragged right now. Only a drag that
  * starts inside the app sets this, so a web page that puts `CARD_TYPE` on a
- * link it drags in is still refused as a link. */
-let dragging = false;
+ * link it drags in is still refused as a link. A card redrawn mid-drag may
+ * never see its dragend, so the flag also ends with any drop and lapses
+ * after a minute. */
+let draggingSince: number | null = null;
+const LAPSE_MS = 60_000;
 export const cardDrag = {
-  start: () => {
-    dragging = true;
+  start: (now = Date.now()) => {
+    draggingSince = now;
   },
   end: () => {
-    dragging = false;
+    draggingSince = null;
   },
-  active: () => dragging,
+  active: (now = Date.now()) => draggingSince !== null && now - draggingSince < LAPSE_MS,
 };
