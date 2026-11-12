@@ -95,6 +95,32 @@ Auto-segment measures loudness only. Wind, a generator, or other people talking 
 - To delete a segment, select it and press **Delete**, then click **Delete** in the box that opens. Click **Keep** to cancel.
 - To add a track, choose a kind from the **Add track…** list: transcription, translation, notes, or custom. A custom track asks for a name.
 
+### Play, zoom, and move around
+
+The row under the Timeline toolbar works like the transport in a video editor. It has buttons to go to the start, play or pause, and go to the end. Beside them is the playhead time and the recording's length. At the right are the zoom controls: **−**, a slider, **+**, and **Fit**, which shows the whole recording.
+
+Click the ruler or the waveform to move the playhead there. While the timeline has focus, these keys also work:
+
+| Key | Action |
+| --- | --- |
+| **Space** | Play or pause. |
+| **J** | Jump back two seconds. |
+| **K** | Stop. |
+| **L** | Play. |
+| **Home** and **End** | Go to the start or the end. |
+| **+** and **-** | Zoom in or out. |
+| **Shift+Z** | Fit the whole recording on screen. |
+
+### Lock, hide, and mute tracks
+
+Each track has a header at the left of the timeline, as in a video editor:
+
+- The lock button stops a track's segments from changing. You can still select them and play them, but drawing, dragging, typing, splitting, merging, nudging and deleting are refused with a message. Click the lock again to unlock the track.
+- The eye button hides a track's segments, so you can work on another track without them in the way. A hidden track cannot be edited either.
+- The speaker button beside **Recording** mutes the sound. The playhead still moves, so you can follow along silently.
+
+These settings belong to one text on this computer. They are not shared with other devices and they do not change the project.
+
 ### Split, merge, and nudge
 
 Select a segment first. Then use the toolbar buttons or these keys while the timeline has focus:

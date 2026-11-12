@@ -384,9 +384,27 @@ form.inline input { flex: 1; min-width: 0; }
 .tl-toolbar button.active { border-color: var(--accent); background: var(--accent-soft); }
 .tl-toolbar .tl-edit-tools { display: inline-flex; gap: 4px; padding: 0 6px; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .tl-main { display: flex; flex: 1; min-height: 0; }
-.tl-gutter { position: relative; width: 132px; border-right: 1px solid var(--line); background: var(--emphasis); font-size: var(--text-xs); flex: none; }
-.tl-gutter-wave, .tl-gutter-tier { position: absolute; left: 0; right: 0; padding: 4px 8px; color: var(--chrome-ink); border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tl-gutter-wave { color: var(--muted); font-style: italic; }
+.tl-gutter { position: relative; width: 148px; border-right: 1px solid var(--line); background: var(--emphasis); font-size: var(--text-xs); flex: none; }
+.tl-gutter-wave, .tl-gutter-tier { position: absolute; left: 0; right: 0; display: flex; align-items: flex-start; gap: 4px; padding: 4px 4px 4px 8px; color: var(--chrome-ink); border-bottom: 1px solid var(--line); }
+.tl-gutter-wave { color: var(--muted); }
+.tl-track-name { flex: 1; min-width: 0; padding-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tl-gutter-tier.is-hidden .tl-track-name { color: var(--muted); text-decoration: line-through; }
+.tl-gutter-tier.is-locked .tl-track-name { color: var(--muted); }
+.tl-track-toggles { display: flex; gap: 1px; flex: none; }
+/* Icon buttons: track toggles and the transport. A pressed toggle keeps the accent, so a locked or muted track is visible at a glance. */
+.tl-icon { display: inline-grid; place-items: center; width: 24px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--chrome-ink); cursor: pointer; }
+.tl-icon:hover:not(:disabled) { background: var(--surface-raised); border-color: var(--line); }
+.tl-icon:disabled { opacity: 0.4; cursor: default; }
+.tl-track-toggle { color: var(--muted); }
+.tl-track-toggle[aria-pressed="true"] { color: var(--accent); background: var(--surface-raised); border-color: var(--line); }
+.tl-transport { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 2px 8px; border-bottom: 1px solid var(--line); font-size: var(--text-sm); }
+.tl-transport-play, .tl-transport-zoom { display: flex; align-items: center; gap: 4px; }
+.tl-clock { margin-left: 8px; font-variant-numeric: tabular-nums; color: var(--chrome-ink); }
+.tl-clock-total { color: var(--muted); }
+.tl-zoom { width: 140px; accent-color: var(--accent); }
+.tl-zoom-step { min-width: 26px; padding: 0 6px; }
+.tl-transport button:not(.tl-icon) { border-color: transparent; background-color: transparent; }
+.tl-transport button:not(.tl-icon):hover { background-color: var(--surface-raised); border-color: var(--line); }
 .tl-gutter-add { position: absolute; left: 6px; right: 6px; }
 .tl-gutter-add select, .tl-gutter-add input { width: 100%; font-size: var(--text-xs); }
 .tl-body { flex: 1; min-width: 0; position: relative; }

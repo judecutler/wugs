@@ -31,6 +31,10 @@ export const currentMs = (): number => audio.currentTime * 1000;
 export const isPlaying = (): boolean => !audio.paused;
 export const pause = (): void => ctl.pause();
 export const seek = (tMs: number): void => ctl.seek(tMs);
+/** The recording track's mute: silence without stopping the playhead. */
+export const setMuted = (on: boolean): void => {
+  audio.muted = on;
+};
 
 export function toggle(): void {
   if (hasSource()) ctl.toggle();

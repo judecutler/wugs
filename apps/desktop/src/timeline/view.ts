@@ -31,10 +31,12 @@ import { laneBounds, snapDragged, snapRange, type Span } from "./snap";
 import { editRules, type EditRules, type Granularity } from "./edit-rules";
 import { checkOf, edgeEntry, UndoHistory, type SegmentCheck, type UndoEntry, type UndoStack } from "./undo";
 import { StripCache } from "./strips";
+import { editBlocker, NO_TRACKS, parseTracks, shuttle, toggleHidden, toggleLocked, toggleMuted, tracksKey, pxPerSecToSlider, sliderToPxPerSec, type Tracks } from "./tracks";
 import { THEME_EVENT } from "../theme/theme";
 import {
   clamp,
   fitPxPerSec,
+  MAX_PX_PER_SEC,
   msToFrame,
   pan,
   timeToX,
@@ -145,6 +147,22 @@ class FrameStats {
   }
 }
 
+function readStored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Storage full or refused: the toggle still holds for this session.
+  }
+}
+
 export class TimelineView {
   readonly element: HTMLElement;
   /** Praat's pitch, intensity and formants over the waveform. */
@@ -164,6 +182,10 @@ export class TimelineView {
 
   private text: TextDetail | null = null;
   private lanes: Lane[] = [];
+  /** Lock, hide and mute for this text on this computer (tracks.ts). */
+  private tracks: Tracks = NO_TRACKS;
+  /** Called when a track toggle or the zoom changed, so the panel redraws its headers. */
+  onTracksChange: () => void = () => {};
   private info: PeaksInfo | null = null;
   private strips: StripCache | null = null;
   private vpState: Viewport = { t0Ms: 0, pxPerSec: 100, durationMs: 0, widthPx: 800 };
@@ -249,6 +271,7 @@ export class TimelineView {
     window.removeEventListener("mousemove", this.windowMoves);
     window.removeEventListener("mouseup", this.windowUps);
     this.closeConfirm();
+    playback.setMuted(false);
     playback.setSource(null);
     setMediaSource(null);
   }
@@ -272,7 +295,11 @@ export class TimelineView {
   setText(text: TextDetail | null): void {
     const sameText = this.text !== null && text !== null && this.text.id === text.id;
     this.text = text;
-    if (!sameText) this.closeEditor(false);
+    if (!sameText) {
+      this.closeEditor(false);
+      this.tracks = text === null ? NO_TRACKS : parseTracks(readStored(tracksKey(text.id)));
+      playback.setMuted(this.tracks.muted);
+    }
     // The popover never outlives its segment (deleted here, by an undo, or on another device).
     if (this.confirmFor !== null && (!sameText || text?.segments.some((x) => x.id === this.confirmFor) !== true)) this.closeConfirm();
     this.lanes = [];
@@ -295,6 +322,7 @@ export class TimelineView {
     }
     this.fitDuration();
     this.onEditStateChange();
+    this.onTracksChange();
   }
 
   setMedia(info: PeaksInfo | null, sourceId: string | null): void {
@@ -324,6 +352,114 @@ export class TimelineView {
 
   laneNames(): string[] {
     return this.lanes.map((l) => l.name);
+  }
+
+  /** The track headers: one row per lane, in drawing order. A lane with no
+   * tier yet (an empty text) has no toggles. */
+  trackRows(): { tierId: string | null; name: string; hidden: boolean; locked: boolean }[] {
+    const t = this.tracks;
+    return this.lanes.map((l) => ({
+      tierId: l.tierId,
+      name: l.name,
+      hidden: l.tierId !== null && t.hidden.includes(l.tierId),
+      locked: l.tierId !== null && t.locked.includes(l.tierId),
+    }));
+  }
+
+  get muted(): boolean {
+    return this.tracks.muted;
+  }
+
+  toggleTrack(tierId: string, what: "hidden" | "locked"): void {
+    this.setTracks(what === "hidden" ? toggleHidden(this.tracks, tierId) : toggleLocked(this.tracks, tierId));
+    // A segment that just went out of sight cannot stay selected.
+    const sel = this.selected === null ? null : this.findSegment(this.selected);
+    if (what === "hidden" && sel !== null && sel.tier === tierId && this.tracks.hidden.includes(tierId)) this.select(null);
+  }
+
+  toggleMute(): void {
+    this.setTracks(toggleMuted(this.tracks));
+  }
+
+  private setTracks(next: Tracks): void {
+    this.tracks = next;
+    playback.setMuted(next.muted);
+    const id = this.text?.id;
+    if (id !== undefined) writeStored(tracksKey(id), JSON.stringify(next));
+    this.closeConfirm();
+    this.onEditStateChange();
+    this.onTracksChange();
+  }
+
+  /** Why segments on this lane cannot change now, or null. */
+  private laneBlock(lane: Lane | null | undefined): string | null {
+    return lane === null || lane === undefined || lane.tierId === null ? null : editBlocker(this.tracks, lane.tierId, lane.name);
+  }
+
+  private isHidden(lane: Lane): boolean {
+    return lane.tierId !== null && this.tracks.hidden.includes(lane.tierId);
+  }
+
+  /** The selected segment's track refuses edits: say so and return true. */
+  private refuseSelected(): boolean {
+    const seg = this.selected === null ? null : this.findSegment(this.selected);
+    const why = seg === null ? null : this.laneBlock(this.laneOf(seg));
+    if (why !== null) showToast({ tone: "info", lines: [why] });
+    return why !== null;
+  }
+
+  // ------------------------------------------------------- zoom and transport
+
+  durationMs(): number {
+    return this.vpState.durationMs;
+  }
+
+  hasRecording(): boolean {
+    return this.info !== null;
+  }
+
+  /** The zoom slider's position, 0 (whole recording) to 1000 (closest). */
+  zoomSlider(): number {
+    const v = this.vp();
+    return pxPerSecToSlider(v.pxPerSec, fitPxPerSec(v), MAX_PX_PER_SEC);
+  }
+
+  /** Zoom to a slider position, keeping the playhead in place when it is on screen. */
+  setZoomSlider(value: number): void {
+    const v = this.vp();
+    this.zoomTo(sliderToPxPerSec(value, fitPxPerSec(v), MAX_PX_PER_SEC));
+  }
+
+  zoomBy(factor: number): void {
+    this.zoomTo(this.vp().pxPerSec * factor);
+  }
+
+  /** The whole recording on screen. */
+  fit(): void {
+    const v = this.vp();
+    this.setVp({ ...v, t0Ms: 0, pxPerSec: fitPxPerSec(v) });
+    this.onTracksChange();
+  }
+
+  private zoomTo(pxPerSec: number): void {
+    const v = this.vp();
+    const head = playback.currentMs();
+    const onScreen = this.info !== null && head >= v.t0Ms && head <= v.t0Ms + visibleSpanMs(v);
+    const anchorX = onScreen ? timeToX(v, head) : v.widthPx / 2;
+    this.setVp(zoomAround(v, anchorX, pxPerSec / v.pxPerSec));
+    this.onTracksChange();
+  }
+
+  /** Move the playhead to t, scrolling it into view. */
+  seekTo(tMs: number): void {
+    this.seek(tMs);
+    const v = this.vp();
+    const span = visibleSpanMs(v);
+    if (tMs < v.t0Ms || tMs > v.t0Ms + span) this.setVp({ ...v, t0Ms: tMs - span * 0.1 });
+  }
+
+  playPause(): void {
+    this.togglePlay();
   }
 
   /** Duration: the recording's, or past the last timed segment when only
@@ -456,10 +592,14 @@ export class TimelineView {
       ctx.moveTo(0, top + TIER_H + 0.5);
       ctx.lineTo(v.widthPx, top + TIER_H + 0.5);
       ctx.stroke();
+      if (this.isHidden(lane)) continue;
+      // A locked track draws faded, the way video editors grey a locked track.
+      if (this.laneBlock(lane) !== null) ctx.globalAlpha = 0.55;
       for (const seg of lane.segments) {
         const draft = this.resizeDraft;
         this.drawSegment(v, draft !== null && draft.id === seg.id ? { ...seg, ...draft } : seg, top);
       }
+      ctx.globalAlpha = 1;
       if (this.drag?.kind === "create" && this.drag.lane === i) {
         const r = this.createRange(i, this.drag.anchorMs, this.drag.currentMs);
         const x0 = timeToX(v, r.startMs);
@@ -559,6 +699,7 @@ export class TimelineView {
   }
 
   private hitAt(lane: Lane, x: number): { hit: Hit; seg: SegmentRow } | null {
+    if (this.isHidden(lane)) return null;
     const hit = hitTest(this.vp(), lane.segments, x);
     const seg = hit === null ? undefined : lane.segments.find((c) => c.id === hit.id);
     return hit === null || seg === undefined ? null : { hit, seg };
@@ -600,9 +741,11 @@ export class TimelineView {
         return;
       }
       const found = this.hitAt(lane, x);
+      // A locked or hidden track still selects and seeks, but nothing on it moves.
+      const blocked = this.laneBlock(lane) !== null;
       if (found !== null) {
         this.select(found.seg.id);
-        if (found.hit.kind === "edge") {
+        if (found.hit.kind === "edge" && !blocked) {
           const edgeMs = (found.hit.edge === "start" ? found.seg.startMs : found.seg.endMs) ?? tMs;
           this.drag = {
             kind: "resize",
@@ -616,7 +759,7 @@ export class TimelineView {
         return;
       }
       this.select(null);
-      this.drag = { kind: "maybe-create", lane: laneIdx, startX: x, anchorMs: tMs };
+      this.drag = blocked ? { kind: "maybe-pan", startX: x, downMs: tMs } : { kind: "maybe-create", lane: laneIdx, startX: x, anchorMs: tMs };
     });
 
     this.windowMoves = (ev) => {
@@ -696,7 +839,10 @@ export class TimelineView {
       const lane = laneIdx === -1 ? undefined : this.lanes[laneIdx];
       if (lane === undefined) return;
       const seg = this.hitAt(lane, x)?.seg;
-      if (seg !== undefined) this.openEditor(seg, laneIdx);
+      if (seg === undefined) return;
+      const why = this.laneBlock(lane);
+      if (why !== null) showToast({ tone: "info", lines: [why] });
+      else this.openEditor(seg, laneIdx);
     });
   }
 
@@ -704,7 +850,7 @@ export class TimelineView {
     const laneIdx = this.laneAt(y);
     const lane = laneIdx === -1 ? undefined : this.lanes[laneIdx];
     let cursor = "";
-    if (lane !== undefined && this.hitAt(lane, x)?.hit.kind === "edge") cursor = "ew-resize";
+    if (lane !== undefined && this.laneBlock(lane) === null && this.hitAt(lane, x)?.hit.kind === "edge") cursor = "ew-resize";
     else if (y < RULER_H + WAVE_H) cursor = "pointer";
     if (cursor !== this.hoverCursor) {
       this.hoverCursor = cursor;
@@ -727,6 +873,30 @@ export class TimelineView {
         return;
       }
       if (mod || ev.altKey) return;
+      const move = shuttle(ev.key);
+      if (move !== null && !ev.shiftKey) {
+        ev.preventDefault();
+        if (this.info === null) return;
+        if (move.kind === "seek") this.seekTo(Math.max(0, playback.currentMs() + move.byMs));
+        else if (move.kind === "pause") playback.pause();
+        else if (!playback.isPlaying()) playback.toggle();
+        return;
+      }
+      if (ev.key === "Home" || ev.key === "End") {
+        ev.preventDefault();
+        this.seekTo(ev.key === "Home" ? 0 : this.vp().durationMs);
+        return;
+      }
+      if (ev.key === "Z" && ev.shiftKey) {
+        ev.preventDefault();
+        this.fit();
+        return;
+      }
+      if (ev.key === "=" || ev.key === "+" || ev.key === "-") {
+        ev.preventDefault();
+        this.zoomBy(ev.key === "-" ? 1 / 1.5 : 1.5);
+        return;
+      }
       if (ev.code === "BracketLeft" || ev.code === "BracketRight") {
         // [ ] move the start, Shift+[ ] the end, by NUDGE_MS.
         ev.preventDefault();
@@ -742,7 +912,7 @@ export class TimelineView {
         this.togglePlay();
       } else if ((ev.key === "Delete" || ev.key === "Backspace") && this.selected !== null) {
         ev.preventDefault();
-        this.askDelete(this.selected);
+        if (!this.refuseSelected()) this.askDelete(this.selected);
       } else if (ev.key === "Escape") {
         this.select(null);
         this.closeConfirm();
@@ -972,6 +1142,8 @@ export class TimelineView {
     const id = this.selected;
     const seg = id === null ? null : this.findSegment(id);
     const lane = seg === null ? null : this.laneOf(seg);
+    const why = this.laneBlock(lane);
+    if (why !== null) return { split: why, merge: why, next: null };
     return editRules(this.info !== null, seg, lane?.segments ?? []);
   }
 
@@ -1079,6 +1251,7 @@ export class TimelineView {
     const id = this.selected;
     const seg = id === null ? null : this.findSegment(id);
     if (this.nudging || text === null || seg === null || seg.startMs === null || seg.endMs === null) return;
+    if (this.refuseSelected()) return;
     const was = edge === "start" ? seg.startMs : seg.endMs;
     const now =
       edge === "start" ? Math.max(0, Math.min(seg.startMs + deltaMs, seg.endMs - MIN_SEGMENT_MS)) : Math.max(seg.startMs + MIN_SEGMENT_MS, seg.endMs + deltaMs);
