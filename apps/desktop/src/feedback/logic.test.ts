@@ -15,15 +15,18 @@ test("the form can be sent once it says what happened", () => {
   assert.equal(sendBlocker("It froze", ""), null);
   assert.match(sendBlocker("It froze", "maria at uni") ?? "", /email/);
   assert.equal(sendBlocker("It froze", "maria@uni.edu"), null);
+  assert.match(sendBlocker("It froze", "a@b@c") ?? "", /email/);
+  assert.match(sendBlocker("It froze", "x<y>@z") ?? "", /email/);
   assert.match(sendBlocker("x".repeat(10_001), "") ?? "", /under 10,000/);
 });
 
 test("the toast says plainly whether it went", () => {
-  assert.deepEqual(outcomeLines({ sent: true, waiting: 0, problem: null }).lines, ["Thank you. Your feedback was sent."]);
-  const offline = outcomeLines({ sent: false, waiting: 1, problem: "Could not reach the feedback service." });
+  assert.deepEqual(outcomeLines({ sent: true, waiting: 0, problem: null, configured: true }).lines, ["Thank you. Your feedback was sent."]);
+  const offline = outcomeLines({ sent: false, waiting: 1, problem: "Could not reach the feedback service.", configured: true });
   assert.equal(offline.tone, "warn");
   assert.match(offline.lines[0], /saved on this computer/);
-  assert.match(outcomeLines({ sent: false, waiting: 0, problem: "The report has no message." }).lines[0], /could not be sent/);
+  assert.match(outcomeLines({ sent: false, waiting: 0, problem: "The report has no message.", configured: true }).lines[0], /could not be sent/);
+  assert.match(outcomeLines({ sent: false, waiting: 3, problem: null, configured: false }).lines[1], /cannot send feedback yet/);
 });
 
 test("an attachment is shown by its own name", () => {

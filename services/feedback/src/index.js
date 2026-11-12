@@ -91,8 +91,9 @@ export function safeName(name) {
 
 async function receiveReport(request, env, id) {
   if (!ID.test(id)) return json(400, { error: "That is not a report id." });
-  const declared = Number(request.headers.get("Content-Length") ?? "0");
-  if (declared > MAX_REPORT_BYTES) return json(413, { error: "The report is too long." });
+  const declared = request.headers.get("Content-Length");
+  if (declared === null) return json(411, { error: "The report needs a Content-Length." });
+  if (Number(declared) > MAX_REPORT_BYTES) return json(413, { error: "The report is too long." });
   const text = await request.text();
   if (text.length > MAX_REPORT_BYTES) return json(413, { error: "The report is too long." });
   let body;
@@ -110,22 +111,57 @@ async function receiveReport(request, env, id) {
   if (stored) {
     record = await stored.json();
   } else {
-    record = { id, received: new Date().toISOString(), ...parsed.report, issue: null, emailed: false, file: null };
+    if (!(await withinDailyCap(env, { reports: 1, bytes: 0 }))) return json(503, { error: FULL });
+    record = { id, received: new Date().toISOString(), ...parsed.report, issue: null, emailed: false, file: null, fileNotified: false };
     await env.REPORTS.put(key, JSON.stringify(record), { httpMetadata: { contentType: "application/json" } });
   }
-  // Finish whatever an earlier attempt left undone.
-  if (record.issue === null && env.GITHUB_TOKEN && env.FEEDBACK_REPO) {
-    record.issue = await fileIssue(env, record);
-    await env.REPORTS.put(key, JSON.stringify(record));
-  }
-  if (!record.emailed && env.RESEND_API_KEY && env.OWNER_EMAIL) {
-    await sendEmail(env, record);
-    record.emailed = true;
-    await env.REPORTS.put(key, JSON.stringify(record));
-  }
+  // Each step on its own: one failing (an expired token, an email quota)
+  // never stops the other, and a repeat finishes only what is left.
+  const delivered = await notify(env, record, request.url);
+  await env.REPORTS.put(key, JSON.stringify(record));
+  if (!delivered) return json(503, { error: "The report is kept, but the maintainer could not be told yet. It will be sent again." });
   const out = { id, received: record.received };
   if (record.attachment && record.file === null) out.upload = { token: await sign(env, `upload:${id}`) };
   return json(stored ? 200 : 201, out);
+}
+
+const FULL = "The feedback service has had too many reports today. Yours is kept and will be sent tomorrow.";
+
+/** Tell the maintainer about the report, and about its attachment once it
+ * has arrived. Returns whether the maintainer has been told by some way
+ * (or no way is set up), so the app retries only when nothing got through. */
+async function notify(env, record, requestUrl) {
+  const hasGitHub = Boolean(env.GITHUB_TOKEN && env.FEEDBACK_REPO);
+  const hasEmail = Boolean(env.RESEND_API_KEY && env.OWNER_EMAIL);
+  const attempt = async (what, step) => {
+    try {
+      await step();
+    } catch (e) {
+      console.error(`${what} for report ${record.id} failed:`, e);
+    }
+  };
+  if (hasGitHub && record.issue === null) await attempt("GitHub issue", async () => (record.issue = await fileIssue(env, record)));
+  if (hasEmail && !record.emailed) await attempt("Email", async () => (await sendEmail(env, record), (record.emailed = true)));
+  if (record.file !== null && !record.fileNotified) {
+    const link = await fileLink(requestUrl, env, record.id);
+    const line = `Attachment: [${mdText(record.attachment.name)}](${link}) (${sizeWords(record.attachment.bytes)}). The link works for anyone who has it; keep it in this repository.`;
+    if (hasGitHub && record.issue !== null) {
+      await attempt("Attachment comment", async () => {
+        await github(env, `/repos/${env.FEEDBACK_REPO}/issues/${record.issue}/comments`, { body: line });
+        record.fileNotified = true;
+      });
+    }
+    if (!record.fileNotified && hasEmail) {
+      await attempt("Attachment email", async () => {
+        await sendEmail(env, record, link);
+        record.fileNotified = true;
+      });
+    }
+    if (!hasGitHub && !hasEmail) record.fileNotified = true;
+    if (!record.fileNotified) return false;
+  }
+  if (!hasGitHub && !hasEmail) return true;
+  return record.issue !== null || record.emailed;
 }
 
 async function receiveAttachment(request, env, id) {
@@ -137,25 +173,40 @@ async function receiveAttachment(request, env, id) {
   if (!stored) return json(404, { error: "Send the report before its attachment." });
   const record = await stored.json();
   if (!record.attachment) return json(400, { error: "This report has no attachment." });
-  if (record.file !== null) return json(200, { id, file: "already received" });
-  const length = Number(request.headers.get("Content-Length") ?? "NaN");
-  if (length !== record.attachment.bytes) return json(400, { error: "The attachment's size does not match the report." });
-  if (request.body === null) return json(400, { error: "The attachment is empty." });
-
-  const fileKey = `reports/${id}/${record.attachment.name}`;
-  // Streamed: a 95 MB video never sits in the Worker's memory.
-  await env.REPORTS.put(fileKey, request.body, {
-    httpMetadata: { contentType: request.headers.get("Content-Type") ?? "application/octet-stream" },
-  });
-  record.file = fileKey;
-  await env.REPORTS.put(key, JSON.stringify(record));
-  const link = await fileLink(request.url, env, id);
-  if (record.issue !== null && env.GITHUB_TOKEN && env.FEEDBACK_REPO) {
-    await github(env, `/repos/${env.FEEDBACK_REPO}/issues/${record.issue}/comments`, {
-      body: `Attachment: [${mdText(record.attachment.name)}](${link}) (${sizeWords(record.attachment.bytes)}). The link works for anyone who has it; keep it in this repository.`,
+  if (record.file === null) {
+    const length = Number(request.headers.get("Content-Length") ?? "NaN");
+    if (length !== record.attachment.bytes) return json(400, { error: "The attachment's size does not match the report." });
+    if (request.body === null) return json(400, { error: "The attachment is empty." });
+    if (!(await withinDailyCap(env, { reports: 0, bytes: length }))) return json(503, { error: FULL });
+    // Prefixed, so no file name can land on the record's own key.
+    const fileKey = `reports/${id}/file-${record.attachment.name}`;
+    // Streamed: a 95 MB video never sits in the Worker's memory.
+    await env.REPORTS.put(fileKey, request.body, {
+      httpMetadata: { contentType: request.headers.get("Content-Type") ?? "application/octet-stream" },
     });
+    record.file = fileKey;
+    await env.REPORTS.put(key, JSON.stringify(record));
   }
+  // A repeat (the app lost the answer, or telling the maintainer failed)
+  // only tells the maintainer what is still untold.
+  const delivered = await notify(env, record, request.url);
+  await env.REPORTS.put(key, JSON.stringify(record));
+  if (!delivered) return json(503, { error: "The attachment is kept, but the maintainer could not be told yet. It will be sent again." });
   return json(201, { id, file: "received" });
+}
+
+/** A soft cap on reports and upload bytes a day, so a flood cannot run up
+ * storage or use every email the plan allows. Counted per UTC day in R2;
+ * two requests at once can both slip under it, which a soft cap allows. */
+async function withinDailyCap(env, add) {
+  const maxReports = Number(env.DAILY_REPORTS ?? 200);
+  const maxBytes = Number(env.DAILY_UPLOAD_MB ?? 2000) * 1e6;
+  const key = `daily/${new Date().toISOString().slice(0, 10)}.json`;
+  const got = await env.REPORTS.get(key);
+  const day = got ? await got.json() : { reports: 0, bytes: 0 };
+  if (day.reports + add.reports > maxReports || day.bytes + add.bytes > maxBytes) return false;
+  await env.REPORTS.put(key, JSON.stringify({ reports: day.reports + add.reports, bytes: day.bytes + add.bytes }));
+  return true;
 }
 
 async function sendFile(url, env, id) {
@@ -167,14 +218,21 @@ async function sendFile(url, env, id) {
   if (record.file === null) return json(404, { error: "The attachment has not arrived yet." });
   const file = await env.REPORTS.get(record.file);
   if (!file) return json(404, { error: "Not found." });
-  const name = record.attachment.name;
   return new Response(file.body, {
     headers: {
       "Content-Type": file.httpMetadata?.contentType ?? "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${name.replace(/"/g, "_")}"; filename*=UTF-8''${encodeURIComponent(name)}`,
+      "Content-Disposition": contentDisposition(record.attachment.name),
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "private, no-store",
     },
   });
+}
+
+/** A header value holds only Latin-1, so the plain filename is an ASCII
+ * stand-in and the real name (any script) goes in filename*. */
+export function contentDisposition(name) {
+  const ascii = name.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
 async function fileLink(requestUrl, env, id) {
@@ -189,9 +247,9 @@ export function issueText(record) {
   const title = `Feedback: ${firstLine.length > 70 ? `${firstLine.slice(0, 69)}…` : firstLine}`;
   const lines = [fence(record.message, "text"), ""];
   lines.push(`- Received: ${record.received}`);
-  if (record.client) lines.push(`- From: ${mdText(record.client)}`);
+  if (record.client) lines.push(`- From: \`${record.client.replace(/[`\r\n]/g, " ")}\``);
   lines.push(`- Reply to: ${record.contact ? `\`${record.contact.replace(/`/g, "")}\`` : "no address given"}`);
-  if (record.attachment) lines.push(`- Attachment: ${mdText(record.attachment.name)} (${sizeWords(record.attachment.bytes)}), linked in a comment once it arrives`);
+  if (record.attachment) lines.push(`- Attachment: ${mdText(record.attachment.name)} (${sizeWords(record.attachment.bytes)}), linked once it arrives`);
   lines.push(`- Report id: \`${record.id}\``);
   if (record.details) lines.push("", "Technical details:", "", fence(JSON.stringify(record.details, null, 2), "json"));
   return { title, body: lines.join("\n") };
@@ -233,8 +291,11 @@ async function github(env, path, payload) {
   return r.json();
 }
 
-async function sendEmail(env, record) {
+async function sendEmail(env, record, attachmentLink = null) {
   const { title } = issueText(record);
+  if (attachmentLink !== null) {
+    return resend(env, record, `Attachment: ${title}`, `The attachment for this report has arrived: ${attachmentLink}\n\nThe link works for anyone who has it.`, "attachment");
+  }
   const text = [
     record.message,
     "",
@@ -245,18 +306,22 @@ async function sendEmail(env, record) {
   ]
     .filter((l) => l !== null)
     .join("\n");
+  return resend(env, record, title, text, "report");
+}
+
+async function resend(env, record, subject, text, what) {
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${env.RESEND_API_KEY}`,
       "Content-Type": "application/json",
       // A retry after a lost answer never sends a second email.
-      "Idempotency-Key": `wugs-feedback/${record.id}`,
+      "Idempotency-Key": `wugs-feedback/${record.id}/${what}`,
     },
     body: JSON.stringify({
       from: env.EMAIL_FROM || "wugs feedback <onboarding@resend.dev>",
       to: [env.OWNER_EMAIL],
-      subject: title,
+      subject,
       text,
       ...(record.contact ? { reply_to: record.contact } : {}),
     }),

@@ -25,14 +25,16 @@ function bucket() {
 
 let calls;
 let failGitHub;
+let failComment;
 const realFetch = globalThis.fetch;
 beforeEach(() => {
   calls = [];
   failGitHub = false;
+  failComment = false;
   globalThis.fetch = async (url, init) => {
     calls.push({ url: String(url), body: JSON.parse(init.body) });
     if (String(url).startsWith("https://api.github.com")) {
-      if (failGitHub) return new Response("down", { status: 503 });
+      if (failGitHub || (failComment && String(url).endsWith("/comments"))) return new Response("down", { status: 503 });
       return Response.json({ number: 7 });
     }
     return Response.json({ id: "email" });
@@ -51,8 +53,22 @@ const ENV = () => ({
   OWNER_EMAIL: "me@example.org",
 });
 const ID = "01JC0000000000000000000000";
-const post = (env, body, id = ID) =>
-  worker.fetch(new Request(`https://fb.example/v1/reports/${id}`, { method: "POST", body: JSON.stringify(body) }), env);
+const post = (env, body, id = ID) => {
+  const text = JSON.stringify(body);
+  return worker.fetch(
+    new Request(`https://fb.example/v1/reports/${id}`, { method: "POST", body: text, headers: { "Content-Length": String(new TextEncoder().encode(text).length) } }),
+    env,
+  );
+};
+const upload = (env, token, bytes, id = ID) =>
+  worker.fetch(
+    new Request(`https://fb.example/v1/reports/${id}/attachment`, {
+      method: "PUT",
+      body: bytes,
+      headers: { Authorization: `Bearer ${token}`, "Content-Length": String(bytes.length), "Content-Type": "video/mp4" },
+    }),
+    env,
+  );
 
 test("a report becomes one private issue and one email", async () => {
   const env = ENV();
@@ -76,23 +92,33 @@ test("sending the same report again files nothing new", async () => {
   assert.equal(calls.length, 2);
 });
 
-test("a retry finishes what a failed attempt left undone", async () => {
+test("a GitHub failure never stops the email, and a repeat files only the issue", async () => {
   const env = ENV();
   failGitHub = true;
   const first = await post(env, { message: "hello" });
-  assert.equal(first.status, 500);
+  assert.equal(first.status, 201, "the maintainer was told by email");
+  assert.deepEqual(calls.map((c) => new URL(c.url).host), ["api.github.com", "api.resend.com"]);
   failGitHub = false;
   calls = [];
-  const second = await post(env, { message: "hello" });
-  assert.equal(second.status, 200);
-  assert.deepEqual(calls.map((c) => new URL(c.url).host), ["api.github.com", "api.resend.com"]);
+  await post(env, { message: "hello" });
+  assert.deepEqual(calls.map((c) => new URL(c.url).host), ["api.github.com"]);
+});
+
+test("when nobody could be told, the app is asked to try again", async () => {
+  const env = ENV();
+  delete env.RESEND_API_KEY;
+  failGitHub = true;
+  assert.equal((await post(env, { message: "hello" })).status, 503);
+  failGitHub = false;
+  assert.equal((await post(env, { message: "hello" })).status, 200);
 });
 
 test("an attachment streams into storage and is linked from the issue", async () => {
   const env = ENV();
   const video = new Uint8Array(1000).fill(7);
   const r = await post(env, { message: "see video", attachment: { name: "clip.mp4", bytes: video.length } });
-  const { upload } = await r.json();
+  const { upload: up } = await r.json();
+  const upload = up;
   assert.ok(upload.token);
   calls = [];
   const put = await worker.fetch(
@@ -104,7 +130,7 @@ test("an attachment streams into storage and is linked from the issue", async ()
     env,
   );
   assert.equal(put.status, 201);
-  assert.equal(env.REPORTS.items.get(`reports/${ID}/clip.mp4`).bytes.length, 1000);
+  assert.equal(env.REPORTS.items.get(`reports/${ID}/file-clip.mp4`).bytes.length, 1000);
   assert.match(calls[0].url, /issues\/7\/comments$/);
   const link = calls[0].body.body.match(/\((https:[^)]+)\)/)[1];
   const got = await worker.fetch(new Request(link), env);
@@ -157,4 +183,61 @@ test("unknown routes and bad ids are refused", async () => {
   assert.equal((await worker.fetch(new Request("https://fb.example/"), env)).status, 404);
   assert.equal((await post(env, { message: "x" }, "../x")).status, 404);
   assert.equal((await post(env, { message: "x" }, "short")).status, 400);
+});
+
+test("a file named in any script downloads", async () => {
+  const env = ENV();
+  const r = await post(env, { message: "x", attachment: { name: "画面録画 2026-11-12.mov", bytes: 4 } });
+  const { upload: up } = await r.json();
+  calls = [];
+  assert.equal((await upload(env, up.token, new Uint8Array(4))).status, 201);
+  const link = calls[0].body.body.match(/\((https:[^)]+)\)/)[1];
+  const got = await worker.fetch(new Request(link), env);
+  assert.equal(got.status, 200);
+  assert.match(got.headers.get("Content-Disposition"), /filename\*=UTF-8''%E7%94%BB/);
+  assert.equal(got.headers.get("X-Content-Type-Options"), "nosniff");
+});
+
+test("a lost attachment comment is posted on the next try", async () => {
+  const env = ENV();
+  const r = await post(env, { message: "x", attachment: { name: "a.mp4", bytes: 3 } });
+  const { upload: up } = await r.json();
+  failComment = true;
+  // GitHub is down for the comment, but the email carries the link instead.
+  const first = await upload(env, up.token, new Uint8Array(3));
+  assert.equal(first.status, 201);
+  assert.ok(calls.some((c) => c.url === "https://api.resend.com/emails" && /^Attachment: /.test(c.body.subject)));
+});
+
+test("an attachment nobody could be told about is retried until someone is", async () => {
+  const env = ENV();
+  delete env.RESEND_API_KEY;
+  const r = await post(env, { message: "x", attachment: { name: "a.mp4", bytes: 3 } });
+  const { upload: up } = await r.json();
+  failComment = true;
+  assert.equal((await upload(env, up.token, new Uint8Array(3))).status, 503);
+  failComment = false;
+  calls = [];
+  assert.equal((await upload(env, up.token, new Uint8Array(3))).status, 201);
+  assert.match(calls[0].url, /issues\/7\/comments$/);
+});
+
+test("a day's reports and uploads are capped", async () => {
+  const env = { ...ENV(), DAILY_REPORTS: "2", DAILY_UPLOAD_MB: "1" };
+  assert.equal((await post(env, { message: "a" }, "01JC0000000000000000000001")).status, 201);
+  assert.equal((await post(env, { message: "b" }, "01JC0000000000000000000002")).status, 201);
+  assert.equal((await post(env, { message: "c" }, "01JC0000000000000000000003")).status, 503);
+  // A repeat of one already received is not a new report.
+  assert.equal((await post(env, { message: "a" }, "01JC0000000000000000000001")).status, 200);
+});
+
+test("a report without a length is refused before it is read", async () => {
+  const env = ENV();
+  const r = await worker.fetch(new Request(`https://fb.example/v1/reports/${ID}`, { method: "POST", body: "{}" }), env);
+  assert.equal(r.status, 411);
+});
+
+test("the app's version line cannot add links or headings to the issue", () => {
+  const { body } = issueText({ id: ID, received: "now", message: "m", contact: "", client: "wugs\n# https://evil.example", details: null, attachment: null });
+  assert.match(body, /- From: `wugs # https:\/\/evil\.example`/);
 });

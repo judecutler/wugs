@@ -3,7 +3,7 @@
 // person can see and leave out. Online; a report written offline waits in
 // the outbox (src-tauri/src/feedback.rs).
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { feedbackDetails, feedbackSend } from "../api";
+import { feedbackDeliver, feedbackDetails, feedbackKeep } from "../api";
 import { h } from "../dom";
 import { showToast } from "../store";
 import { fileName, outcomeLines, recordingTip, sendBlocker, systemOf } from "./logic";
@@ -19,7 +19,9 @@ export function openFeedback(page: Record<string, unknown>): void {
     return;
   }
   let attachment: string | null = null;
-  let sending = false;
+  // Checking the report and copying the attachment; the form closes once kept.
+  let keeping = false;
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 
   const message = h("textarea", { className: "feedback-message", rows: 6, placeholder: "What were you doing, and what went wrong or could be better?" });
   const contact = h("input", { type: "email", className: "feedback-contact", placeholder: "you@example.org", autocomplete: "email", value: localStorage.getItem(CONTACT_KEY) ?? "" });
@@ -34,8 +36,10 @@ export function openFeedback(page: Record<string, unknown>): void {
 
   const refresh = () => {
     const blocker = sendBlocker(message.value, contact.value);
-    send.disabled = sending || blocker !== null;
-    send.textContent = sending ? "Sending…" : "Send feedback";
+    send.disabled = keeping || blocker !== null;
+    cancel.disabled = keeping;
+    attach.disabled = keeping;
+    send.textContent = keeping ? "Saving…" : "Send feedback";
     why.textContent = message.value.trim() === "" ? "" : (blocker ?? "");
     attached.textContent = attachment === null ? "" : fileName(attachment);
     unattach.hidden = attachment === null;
@@ -56,35 +60,61 @@ export function openFeedback(page: Record<string, unknown>): void {
     refresh();
   };
 
+  let overlay: HTMLElement;
   const close = () => {
-    open?.remove();
-    open = null;
+    overlay.remove();
+    if (open === overlay) open = null;
     document.removeEventListener("keydown", onKey, true);
+    opener?.focus();
   };
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && !sending) {
+    if (e.key === "Escape" && !keeping) {
       e.stopPropagation();
-      close();
+      // Escape never throws away what was typed: Cancel does that.
+      if (message.value.trim() === "") close();
+    }
+    if (e.key === "Tab") {
+      // Keep the keyboard inside the form while it is open.
+      const stops = [...card.querySelectorAll<HTMLElement>("textarea, input, button:not(:disabled), summary")].filter((el) => el.offsetParent !== null);
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      if (first === undefined || last === undefined) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!card.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   };
   cancel.onclick = close;
   send.onclick = async () => {
-    if (sendBlocker(message.value, contact.value) !== null || sending) return;
-    sending = true;
+    if (sendBlocker(message.value, contact.value) !== null || keeping) return;
+    keeping = true;
     refresh();
     localStorage.setItem(CONTACT_KEY, contact.value.trim());
+    let id: string;
     try {
-      const outcome = await feedbackSend({ message: message.value, contact: contact.value, details: includeDetails.checked ? page : null, attachment });
-      // A refused report with nothing waiting stays open so it can be fixed.
-      if (outcome.sent || outcome.waiting > 0) close();
-      const { tone, lines } = outcomeLines(outcome);
+      id = await feedbackKeep({ message: message.value, contact: contact.value, details: includeDetails.checked ? page : null, attachment });
+    } catch (e) {
+      // Checked before anything was kept (too large, unreadable): fix and send again.
+      why.textContent = String(e);
+      keeping = false;
+      refresh();
+      return;
+    }
+    // Kept on this computer: nothing is lost from here, so the form can go.
+    close();
+    if (attachment !== null) showToast({ tone: "info", lines: ["Sending your feedback and its attachment…"] });
+    try {
+      const { tone, lines } = outcomeLines(await feedbackDeliver({ id }));
       showToast({ tone, lines });
     } catch (e) {
-      // Checked before anything was kept (too large, unreadable): fix and retry.
-      why.textContent = String(e);
-    } finally {
-      sending = false;
-      if (open !== null) refresh();
+      showToast({ tone: "warn", lines: ["Your feedback is saved on this computer and will be sent later.", String(e)] });
     }
   };
 
@@ -108,9 +138,10 @@ export function openFeedback(page: Record<string, unknown>): void {
     h("div", { className: "feedback-actions" }, cancel, send),
   );
   // No close on a click outside: a stray click must not lose what was typed.
-  open = h("div", { className: "feedback-overlay" }, card);
+  overlay = h("div", { className: "feedback-overlay" }, card);
+  open = overlay;
   document.addEventListener("keydown", onKey, true);
-  document.body.append(open);
+  document.body.append(overlay);
   refresh();
   message.focus();
 }

@@ -873,19 +873,30 @@ fn feedback_details(page: serde_json::Value) -> serde_json::Value {
     feedback::details(page)
 }
 
-/// Keep a feedback report in the outbox, then send everything waiting.
-/// Online; offline, it waits and goes with the next send.
+/// Check a feedback report and keep it in the outbox (copying a video can
+/// take a moment, so off the async workers). Returns its id; the form closes
+/// and `feedback_deliver` sends it.
 #[tauri::command]
-async fn feedback_send(
-    app: AppHandle,
+async fn feedback_keep(
     dir: State<'_, AppData>,
     message: String,
     contact: String,
     details: Option<serde_json::Value>,
     attachment: Option<String>,
-) -> Result<feedback::Outcome, String> {
-    let details = details.map(feedback::details);
-    let id = feedback::enqueue(&dir.0, &message, &contact, details, attachment.as_deref().map(std::path::Path::new))?;
+) -> Result<String, String> {
+    let dir = dir.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let details = details.map(feedback::details);
+        feedback::enqueue(&dir, &message, &contact, details, attachment.as_deref().map(std::path::Path::new))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+/// Send everything waiting and say what became of report `id`. Online;
+/// offline, it waits and goes with the next send.
+#[tauri::command]
+async fn feedback_deliver(app: AppHandle, dir: State<'_, AppData>, id: String) -> Result<feedback::Outcome, String> {
     send_feedback(app, dir.0.clone(), Some(id)).await
 }
 
@@ -900,7 +911,8 @@ async fn send_feedback(app: AppHandle, dir: PathBuf, focus: Option<String>) -> R
         return Ok(feedback::Outcome {
             sent: false,
             waiting: feedback::waiting(&dir).len(),
-            problem: Some("Feedback is kept on this computer: this build has no feedback service set up yet.".into()),
+            problem: None,
+            configured: false,
         });
     }
     tauri::async_runtime::spawn_blocking(move || {
@@ -1307,7 +1319,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             assist_models,
             feedback_details,
-            feedback_send,
+            feedback_keep,
+            feedback_deliver,
             feedback_retry,
             assist_download,
             assist_cancel,

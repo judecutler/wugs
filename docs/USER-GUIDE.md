@@ -496,10 +496,10 @@ When something goes wrong or could work better, tell the people who make wugs. T
 3. Optional: add your email address if you would like a reply.
 4. Optional: click **Attach a screenshot or video…** and choose the file. The form shows the keys that record the screen on your computer. The file can be up to 95 MB, which is a few minutes of screen recording.
 5. Check what the attachment shows. A recording of the screen shows your project too: names, recordings and transcriptions.
-6. Leave **Include technical details** ticked unless you prefer not to send them. **See exactly what is included** shows them: the wugs version, your system, the kit, theme and window size. Nothing from your project is sent.
-7. Click **Send feedback**.
+6. Leave **Include technical details** ticked unless you prefer not to send them. **See exactly what is included** shows every line: the wugs version, your system and its web view, the kit (its id is the name you gave it, if you made your own), the theme and pattern, the window size, and whether a project is open. Nothing from inside your project is sent, and an attachment goes by its file name only, never its folder.
+7. Click **Send feedback**. The form closes once your feedback is saved on this computer, and a message says when it has been sent.
 
-Your feedback goes to the wugs maintainers privately. It is never posted publicly.
+Your feedback goes to the wugs maintainers privately. It is never posted publicly. Escape closes the form only while it is empty; **Cancel** closes it and discards what you wrote.
 
 ## Known limits
 

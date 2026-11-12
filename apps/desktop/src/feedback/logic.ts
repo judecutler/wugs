@@ -4,7 +4,7 @@ export const MAX_MESSAGE_CHARS = 10_000;
 
 export type System = "windows" | "mac" | "linux" | "other";
 
-export type Outcome = { sent: boolean; waiting: number; problem: string | null };
+export type Outcome = { sent: boolean; waiting: number; problem: string | null; configured: boolean };
 
 export function systemOf(hint: string): System {
   if (/win/i.test(hint)) return "windows";
@@ -32,8 +32,16 @@ export function sendBlocker(message: string, contact: string): string | null {
   if (message.trim() === "") return "Write what happened first.";
   if (message.length > MAX_MESSAGE_CHARS) return `Keep it under ${MAX_MESSAGE_CHARS.toLocaleString("en")} characters.`;
   const c = contact.trim();
-  if (c !== "" && (!c.includes("@") || /\s/.test(c))) return "The reply address does not look like an email address.";
+  if (c !== "" && !looksLikeEmail(c)) return "The reply address does not look like an email address.";
   return null;
+}
+
+/** The same test the app's Rust side and the service apply. */
+export function looksLikeEmail(s: string): boolean {
+  const [local, domain, ...rest] = s.split("@");
+  if (local === undefined || domain === undefined || rest.length > 0) return false;
+  const fine = (p: string, max: number) => p !== "" && [...p].length <= max && !/[\s<>]/.test(p);
+  return fine(local, 64) && fine(domain, 190);
 }
 
 /** The last part of a path, for showing which file is attached. */
@@ -41,6 +49,9 @@ export const fileName = (path: string): string => path.split(/[\\/]/).pop() ?? p
 
 /** The toast after a send, in words. */
 export function outcomeLines(o: Outcome): { tone: "info" | "warn"; lines: string[] } {
+  if (!o.configured) {
+    return { tone: "warn", lines: ["Your feedback is saved on this computer.", "This version of wugs cannot send feedback yet; it goes once an update can."] };
+  }
   if (o.sent) {
     const more = o.waiting > 0 ? [`${o.waiting} earlier ${o.waiting === 1 ? "report is" : "reports are"} still waiting and will go when the connection allows.`] : [];
     return { tone: "info", lines: ["Thank you. Your feedback was sent.", ...more] };
