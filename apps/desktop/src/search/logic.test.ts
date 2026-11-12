@@ -4,7 +4,7 @@ import type { SearchRow } from "../api.ts";
 import { clockTime, groupRows, moveActive, navigable, navTargets, whereLabel } from "./logic.ts";
 
 const row = (over: Partial<SearchRow>): SearchRow => ({
-  target: "x", kind: "segment", field: "content", snippet: "", textId: null, textTitle: null, tierId: null, tierName: null, startMs: null, ...over,
+  target: "x", kind: "segment", field: "content", snippet: "", textId: null, textTitle: null, tierId: null, tierName: null, startMs: null, endMs: null, ...over,
 });
 const seg = (target: string, textId: string, title: string, startMs = 0) =>
   row({ target, textId, textTitle: title, tierId: "t", tierName: "Utterance", startMs });

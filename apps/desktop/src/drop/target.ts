@@ -8,7 +8,7 @@
 // anything else is refused. The navigation guard in lib.rs is the second layer.
 import { dropBegin, dropCancel, dropChunk, dropFinish, errorText } from "../api";
 import { h } from "../dom";
-import { cardDrag } from "../media/logic";
+import { cardDrag, isCardDrag } from "../media/logic";
 import { getPaneData, getPanelData } from "../dockview";
 import { getState, refreshAll, selectText, showToast, touchLexicon, wantMedia } from "../store";
 import {
@@ -46,7 +46,7 @@ function action(e: DragEvent): DragAction {
     files: e.dataTransfer?.types.includes("Files") ?? false,
     dock: getPanelData() !== undefined || getPaneData() !== undefined,
     editable: takesText(e.target),
-    card: cardDrag.active(),
+    card: isCardDrag(cardDrag.active(), [...(e.dataTransfer?.types ?? [])]),
   });
 }
 
@@ -119,10 +119,13 @@ export function dropTarget(): HTMLElement {
     },
     true,
   );
+  // Any drop or drag end ends a card drag, even one whose card was redrawn away.
+  window.addEventListener("dragend", () => cardDrag.end(), true);
   window.addEventListener(
     "drop",
     (e) => {
       const act = action(e);
+      cardDrag.end();
       if (act === "pass") return;
       claim(e);
       if (act === "refuse") return;

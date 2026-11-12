@@ -335,7 +335,7 @@ form.inline input { flex: 1; min-width: 0; }
 
 .panel-search input[type="search"] { width: 100%; margin-bottom: 6px; }
 .hits { list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); }
-.hits li { padding: 3px 4px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+.hits li { padding: 3px 4px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
 .hits li.clickable { cursor: pointer; }
 .hits li.clickable:hover, .hits li.active { background: var(--panel); }
 .hits li.active { outline: 1px solid var(--muted); }
@@ -424,6 +424,7 @@ form.inline input { flex: 1; min-width: 0; }
 .play-seg { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--accent); cursor: pointer; }
 .play-seg:hover { background: var(--surface-raised); border-color: var(--line); }
 .play-seg svg { width: 12px; height: 12px; }
+.play-spacer { flex: none; display: inline-block; width: 22px; height: 22px; }
 .link-button { padding: 0; border: none; background: none; color: var(--accent); font: inherit; text-align: left; cursor: pointer; }
 .link-button:hover { text-decoration: underline; }
 .lx-uses { list-style: none; margin: 4px 0 0; padding: 0; font-size: var(--text-sm); }

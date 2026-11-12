@@ -207,6 +207,7 @@ export type SearchRow = {
   tierId: string | null;
   tierName: string | null;
   startMs: number | null;
+  endMs: number | null;
 };
 
 export const listSources = () => invoke<SourceRow[]>("list_sources");

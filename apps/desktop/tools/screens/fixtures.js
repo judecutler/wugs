@@ -503,10 +503,10 @@
     const mark = (s) => s.split(q).join(`[${q}]`);
     const hits = utterances
       .filter((u) => u.content.includes(q))
-      .map((u) => ({ target: u.id, kind: "segment", field: "content", snippet: mark(u.content), textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", tierName: "utterance", startMs: u.startMs }));
-    hits.push({ target: "t-fox-s3", kind: "segment", field: "content", snippet: `wiripa [${q}] tela`, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", tierName: "utterance", startMs: 8200 });
-    hits.push({ target: "lx-kesi", kind: "lexeme", field: "lemma", snippet: `[${q}]`, textId: null, textTitle: null, tierId: null, tierName: null, startMs: null });
-    hits.push({ target: "sense-lx-kesi-0", kind: "sense", field: "gloss", snippet: "three (from [kesi])", textId: null, textTitle: null, tierId: null, tierName: null, startMs: null });
+      .map((u) => ({ target: u.id, kind: "segment", field: "content", snippet: mark(u.content), textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", tierName: "utterance", startMs: u.startMs, endMs: u.endMs }));
+    hits.push({ target: "t-fox-s3", kind: "segment", field: "content", snippet: `wiripa [${q}] tela`, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", tierName: "utterance", startMs: 8200, endMs: 9400 });
+    hits.push({ target: "lx-kesi", kind: "lexeme", field: "lemma", snippet: `[${q}]`, textId: null, textTitle: null, tierId: null, tierName: null, startMs: null, endMs: null });
+    hits.push({ target: "sense-lx-kesi-0", kind: "sense", field: "gloss", snippet: "three (from [kesi])", textId: null, textTitle: null, tierId: null, tierName: null, startMs: null, endMs: null });
     return hits;
   }
 

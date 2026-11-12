@@ -305,6 +305,7 @@ fn search_rows_locate_segments_and_filter_by_kind() {
     assert_eq!(seg.tier_name.as_deref(), Some(detail.tiers[0].name.as_str()));
     assert_eq!(seg.text_title.as_deref(), Some("Frog story"));
     assert_eq!(seg.start_ms, Some(65_000.0));
+    assert_eq!(seg.end_ms, Some(66_000.0), "the end lets Search play the hit");
     assert!(all.iter().any(|h| h.kind == "lexeme"), "All includes the lexicon");
 
     let texts = session::search(&mut s, "kopek", SearchScope::Texts).unwrap();

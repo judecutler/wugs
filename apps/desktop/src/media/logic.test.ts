@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { cards, duration, normalized, wavePath } from "./logic.ts";
+import { CARD_TYPE, cardDrag, cards, isCardDrag, duration, normalized, wavePath } from "./logic.ts";
 
 test("cards are the recordings with audio, marked for the text on screen", () => {
   const sources = [
@@ -38,4 +38,23 @@ test("the waveform path goes along the maxima and back along the minima", () => 
 test("peaks are scaled so the loudest reaches the edge", () => {
   assert.deepEqual(normalized([-100, -50], [200, 0]), { mins: [-0.5, -0.25], maxs: [1, 0] });
   assert.deepEqual(normalized([0], [0]), { mins: [0], maxs: [0] });
+});
+
+test("a card drag is live from its start until its end, and lapses", () => {
+  assert.equal(cardDrag.active(0), false);
+  cardDrag.start(1000);
+  assert.equal(cardDrag.active(2000), true);
+  assert.equal(cardDrag.remaining(2000), 59_000);
+  assert.equal(cardDrag.active(70_000), false, "a lost dragend never leaves the guard open");
+  assert.equal(cardDrag.remaining(70_000), 0);
+  cardDrag.end();
+  assert.equal(cardDrag.active(2000), false);
+});
+
+test("a card drag carries the card type and nothing to open", () => {
+  assert.equal(isCardDrag(true, [CARD_TYPE]), true);
+  assert.equal(isCardDrag(false, [CARD_TYPE]), false, "only a drag started in the app");
+  assert.equal(isCardDrag(true, ["text/uri-list", CARD_TYPE]), false, "a link dragged in meanwhile");
+  assert.equal(isCardDrag(true, ["text/plain"]), false);
+  assert.equal(isCardDrag(true, ["Files", CARD_TYPE]), false);
 });
