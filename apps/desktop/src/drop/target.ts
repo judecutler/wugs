@@ -27,12 +27,22 @@ import {
 // (WebKit keeps to it), so a shorter silence would flicker the overlay.
 const QUIET_MS = 1000;
 
+const TEXT_INPUTS = new Set(["text", "search", "url", "email", "tel", "number", "password"]);
+
+/** Where dropped text lands as text; a checkbox, button or read-only field would let the webview open a link instead. */
+function takesText(target: EventTarget | null): boolean {
+  if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) {
+    const typed = target instanceof HTMLTextAreaElement || TEXT_INPUTS.has(target.type);
+    return typed && !target.readOnly && !target.disabled;
+  }
+  return target instanceof HTMLElement && target.isContentEditable;
+}
+
 function action(e: DragEvent): DragAction {
-  const target = e.target;
   return dragAction({
     files: e.dataTransfer?.types.includes("Files") ?? false,
     dock: getPanelData() !== undefined || getPaneData() !== undefined,
-    editable: target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea") !== null),
+    editable: takesText(e.target),
   });
 }
 
