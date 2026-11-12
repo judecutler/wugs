@@ -3,6 +3,7 @@
 import { h } from "../dom";
 import { keyLabel, moveIndex, opensPalette, opensShortcuts, rank, SHORTCUTS, type Command } from "./logic";
 import { allCommands } from "./registry";
+import { createComposition, imeBusy } from "../transcribe/logic";
 
 const MAC = /Mac|iPhone|iPad/u.test(navigator.platform || navigator.userAgent);
 let open: { close: () => void } | null = null;
@@ -54,6 +55,12 @@ export function openPalette(): void {
   let shown: Command[] = commands;
   let at = 0;
   const input = h("input", { className: "palette-input", type: "text", placeholder: "Type what you want to do: “split”, “night”, “lexicon”…", spellcheck: false, autocomplete: "off" });
+  input.setAttribute("aria-label", "Find an action");
+  input.setAttribute("aria-autocomplete", "list");
+  // An input method's confirming Enter never runs a command.
+  const composition = createComposition({ set: (cb) => window.setTimeout(cb, 0), clear: (id) => window.clearTimeout(id) });
+  input.addEventListener("compositionstart", () => composition.start());
+  input.addEventListener("compositionend", () => composition.end());
   input.setAttribute("role", "combobox");
   input.setAttribute("aria-expanded", "true");
   input.setAttribute("aria-controls", "palette-list");
@@ -111,6 +118,7 @@ export function openPalette(): void {
       return [input, list, h("p", { className: "palette-foot", textContent: "↑ ↓ to move · Enter to run · Esc to close · ? for every shortcut" })];
     },
     (e) => {
+      if (imeBusy(e, composition.active)) return;
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
         at = moveIndex(at, e.key === "ArrowDown" ? 1 : -1, shown.length);
@@ -145,11 +153,16 @@ export function openShortcuts(): void {
 const typing = (t: EventTarget | null): boolean =>
   t instanceof HTMLElement && (t.isContentEditable || t instanceof HTMLTextAreaElement || (t instanceof HTMLInputElement && !["checkbox", "radio", "button", "range"].includes(t.type)) || t instanceof HTMLSelectElement);
 
-/** Ctrl+K and ? from anywhere in the window. */
+/** Another modal (Settings, Feedback, a menu) has the keyboard: the palette waits. */
+const otherModal = (): boolean =>
+  document.querySelector('[aria-modal="true"]:not(.palette)') !== null || document.querySelector(".menu-list") !== null;
+
+/** Ctrl+K (Cmd+K on a Mac) and ? from anywhere in the window. */
 export function wirePalette(): () => void {
   const onKey = (e: KeyboardEvent) => {
     if (e.defaultPrevented || e.isComposing) return;
-    if (opensPalette(e)) {
+    if (open === null && otherModal()) return;
+    if (opensPalette(e, MAC)) {
       e.preventDefault();
       if (open !== null && document.querySelector(".palette-commands") !== null) open.close();
       else openPalette();
