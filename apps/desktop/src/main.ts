@@ -32,6 +32,9 @@ import { isPanelId, PANELS, type PanelId } from "./panels/registry";
 import { SHOW_PANEL } from "./panels/panel";
 import { attachDock, useKit } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
+import { hopInto, hopping } from "./help/hop";
+import { helpView } from "./help/view";
+import { helpPanelView, setHelpFeedback } from "./panels/help";
 import { openSettings } from "./settings/panel";
 import { provide } from "./palette/registry";
 import { openPalette, openShortcuts, wirePalette } from "./palette/ui";
@@ -164,6 +167,7 @@ function renderTop() {
       const art = wugArt("brand-wug", `${kit?.name ?? "wugs"} wug`);
       // Out on a visit: a redraw must not put a second wug in the corner.
       if (visits?.away()) art.classList.add("wug-away");
+      if (hopping()) art.classList.add("wug-hopping");
       return art;
     })()),
     kitSwitcher(),
@@ -217,6 +221,12 @@ function renderTop() {
       project,
       settings,
       h("button", {
+        className: "menu-button help-button",
+        textContent: "Help",
+        title: "Ask how to do something in wugs; answers come from the user guide (Online)",
+        onclick: openHelpSheet,
+      }),
+      h("button", {
         className: "menu-button feedback-button",
         textContent: "Feedback",
         title: "Tell the people who make wugs what went wrong or what would help (Online)",
@@ -264,6 +274,82 @@ function openSettingsSheet(): void {
       if (visitAfterSettings) window.setTimeout(() => visits?.visitNow(), 400);
       visitAfterSettings = false;
     },
+  });
+}
+
+/** Help: from the top bar's button and the command palette. The wug jumps
+ * from the top bar into the Help panel; with no project open (the dock is
+ * veiled) the same conversation opens in a card instead. */
+function openHelpSheet(): void {
+  const logo = () => top.querySelector(".brand-wug");
+  if (dock === null || getState().kind !== "open") {
+    openHelpCard(logo);
+    return;
+  }
+  // Already on screen: the wug is there, so it does not jump again.
+  const shown = (helpPanelView()?.wug.getBoundingClientRect().width ?? 0) > 0;
+  showOrFocus("help");
+  const view = helpPanelView();
+  if (view === null) return;
+  // After the dock lays the panel out, so the landing spot is where it shows.
+  requestAnimationFrame(() => {
+    if (!shown) hopInto(logo, view.wug);
+    view.focus();
+  });
+}
+
+let helpCard: HTMLElement | null = null;
+function openHelpCard(logo: () => Element | null): void {
+  if (helpCard !== null) {
+    helpCard.querySelector("textarea")?.focus();
+    return;
+  }
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const view = helpView(() => {
+    close();
+    openFeedbackForm();
+  });
+  const closeButton = h("button", { className: "help-close", textContent: "Close" });
+  const card = h("div", { className: "feedback-card help-card", role: "dialog", ariaModal: "true", ariaLabel: "Help" }, h("h2", { textContent: "Help" }), view.element, h("div", { className: "feedback-actions" }, closeButton));
+  const overlay = h("div", { className: "feedback-overlay" }, card);
+  const onKey = (e: KeyboardEvent) => {
+    // Escape while an input method composes cancels the composition, not the card.
+    if (e.key === "Escape" && !e.isComposing && e.keyCode !== 229) {
+      e.stopImmediatePropagation();
+      close();
+    }
+    if (e.key === "Tab") {
+      // The keyboard stays inside the card while it is open.
+      const stops = [...card.querySelectorAll<HTMLElement>("textarea, input, button:not(:disabled)")];
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      if (first === undefined || last === undefined) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      } else if (!card.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+  function close() {
+    overlay.remove();
+    view.dispose();
+    helpCard = null;
+    window.removeEventListener("keydown", onKey, true);
+    opener?.focus();
+  }
+  closeButton.onclick = close;
+  window.addEventListener("keydown", onKey, true);
+  helpCard = overlay;
+  document.body.append(overlay);
+  requestAnimationFrame(() => {
+    hopInto(logo, view.wug);
+    view.focus();
   });
 }
 
@@ -340,6 +426,7 @@ function shellCommands(): Command[] {
       .map((k) => ({ id: `kit:${k.kit.id}`, title: `Switch to ${k.kit.name}`, group: "Kits", words: ["kit", k.kit.subtitle, "workspace"], run: () => void switchKit(k.kit.id) })),
     { id: "app:settings", title: "Open Settings", group: "wugs", words: ["preferences", "options", "theme", "pattern"], run: openSettingsSheet },
     { id: "app:shortcuts", title: "Show keyboard shortcuts", group: "Help", keys: "?", words: ["keys", "hotkeys"], run: openShortcuts },
+    { id: "app:help", title: "Ask for help", group: "Help", words: ["question", "how", "guide", "assistant", "chat"], run: openHelpSheet },
     { id: "app:feedback", title: "Send feedback", group: "Help", words: ["bug", "problem", "report", "contact"], run: openFeedbackForm },
     { id: "app:reset-layout", title: "Reset layout", group: "Workspace", words: ["arrange", "panels", "default"], disabled: noProject, run: () => {
       if (dock !== null && kit !== null) layoutKit(dock, kit);
@@ -521,6 +608,7 @@ if (app !== null) {
   // The welcome covers the dock inside one stage, below the update notice and banner.
   app.replaceChildren(top, updateSlot(), bannerSlot, h("div", { className: "stage" }, host, welcomeSlot), toastSlot, dropTarget());
   host.classList.add("dock-veiled");
+  setHelpFeedback(openFeedbackForm);
   subscribe(renderTop);
   subscribe(renderBanner);
   // A panel asking for another (Frequencies opens the Concordance).

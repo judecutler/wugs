@@ -1,0 +1,70 @@
+name: help
+
+on:
+  push:
+    branches: [main]
+    paths: ["services/help/**", ".github/workflows/help.yml"]
+  workflow_dispatch:
+    inputs:
+      report:
+        description: Print how often each guide section was asked about (counts only) instead of deploying
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: help-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ !inputs.report }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+        working-directory: services/help
+      - name: Deploy
+        working-directory: services/help
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          npx --yes wrangler@4.161.0 deploy 2>&1 | tee deploy.log
+          url=$(grep -oE 'https://[a-z0-9.-]+\.workers\.dev' deploy.log | head -1 || true)
+          if [ -z "$url" ]; then echo "::error::wrangler printed no workers.dev address"; exit 1; fi
+          {
+            echo "## Help bot deployed"
+            echo
+            echo "Address: \`${url}\`"
+            echo
+            echo "In \`apps/desktop/src-tauri/src/help.rs\`: \`pub const ENDPOINT: &str = \"${url}\";\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  report:
+    if: ${{ inputs.report }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - working-directory: services/help
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        # Counts only: this repository is public, and people shared their
+        # questions with the maintainers, not with everyone. Run the full
+        # report locally (README).
+        run: node tools/most-asked.mjs 30 --counts-only >> "$GITHUB_STEP_SUMMARY"

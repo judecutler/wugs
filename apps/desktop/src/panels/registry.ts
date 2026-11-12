@@ -7,6 +7,7 @@ import { collocatesPanel } from "./collocates";
 import { keywordsPanel } from "./keywords";
 import { frequenciesPanel } from "./frequencies";
 import { glossPanel } from "./gloss";
+import { helpPanel } from "./help";
 import { kitsPanel } from "./kits";
 import { lexiconPanel } from "./lexicon";
 import { mediaPanel } from "./media";
@@ -37,6 +38,7 @@ export const PANELS = {
   conflicts: conflictsPanel,
   devices: devicesPanel,
   kits: kitsPanel,
+  help: helpPanel,
 } satisfies Record<string, PanelDef>;
 
 export type PanelId = keyof typeof PANELS;
@@ -45,7 +47,7 @@ export const isPanelId = (name: string): name is PanelId => Object.hasOwn(PANELS
 
 /** Panels every kit offers: they look after the project and the app, not
  * one kind of linguistic work. The rest are tools a kit turns on. */
-const PLATFORM: ReadonlySet<PanelId> = new Set<PanelId>(["conflicts", "devices", "kits"]);
+const PLATFORM: ReadonlySet<PanelId> = new Set<PanelId>(["conflicts", "devices", "kits", "help"]);
 
 export const isPlatformPanel = (id: string): boolean => isPanelId(id) && PLATFORM.has(id);
 

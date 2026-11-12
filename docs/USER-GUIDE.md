@@ -577,6 +577,16 @@ To stop the check, open **Settings** in the top bar and, under **Updates**, turn
 | A Praat button is missing. | wugs has not found Praat. Click **Praat…** and choose the Praat program. |
 | **Keep this** on a conflict card is refused. | Another device settled the conflict meanwhile. The card reloads. Choose again. |
 
+## Ask for help
+
+The wug answers questions about wugs from this guide. It needs an internet connection.
+
+1. Click **Help** at the top right, or press Ctrl+K (⌘K on a Mac) and choose **Ask for help**. The wug jumps into the **Help** panel. With no project open, Help opens in a card instead.
+2. Type your question, such as "How do I split a segment?", and press Enter or click **Ask**.
+3. The wug answers, and names the parts of this guide the answer came from. Ask a follow-up in the same box. Help remembers the conversation until wugs closes, even if you close the panel.
+
+Your question, your last few questions and answers in Help, and the wugs version are sent, never anything from your project. Help keeps nothing unless you tick **Share my questions with the people who make wugs**; then each question, the part of this guide it matched and the wugs version are kept, so this guide can cover what people ask most. Still having trouble? **Give wugs feedback** under the conversation opens the Feedback form, and the people who make wugs fix it as soon as they can. Each answer names the parts of this guide it came from.
+
 ## Send feedback
 
 When something goes wrong or could work better, tell the people who make wugs. This needs an internet connection; without one, wugs keeps your feedback and sends it the next time it can.
