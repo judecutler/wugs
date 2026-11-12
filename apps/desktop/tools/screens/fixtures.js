@@ -557,7 +557,7 @@
     }),
     frequencies: ({ kind, size }) =>
       size > 1
-        ? { tokens: 58, types: 4, rows: [{ item: "nikani ŋai", count: 12, texts: 3 }, { item: "ŋai kesi", count: 7, texts: 2 }, { item: "kesi toruma", count: 4, texts: 1 }, { item: "toruma liwa", count: 1, texts: 1 }] }
+        ? { tokens: 58, types: 9, words: 65, once: 5, rows: [{ item: "nikani ŋai", count: 12, texts: 3 }, { item: "ŋai kesi", count: 7, texts: 2 }, { item: "kesi toruma", count: 4, texts: 1 }, { item: "toruma liwa", count: 2, texts: 1 }] }
         : ({
       tokens: kind === "gloss" ? 29 : 65,
       types: kind === "gloss" ? 3 : 6,

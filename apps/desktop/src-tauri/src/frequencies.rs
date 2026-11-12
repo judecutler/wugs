@@ -40,6 +40,10 @@ pub struct Frequencies {
     pub tokens: usize,
     /// Distinct items (types), even past the limit.
     pub types: usize,
+    /// Running words in the scope (equal to `tokens` for single words).
+    pub words: usize,
+    /// Sequences met only once, left out of `rows` (n-grams only).
+    pub once: usize,
 }
 
 /// At most this many rows are returned; `types` says how many there were.
@@ -57,12 +61,16 @@ pub fn frequencies(session: &mut Session, kind: Kind, text: Option<&str>) -> Res
     frequencies_of(session, kind, text, 1)
 }
 
-/// The longest word sequence an n-gram list counts (AntConc offers the same range by default).
+/// The longest word sequence an n-gram list counts.
 pub const MAX_N: usize = 5;
 
 /// A frequency list of single items (`size` 1) or of word n-grams: runs of
 /// `size` words in a row inside one segment (AntConc's N-Grams), counted
-/// under their words' keys joined by a space, words and translation words only.
+/// under their words' keys, words and translation words only. A sequence
+/// row's count equals the Concordance's lines for it (an exact query of
+/// several words meets them in a row). Sequences met only once are left out
+/// (`once` says how many), as almost every sequence occurs once and would
+/// crowd the list; `words` is the running word count rates are taken from.
 pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, size: usize) -> Result<Frequencies, String> {
     if kind == Kind::Sense {
         return Err("a frequency list counts words, morphs, glosses or translation words".into());
@@ -76,6 +84,7 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, siz
     let p = project(session)?;
     let mut tallies: HashMap<String, Tally> = HashMap::new();
     let mut tokens = 0usize;
+    let mut running = 0usize;
     let mut count = |key: String, spelling: &str, text: &str, tokens: &mut usize| {
         if key.is_empty() {
             return;
@@ -104,8 +113,10 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, siz
                     })
                     .filter(|(k, _)| !k.is_empty())
                     .collect();
+                running += words.len();
                 for run in words.windows(size) {
-                    let key = run.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>().join(" ");
+                    // Keys joined by a character no word holds, so `a b`+`c` and `a`+`b c` stay apart.
+                    let key = run.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>().join("\u{1f}");
                     let spelling = run.iter().map(|(_, s)| s.as_str()).collect::<Vec<_>>().join(" ");
                     count(key, &spelling, &seg.text, &mut tokens);
                 }
@@ -131,6 +142,11 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, siz
     })?;
     let types = tallies.len();
     let mut all: Vec<Tally> = tallies.into_values().collect();
+    let before = all.len();
+    if size > 1 {
+        all.retain(|t| t.count > 1);
+    }
+    let once = before - all.len();
     all.sort_by(|a, b| b.count.cmp(&a.count).then(a.first.cmp(&b.first)));
     all.truncate(LIMIT);
     let rows = all
@@ -140,7 +156,8 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, siz
             FrequencyRow { item, count: t.count, texts: t.texts.len() }
         })
         .collect();
-    Ok(Frequencies { rows, tokens, types })
+    let words = if matches!(kind, Kind::Word | Kind::Translation) { running } else { tokens };
+    Ok(Frequencies { rows, tokens, types, words, once })
 }
 
 #[cfg(test)]
@@ -189,10 +206,19 @@ mod tests {
         assert_eq!(frequencies(&mut session, Kind::Word, Some("txt_none")).unwrap().tokens, 0);
         assert!(frequencies(&mut session, Kind::Sense, None).is_err());
         // Bigrams: one per pair of words in a row, never across segments.
+        crate::session::add_segment(&mut session, &text, None, Some(20_000.0), Some(20_900.0), "Ka?a kaba").unwrap();
+        let words = frequencies(&mut session, Kind::Word, None).unwrap();
         let bi = frequencies_of(&mut session, Kind::Word, None, 2).unwrap();
+        assert!(bi.rows.iter().any(|r| r.item.to_lowercase() == "ka?a kaba" && r.count == 2), "case folded together");
         let segments: usize = crate::concordance::tests_word_counts(&mut session).iter().map(|n| n.saturating_sub(1)).sum();
         assert_eq!(bi.tokens, segments);
-        assert!(bi.rows.iter().all(|r| r.item.split(' ').count() == 2));
+        assert!(bi.rows.iter().all(|r| r.item.split(' ').count() == 2 && r.count >= 2));
+        assert_eq!(bi.words, words.tokens);
+        // A sequence's count is the Concordance's lines for it, met in a row.
+        for row in bi.rows.iter().take(20) {
+            let found = crate::concordance::concordance_in(&mut session, &row.item, Kind::Word, crate::concordance::Match::Exact, None).unwrap().total;
+            assert_eq!(found, row.count, "{}", row.item);
+        }
         assert!(frequencies_of(&mut session, Kind::Morph, None, 2).is_err());
         assert!(frequencies_of(&mut session, Kind::Word, None, 6).is_err());
         drop(session);

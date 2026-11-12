@@ -6,7 +6,8 @@ export type RankedRow = FrequencyRow & { rank: number };
 
 /** Ranks in the backend's order (most frequent first, ties as first met). */
 export const ranked = (rows: readonly FrequencyRow[]): RankedRow[] => rows.map((r, i) => ({ ...r, rank: i + 1 }));
-export type Frequencies = { rows: FrequencyRow[]; tokens: number; types: number };
+/** `words` is the running word count rates are taken from; `once` the sequences met once and left out (n-grams). */
+export type Frequencies = { rows: FrequencyRow[]; tokens: number; types: number; words?: number; once?: number };
 
 export type FreqSort = "count" | "alpha" | "texts";
 
@@ -44,12 +45,13 @@ export function filterRows<R extends FrequencyRow>(rows: readonly R[], filter: s
 export function summary(f: Frequencies, noun: { one: string; many: string }): string {
   if (f.tokens === 0) return `No ${noun.many} yet.`;
   const n = (x: number) => x.toLocaleString("en");
-  const shown = f.rows.length < f.types ? ` The ${n(f.rows.length)} most frequent are listed.` : "";
-  return `${n(f.tokens)} ${f.tokens === 1 ? noun.one : noun.many}, ${n(f.types)} different.${shown}`;
+  const shown = f.rows.length < f.types - (f.once ?? 0) ? ` The ${n(f.rows.length)} most frequent are listed.` : "";
+  const once = (f.once ?? 0) > 0 ? ` The ${n(f.once!)} met only once are left out.` : "";
+  return `${n(f.tokens)} ${f.tokens === 1 ? noun.one : noun.many}, ${n(f.types)} different.${once}${shown}`;
 }
 
 /** Tab-separated, with a header row, for a spreadsheet; rank is the frequency rank, whatever the order. */
-export function asTsv(rows: readonly RankedRow[], tokens: number): string {
+export function asTsv(rows: readonly RankedRow[], tokens: number, item = "item"): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
-  return ["rank\titem\tcount\tper 1000\ttexts", ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts)].join("\t"))].join("\n");
+  return [`rank\t${clean(item)}\tcount\tper 1000 words\ttexts`, ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts)].join("\t"))].join("\n");
 }
