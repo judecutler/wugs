@@ -8,7 +8,18 @@ import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
 import { getState, selectSegment, selectText, showToast } from "../store";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import type { PanelDef, PanelView } from "./panel";
+import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
+
+/** A query another panel asked for (Frequencies), taken by the panel once it is open. */
+let pending: { query: string; kind: ConcordanceKind } | null = null;
+const askers = new Set<() => void>();
+
+/** Show the Concordance for this item, opening the panel if it is closed. */
+export function askConcordance(query: string, kind: ConcordanceKind): void {
+  pending = { query, kind };
+  window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "concordance" }));
+  for (const take of askers) take();
+}
 
 /** Characters of context shown on each side of the keyword. */
 const CONTEXT = 48;
@@ -181,12 +192,25 @@ export const concordancePanel: PanelDef = {
       drawChips();
       drawRows();
       el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, copy), chips, count, rows);
+      take();
     };
+    /** A query asked for from another panel replaces the one typed here. */
+    const take = () => {
+      if (pending === null || shown === null || shown === "closed") return;
+      ({ kind } = pending);
+      input.value = pending.query;
+      input.placeholder = KINDS.find((k) => k.id === kind)?.hint ?? "";
+      pending = null;
+      drawChips();
+      run();
+    };
+    askers.add(take);
     return {
       element: el,
       render,
       dispose: () => {
         window.clearTimeout(timer);
+        askers.delete(take);
         unprovide();
       },
     };

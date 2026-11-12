@@ -28,7 +28,8 @@ import { setVisitsOn, visitsOn } from "./wug-visit";
 import { autoOpen, lastProject } from "./last-project";
 import { folderName, welcomeView } from "./welcome";
 import { onDevicesChange, relocationBanner, wireDeviceEvents } from "./panels/devices";
-import { PANELS, type PanelId } from "./panels/registry";
+import { isPanelId, PANELS, type PanelId } from "./panels/registry";
+import { SHOW_PANEL } from "./panels/panel";
 import { attachDock, useKit } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
 import { openSettings } from "./settings/panel";
@@ -522,6 +523,11 @@ if (app !== null) {
   host.classList.add("dock-veiled");
   subscribe(renderTop);
   subscribe(renderBanner);
+  // A panel asking for another (Frequencies opens the Concordance).
+  window.addEventListener(SHOW_PANEL, (e) => {
+    const id = (e as CustomEvent<string>).detail;
+    if (isPanelId(id)) showOrFocus(id);
+  });
   // Ctrl+K finds any action; ? lists the keys (roadmap 70).
   provide("shell", shellCommands);
   wirePalette();

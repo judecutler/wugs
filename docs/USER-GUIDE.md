@@ -487,6 +487,16 @@ The **Concordance** panel lists every place a word is used, one line per occurre
 
 Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
 
+## Count words, morphs and glosses
+
+The **Frequencies** panel lists every word in the project with how often it occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.
+
+1. Choose what to count: **Words**, **Morphs**, **Glosses** or words of **Translations**.
+2. Count in the **Whole project** or pick one text.
+3. Sort by count, alphabetically, or by how many texts a word is in, and type in **Filter the list** to find one.
+
+**Per 1000** is how often it occurs in every thousand. Capital letters count together (Kesi and kesi are one word, shown as the spelling used most); diacritics do not (ŋa and na are two). Click a row to see every occurrence in the Concordance: the number of lines there is always the count here. **Copy table** copies the list to paste into a spreadsheet.
+
 ## Hear any segment from anywhere
 
 Every segment has a ▶ beside it: the lines in Transcribe, the top of the Gloss panel, each line of the Concordance, and the words a lexicon entry is used in. In the Lexicon, click **used in 3 words** (or however many) under a sense to list those words, then ▶ to hear each one.

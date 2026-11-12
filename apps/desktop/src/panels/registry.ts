@@ -3,6 +3,7 @@ import { concordancePanel } from "./concordance";
 import { conflictsPanel } from "./conflicts";
 import { devicesPanel } from "./devices";
 import { elicitPanel } from "./elicit";
+import { frequenciesPanel } from "./frequencies";
 import { glossPanel } from "./gloss";
 import { kitsPanel } from "./kits";
 import { lexiconPanel } from "./lexicon";
@@ -26,6 +27,7 @@ export const PANELS = {
   elicit: elicitPanel,
   search: searchPanel,
   concordance: concordancePanel,
+  frequencies: frequenciesPanel,
   assist: assistPanel,
   people: peoplePanel,
   conflicts: conflictsPanel,

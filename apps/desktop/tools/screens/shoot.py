@@ -34,6 +34,7 @@ PANELS = [
     ("elicit", "Elicit"),
     ("search", "Search"),
     ("concordance", "Concordance"),
+    ("frequencies", "Frequencies"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),
@@ -332,6 +333,16 @@ def main():
             run.page.locator(".menu-list [role=menuitemradio]", has_text="Scrolls").click()
             run.page.wait_for_timeout(900)
             run.shot("state-scrolls")
+            # Frequencies (Scrolls): a row opens the Concordance on that word.
+            run.front("frequencies", "Frequencies")
+            run.page.wait_for_timeout(400)
+            run.shot("state-frequencies", run.page.locator(".panel-frequencies"))
+            if run.page.locator(".panel-frequencies .fq-table tbody tr").count() == 0:
+                failures.append("the frequency list showed no rows")
+            run.page.locator(".panel-frequencies .fq-table tbody tr").first.click()
+            run.page.wait_for_timeout(600)
+            if run.page.locator(".panel-concordance .cc-query").input_value() != "nikani":
+                failures.append("a frequency row did not open the Concordance on its word")
             if "Scrolls" not in run.page.locator(".kit-switcher").inner_text():
                 failures.append("switching to Scrolls did not change the kit")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")

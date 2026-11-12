@@ -6,6 +6,9 @@ export type PanelView = { element: HTMLElement; render(): void; dispose?(): void
 
 export type PanelDef = { title: string; create(): PanelView };
 
+/** A panel asks the shell to show another panel (detail: its id). */
+export const SHOW_PANEL = "wugs:show-panel";
+
 export type SliceOptions<T> = {
   /** How two slices compare; identity by default. */
   equal?: (a: T, b: T) => boolean;
