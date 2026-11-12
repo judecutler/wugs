@@ -18,6 +18,7 @@ import { applyNeedsConfirm, applyOthersLabel, describe, matchCase } from "../glo
 import { forms } from "../gloss/tokenizer";
 import { needsTranslationTrack, translationLines } from "../gloss/translation";
 import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
+import { provide } from "../palette/registry";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { emptyState, h } from "../dom";
 import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, showToast, subscribeSelection, touchLexicon } from "../store";
@@ -723,7 +724,24 @@ export const glossPanel: PanelDef = {
     }
 
     const unsubscribe = subscribeSelection(() => draw());
-    return { element: el, render: () => draw(), dispose: unsubscribe };
+    const unprovide = provide("gloss", () => [
+      {
+        id: "gloss:copy-example",
+        title: "Copy the example for a paper",
+        group: "Gloss",
+        words: ["interlinear", "leipzig", "latex", "word", "igt", "export"],
+        disabled: () => (el.querySelector(".gl-copy") === null ? "Select a segment broken into words first" : null),
+        run: () => el.querySelector<HTMLButtonElement>(".gl-copy")?.click(),
+      },
+    ]);
+    return {
+      element: el,
+      render: () => draw(),
+      dispose: () => {
+        unsubscribe();
+        unprovide();
+      },
+    };
   },
 };
 

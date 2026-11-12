@@ -319,6 +319,23 @@ def main():
                 tiers.nth(0).locator(".tl-track-toggle").nth(0).click()
                 tiers.nth(1).locator(".tl-track-toggle").nth(1).click()
 
+            # Command palette (Ctrl+K) and the shortcuts sheet (?).
+            run.page.locator(".panel-timeline .tl-wrap").focus()
+            run.page.keyboard.press("Control+k")
+            run.page.wait_for_timeout(200)
+            run.page.keyboard.type("split")
+            run.page.wait_for_timeout(150)
+            run.shot("state-palette")
+            if run.page.locator(".palette-row").count() == 0:
+                failures.append("the palette found nothing for 'split'")
+            run.page.keyboard.press("Escape")
+            run.page.keyboard.press("?")
+            run.page.wait_for_timeout(200)
+            run.shot("state-shortcuts")
+            if run.page.locator(".palette-shortcuts").count() == 0:
+                failures.append("? did not open the shortcuts sheet")
+            run.page.keyboard.press("Escape")
+
             run.page.click(".settings-button")
             # Pattern tiles are CSS masks that load on first use.
             run.page.wait_for_load_state("networkidle")
