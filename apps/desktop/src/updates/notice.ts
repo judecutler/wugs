@@ -1,4 +1,4 @@
-// The update notice under the header and the Updates menu's actions. Owns
+// The update notice under the header and the actions Settings' Updates section uses. Owns
 // the update state for the window; what it says and when it moves are in
 // logic.ts. Nothing downloads until "Install and restart" is clicked.
 

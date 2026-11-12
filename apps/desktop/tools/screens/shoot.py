@@ -192,10 +192,12 @@ class Run:
     def front(self, panel_id, title):
         tab = self.page.locator(f".dv-tab[data-tab-panel-id='{panel_id}']")
         if tab.count() == 0:
-            # A closed panel comes back through the Workspace menu (src/menu.ts).
-            self.page.click(".panel-menu")
-            self.page.click(f".menu-list .menu-item:has-text('{title}')")
+            # A closed panel comes back through Settings (src/settings/panel.ts).
+            self.page.click(".settings-button")
+            self.page.click(f".settings-chips button:has-text('Show {title}')")
+            self.page.keyboard.press("Escape")
             tab.first.wait_for(state="attached")
+            self.page.locator(".settings-overlay").wait_for(state="detached")
         # Dockview activates a tab on pointerdown. Dispatched rather than
         # clicked, so it works however the theme hides or overlaps the strip.
         tab.first.evaluate(
@@ -299,6 +301,16 @@ def main():
                 run.shot("state-tabs-risen")
                 run.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 200)
                 run.page.wait_for_timeout(800)
+
+            run.page.click(".settings-button")
+            # Pattern tiles are CSS masks that load on first use.
+            run.page.wait_for_load_state("networkidle")
+            run.page.wait_for_timeout(800)
+            run.shot("state-settings")
+            run.page.locator(".settings-sheet .settings-section").nth(1).scroll_into_view_if_needed()
+            run.shot("state-settings-patterns")
+            run.page.keyboard.press("Escape")
+            run.page.locator(".settings-overlay").wait_for(state="detached")
 
             run.page.get_by_role("button", name="Feedback").click()
             run.page.locator(".feedback-message").fill("The timeline froze after I imported a long recording.")

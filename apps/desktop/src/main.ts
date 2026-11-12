@@ -1,10 +1,16 @@
 import { dropTarget } from "./drop/target";
 import { kitWug, setCurrentWug } from "./theme/wug";
-import { applyEmphasisPattern, applyPattern, applyTheme, chooseEmphasisPattern, choosePattern, chooseTheme, emphasisPatternOn, PATTERNS, savedPattern, savedTheme, THEMES } from "./theme/theme";
+import { getVersion } from "@tauri-apps/api/app";
+import { applyEmphasisPattern, applyPattern, applyTheme, emphasisPatternOn, savedPattern, savedTheme } from "./theme/theme";
 
 applyTheme(savedTheme(localStorage));
 applyPattern(savedPattern(localStorage));
 applyEmphasisPattern(emphasisPatternOn(localStorage));
+// Shown in Settings; read once, never awaited by anything.
+let appVersion = "";
+void getVersion()
+  .then((v) => (appVersion = v))
+  .catch(() => {});
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import { captureReset, createProject, errorText, feedbackRetry, kitsList, onAssistDownload, openProject } from "./api";
 import { reloadModels } from "./panels/assist";
@@ -22,6 +28,7 @@ import { onDevicesChange, relocationBanner, wireDeviceEvents } from "./panels/de
 import { PANELS, type PanelId } from "./panels/registry";
 import { attachDock } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
+import { openSettings } from "./settings/panel";
 import { autoChecks, checkForUpdates, setAutoChecks, setBeforeInstall, updateSlot } from "./updates/notice";
 import { activeKit, assistModelList, attempt, enterProject, getState, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
@@ -124,7 +131,6 @@ function renderTop() {
           renderTop();
         },
       });
-  const tabsAlways = tabMode(localStorage) === "always";
   const showOrFocus = (id: PanelId) => {
     if (dock !== null) (dock.getPanel(id) ?? showPanel(dock, id))?.api.setActive();
   };
@@ -132,88 +138,38 @@ function renderTop() {
     { label: "Open another project…", run: () => void pickProject("open") },
     { label: "Create a project…", run: () => void pickProject("create") },
   ]);
-  // One menu for the workspace: bring back a closed panel, how tabs show, reset.
-  const workspace = menuButton(
-    "Workspace",
-    () => {
-      const closed = dock === null || kit === null ? [] : closedPanels(dock, kit);
-      return [
-        ...(closed.length === 0 ? [] : [{ heading: "Show a closed panel" }, ...closed.map((id) => ({ label: PANELS[id].title, run: () => showOrFocus(id) }))]),
-        ...(closed.length === 0 ? [] : ["separator" as const]),
-        { heading: "Theme" },
-        ...THEMES.map((t) => ({
-          label: t.label,
-          note: t.note,
-          radio: true,
-          checked: savedTheme(localStorage) === t.id,
-          run: () => chooseTheme(localStorage, t.id),
-        })),
-        "separator" as const,
-        { heading: "Patterns" },
-        ...PATTERNS.map((p) => ({
-          label: p.label,
-          note: p.note,
-          radio: true,
-          checked: savedPattern(localStorage) === p.id,
-          run: () => choosePattern(localStorage, p.id),
-        })),
-        {
-          label: "Pattern on emphasised sections",
-          note: "Adds the family's third pattern to the tier gutter, the IPA palette and Import and export",
-          checked: emphasisPatternOn(localStorage),
-          disabled: savedPattern(localStorage) === "none",
-          run: () => {
-            chooseEmphasisPattern(localStorage, !emphasisPatternOn(localStorage));
-            renderTop();
-          },
+  // Settings (owner, 2026-11-12): one panel for how the workspace looks and
+  // behaves and for updates, with themes and patterns shown, not named.
+  const settings = h("button", {
+    className: "menu-button settings-button",
+    textContent: "Settings",
+    title: "Colours, patterns, the workspace and updates",
+    onclick: () =>
+      openSettings({
+        closedPanels: () => (dock === null || kit === null ? [] : closedPanels(dock, kit).map((id) => ({ id, title: PANELS[id].title }))),
+        showPanel: (id) => showOrFocus(id as PanelId),
+        kitName: kit?.name ?? "the kit",
+        resetLayout: () => {
+          if (dock !== null && kit !== null) layoutKit(dock, kit);
         },
-        "separator" as const,
-        {
-          label: "Let the wug visit",
-          checked: visitsOn(localStorage),
-          note: "Now and then it peeks over the panel you are in. Touch it and it hides.",
-          run: () => {
-            const on = !visitsOn(localStorage);
-            setVisitsOn(localStorage, on);
-            if (on) window.setTimeout(() => visits?.visitNow(), 400);
-            else visits?.stop();
-            renderTop();
-          },
+        tabsAlways: () => tabMode(localStorage) === "always",
+        setTabsAlways: (on) => {
+          setTabMode(localStorage, on ? "always" : "reach");
+          host.classList.toggle("tabs-always", on);
         },
-        {
-          label: "Always show panel tabs",
-          checked: tabsAlways,
-          note: "Otherwise they rise when you reach for a panel's top edge",
-          run: () => {
-            setTabMode(localStorage, tabsAlways ? "reach" : "always");
-            host.classList.toggle("tabs-always", !tabsAlways);
-            renderTop();
-          },
+        visitsOn: () => visitsOn(localStorage),
+        setVisitsOn: (on) => {
+          setVisitsOn(localStorage, on);
+          if (on) window.setTimeout(() => visits?.visitNow(), 400);
+          else visits?.stop();
         },
-        {
-          label: `Reset to how ${kit?.name ?? "the kit"} starts`,
-          run: () => {
-            if (dock !== null && kit !== null) layoutKit(dock, kit);
-            renderTop();
-          },
-        },
-      ];
-    },
-    { className: "panel-menu", title: "Arrange the workspace" },
-  );
-  // Online. Per machine; checking never downloads anything.
-  const updates = menuButton("Updates", () => [
-    { label: "Check for updates now", note: "Online: asks GitHub Releases", run: () => void checkForUpdates(true) },
-    {
-      label: "Check when wugs starts",
-      checked: autoChecks(),
-      note: "Online, a few kB; nothing downloads until you say so",
-      run: () => {
-        setAutoChecks(!autoChecks());
-        renderTop();
-      },
-    },
-  ]);
+        checkForUpdates: () => void checkForUpdates(true),
+        autoChecks,
+        setAutoChecks,
+        version: appVersion,
+        changed: () => renderTop(),
+      }),
+  });
   project.classList.add("project-menu");
   setCurrentWug(kitWug(kit));
   const conflicts = s.kind === "open" ? s.info.conflicts : 0;
@@ -269,8 +225,7 @@ function renderTop() {
       "span",
       { className: "project" },
       project,
-      workspace,
-      updates,
+      settings,
       h("button", {
         className: "menu-button feedback-button",
         textContent: "Feedback",
