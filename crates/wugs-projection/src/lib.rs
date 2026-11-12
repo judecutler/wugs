@@ -584,6 +584,7 @@ impl Projection {
         s.bind_text(3, field)?;
         s.step()?;
         drop(s);
+        self.corpus_mark_write(target, &kind, field, &value)?;
         self.fts_write(target, &kind, field, &value)
     }
 
@@ -645,6 +646,7 @@ impl Projection {
                 s.bind_text(3, field)?;
                 s.step()?;
                 drop(s);
+                self.corpus_mark_write(target, &op.entity, field, &Value::str(text))?;
                 self.fts_write(target, &op.entity, field, &Value::str(text))?;
             }
             _ => self.upsert_field(target, field, &Value::str(text), op)?,
@@ -2310,5 +2312,101 @@ mod tests {
         }
         assert_eq!(p.count("conflicts").unwrap(), 1, "Ana's PL against Bo's PLU stays on record");
         assert_eq!(p.field_str("m", "gloss").unwrap().as_deref(), Some("PLURAL"));
+    }
+
+    struct FailMerger;
+    impl wugs_model::TextMerger for FailMerger {
+        fn resolve(&self, updates: &[Vec<u8>]) -> Result<String, String> {
+            let mut t: Vec<String> = updates.iter().map(|u| String::from_utf8_lossy(u).into_owned()).collect();
+            if t.len() > 1 && t.iter().any(|x| x == "bad") { return Err("no".into()); }
+            t.sort();
+            Ok(t.join(" "))
+        }
+        fn edit(&self, _: &[Vec<u8>], _: Option<(&str, u64)>, _: &str, _: u64) -> Result<(Vec<u8>, String), String> { unreachable!() }
+    }
+    fn scratch_dump(p: &Projection) -> Vec<(String, Vec<String>)> {
+        let mut out = Vec::new();
+        p.each_corpus_segment(&["tir".to_string()], None, |s, _, _, w| { out.push((s.to_string(), w.to_vec())); Ok(()) }).unwrap();
+        out
+    }
+    fn scratch_te(m: u64, d: &str, t: &str) -> Op {
+        let v = vec![("resolved", Value::str(t)), ("loro", Value::str(&wugs_model::base64::encode(t.as_bytes())))];
+        at(m, d, "text-edit", "segment", "seg", Some("content"), Value::obj(v), None)
+    }
+    fn scratch_base() -> Vec<Op> {
+        vec![
+            at(1, "dvc_A", "create", "text", "txt", None, Value::obj(vec![]), None),
+            at(2, "dvc_A", "create", "tier", "tir", None, Value::obj(vec![]), None),
+            at(3, "dvc_A", "create", "segment", "seg", None, Value::obj(vec![("text", Value::str("txt")), ("tier", Value::str("tir")), ("content", Value::str(""))]), None),
+        ]
+    }
+    #[test]
+    fn scratch_older_merged_text_edit_is_missed() {
+        let p = { let mut p = Projection::open_memory().unwrap(); p.merger = Some(Box::new(FailMerger)); p };
+        let mut st = ApplyStats::default();
+        for o in scratch_base() { p.apply(&o, &mut st).unwrap(); }
+        p.apply(&scratch_te(6, "dvc_B", "bbb"), &mut st).unwrap();
+        let _ = scratch_dump(&p);
+        p.apply(&scratch_te(5, "dvc_A", "aaa"), &mut st).unwrap();
+        let field = p.field_str("seg", "content").unwrap();
+        let fresh = { let mut q = Projection::open_memory().unwrap(); q.merger = Some(Box::new(FailMerger)); let mut st = ApplyStats::default();
+            for o in scratch_base().into_iter().chain([scratch_te(5, "dvc_A", "aaa"), scratch_te(6, "dvc_B", "bbb")]) { q.apply(&o, &mut st).unwrap(); } scratch_dump(&q) };
+        assert_eq!(scratch_dump(&p), fresh, "field now {field:?}");
+    }
+    #[test]
+    fn scratch_unmerged_older_edit_is_missed() {
+        let p = { let mut p = Projection::open_memory().unwrap(); p.merger = Some(Box::new(FailMerger)); p };
+        let mut st = ApplyStats::default();
+        for o in scratch_base() { p.apply(&o, &mut st).unwrap(); }
+        p.apply(&scratch_te(5, "dvc_A", "aaa"), &mut st).unwrap();
+        p.apply(&scratch_te(6, "dvc_B", "ccc"), &mut st).unwrap();
+        let before = scratch_dump(&p);
+        p.apply(&scratch_te(4, "dvc_C", "bad"), &mut st).unwrap();
+        let field = p.field_str("seg", "content").unwrap();
+        assert_eq!(scratch_dump(&p), vec![("seg".to_string(), vec![field.clone().unwrap()])], "before {before:?} field now {field:?}");
+    }
+    #[test]
+    fn scratch_random_orders_converge() {
+        let mut rng: u64 = 0x9e3779b97f4a7c15;
+        let mut next = |n: u64| { rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17; rng % n };
+        for round in 0..4000 {
+            let mut ops = vec![
+                at(1, "dvc_A", "create", "text", "txt", None, Value::obj(vec![]), None),
+                at(2, "dvc_A", "create", "tier", "tir", None, Value::obj(vec![]), None),
+            ];
+            let segs = ["sa", "sb"]; let toks = ["ta", "tb", "tc"];
+            let mut m = 3u64;
+            for s in segs { ops.push(at(m, "dvc_A", "create", "segment", s, None, Value::obj(vec![("text", Value::str("txt")), ("tier", Value::str("tir")), ("content", Value::str("x y")), ("pos", Value::str(s))]), None)); m += 1; }
+            for (i, t) in toks.iter().enumerate() { ops.push(at(m, "dvc_A", "create", "token", t, None, Value::obj(vec![("segment", Value::str("sa")), ("form", Value::str(&format!("f{i}"))), ("pos", Value::str(&format!("{i}")))]), None)); m += 1; }
+            for _ in 0..12 {
+                let dev = ["dvc_A", "dvc_B"][next(2) as usize];
+                let o = match next(9) {
+                    0 => { let t = toks[next(3) as usize]; at(m, dev, "set", "token", t, Some("form"), Value::str(&format!("w{m}")), None) }
+                    1 => { let t = toks[next(3) as usize]; at(m, dev, "set", "token", t, Some("segment"), Value::str(segs[next(2) as usize]), None) }
+                    2 => { let t = toks[next(3) as usize]; at(m, dev, "set", "token", t, Some("pos"), Value::str(&format!("{}", next(5))), None) }
+                    3 => { let t = toks[next(3) as usize]; at(m, dev, if next(2)==0 {"delete"} else {"restore"}, "token", t, None, Value::Null, None) }
+                    4 => { let s = segs[next(2) as usize]; let l: Vec<Value> = toks.iter().filter(|_| next(2)==0).map(|t| Value::str(t)).collect(); at(m, dev, "set", "segment", s, Some("tokens"), Value::Arr(l), None) }
+                    5 => { let s = segs[next(2) as usize]; at(m, dev, if next(2)==0 {"delete"} else {"restore"}, "segment", s, None, Value::Null, None) }
+                    6 => { let s = segs[next(2) as usize]; let v = vec![("resolved", Value::str(&format!("e{m}"))), ("loro", Value::str(&wugs_model::base64::encode(format!("e{m}").as_bytes())))];
+                           at(m, dev, "text-edit", "segment", s, Some("content"), Value::obj(v), None) }
+                    7 => { let s = segs[next(2) as usize]; at(m, dev, "set", "segment", s, Some("content"), Value::str(&format!("c{m} d")), None) }
+                    _ => { let t = toks[next(3) as usize]; at(m, dev, "set", "token", t, Some("x.flex.kind"), Value::str(if next(2)==0 {"punct"} else {"txt"}), None) }
+                };
+                ops.push(o); m += 1;
+            }
+            let fresh = { let mut q = Projection::open_memory().unwrap(); q.merger = Some(Box::new(JoinMerger)); let mut st = ApplyStats::default();
+                for o in &ops { q.apply(o, &mut st).unwrap(); } scratch_dump(&q) };
+            // shuffle
+            let mut sh = ops.clone();
+            for i in (1..sh.len()).rev() { let j = next(i as u64 + 1) as usize; sh.swap(i, j); }
+            let mut q = Projection::open_memory().unwrap(); q.merger = Some(Box::new(JoinMerger)); let mut st = ApplyStats::default();
+            for o in &sh { q.apply(o, &mut st).unwrap(); if next(3) == 0 { let _ = scratch_dump(&q); } }
+            // fields must agree first (projection is order independent)
+            let got = scratch_dump(&q);
+            // reference: drop index, rebuild everything in q
+            q.db.exec("INSERT OR IGNORE INTO corpus_dirty(segment) SELECT id FROM entities WHERE kind='segment'").unwrap();
+            let rebuilt = scratch_dump(&q);
+            assert_eq!(got, rebuilt, "round {round}: incremental vs rebuild on same db; fresh-in-order {fresh:?}\nops {:#?}", sh.iter().map(|o| (o.hlc.clone(), o.verb.clone(), o.target.clone(), o.field.clone(), o.value.to_json())).collect::<Vec<_>>());
+        }
     }
 }
