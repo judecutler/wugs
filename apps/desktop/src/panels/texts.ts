@@ -58,7 +58,7 @@ async function work(label: string, action: () => Promise<void>) {
 
 async function importOne() {
   const path = await pickFile({
-    title: "Import a file from ELAN, FLEx, Praat or Toolbox",
+    title: "Import a file from ELAN, FLEx, Praat or Toolbox, or plain text",
     filters: [
       { name: "ELAN, FLEx, Praat, Toolbox, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "txt"] },
       { name: "All files", extensions: ["*"] },
