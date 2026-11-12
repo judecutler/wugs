@@ -528,6 +528,21 @@
     }),
     list_texts: () => texts,
     link_recording: () => null,
+    keywords: ({ minCount }) => {
+      // Computed by the same formulas as src-tauri/src/keywords.rs.
+      const c = 23, d = 42, n = c + d;
+      const t = (o, e) => (o > 0 && e > 0 ? o * Math.log(o / e) : 0);
+      const row = (item, a, b) => {
+        const k = a + b, other = n - k;
+        let ll = 2 * (t(a, (c * k) / n) + t(b, (d * k) / n) + t(c - a, (c * other) / n) + t(d - b, (d * other) / n));
+        if (a / c < b / d) ll = -ll;
+        const fa = Math.max(a, 0.5) / c, fb = Math.max(b, 0.5) / d;
+        return { item, focus: a, reference: b, logLikelihood: ll, logRatio: Math.log2(fa / fb), percentDiff: ((fa - fb) * 100) / fb, simpleMaths: ((a * 1e6) / c + 1) / ((b * 1e6) / d + 1) };
+      };
+      const all = [row("nikani", 9, 2), row("toruma", 4, 0), row("liwa", 1, 0), row("ŋai", 3, 16), row("kesi", 0, 11)];
+      const rows = all.filter((r) => (r.logLikelihood >= 0 ? r.focus : r.reference) >= (minCount ?? 1));
+      return { focusTokens: c, referenceTokens: d, types: 6, omitted: 0, critical: 9.14, rows };
+    },
     collocates: ({ node }) => ({
       node: node === "" ? 0 : 23,
       tokens: 65,

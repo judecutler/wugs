@@ -4,6 +4,7 @@ import { conflictsPanel } from "./conflicts";
 import { devicesPanel } from "./devices";
 import { elicitPanel } from "./elicit";
 import { collocatesPanel } from "./collocates";
+import { keywordsPanel } from "./keywords";
 import { frequenciesPanel } from "./frequencies";
 import { glossPanel } from "./gloss";
 import { kitsPanel } from "./kits";
@@ -30,6 +31,7 @@ export const PANELS = {
   concordance: concordancePanel,
   frequencies: frequenciesPanel,
   collocates: collocatesPanel,
+  keywords: keywordsPanel,
   assist: assistPanel,
   people: peoplePanel,
   conflicts: conflictsPanel,

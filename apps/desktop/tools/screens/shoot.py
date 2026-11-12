@@ -36,6 +36,7 @@ PANELS = [
     ("concordance", "Concordance"),
     ("frequencies", "Frequencies"),
     ("collocates", "Collocates"),
+    ("keywords", "Keywords"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),
@@ -364,6 +365,12 @@ def main():
             run.shot("state-collocates", run.page.locator(".panel-collocates"))
             if run.page.locator(".panel-collocates .co-table tbody tr").count() == 0:
                 failures.append("collocates showed no rows")
+            # Keywords (Scrolls): a text's words against the rest.
+            run.front("keywords", "Keywords")
+            run.page.wait_for_timeout(400)
+            run.shot("state-keywords", run.page.locator(".panel-keywords"))
+            if run.page.locator(".panel-keywords .kw-table tbody tr").count() == 0:
+                failures.append("keywords showed no rows")
             if "Scrolls" not in run.page.locator(".kit-switcher").inner_text():
                 failures.append("switching to Scrolls did not change the kit")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
