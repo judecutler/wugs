@@ -7,9 +7,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::time::Duration;
 
-/// Where the help service runs. Empty until it is deployed; the sheet then
-/// says it is not connected yet (`services/help/README.md`, Deploy).
-pub const ENDPOINT: &str = "";
+/// Where the help service runs (`services/help/README.md`, Deploy). Empty
+/// means no service: the panel then says it is not connected yet.
+pub const ENDPOINT: &str = "https://wugs-help.judecutler88.workers.dev";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct Turn {

@@ -18,10 +18,12 @@ GUIDE_URL = "https://raw.githubusercontent.com/judecutler/wugs/{ref}/docs/USER-G
 [ai]
 binding = "AI"
 
-# Questions people agreed to share, for the "most asked" report.
-[[analytics_engine_datasets]]
-binding = "ASKED"
-dataset = "wugs_help_asked"
+# Questions people agreed to share, for the "most asked" report. Off until
+# the account has Analytics Engine turned on (the deploy fails with code 10089
+# otherwise); without it shared questions are not kept and answers still work.
+# [[analytics_engine_datasets]]
+# binding = "ASKED"
+# dataset = "wugs_help_asked"
 
 # Per address: at most 10 questions a minute.
 [[ratelimits]]
