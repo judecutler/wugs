@@ -177,18 +177,22 @@ async function receiveAttachment(request, env, id) {
     const length = Number(request.headers.get("Content-Length") ?? "NaN");
     if (length !== record.attachment.bytes) return refuse(400, "The attachment's size does not match the report.");
     if (request.body === null) return refuse(400, "The attachment is empty.");
-    // Checked now, counted only once the whole file has arrived, so an
-    // upload cut off part way and sent again is not counted twice.
-    if (!(await withinDailyCap(env, { reports: 0, bytes: length }, false))) return json(503, { error: FULL });
+    // Reserved before the upload, so uploads running at once cannot all pass
+    // the cap, and given back if it is cut off, so a retry is not counted twice.
+    if (!(await withinDailyCap(env, { reports: 0, bytes: length }))) return json(503, { error: FULL });
     // Prefixed, so no file name can land on the record's own key.
     const fileKey = `reports/${id}/file-${record.attachment.name}`;
-    // Streamed: a 95 MB video never sits in the Worker's memory.
-    await env.REPORTS.put(fileKey, request.body, {
-      httpMetadata: { contentType: request.headers.get("Content-Type") ?? "application/octet-stream" },
-    });
+    try {
+      // Streamed: a 95 MB video never sits in the Worker's memory.
+      await env.REPORTS.put(fileKey, request.body, {
+        httpMetadata: { contentType: request.headers.get("Content-Type") ?? "application/octet-stream" },
+      });
+    } catch (e) {
+      await giveBack(env, length);
+      throw e;
+    }
     record.file = fileKey;
     await env.REPORTS.put(key, JSON.stringify(record));
-    await withinDailyCap(env, { reports: 0, bytes: length });
   }
   // A repeat (the app lost the answer, or telling the maintainer failed)
   // only tells the maintainer what is still untold.
@@ -201,14 +205,23 @@ async function receiveAttachment(request, env, id) {
 /** A soft cap on reports and upload bytes a day, so a flood cannot run up
  * storage or use every email the plan allows. Counted per UTC day in R2;
  * two requests at once can both slip under it, which a soft cap allows. */
-async function withinDailyCap(env, add, count = true) {
+async function giveBack(env, bytes) {
+  const key = dayKey();
+  const got = await env.REPORTS.get(key);
+  if (!got) return;
+  const day = await got.json();
+  await env.REPORTS.put(key, JSON.stringify({ ...day, bytes: Math.max(0, day.bytes - bytes) }));
+}
+
+const dayKey = () => `daily/${new Date().toISOString().slice(0, 10)}.json`;
+
+async function withinDailyCap(env, add) {
   const maxReports = Number(env.DAILY_REPORTS ?? 200);
   const maxBytes = Number(env.DAILY_UPLOAD_MB ?? 2000) * 1e6;
-  const key = `daily/${new Date().toISOString().slice(0, 10)}.json`;
+  const key = dayKey();
   const got = await env.REPORTS.get(key);
   const day = got ? await got.json() : { reports: 0, bytes: 0 };
   if (day.reports + add.reports > maxReports || day.bytes + add.bytes > maxBytes) return false;
-  if (!count) return true;
   await env.REPORTS.put(key, JSON.stringify({ reports: day.reports + add.reports, bytes: day.bytes + add.bytes }));
   return true;
 }

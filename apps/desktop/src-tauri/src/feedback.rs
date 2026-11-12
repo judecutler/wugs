@@ -206,6 +206,9 @@ pub fn send_waiting(app_data: &Path, net: &dyn Transport, focus: Option<&str>) -
                 }
             }
             Err(Failure::Refused(why)) => {
+                if focus == Some(id.as_str()) {
+                    focus_problem = Some(why.clone());
+                }
                 // The service will never take this one as it is: keep it aside
                 // with the reason rather than retrying it forever.
                 let refused = refused_dir(app_data).join(&id);
@@ -258,8 +261,17 @@ fn send_one(app_data: &Path, net: &dyn Transport, id: &str) -> Result<(), Failur
     let reply = net.post_report(id, &report_text).map_err(Failure::Unreachable)?;
     classify(&reply)?;
     let answer: Value = serde_json::from_str(&reply.body).unwrap_or(Value::Null);
+    // Only the service's own answer about this report counts as received.
+    if answer.get("id").and_then(Value::as_str) != Some(id) {
+        return Err(Failure::Later("The feedback service gave an unexpected answer. It will be sent later.".into()));
+    }
     if let (Some(info), Some(token)) = (&report.attachment, answer.pointer("/upload/token").and_then(Value::as_str)) {
-        let reply = net.put_attachment(id, token, &dir.join("attachment"), content_type(&info.name)).map_err(Failure::Unreachable)?;
+        let file = dir.join("attachment");
+        if !file.is_file() {
+            // Removed from the outbox (by an antivirus, say): it can never go.
+            return Err(Failure::Refused("The attachment kept for this report is gone.".into()));
+        }
+        let reply = net.put_attachment(id, token, &file, content_type(&info.name)).map_err(Failure::Unreachable)?;
         classify(&reply)?;
     }
     let _ = fs::remove_dir_all(&dir);
@@ -359,7 +371,15 @@ mod tests {
             }
             self.posts.borrow_mut().push(format!("{id}:{report}"));
             let (status, body) = self.answer.unwrap_or((201, r#"{"upload":{"token":"tok"}}"#));
-            Ok(Reply { status, body: body.into() })
+            // The real service always names the report it answers about.
+            let body = match serde_json::from_str::<Value>(body) {
+                Ok(Value::Object(mut m)) => {
+                    m.entry("id").or_insert(json!(id));
+                    Value::Object(m).to_string()
+                }
+                _ => body.to_string(),
+            };
+            Ok(Reply { status, body })
         }
         fn put_attachment(&self, id: &str, token: &str, file: &Path, _: &str) -> Result<Reply, String> {
             assert_eq!(token, "tok");
@@ -434,7 +454,7 @@ mod tests {
         fs::write(&video, b"abc").unwrap();
         let id = enqueue(&app, "x", "", None, Some(&video)).unwrap();
         // No upload token in the answer: the service has the file.
-        let net = Fake { answer: Some((200, r#"{"id":"x"}"#)), ..Fake::default() };
+        let net = Fake { answer: Some((200, r#"{"received":"now"}"#)), ..Fake::default() };
         assert!(send_waiting(&app, &net, Some(&id)).sent);
         assert!(net.puts.borrow().is_empty());
     }

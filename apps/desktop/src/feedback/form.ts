@@ -64,13 +64,13 @@ export function openFeedback(page: Record<string, unknown>): void {
   const close = () => {
     overlay.remove();
     if (open === overlay) open = null;
-    document.removeEventListener("keydown", onKey, true);
+    window.removeEventListener("keydown", onKey, true);
     opener?.focus();
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
       // The form is in front: nothing behind it reacts to Escape.
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       // Escape never throws away what was typed: Cancel does that.
       if (keeping) return;
       if (message.value.trim() === "") close();
@@ -143,7 +143,8 @@ export function openFeedback(page: Record<string, unknown>): void {
   // No close on a click outside: a stray click must not lose what was typed.
   overlay = h("div", { className: "feedback-overlay" }, card);
   open = overlay;
-  document.addEventListener("keydown", onKey, true);
+  // On window, capturing: it runs before any listener on the document.
+  window.addEventListener("keydown", onKey, true);
   document.body.append(overlay);
   refresh();
   message.focus();
