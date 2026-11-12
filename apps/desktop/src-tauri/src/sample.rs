@@ -73,15 +73,15 @@ pub fn open_sample(session: &mut Session, dir: &Path, researcher: &str) -> Resul
     // Close whatever is open first: a half-built sample may be the open project.
     *session = None;
     if dir.exists() {
-        std::fs::remove_dir_all(dir).map_err(|e| format!("could not clear an unfinished sample: {e}"))?;
+        std::fs::remove_dir_all(dir).map_err(|e| format!("could not clear an unfinished tutorial: {e}"))?;
     }
-    std::fs::create_dir_all(dir).map_err(|e| format!("could not make the sample folder: {e}"))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("could not make the tutorial folder: {e}"))?;
     let built = session::create_project(session, &path, researcher).and_then(|_| build(session, dir));
     if let Err(e) = built {
         // Nothing half-built stays open or on disk; the next click starts over.
         *session = None;
         let _ = std::fs::remove_dir_all(dir);
-        return Err(format!("the sample project could not be made: {e}"));
+        return Err(format!("the tutorial project could not be made: {e}"));
     }
     std::fs::write(dir.join(COMPLETE), "1\n").map_err(|e| e.to_string())?;
     session::open_project(session, &path, researcher)
@@ -180,7 +180,9 @@ mod tests {
         assert_eq!(&RECORDING[0..4], b"RIFF");
         assert_eq!(&RECORDING[8..16], b"WAVEfmt ");
         assert_eq!(u32::from_le_bytes(RECORDING[24..28].try_into().unwrap()), 16_000);
-        let samples: Vec<f64> = RECORDING[44..].chunks_exact(2).map(|b| f64::from(i16::from_le_bytes([b[0], b[1]]))).collect();
+        // The audio starts after the `data` chunk's header, wherever ffmpeg put it.
+        let data = RECORDING.windows(4).position(|w| w == b"data").expect("a data chunk") + 8;
+        let samples: Vec<f64> = RECORDING[data..].chunks_exact(2).map(|b| f64::from(i16::from_le_bytes([b[0], b[1]]))).collect();
         let rms = |a: f64, b: f64| {
             let (i, j) = ((a * 16_000.0) as usize, ((b * 16_000.0) as usize).min(samples.len()));
             (samples[i..j].iter().map(|s| s * s).sum::<f64>() / (j - i) as f64).sqrt()

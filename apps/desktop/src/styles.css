@@ -994,7 +994,7 @@ body::before {
   @keyframes palette-in { from { opacity: 0; transform: translateY(-6px); } }
 }
 
-/* The sample project on the welcome card, and the first-run tour (roadmap 68). */
+/* The tutorial project on the welcome card, and the first-run tour (roadmap 68). */
 .welcome-sample { margin: 4px auto 14px; padding: 12px 14px; max-width: 360px; border: 1px dashed var(--line); border-radius: var(--radius-md); }
 .welcome-sample button { padding: 7px 14px; }
 .welcome-sample .note { margin: 6px 0 0; }
