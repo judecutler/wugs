@@ -9,7 +9,8 @@ import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest
 import { batchTargets, correctionsLine, count, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
 import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
 import { emptyState, h } from "../dom";
-import { assistModelList, capability, getState, mediaSource, refreshCapabilities, refreshText, setAssistModels, showToast } from "../store";
+import { recordingForShown } from "../hear/hear";
+import { assistModelList, capability, getState, refreshCapabilities, refreshText, setAssistModels, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 /** A batch run in progress, shared by every instance of the panel. */
@@ -189,8 +190,9 @@ export const assistPanel: PanelDef = {
     function batchControls(s: ReturnType<typeof getState>, phones: CapabilityView | null) {
       if (s.kind !== "open" || s.text === null) return h("p", { className: "as-note", textContent: "Open a text to fill its empty segments." });
       if (phones?.effective == null) return h("p", { className: "as-note", textContent: phones?.problem ?? "Download a model first." });
-      const source = mediaSource();
-      if (source === null) return h("p", { className: "as-note", textContent: "Load the text's recording on the Timeline first." });
+      // The text's own recording (or the loaded one, if no other text claims it).
+      const source = recordingForShown();
+      if (source === null) return h("p", { className: "as-note", textContent: "Pick the text's recording on the Timeline first." });
       const text = s.text;
       const tiers = text.tiers.filter((t) => t.kind === "time-aligned" || t.kind === null);
       if (tierChoice === null || !tiers.some((t) => t.id === tierChoice)) tierChoice = tiers.find((t) => t.role === "transcription")?.id ?? tiers[0]?.id ?? null;

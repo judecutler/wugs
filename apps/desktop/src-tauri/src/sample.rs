@@ -198,7 +198,9 @@ const COMPLETE: &str = "sample-complete";
 pub fn open_sample(session: &mut Session, dir: &Path, researcher: &str) -> Result<ProjectInfo, String> {
     let path = dir.to_string_lossy().to_string();
     if dir.join(COMPLETE).is_file() && dir.join("project.json").is_file() {
-        return session::open_project(session, &path, researcher);
+        let info = session::open_project(session, &path, researcher)?;
+        link_older_sample(session)?;
+        return Ok(info);
     }
     // Close whatever is open first: a half-built sample may be the open project.
     *session = None;
@@ -215,6 +217,19 @@ pub fn open_sample(session: &mut Session, dir: &Path, researcher: &str) -> Resul
     }
     std::fs::write(dir.join(COMPLETE), "1\n").map_err(|e| e.to_string())?;
     session::open_project(session, &path, researcher)
+}
+
+/// A sample built before texts remembered their recording (roadmap 72) has
+/// one text and one recording, unlinked: link them, once.
+fn link_older_sample(session: &mut Session) -> Result<(), String> {
+    let texts = session::list_texts(session)?;
+    let sources = session::list_sources(session)?;
+    if let ([text], [source]) = (texts.as_slice(), sources.as_slice()) {
+        if text.recording.is_none() && source.has_media {
+            session::link_recording(session, &text.id, Some(&source.id))?;
+        }
+    }
+    Ok(())
 }
 
 fn build(session: &mut Session, dir: &Path) -> Result<(), String> {
@@ -334,7 +349,10 @@ mod tests {
         session::link_recording(&mut session, &texts[0].id, Some(&sources[0].id)).unwrap();
         session::link_recording(&mut session, &texts[0].id, None).unwrap();
         assert_eq!(session::list_texts(&mut session).unwrap()[0].recording, None);
-        session::link_recording(&mut session, &texts[0].id, Some(&sources[0].id)).unwrap();
+        // A sample from before links were kept is linked when it is opened again.
+        let again = open_sample(&mut session, &dir, "tester").unwrap();
+        assert_eq!(again.texts, 1);
+        assert_eq!(session::list_texts(&mut session).unwrap()[0].recording.as_deref(), Some(sources[0].id.as_str()));
         // Opening it again reuses it rather than building a second copy.
         let again = open_sample(&mut session, &dir, "tester").unwrap();
         assert_eq!(again.texts, 1);
