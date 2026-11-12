@@ -52,6 +52,8 @@ wugs can update itself from the repository's GitHub Releases. This is an **Onlin
 
 ### Each release
 
+Never make the release on GitHub's Releases page. Pushing the tag is all it takes: the run below builds the installers and makes a **draft** with them attached, and you publish that. A release made by hand is published before any installer exists, the download page then has nothing to offer, and the run never changes a published release, so it stays empty. If that happens, delete the release (its tag stays) and re-run the failed `publish` job, or let a run still in progress reach it.
+
 1. Bump `version` in `apps/desktop/src-tauri/tauri.conf.json` (and `Cargo.toml`, `package.json` to match). The workflow refuses a tag that does not match.
 2. Make an annotated tag whose message is the release notes. The app shows them under **What's new**: `git tag -a vX.Y.Z -m "wugs X.Y.Z" -m "What changed, in a few lines."`, then `git push origin vX.Y.Z`.
 3. In GitHub, open **Actions**, then the **Release** run for the tag. The three `build` jobs run first. Then the `sign` job waits for approval of the `release` environment: click **Review deployments**, select `release` and **Approve and deploy**.
