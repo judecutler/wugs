@@ -213,7 +213,7 @@ pub(crate) fn each_segment(
     };
     if read != Read::Analyses {
         let tiers = if read == Read::Translations { &translation_tiers } else { &transcription_tiers };
-        return p.proj.each_corpus_segment(tiers, only_text, |seg, text, tier, words| {
+        return p.proj.each_corpus_segment(tiers, only_text, read == Read::Translations, |seg, text, tier, words| {
             let title = title_of(text)?;
             visit(&CorpusSegment { text: text.to_string(), title, id: seg.to_string(), tier: tier.to_string(), tokens: Vec::new(), words: words.to_vec() })
         });
