@@ -3,11 +3,12 @@
 //! kit is a per-machine choice in `kits/active`. Manifests are read and
 //! rewritten by `wugs-kit`; this module only stores them.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use wugs_kit::{Kit, Place, Placement, Problem};
+use wugs_kit::{Kit, Place, Placement, Problem, Wug};
 use wugs_model::ulid;
 
 pub const BUNDLED: &str = include_str!("../../../../kits/tongues/kit.toml");
@@ -30,6 +31,19 @@ pub struct KitDto {
     pub tools: Vec<String>,
     pub layout: Vec<PlacementDto>,
     pub active: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wug: Option<WugDto>,
+}
+
+/// The shell's `WugLook`. Colours are checked by `wugs_kit` on every save,
+/// so only `#rrggbb` ever reaches the drawing.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WugDto {
+    pub body: String,
+    pub accessories: Vec<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub colours: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +105,11 @@ impl From<&Kit> for KitDto {
                 })
                 .collect(),
             active: k.active.clone(),
+            wug: k.wug.as_ref().map(|w| WugDto {
+                body: w.body.clone(),
+                accessories: w.accessories.clone(),
+                colours: w.colours.clone(),
+            }),
         }
     }
 }
@@ -126,6 +145,11 @@ impl KitDto {
             tools: self.tools.clone(),
             layout,
             active: self.active.clone(),
+            wug: self.wug.as_ref().map(|w| Wug {
+                body: w.body.clone(),
+                accessories: w.accessories.clone(),
+                colours: w.colours.clone(),
+            }),
         })
     }
 }

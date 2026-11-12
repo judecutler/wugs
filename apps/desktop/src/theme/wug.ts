@@ -26,28 +26,27 @@ export const ACCESSORIES = {
 
 export type AccessoryId = keyof typeof ACCESSORIES;
 
+export const isAccessory = (id: string): id is AccessoryId => Object.hasOwn(ACCESSORIES, id);
+
 export type WugLook = {
   /** The body's fill. */
   body: string;
-  accessories: readonly AccessoryId[];
+  /** Accessory ids. A kit file may name one this build does not have
+   * (made with a newer version); it is left off when drawn. */
+  accessories: readonly string[];
   /** Fill overrides for an accessory's shapes, by part id (`hat-shape`). */
   colours?: Readonly<Record<string, string>>;
 };
 
-/** The brand wug, and one per built-in kit, as in the brand sheet. */
 export const BRAND_BLUE = "#00c1e3";
-export const KIT_WUGS: Readonly<Record<string, WugLook>> = {
-  wugs: { body: BRAND_BLUE, accessories: [] },
-  "org.wugs.tongues": { body: "#f08060", accessories: ["hat", "recorder"] },
-  "org.wugs.scrolls": { body: "#e8b030", accessories: ["monocle", "scroll"] },
-  "org.wugs.glyphs": { body: "#70b850", accessories: ["glasses", "tablet"] },
-};
+/** The brand wug: what a kit without a `[wug]` shows. Kits carry their own,
+ * built-in ones included (kits/tongues/kit.toml). */
+export const BRAND_WUG: WugLook = { body: BRAND_BLUE, accessories: [] };
 
-/** A kit's wug: its own look when built in, else the brand wug. */
-export const kitWug = (kitId: string | undefined): WugLook =>
-  kitId !== undefined && Object.hasOwn(KIT_WUGS, kitId) ? KIT_WUGS[kitId]! : KIT_WUGS.wugs!;
+/** A kit's wug: its own `[wug]`, else the brand wug. */
+export const kitWug = (kit: { wug?: WugLook } | null | undefined): WugLook => kit?.wug ?? BRAND_WUG;
 
-let current: WugLook = KIT_WUGS.wugs!;
+let current: WugLook = BRAND_WUG;
 /** The wug the shell shows (the active kit's), for empty states and the top bar. */
 export const currentWug = () => current;
 export function setCurrentWug(look: WugLook) {
@@ -60,7 +59,7 @@ export type Layer = { id: string; d: string; fill: string; opacity: number };
 export function wugLayers(look: WugLook): Layer[] {
   const bySlot = new Map<Slot, AccessoryId>();
   // An id this build does not know (a newer kit file) is left off, never fatal.
-  for (const a of look.accessories) if (Object.hasOwn(ACCESSORIES, a)) bySlot.set(ACCESSORIES[a].slot, a);
+  for (const a of look.accessories) if (isAccessory(a)) bySlot.set(ACCESSORIES[a].slot, a);
   const wanted = new Set<string>(["body-shape", "body-line", "eye-shape", "eye-line"]);
   for (const a of bySlot.values()) for (const p of ACCESSORIES[a].parts) wanted.add(p);
   return PARTS.filter((p) => wanted.has(p.id)).map((p) => ({

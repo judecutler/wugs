@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import drawing from "./wug-parts.json" with { type: "json" };
-import { ACCESSORIES, kitWug, wugLayers, wugSvg } from "./wug.ts";
+import { ACCESSORIES, BRAND_WUG, kitWug, wugLayers, wugSvg } from "./wug.ts";
 
 const ids = (look: Parameters<typeof wugLayers>[0]) => wugLayers(look).map((l) => l.id);
 
@@ -51,18 +51,15 @@ test("see-through parts keep the drawing's 35% opacity", () => {
   assert.equal(layers.find((l) => l.id === "spacesuit-mask-shape")!.opacity, 0.35);
 });
 
-test("built-in kits have their own wug; any other kit gets the brand wug", () => {
-  assert.deepEqual(kitWug("org.wugs.tongues").accessories, ["hat", "recorder"]);
-  assert.equal(kitWug("someones-kit").body, kitWug(undefined).body);
-});
-
-test("a kit id that names an Object property still gets the brand wug", () => {
-  assert.equal(kitWug("constructor").body, kitWug(undefined).body);
-  assert.equal(kitWug("toString").body, kitWug(undefined).body);
+test("a kit shows its own wug; a kit without one shows the brand wug", () => {
+  const coral = { body: "#f08060", accessories: ["hat", "recorder"] };
+  assert.equal(kitWug({ wug: coral }), coral);
+  assert.equal(kitWug({}), BRAND_WUG);
+  assert.equal(kitWug(null), BRAND_WUG);
 });
 
 test("an accessory this build does not know is left off", () => {
-  assert.deepEqual(ids({ body: "#000", accessories: ["jetpack" as never] }), ["body-shape", "body-line", "eye-shape", "eye-line"]);
+  assert.deepEqual(ids({ body: "#000", accessories: ["jetpack"] }), ["body-shape", "body-line", "eye-shape", "eye-line"]);
 });
 
 test("svg markup escapes the label and colours", () => {

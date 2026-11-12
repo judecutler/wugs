@@ -5,8 +5,10 @@
 //! it does not model (`[templates]`, `[validators]`) survive.
 //!
 //! Kits come from other people, so everything here is input validation:
-//! a size cap, path-safe ids, bounded strings, and no `[scripts]`.
+//! a size cap, path-safe ids, bounded strings, `#rrggbb` colours, and no
+//! `[scripts]`.
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::Range;
 
@@ -31,6 +33,20 @@ pub struct Kit {
     pub layout: Vec<Placement>,
     /// Panels brought to the front once laid out, in order.
     pub active: Vec<String>,
+    /// The kit's mascot; `None` shows the brand wug.
+    pub wug: Option<Wug>,
+}
+
+/// A wug look: the shell draws it (`apps/desktop/src/theme/wug.ts`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Wug {
+    /// `#rrggbb`.
+    pub body: String,
+    /// Accessory ids. Unknown ones are kept, like tool ids, so a kit made
+    /// with a newer version still loads; the shell leaves them off.
+    pub accessories: Vec<String>,
+    /// Fill overrides by drawing part id (`hat-shape`), each `#rrggbb`.
+    pub colours: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -98,6 +114,11 @@ const TEXT_MAX: usize = 500;
 const ID_MAX: usize = 64;
 const LIST_MAX: usize = 64;
 const SIZE_RANGE: Range<i64> = 50..4001;
+
+/// Whether `s` is a colour a kit may carry: `#` and six hex digits.
+pub fn valid_colour(s: &str) -> bool {
+    s.len() == 7 && s.starts_with('#') && s[1..].bytes().all(|c| c.is_ascii_hexdigit())
+}
 
 /// Whether `id` can name a kit: lowercase letters, digits, `.` and `-`,
 /// starting with a letter or digit, no `..`, at most 64 bytes, and not a
@@ -171,6 +192,7 @@ pub fn parse(text: &str) -> Result<Kit, Vec<Problem>> {
     let layout_table = r.table(root, "layout");
     let layout = r.placements(layout_table);
     let active = r.names(layout_table, "layout", "active");
+    let wug = r.table(root, "wug").map(|t| r.wug(t));
     for name in &active {
         if !layout.iter().any(|p| &p.panel == name) {
             r.fail(
@@ -191,6 +213,7 @@ pub fn parse(text: &str) -> Result<Kit, Vec<Problem>> {
             tools,
             layout,
             active,
+            wug,
         })
     } else {
         Err(r.problems)
@@ -236,6 +259,34 @@ pub fn update(text: &str, kit: &Kit) -> Result<String, Vec<Problem>> {
         let mut active = Array::new();
         active.extend(kit.active.iter().map(String::as_str));
         set_value(t, "active", Value::Array(active));
+    }
+    if changed(&|b| b.wug == kit.wug) {
+        match &kit.wug {
+            None => {
+                doc.remove("wug");
+            }
+            Some(w) => {
+                let was = before.as_ref().and_then(|b| b.wug.as_ref());
+                let t = table_mut(&mut doc, "wug");
+                set_str(t, "body", &w.body, true);
+                if was.is_none_or(|b| b.accessories != w.accessories) {
+                    let mut a = Array::new();
+                    a.extend(w.accessories.iter().map(String::as_str));
+                    set_value(t, "accessories", Value::Array(a));
+                }
+                if was.is_none_or(|b| b.colours != w.colours) {
+                    if w.colours.is_empty() {
+                        t.remove("colours");
+                    } else {
+                        let mut c = InlineTable::new();
+                        for (part, colour) in &w.colours {
+                            c.insert(part, colour.as_str().into());
+                        }
+                        set_value(t, "colours", Value::InlineTable(c));
+                    }
+                }
+            }
+        }
     }
     let out = doc.to_string();
     parse(&out)?;
@@ -421,6 +472,62 @@ impl Reader<'_> {
         out
     }
 
+    /// `[wug]`: a body colour, accessory ids and part colours. Keys it does
+    /// not know are left alone, as in `[kit]`, so a newer kit still loads.
+    fn wug(&mut self, t: &Table) -> Wug {
+        let body = self.string(Some(t), "wug", "body", NAME_MAX, true);
+        if !body.is_empty() && !valid_colour(&body) {
+            self.fail(t.get("body").and_then(Item::span), COLOUR);
+        }
+        let accessories = self.names(Some(t), "wug", "accessories");
+        let colours = t
+            .get("colours")
+            .map(|c| self.colours(c))
+            .unwrap_or_default();
+        Wug {
+            body,
+            accessories,
+            colours,
+        }
+    }
+
+    fn colours(&mut self, item: &Item) -> BTreeMap<String, String> {
+        let mut out = BTreeMap::new();
+        let table: &dyn TableLike = match item {
+            Item::Table(t) => t,
+            Item::Value(Value::InlineTable(t)) => t,
+            _ => {
+                self.fail(
+                    item.span(),
+                    "wug.colours must be a table like { \"hat-shape\" = \"#a1691c\" }",
+                );
+                return out;
+            }
+        };
+        if table.keys().len() > LIST_MAX {
+            self.fail(
+                item.span(),
+                &format!("wug.colours has more than {LIST_MAX} parts"),
+            );
+            return out;
+        }
+        for key in table.keys() {
+            let value = table.value(key);
+            let span = value.and_then(Value::span).or_else(|| item.span());
+            match value.and_then(Value::as_str) {
+                _ if !valid_name(key) => self.fail(
+                    span,
+                    "wug.colours names drawing parts: lowercase letters, digits and '-'",
+                ),
+                Some(c) if valid_colour(c) => {
+                    out.insert(key.to_string(), c.to_string());
+                }
+                _ => self.fail(span, COLOUR),
+            }
+        }
+        out
+    }
+
     fn placements(&mut self, layout: Option<&Table>) -> Vec<Placement> {
         let Some(item) = layout.and_then(|t| t.get("panels")) else {
             return Vec::new();
@@ -532,6 +639,8 @@ impl Reader<'_> {
         out
     }
 }
+
+const COLOUR: &str = "a wug colour is '#' and six hex digits, like \"#f08060\"";
 
 fn valid_name(s: &str) -> bool {
     !s.is_empty()

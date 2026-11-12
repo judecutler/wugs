@@ -214,7 +214,7 @@ function renderTop() {
     },
   ]);
   project.classList.add("project-menu");
-  setCurrentWug(kitWug(kit?.id));
+  setCurrentWug(kitWug(kit));
   const conflicts = s.kind === "open" ? s.info.conflicts : 0;
   top.replaceChildren(
     ...[

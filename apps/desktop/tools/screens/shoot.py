@@ -21,7 +21,6 @@ from playwright.sync_api import sync_playwright
 HERE = Path(__file__).resolve().parent
 DESKTOP = HERE.parents[1]
 PORT = 1420
-URL = f"http://localhost:{PORT}/"
 CHROME = "/usr/bin/google-chrome"
 
 # Panel id -> title, in src/panels/registry.ts order.
@@ -50,10 +49,14 @@ def registry_ids():
 
 def serving():
     try:
-        with urllib.request.urlopen(URL, timeout=1) as r:
+        with urllib.request.urlopen(url(), timeout=1) as r:
             return r.status == 200
     except OSError:
         return False
+
+
+def url():
+    return f"http://localhost:{PORT}/"
 
 
 def start_vite():
@@ -97,6 +100,7 @@ def bundled_kit():
         "id": k["kit"]["id"], "name": k["kit"]["name"], "subtitle": k["kit"].get("subtitle", ""),
         "version": k["kit"]["version"], "description": k["kit"].get("description", ""),
         "tools": k["tools"]["enabled"], "layout": k["layout"]["panels"], "active": k["layout"].get("active", []),
+        **({"wug": k["wug"]} if "wug" in k else {}),
     }
 
 
@@ -125,7 +129,7 @@ class Run:
         self.page = self.context.new_page()
         self.page.on("pageerror", lambda e: self.errors.append(f"pageerror: {e}"))
         self.page.on("console", self.console)
-        self.page.goto(URL)
+        self.page.goto(url())
         self.page.wait_for_selector(".dv-tab", state="attached", timeout=15000)
 
     def console(self, msg):
@@ -214,6 +218,10 @@ def prepare(run, panel_id):
         box = page.locator(".panel-search input").first
         box.fill("kesi")
         page.locator(".panel-search mark").first.wait_for()
+    elif panel_id == "kits":
+        # The user kit, so the shot shows the editor and the wug picker.
+        page.locator(".panel-kits .kit-name", has_text="Word-list sprint").click()
+        page.locator(".panel-kits .kit-wug select").first.wait_for()
 
 
 def open_workspace(run):
@@ -236,9 +244,11 @@ def main():
     ap.add_argument("--out", default="/tmp/screens")
     ap.add_argument("--only", action="append", default=[], help="substring of a screenshot name; repeatable")
     ap.add_argument("--theme", default=None, help="cream, seafoam, clay or night")
+    ap.add_argument("--port", type=int, default=1420, help="dev server port; another worktree's server on 1420 would be reused")
     args = ap.parse_args()
-    global THEME
+    global THEME, PORT
     THEME = args.theme
+    PORT = args.port
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
 

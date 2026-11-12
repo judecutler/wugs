@@ -10,9 +10,10 @@ From the repository root:
 python3 apps/desktop/tools/screens/shoot.py                 # every screen into /tmp/screens/
 python3 apps/desktop/tools/screens/shoot.py --out /tmp/a    # another folder
 python3 apps/desktop/tools/screens/shoot.py --only gloss --only toast
+python3 apps/desktop/tools/screens/shoot.py --port 1430      # beside a dev server of another checkout
 ```
 
-`--only` keeps the screenshots whose file name contains the text. You can give it more than once. The script starts `npx vite --port 1420 --strictPort` in `apps/desktop`, or reuses a dev server already on that port. It needs Python Playwright and Chrome at `/usr/bin/google-chrome`.
+`--only` keeps the screenshots whose file name contains the text. You can give it more than once. The script starts `npx vite --port 1420 --strictPort` in `apps/desktop`, or reuses a dev server already on that port, whichever checkout it serves. Give `--port` another number when a dev server of another worktree holds 1420. It needs Python Playwright and Chrome at `/usr/bin/google-chrome`.
 
 ## What it writes
 
