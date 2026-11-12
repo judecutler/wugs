@@ -118,11 +118,12 @@ fn create_project(app: AppHandle, s: State<SessionThread>, reach: State<Reachabl
     Ok(info)
 }
 
-/// The sample project (roadmap 68): built in this computer's app data the
+/// The tutorial project (roadmap 68; once called the sample, whose old
+/// `sample-project` folder is left as it was): built in this computer's app data the
 /// first time, opened as it was left after that.
 #[tauri::command(async)]
 fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>, researcher: String) -> Result<ProjectInfo, String> {
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("sample-project");
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("tutorial-project");
     let path = dir.to_string_lossy().to_string();
     let who = if researcher.trim().is_empty() { "me".to_string() } else { researcher };
     let info = s.run(move |s| sample::open_sample(s, &dir, &who))?;

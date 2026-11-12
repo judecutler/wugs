@@ -1066,3 +1066,12 @@ body::before {
    keyword sits on its right; that side is cut at its far (right) end. */
 .cc-row[dir="rtl"] .cc-left { direction: ltr; text-align: left; }
 .cc-row[dir="rtl"] .cc-right { direction: rtl; text-align: right; unicode-bidi: plaintext; }
+
+/* The first-run Tutorial button and its jump into the Project menu. */
+.menu-button.tutorial-button { background: var(--accent-bright); color: var(--on-bright); border: var(--ink-line); font-weight: 650; }
+.menu-button.tutorial-button::after { content: none; }
+.menu-button.tutorial-button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-bright) 82%, white); }
+.tutorial-flyer { position: fixed; z-index: 950; pointer-events: none; transform-origin: 0 0; margin: 0; }
+@keyframes menu-landed { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.menu-landed { animation: menu-landed 420ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .menu-landed { animation: none; } }

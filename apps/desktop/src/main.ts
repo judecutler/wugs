@@ -33,6 +33,8 @@ import { SHOW_PANEL } from "./panels/panel";
 import { attachDock, useKit } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
 import { hopInto, hopping } from "./help/hop";
+import { fileTutorial, tutorialFiled } from "./tutorial/logic";
+import { flyInto } from "./tutorial/fly";
 import { helpView } from "./help/view";
 import { helpPanelView, setHelpFeedback } from "./panels/help";
 import { openSettings } from "./settings/panel";
@@ -148,7 +150,7 @@ function renderTop() {
   const project = menuButton("Project", () => [
     { label: "Open another project…", run: () => void pickProject("open") },
     { label: "Create a project…", run: () => void pickProject("create") },
-    { label: "Open the sample project", run: () => void enterSample() },
+    { label: "Open the tutorial project", run: () => void enterSample() },
   ]);
   // Settings (owner, 2026-11-12): one panel for how the workspace looks and
   // behaves and for updates, with themes and patterns shown, not named.
@@ -218,6 +220,7 @@ function renderTop() {
         "Find an action",
         h("kbd", { textContent: /Mac|iPhone|iPad/u.test(navigator.platform || navigator.userAgent) ? "⌘K" : "Ctrl+K" }),
       ),
+      tutorialFiled(localStorage) ? null : tutorialButton(),
       project,
       settings,
       h("button", {
@@ -235,6 +238,26 @@ function renderTop() {
     ),
     ].filter((c) => c !== null),
   );
+}
+
+/** The first-run Tutorial button: opens the tutorial project and jumps into
+ * the Project menu, where it stays (`src/tutorial/`). */
+function tutorialButton(): HTMLElement {
+  const button = h("button", {
+    className: "menu-button tutorial-button",
+    textContent: "Tutorial",
+    title: "Open the tutorial project: a short recording already transcribed, glossed and in a dictionary, with a tour",
+    onclick: () => {
+      if (refuseProjectChange()) return;
+      const from = button.getBoundingClientRect();
+      const copy = button.cloneNode(true) as HTMLElement;
+      fileTutorial(localStorage);
+      renderTop();
+      flyInto(copy, from, () => top.querySelector(".project-menu"));
+      void enterSample();
+    },
+  });
+  return button;
 }
 
 /** Bring a panel to the front, opening it if it is closed. */
@@ -440,7 +463,7 @@ function shellCommands(): Command[] {
     ...PATTERNS.map((p) => ({ id: `pattern:${p.id}`, title: `Pattern: ${p.label}`, group: "Look", words: ["background", p.note], run: () => choosePattern(localStorage, p.id) })),
     { id: "project:open", title: "Open another project…", group: "Project", words: ["folder"], run: () => void pickProject("open") },
     { id: "project:create", title: "Create a project…", group: "Project", words: ["new"], run: () => void pickProject("create") },
-    { id: "project:sample", title: "Open the sample project", group: "Project", words: ["example", "demo", "try", "practice"], run: () => void enterSample() },
+    { id: "project:sample", title: "Open the tutorial project", group: "Project", words: ["tutorial", "sample", "example", "demo", "try", "practice"], run: () => void enterSample() },
     { id: "app:tour", title: "Take the tour", group: "Help", words: ["introduction", "guide", "start", "learn"], disabled: () => noProject() ?? (kit !== null && !kit.tools.includes("timeline") ? `The tour shows Tongues; ${kit.name} has no Timeline` : null), run: () => startTour((id) => showOrFocus(id as PanelId)) },
     { id: "app:updates", title: "Check for updates", group: "wugs", words: ["version", "upgrade"], run: () => void checkForUpdates(true) },
   ];
@@ -561,9 +584,13 @@ async function pickProject(mode: "open" | "create") {
   });
 }
 
-/** Open the sample project, show its text, and give the tour the first time. */
+/** Open the tutorial project, show its text, and give the tour the first time. */
 async function enterSample() {
   if (refuseProjectChange()) return;
+  if (!tutorialFiled(localStorage)) {
+    fileTutorial(localStorage);
+    renderTop();
+  }
   await attempt(async () => {
     await enterProject(await openSample({ researcher: researcher() }), false);
     const s = getState();

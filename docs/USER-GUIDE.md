@@ -26,13 +26,13 @@ To open a project that already exists, click **Open a project folder** and choos
 
 To start a text, open the **Texts** panel, type a title in **New text title**, and click **New text**.
 
-## Try the sample project
+## Try the tutorial project
 
-On the welcome screen, click **Open the sample project**. It holds a short made-up recording of someone counting to ten in an invented language, already segmented, transcribed, translated, glossed and in the lexicon. The last segment is left empty so you can try transcribing it.
+The first time you start wugs, click **Tutorial** in the top bar (or **Open the tutorial project** on the welcome screen). It holds a short recording of someone counting from one to six in English, already segmented, transcribed in IPA, translated, glossed and in the lexicon. The last segment, «six», is left empty so you can try transcribing it. After the first time, the Tutorial button moves into the **Project** menu, as **Open the tutorial project**.
 
 The first time you open it, a short tour shows what each panel is for. Press **Escape** or click **Skip the tour** to leave it at any point. To see it again, press **Ctrl+K** and choose **Take the tour**.
 
-The sample is an ordinary project kept in wugs's own folder on this computer. Change anything you like. It is never mixed into your own projects.
+The tutorial is an ordinary project kept in wugs's own folder on this computer. Change anything you like. It is never mixed into your own projects.
 
 ## Switch between Tongues and Scrolls
 
@@ -506,7 +506,7 @@ The **Frequencies** panel lists the words of the project with how often each occ
 
 Every segment has a ▶ beside it: the lines in Transcribe, the top of the Gloss panel, each line of the Concordance, each segment found by Search, and the words a lexicon entry is used in. In the Lexicon, click **used in 3 words** (or however many) under a sense to list those words, then ▶ to hear each one.
 
-▶ plays from the text's own recording. A text learns its recording the first time you pick a recording for it in the Timeline's list (or import or drop one while the text is open), and from then on the Timeline opens the text with it and ▶ works from every panel, even while another text is on the Timeline. A text whose recording was never picked plays only while it is the text on screen and the recording loaded is not another text's; elsewhere ▶ says to pick its recording first. The sample project comes with its recording picked.
+▶ plays from the text's own recording. A text learns its recording the first time you pick a recording for it in the Timeline's list (or import or drop one while the text is open), and from then on the Timeline opens the text with it and ▶ works from every panel, even while another text is on the Timeline. A text whose recording was never picked plays only while it is the text on screen and the recording loaded is not another text's; elsewhere ▶ says to pick its recording first. The tutorial project comes with its recording picked.
 
 A text with no sharing level of its own shares like its recording, so picking a restricted recording makes the text restricted too; wugs says so when a pick changes this.
 

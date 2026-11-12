@@ -77,7 +77,7 @@ export const collocates = (args: { node: string; kind: "word" | "translation"; l
   invoke<import("./collocates/logic").Collocates>("collocates", args);
 export const keywords = (args: { kind: "word" | "translation"; textId: string; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
 export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null }) => invoke<ConcordanceResult>("concordance", args);
-/** The sample project (roadmap 68), built the first time in this computer's app data. */
+/** The tutorial project (roadmap 68), built the first time in this computer's app data. */
 export const openSample = (args: { researcher: string }) => invoke<ProjectInfo>("open_sample", args);
 export const listTexts = () => invoke<TextRow[]>("list_texts");
 export const getText = (args: { textId: string }) => invoke<TextDetail>("get_text", args);

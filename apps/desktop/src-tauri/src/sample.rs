@@ -1,34 +1,30 @@
-//! The sample project (roadmap 68): a short recording already segmented,
+//! The tutorial project (roadmap 68): a short recording already segmented,
 //! transcribed, translated, glossed and in the lexicon, so a first-time user
 //! sees what every panel does before bringing data of their own.
 //!
-//! Everything in it is made up here. The "language" is invented and the
-//! recording is synthesized (voiced syllables built from harmonics, a quiet
-//! noise floor), never real speech: the repository is public and holds no
-//! field data. It is written through the same intents as any edit, so it
-//! is an ordinary project the person can change, break or delete.
+//! The recording is the maintainer's own voice counting from one to six in
+//! English, published by him under CC BY 4.0 (`tutorial/README.md`); it is
+//! the one piece of real speech in the repository. The project is written
+//! through the same intents as any edit, so it is an ordinary project the
+//! person can change, break or delete.
 
-use std::f64::consts::PI;
 use std::path::Path;
 
 use crate::gloss::MorphSpecView;
 use crate::session::{self, project, ProjectInfo, Session};
 
-const RATE: u32 = 16_000;
-/// Where the first syllable starts, and the gaps between words and utterances.
-const LEAD_S: f64 = 0.6;
-const WORD_GAP_S: f64 = 0.14;
-const UTTERANCE_GAP_S: f64 = 0.9;
-/// Padding kept around each utterance's words when its segment is drawn.
-const PAD_S: f64 = 0.08;
+/// The recording, 16 kHz mono PCM16.
+const RECORDING: &[u8] = include_bytes!("../tutorial/counting-to-six.wav");
 
-/// One word: its spelling, its morphs (surface, type, gloss) and how long it is spoken.
+/// One word: its IPA transcription, its gloss, and where it is spoken
+/// (seconds, measured from the recording with a little room either side).
 struct Word {
     form: &'static str,
-    morphs: &'static [(&'static str, &'static str, &'static str)],
+    gloss: &'static str,
+    span: (f64, f64),
 }
 
-/// One utterance: its words, the free translation, and whether the sample
+/// One utterance: its words, the free translation, and whether the tutorial
 /// leaves it untranscribed (so the person has one to try).
 struct Utterance {
     words: &'static [Word],
@@ -39,155 +35,27 @@ struct Utterance {
 const UTTERANCES: &[Utterance] = &[
     Utterance {
         words: &[
-            Word { form: "nikani", morphs: &[("ni", "prefix", "1SG"), ("kani", "root", "count")] },
-            Word { form: "ŋai", morphs: &[("ŋai", "root", "one")] },
-            Word { form: "toɾu", morphs: &[("toɾu", "root", "two")] },
-            Word { form: "kesi", morphs: &[("kesi", "root", "three")] },
+            Word { form: "wʌn", gloss: "one", span: (0.66, 1.34) },
+            Word { form: "tuː", gloss: "two", span: (1.38, 2.06) },
+            Word { form: "θɹiː", gloss: "three", span: (2.12, 2.72) },
         ],
-        translation: "I count: one, two, three.",
+        translation: "One, two, three.",
         transcribed: true,
     },
     Utterance {
-        words: &[
-            Word { form: "mopa", morphs: &[("mopa", "root", "four")] },
-            Word { form: "liwa", morphs: &[("liwa", "root", "five")] },
-            Word { form: "senu", morphs: &[("senu", "root", "six")] },
-        ],
-        translation: "Four, five, six.",
+        words: &[Word { form: "fɔɹ", gloss: "four", span: (2.84, 3.50) }, Word { form: "faɪv", gloss: "five", span: (3.58, 4.22) }],
+        translation: "Four, five.",
         transcribed: true,
     },
-    Utterance {
-        words: &[
-            Word { form: "paki", morphs: &[("paki", "root", "seven")] },
-            Word { form: "ɾata", morphs: &[("ɾata", "root", "eight")] },
-            Word { form: "wuno", morphs: &[("wuno", "root", "nine")] },
-            Word { form: "tekama", morphs: &[("teka", "root", "ten"), ("ma", "clitic", "FOC")] },
-        ],
-        translation: "Seven, eight, nine, and ten.",
-        transcribed: true,
-    },
-    Utterance {
-        words: &[
-            Word { form: "nikaniɾa", morphs: &[] },
-            Word { form: "teka", morphs: &[] },
-        ],
-        translation: "",
-        transcribed: false,
-    },
+    Utterance { words: &[Word { form: "sɪks", gloss: "six", span: (4.30, 5.12) }], translation: "", transcribed: false },
 ];
 
-/// Seconds a word lasts: a syllable is about 0.19 s.
-fn word_seconds(w: &Word) -> f64 {
-    let vowels = w.form.chars().filter(|c| "aeiou".contains(*c)).count().max(1);
-    0.19 * vowels as f64
+/// Each utterance's span in seconds: from its first word to its last.
+fn span(u: &Utterance) -> (f64, f64) {
+    (u.words[0].span.0, u.words[u.words.len() - 1].span.1)
 }
 
-/// Each utterance's span in seconds, and each word's within it, in order.
-fn timing() -> Vec<(f64, f64, Vec<(f64, f64)>)> {
-    let mut t = LEAD_S;
-    let mut out = Vec::new();
-    for u in UTTERANCES {
-        let start = t;
-        let mut words = Vec::new();
-        for (i, w) in u.words.iter().enumerate() {
-            if i > 0 {
-                t += WORD_GAP_S;
-            }
-            let d = word_seconds(w);
-            words.push((t, t + d));
-            t += d;
-        }
-        out.push((start, t, words));
-        t += UTTERANCE_GAP_S;
-    }
-    out
-}
-
-/// A small deterministic noise source, so the sample is the same every time.
-struct Lcg(u64);
-impl Lcg {
-    fn next(&mut self) -> f64 {
-        self.0 = self.0.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
-        ((self.0 >> 33) as f64 / (1u64 << 31) as f64) * 2.0 - 1.0
-    }
-}
-
-/// The synthetic recording: each syllable a short consonant hiss then a
-/// voiced vowel (harmonics of a falling pitch, shaped to sound vowel-like),
-/// over a faint noise floor, as 16 kHz mono PCM16.
-pub fn synth_samples() -> Vec<i16> {
-    let spans = timing();
-    let total = spans.last().map(|s| s.1).unwrap_or(0.0) + 0.8;
-    let n = (total * f64::from(RATE)) as usize;
-    let mut out = vec![0f64; n];
-    let mut noise = Lcg(0x5eed);
-    for x in out.iter_mut() {
-        *x = noise.next() * 0.0015;
-    }
-    for (ui, (_, _, words)) in spans.iter().enumerate() {
-        for (wi, &(ws, we)) in words.iter().enumerate() {
-            let syllables = ((we - ws) / 0.19).round().max(1.0) as usize;
-            let syl = (we - ws) / syllables as f64;
-            for k in 0..syllables {
-                let s0 = ws + k as f64 * syl;
-                let consonant = 0.045;
-                // Vowel colour cycles through a, i, u, e, o so words differ.
-                let vowel = (ui * 7 + wi * 3 + k) % 5;
-                let formants: [(f64, f64); 5] = [(750.0, 1200.0), (300.0, 2300.0), (320.0, 800.0), (480.0, 1900.0), (500.0, 900.0)];
-                let (f1, f2) = formants[vowel];
-                let a = (s0 * f64::from(RATE)) as usize;
-                let b = ((s0 + syl) * f64::from(RATE)).min(n as f64) as usize;
-                for (i, x) in out.iter_mut().enumerate().take(b).skip(a) {
-                    let t = (i - a) as f64 / f64::from(RATE);
-                    let len = syl;
-                    if t < consonant {
-                        *x += noise.next() * 0.05 * (t / consonant);
-                        continue;
-                    }
-                    let tv = t - consonant;
-                    let dv = len - consonant;
-                    let env = (tv / 0.03).min(1.0) * ((dv - tv) / 0.05).clamp(0.0, 1.0);
-                    let f0 = 150.0 - 30.0 * (tv / dv) - 6.0 * ui as f64;
-                    let phase = 2.0 * PI * f0 * tv;
-                    let mut v = 0.0;
-                    for h in 1..=24 {
-                        let f = f0 * h as f64;
-                        let gain = 1.0 / h as f64 * (1.0 + 3.0 * (-((f - f1) / 120.0).powi(2)).exp() + 2.0 * (-((f - f2) / 180.0).powi(2)).exp());
-                        v += gain * (phase * h as f64).sin();
-                    }
-                    *x += 0.12 * env * v;
-                }
-            }
-        }
-    }
-    let peak = out.iter().fold(0.0f64, |m, x| m.max(x.abs())).max(1e-9);
-    out.iter().map(|x| ((x / peak) * 0.7 * f64::from(i16::MAX)) as i16).collect()
-}
-
-/// The recording as a WAV file's bytes.
-pub fn synth_wav() -> Vec<u8> {
-    let samples = synth_samples();
-    let data_len = (samples.len() * 2) as u32;
-    let mut b = Vec::with_capacity(44 + data_len as usize);
-    b.extend_from_slice(b"RIFF");
-    b.extend_from_slice(&(36 + data_len).to_le_bytes());
-    b.extend_from_slice(b"WAVEfmt ");
-    b.extend_from_slice(&16u32.to_le_bytes());
-    b.extend_from_slice(&1u16.to_le_bytes());
-    b.extend_from_slice(&1u16.to_le_bytes());
-    b.extend_from_slice(&RATE.to_le_bytes());
-    b.extend_from_slice(&(RATE * 2).to_le_bytes());
-    b.extend_from_slice(&2u16.to_le_bytes());
-    b.extend_from_slice(&16u16.to_le_bytes());
-    b.extend_from_slice(b"data");
-    b.extend_from_slice(&data_len.to_le_bytes());
-    for s in samples {
-        b.extend_from_slice(&s.to_le_bytes());
-    }
-    b
-}
-
-pub const TITLE: &str = "Counting to ten (sample)";
+pub const TITLE: &str = "Counting to six (tutorial)";
 
 /// Written last, when the sample is whole. A folder without it is a build
 /// that did not finish (a full disk, a crash), so it is wiped and built again;
@@ -234,10 +102,10 @@ fn link_older_sample(session: &mut Session) -> Result<(), String> {
 
 fn build(session: &mut Session, dir: &Path) -> Result<(), String> {
     // The recording, through the ordinary import.
-    let wav = dir.join("cache").join("sample-recording.wav");
+    let wav = dir.join("cache").join("tutorial-recording.wav");
     std::fs::create_dir_all(wav.parent().unwrap_or(dir)).map_err(|e| e.to_string())?;
-    std::fs::write(&wav, synth_wav()).map_err(|e| e.to_string())?;
-    let imported = session::import_media_named(session, &wav, "Counting to ten (synthetic voice)", None);
+    std::fs::write(&wav, RECORDING).map_err(|e| e.to_string())?;
+    let imported = session::import_media_named(session, &wav, "Counting to six", None);
     std::fs::remove_file(&wav).ok();
     let recording = imported?;
 
@@ -249,18 +117,16 @@ fn build(session: &mut Session, dir: &Path) -> Result<(), String> {
     let mut senses = std::collections::BTreeMap::new();
     for u in UTTERANCES {
         for w in u.words {
-            for &(surface, kind, gloss) in w.morphs {
-                if kind != "root" || senses.contains_key(surface) {
-                    continue;
-                }
-                let (_, sense) = project(session)?.create_lexeme(surface, gloss)?;
-                senses.insert(surface, sense);
+            if !senses.contains_key(w.form) {
+                let (_, sense) = project(session)?.create_lexeme(w.form, w.gloss)?;
+                senses.insert(w.form, sense);
             }
         }
     }
 
-    for (u, (start, end, _)) in UTTERANCES.iter().zip(timing()) {
-        let (s0, s1) = ((start - PAD_S) * 1000.0, (end + PAD_S) * 1000.0);
+    for u in UTTERANCES {
+        let (start, end) = span(u);
+        let (s0, s1) = (start * 1000.0, end * 1000.0);
         let content = if u.transcribed { u.words.iter().map(|w| w.form).collect::<Vec<_>>().join(" ") } else { String::new() };
         let seg = session::add_segment(session, &text, None, Some(s0.round()), Some(s1.round()), &content)?.id;
         if !u.translation.is_empty() {
@@ -272,23 +138,36 @@ fn build(session: &mut Session, dir: &Path) -> Result<(), String> {
         let forms: Vec<String> = u.words.iter().map(|w| w.form.to_string()).collect();
         let view = crate::gloss::gloss_tokenize(session, &text, &seg, &forms)?.view;
         for (word, w) in view.words.iter().zip(u.words) {
-            if w.morphs.is_empty() {
-                continue;
-            }
-            let morphs = w
-                .morphs
-                .iter()
-                .map(|&(surface, kind, gloss)| MorphSpecView {
-                    surface: surface.to_string(),
-                    morph_type: kind.to_string(),
-                    gloss: Some(gloss.to_string()),
-                    glosses_by_lang: Default::default(),
-                    sense: if kind == "root" { senses.get(surface).cloned() } else { None },
-                })
-                .collect();
+            let morphs = vec![MorphSpecView {
+                surface: w.form.to_string(),
+                morph_type: "root".to_string(),
+                gloss: Some(w.gloss.to_string()),
+                glosses_by_lang: Default::default(),
+                sense: senses.get(w.form).cloned(),
+            }];
             crate::gloss::gloss_apply(session, &text, &seg, &word.id, morphs)?;
         }
     }
+    Ok(())
+}
+
+/// For the corpus tools' tests: one more utterance with a prefix and a
+/// clitic (`ni-kani teka=ma`, "I count to ten"), its root linked to a
+/// lexicon entry and a translation, since the tutorial's English has no
+/// morphology to find.
+#[cfg(test)]
+pub fn add_morphology(session: &mut Session) -> Result<(), String> {
+    let text = session::list_texts(session)?[0].id.clone();
+    let tiers = session::get_text(session, &text)?.tiers;
+    let translation = tiers.iter().find(|t| t.name == "translation").map(|t| t.id.clone()).ok_or("no translation tier")?;
+    let (_, count) = project(session)?.create_lexeme("kani", "count")?;
+    let seg = session::add_segment(session, &text, None, Some(6_000.0), Some(7_000.0), "nikani tekama")?.id;
+    session::add_segment(session, &text, Some(&translation), Some(6_000.0), Some(7_000.0), "I count to ten.")?;
+    let forms = vec!["nikani".to_string(), "tekama".to_string()];
+    let view = crate::gloss::gloss_tokenize(session, &text, &seg, &forms)?.view;
+    let m = |surface: &str, kind: &str, gloss: &str, sense: Option<String>| MorphSpecView { surface: surface.into(), morph_type: kind.into(), gloss: Some(gloss.into()), glosses_by_lang: Default::default(), sense };
+    crate::gloss::gloss_apply(session, &text, &seg, &view.words[0].id, vec![m("ni", "prefix", "1SG", None), m("kani", "root", "count", Some(count))])?;
+    crate::gloss::gloss_apply(session, &text, &seg, &view.words[1].id, vec![m("teka", "root", "ten", None), m("ma", "clitic", "FOC", None)])?;
     Ok(())
 }
 
@@ -297,33 +176,23 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_recording_is_a_valid_wav_with_speech_where_the_segments_are() {
-        let wav = synth_wav();
-        assert_eq!(&wav[0..4], b"RIFF");
-        assert_eq!(&wav[8..16], b"WAVEfmt ");
-        let samples = synth_samples();
+    fn the_recording_is_loud_where_the_words_are() {
+        assert_eq!(&RECORDING[0..4], b"RIFF");
+        assert_eq!(&RECORDING[8..16], b"WAVEfmt ");
+        assert_eq!(u32::from_le_bytes(RECORDING[24..28].try_into().unwrap()), 16_000);
+        let samples: Vec<f64> = RECORDING[44..].chunks_exact(2).map(|b| f64::from(i16::from_le_bytes([b[0], b[1]]))).collect();
         let rms = |a: f64, b: f64| {
-            let (i, j) = ((a * f64::from(RATE)) as usize, (b * f64::from(RATE)) as usize);
-            (samples[i..j].iter().map(|&s| f64::from(s).powi(2)).sum::<f64>() / (j - i) as f64).sqrt()
+            let (i, j) = ((a * 16_000.0) as usize, ((b * 16_000.0) as usize).min(samples.len()));
+            (samples[i..j].iter().map(|s| s * s).sum::<f64>() / (j - i) as f64).sqrt()
         };
-        let spans = timing();
-        let (start, end, words) = &spans[0];
-        // Loud inside a word, near silent between utterances.
-        let (w0, w1) = words[1];
-        assert!(rms(w0 + 0.05, w1 - 0.05) > 20.0 * rms(end + 0.2, end + 0.6));
-        assert!(*start >= LEAD_S && end > start);
-        assert_eq!(spans.len(), UTTERANCES.len());
-    }
-
-    #[test]
-    fn every_glossed_word_spells_its_morphs() {
+        let quiet = rms(0.05, 0.6);
+        let mut last = 0.0;
         for u in UTTERANCES {
             for w in u.words {
-                if w.morphs.is_empty() {
-                    continue;
-                }
-                let joined: String = w.morphs.iter().map(|m| m.0).collect();
-                assert_eq!(joined, w.form, "{} must be the concatenation of its morphs", w.form);
+                assert!(w.span.0 >= last && w.span.1 > w.span.0, "{} is in order", w.form);
+                last = w.span.1;
+                let (a, b) = w.span;
+                assert!(rms(a + (b - a) * 0.3, a + (b - a) * 0.6) > 10.0 * quiet, "{} is spoken where its segment is", w.form);
             }
         }
     }
@@ -338,8 +207,8 @@ mod tests {
         let texts = session::list_texts(&mut session).unwrap();
         let detail = session::get_text(&mut session, &texts[0].id).unwrap();
         assert_eq!(detail.title, TITLE);
-        // Four utterances, three translations; the last utterance is left to transcribe.
-        assert_eq!(detail.segments.iter().filter(|s| detail.tiers.iter().any(|t| t.id == s.tier && t.utterance)).count(), 4);
+        // Three utterances, two translations; the last utterance is left to transcribe.
+        assert_eq!(detail.segments.iter().filter(|s| detail.tiers.iter().any(|t| t.id == s.tier && t.utterance)).count(), 3);
         assert!(detail.segments.iter().any(|s| s.content.is_empty()));
         let sources = session::list_sources(&mut session).unwrap();
         assert_eq!(sources.len(), 1);
