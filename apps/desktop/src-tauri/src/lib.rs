@@ -15,6 +15,7 @@ pub mod interchange;
 pub mod kits;
 pub mod layout;
 pub mod lexicon;
+pub mod media_bin;
 pub mod people;
 pub mod plaintext;
 pub mod listen;
@@ -389,6 +390,15 @@ fn capture_recovered_import(s: State<SessionThread>, captures: State<Captures>, 
 fn capture_recovered_discard(s: State<SessionThread>, captures: State<Captures>, id: String) -> Result<(), String> {
     let root = s.run(session::project_root)?;
     captures.discard_pending(&root, &id)
+}
+
+/// A recording's waveform overview for its media bin card, made off the session thread.
+#[tauri::command]
+async fn media_overview(s: State<'_, SessionThread>, source_id: String) -> Result<media_bin::Overview, String> {
+    let Some(at) = s.run(move |s| media_bin::locate(s, &source_id))? else {
+        return Ok(media_bin::Overview::Missing);
+    };
+    tauri::async_runtime::spawn_blocking(move || media_bin::overview(&at)).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command(async)]
@@ -1375,6 +1385,7 @@ pub fn run() {
             concordance,
             list_texts,
             link_recording,
+            media_overview,
             frequencies,
             get_text,
             create_text,

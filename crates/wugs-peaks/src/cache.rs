@@ -165,9 +165,15 @@ impl Peaks {
     pub fn save(&self, cache_dir: &Path, key: &str) -> Result<PathBuf, Error> {
         let path = cache_path(cache_dir, key)?;
         fs::create_dir_all(path.parent().expect("cache path has a parent"))?;
-        let tmp = path.with_extension(format!("wpk.tmp{}", std::process::id()));
-        fs::write(&tmp, self.to_bytes())?;
-        fs::rename(&tmp, &path)?;
+        // Unique per save, so two threads saving one recording never share a file.
+        static SAVES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = SAVES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let tmp = path.with_extension(format!("wpk.tmp{}-{n}", std::process::id()));
+        let written = fs::write(&tmp, self.to_bytes()).and_then(|()| fs::rename(&tmp, &path));
+        if let Err(e) = written {
+            let _ = fs::remove_file(&tmp);
+            return Err(e.into());
+        }
         Ok(path)
     }
 

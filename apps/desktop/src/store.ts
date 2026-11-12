@@ -162,19 +162,41 @@ export function setMediaSource(id: string | null) {
   for (const f of listeners) f();
 }
 
-let wantedMedia: string | null = null;
+/** A recording asked for on the Timeline, and the text on screen when it was asked. */
+let wantedMedia: { id: string; text: string | null } | null = null;
+
+const shownText = (): string | null => (state.kind === "open" ? (state.text?.id ?? null) : null);
 
 /** Ask the Timeline to load this recording the next time it lists them (a dropped recording). */
 export function wantMedia(id: string) {
-  wantedMedia = id;
+  wantedMedia = { id, text: shownText() };
 }
 
-/** The recording asked for, once it is among `listed`; a listing that does not have it yet leaves it asked for. */
-export function takeWantedMedia(listed: string[]): string | null {
-  const id = wantedMedia;
-  if (id === null || !listed.includes(id)) return null;
+/** Load this recording on the Timeline for the text on screen, and link it
+ * (a media bin card): the Timeline takes it on its next draw. */
+export function useRecording(id: string) {
+  wantedMedia = { id, text: shownText() };
+  for (const f of listeners) f();
+}
+
+/** Forget a recording asked for (the shell could not open the Timeline). */
+export function dropWantedMedia() {
   wantedMedia = null;
-  return id;
+}
+
+/** The recording asked for, once it is among `listed`; a listing that does
+ * not have it yet leaves it asked for. Asked while another text was on
+ * screen, it is dropped: it was meant for that text. */
+export function takeWantedMedia(listed: string[]): string | null {
+  const w = wantedMedia;
+  if (w === null) return null;
+  if (w.text !== shownText()) {
+    wantedMedia = null;
+    return null;
+  }
+  if (!listed.includes(w.id)) return null;
+  wantedMedia = null;
+  return w.id;
 }
 
 /** Speech-assist models and whether each is downloaded. */

@@ -1,6 +1,7 @@
 import { token } from "../theme/tokens";
 import { THEME_EVENT } from "../theme/theme";
-import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, type Recovered, type SourceRow } from "../api";
+import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, mediaOverview, type Recovered, type SourceRow } from "../api";
+import { CARD_TYPE, cardDrag, cards, duration, normalized, wavePath, type Card } from "../media/logic";
 import { canRecord } from "../capture/recorder.ts";
 import { defaultLabel, formatElapsed, meterFill } from "../capture/pcm.ts";
 import {
@@ -21,16 +22,21 @@ import {
 } from "../capture/session.ts";
 import { isLive } from "../capture/take.ts";
 import { emptyState, h } from "../dom";
-import { attempt, dataGeneration, getState, refreshAll, showToast } from "../store";
-import { sliced, type PanelDef } from "./panel";
+import { activeKit, attempt, dataGeneration, getState, refreshAll, showToast, useRecording } from "../store";
+import { SHOW_PANEL, sliced, type PanelDef } from "./panel";
+
+/** A card's waveform box, in SVG units. */
+const WAVE_W = 120;
+const WAVE_H = 32;
 
 const MIC_KEY = "wugs.mic";
 
 // The media bin: record straight into the project, and list its sources.
 // The take itself lives in capture/session.ts, so this panel can be closed
 // and reopened mid-recording; it only draws what that module holds.
-// Speaker and recording date join the row once the Person and Session
-// workflows land; dragging onto the timeline comes with step 2.
+// Recordings show as cards (docs/design/EDITOR.md): a waveform, the name,
+// the length, the sharing level and which texts use it; drag one onto the
+// Timeline, double-click it, or click Use, to use it for the text on screen.
 export const mediaPanel: PanelDef = {
   title: "Media",
   create() {
@@ -243,35 +249,133 @@ export const mediaPanel: PanelDef = {
         );
         return;
       }
+      const st = getState();
+      const texts = st.kind === "open" ? st.texts : [];
+      const shown = st.kind === "open" ? (st.text?.id ?? null) : null;
+      const bin = cards(sources, texts, shown);
+      const others = sources.filter((x) => !(x.kind === "audio" && x.hasMedia));
       list.replaceChildren(
-        h(
-          "table",
-          { className: "dense" },
-          h("thead", {}, h("tr", {}, h("th", { textContent: "Source" }), h("th", { textContent: "Kind" }), h("th", { textContent: "Access" }))),
-          h(
-            "tbody",
-            {},
-            ...sources.map((src) =>
-              h(
-                "tr",
-                { title: src.hasMedia ? src.id : `${src.id} (no media file attached)` },
-                h("td", { textContent: src.label || "(unlabelled)" }),
-                h("td", { textContent: src.kind ?? "" }),
-                h("td", {}, h("span", { className: `access access-${src.access ?? "open"}`, textContent: src.access ?? "open" })),
-              ),
-            ),
-          ),
-        ),
+        bin.length === 0 ? emptyState("No recordings yet", "Record above, import one on the Timeline, or drop a recording here.", "Nothing for the wug to listen to yet.") : h("div", { className: "bin-grid", role: "list" }, ...bin.map((c) => card(c, shown))),
+        others.length === 0
+          ? ""
+          : h("p", { className: "note bin-others", textContent: `Also in the project, without audio here: ${others.map((x) => `${x.label || x.id} (${x.access ?? "open"})`).join(", ")}.` }),
       );
     };
+
+    /** Waveforms by recording, for this project, asked for one at a time
+     * (each is read, or first computed, off the session thread). */
+    let fetchedFor = "";
+    const waves = new Map<string, { path: string; durationMs: number } | "waiting" | "missing" | "failed">();
+    const queue: string[] = [];
+    let fetching = false;
+    let wavesFor = "";
+    async function fetchWaves() {
+      if (fetching) return;
+      fetching = true;
+      const project = wavesFor;
+      try {
+        for (let id = queue.shift(); id !== undefined && project === wavesFor; id = queue.shift()) {
+          try {
+            const o = await mediaOverview({ sourceId: id });
+            if (project !== wavesFor) break;
+            if (o.state === "missing") waves.set(id, "missing");
+            else {
+              const n = normalized(o.mins, o.maxs);
+              waves.set(id, { path: wavePath(n.mins, n.maxs, WAVE_W, WAVE_H), durationMs: o.durationMs });
+            }
+          } catch {
+            if (project !== wavesFor) break;
+            waves.set(id, "failed");
+          }
+          drawList();
+        }
+      } finally {
+        fetching = false;
+      }
+      if (project !== wavesFor && queue.length > 0) void fetchWaves();
+    }
+    function wave(id: string) {
+      if (!waves.has(id)) {
+        waves.set(id, "waiting");
+        queue.push(id);
+        void fetchWaves();
+      }
+      return waves.get(id)!;
+    }
+
+    function card(c: Card, shown: string | null): HTMLElement {
+      const w = wave(c.id);
+      const here = w !== "missing" && w !== "failed";
+      const art = h("div", { className: "bin-wave" });
+      if (typeof w === "object") art.innerHTML = `<svg viewBox="0 0 ${WAVE_W} ${WAVE_H}" preserveAspectRatio="none" aria-hidden="true"><path d="${w.path}"/></svg>`;
+      else if (!here) art.append(h("span", { className: "bin-wave-note", textContent: w === "missing" ? "Audio not on this computer" : "Could not read the audio" }));
+      const kit = activeKit();
+      const timeline = kit === null || kit.tools.includes("timeline");
+      const blocker = !here ? "Its audio is not on this computer" : !timeline ? `${kit?.name ?? "This kit"} has no Timeline` : shown === null ? "Select a text first" : null;
+      const use = () => {
+        if (blocker !== null || c.inThisText) return;
+        useRecording(c.id);
+        window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "timeline" }));
+      };
+      const where = c.inThisText ? "In this text" : c.usedBy.length > 0 ? `In ${c.usedBy.map((t) => `«${t}»`).join(", ")}` : "Not in a text yet";
+      const button = h("button", {
+        type: "button",
+        textContent: c.inThisText ? "In use" : "Use for this text",
+        disabled: c.inThisText || blocker !== null,
+        title: blocker ?? "Load it on the Timeline for the text on screen; the text remembers it",
+      });
+      button.setAttribute("aria-label", c.inThisText ? `${c.label}: in use for this text` : `Use ${c.label} for this text`);
+      button.onclick = use;
+      // A double-click on the button is two clicks, not also the card's double-click.
+      button.ondblclick = (e) => e.stopPropagation();
+      const el = h(
+        "div",
+        {
+          className: (c.inThisText ? "bin-card is-current" : "bin-card") + (here ? "" : " is-missing"),
+          role: "listitem",
+          draggable: blocker === null,
+          title: blocker === null ? `${c.label}: drag onto the Timeline, or double-click, to use it for the text on screen` : `${c.label}: ${blocker}`,
+        },
+        art,
+        h("div", { className: "bin-name", textContent: c.label }),
+        h("div", { className: "bin-meta" }, h("span", { className: "bin-time", textContent: typeof w === "object" ? duration(w.durationMs) : "" }), h("span", { className: `access access-${c.access}`, textContent: c.access })),
+        h("div", { className: "note bin-where", textContent: where }),
+        button,
+      );
+      el.ondragstart = (e) => {
+        cardDrag.start();
+        e.dataTransfer?.setData(CARD_TYPE, c.id);
+        if (e.dataTransfer !== null) e.dataTransfer.effectAllowed = "link";
+      };
+      el.ondragend = () => cardDrag.end();
+      el.ondblclick = use;
+      return el;
+    }
+
     const slice = () => {
       const s = getState();
-      return s.kind === "open" ? `${s.info.projectId}|${dataGeneration()}` : "closed";
+      return s.kind === "open" ? `${s.info.projectId}|${dataGeneration()}|${s.text?.id ?? ""}|${s.texts.map((t) => `${t.id}:${t.title}:${t.recording ?? ""}`).join(",")}` : "closed";
     };
     const view = sliced(el, slice, () => {
       const s = getState();
+      const project = s.kind === "open" ? s.info.projectId : "";
+      if (project !== wavesFor) {
+        wavesFor = project;
+        waves.clear();
+        queue.length = 0;
+        // The last project's cards would be drawn and asked for against this one.
+        sources = [];
+      } else {
+        // Any redraw (new data, another text) asks again for audio that was missing.
+        for (const [id, w] of waves) if (w === "missing" || w === "failed") waves.delete(id);
+      }
       drawList();
       drawBar();
+      // A text switch only moves the "In this text" mark: the list is fetched
+      // again only when the project or its data changed.
+      const fetchKey = s.kind === "open" ? `${s.info.projectId}|${dataGeneration()}` : "closed";
+      if (fetchKey === fetchedFor) return;
+      fetchedFor = fetchKey;
       if (s.kind === "open") {
         void attempt(async () => {
           sources = await listSources();

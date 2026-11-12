@@ -233,6 +233,9 @@ export const importMedia = (args: { path: string }) => invoke<SourceRow>("import
 export const peaksInfo = (args: { sourceId: string }) => invoke<PeaksInfo>("peaks_info", args);
 /** Remember which recording a text was transcribed from (null forgets it). */
 export const linkRecording = (args: { textId: string; sourceId: string | null }) => invoke<void>("link_recording", args);
+/** A media bin card's waveform: 120 points of 16-bit peaks, or the audio is not here. */
+export type MediaOverview = { state: "ready"; durationMs: number; mins: number[]; maxs: number[] } | { state: "missing" };
+export const mediaOverview = (args: { sourceId: string }) => invoke<MediaOverview>("media_overview", args);
 export const peaksQuery = (args: {
   sourceId: string;
   channel: number;

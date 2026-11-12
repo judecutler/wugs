@@ -91,6 +91,10 @@ wugs saves the recording to disk every few seconds while you record. If the comp
 
 Recording is meant to work on Windows and macOS. On Linux, the system's web view may not allow recording. In that case the Media panel says "This system's web view cannot record audio", and you import a file instead.
 
+### The media bin
+
+Below the Record button, the **Media** panel shows each recording as a card: its waveform, name, length, sharing level and the texts that use it. The card of the text on screen has a blue outline and says **In this text**. To use a recording for the text on screen, drag its card onto the Timeline, double-click it, or click **Use for this text**. The text remembers it, so every panel can play its segments.
+
 ## Segment the recording
 
 A segment marks where one utterance, or one word, starts and ends. The Transcribe and Gloss panels work segment by segment.
