@@ -1,6 +1,11 @@
 // Frequency list (Scrolls): display rules. Pure: no DOM.
 
 export type FrequencyRow = { item: string; count: number; texts: number };
+/** A row with its frequency rank (1 = most frequent), kept through sorting and filtering. */
+export type RankedRow = FrequencyRow & { rank: number };
+
+/** Ranks in the backend's order (most frequent first, ties as first met). */
+export const ranked = (rows: readonly FrequencyRow[]): RankedRow[] => rows.map((r, i) => ({ ...r, rank: i + 1 }));
 export type Frequencies = { rows: FrequencyRow[]; tokens: number; types: number };
 
 export type FreqSort = "count" | "alpha" | "texts";
@@ -14,7 +19,7 @@ export const FREQ_SORTS: { id: FreqSort; label: string }[] = [
 const collator = new Intl.Collator(undefined, { sensitivity: "accent", numeric: true });
 
 /** Sorted copy; ties keep the backend's order (most frequent, then first met). */
-export function sortRows(rows: readonly FrequencyRow[], by: FreqSort): FrequencyRow[] {
+export function sortRows<R extends FrequencyRow>(rows: readonly R[], by: FreqSort): R[] {
   if (by === "count") return [...rows];
   if (by === "texts") return [...rows].sort((a, b) => b.texts - a.texts || b.count - a.count);
   return [...rows].sort((a, b) => collator.compare(a.item, b.item));
@@ -28,7 +33,7 @@ export function perThousand(count: number, tokens: number): string {
 }
 
 /** Rows whose item contains the filter, ignoring case but not diacritics. */
-export function filterRows(rows: readonly FrequencyRow[], filter: string): FrequencyRow[] {
+export function filterRows<R extends FrequencyRow>(rows: readonly R[], filter: string): R[] {
   const f = filter.trim();
   if (f === "") return [...rows];
   const lower = f.toLocaleLowerCase();
@@ -43,8 +48,8 @@ export function summary(f: Frequencies, noun: { one: string; many: string }): st
   return `${n(f.tokens)} ${f.tokens === 1 ? noun.one : noun.many}, ${n(f.types)} different.${shown}`;
 }
 
-/** Tab-separated, with a header row, for a spreadsheet. */
-export function asTsv(rows: readonly FrequencyRow[], tokens: number): string {
+/** Tab-separated, with a header row, for a spreadsheet; rank is the frequency rank, whatever the order. */
+export function asTsv(rows: readonly RankedRow[], tokens: number): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
-  return ["rank\titem\tcount\tper 1000\ttexts", ...rows.map((r, i) => [String(i + 1), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts)].join("\t"))].join("\n");
+  return ["rank\titem\tcount\tper 1000\ttexts", ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts)].join("\t"))].join("\n");
 }

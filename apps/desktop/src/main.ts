@@ -526,7 +526,14 @@ if (app !== null) {
   // A panel asking for another (Frequencies opens the Concordance).
   window.addEventListener(SHOW_PANEL, (e) => {
     const id = (e as CustomEvent<string>).detail;
-    if (isPanelId(id)) showOrFocus(id);
+    const kit = activeKit();
+    if (!isPanelId(id)) return;
+    const title = PANELS[id].title;
+    if (kit !== null && !offers(kit, id)) {
+      showToast({ tone: "info", lines: [`${kit.name} has no ${title} panel. Add it in the Kits panel, or switch kits.`] });
+      return;
+    }
+    showOrFocus(id);
   });
   // Ctrl+K finds any action; ? lists the keys (roadmap 70).
   provide("shell", shellCommands);

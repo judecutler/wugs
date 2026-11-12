@@ -1,9 +1,11 @@
 //! Frequency list (Scrolls, SCROLLS.md §5 step 3, first form): how often each
 //! word, morph, gloss or translation word occurs, in the whole project or one
 //! text, read the way the Concordance reads (`concordance::each_segment`), so
-//! a row's count is exactly the number of lines the Concordance shows for it.
+//! a row's count is the number of lines the Concordance shows for it when
+//! asked for that exact item in the same text or the whole project.
 //!
-//! Items are counted under the Concordance's keys: words and translation
+//! A morph or gloss counts once per word that has it, since the Concordance
+//! shows one line per word. Items are counted under the Concordance's keys: words and translation
 //! words by `fold_key` (case folded, diacritics kept), morphs and glosses by
 //! `lexicon_key` (edge markers dropped too). Each row shows the spelling met
 //! most often (the first met on a tie), so `Kesi` and `kesi` count together
@@ -83,11 +85,17 @@ pub fn frequencies(session: &mut Session, kind: Kind, text: Option<&str>) -> Res
                 }
             }
             Kind::Morph | Kind::Gloss => {
+                // Once per word, as the Concordance shows one line per word:
+                // `lo~lo` or two PL glosses in one word count once.
                 for token in &seg.tokens {
+                    let mut seen = std::collections::HashSet::new();
                     for m in morphs_of(p, token)? {
                         let raw = if kind == Kind::Morph { m.surface } else { m.gloss };
                         let spelling = p.proj.nfc(bare(&raw));
-                        count(wugs_model::lexicon_key(&spelling), &spelling, &seg.text, &mut tokens);
+                        let key = wugs_model::lexicon_key(&spelling);
+                        if seen.insert(key.clone()) {
+                            count(key, &spelling, &seg.text, &mut tokens);
+                        }
                     }
                 }
             }
@@ -119,13 +127,28 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let mut session: Session = None;
         crate::sample::open_sample(&mut session, &dir, "tester").unwrap();
+        // A segment with a glottal stop written `?` and a reduplicated word
+        // whose two morphs share a gloss: the cases a count can get wrong.
+        let text = crate::session::list_texts(&mut session).unwrap()[0].id.clone();
+        let seg = crate::session::add_segment(&mut session, &text, None, Some(19_000.0), Some(19_900.0), "ka?a kaba lolo").unwrap().id;
+        let forms: Vec<String> = ["ka?a", "kaba", "lolo"].iter().map(|s| s.to_string()).collect();
+        let view = crate::gloss::gloss_tokenize(&mut session, &text, &seg, &forms).unwrap().view;
+        let m = |surface: &str, kind: &str| crate::gloss::MorphSpecView { surface: surface.into(), morph_type: kind.into(), gloss: Some("PL".into()), glosses_by_lang: Default::default(), sense: None };
+        crate::gloss::gloss_apply(&mut session, &text, &seg, &view.words[2].id, vec![m("lo", "reduplication"), m("lo", "root")]).unwrap();
         let words = frequencies(&mut session, Kind::Word, None).unwrap();
         assert!(words.tokens > 0 && words.types <= words.tokens);
-        // Every row's count is what the Concordance finds for it.
-        for row in &words.rows {
-            let found = crate::concordance::concordance(&mut session, &row.item, Kind::Word).unwrap().total;
-            assert_eq!(found, row.count, "{}", row.item);
+        // Every row's count is what the Concordance finds for that exact item,
+        // in the whole project and in the one text.
+        for kind in [Kind::Word, Kind::Morph, Kind::Gloss, Kind::Translation] {
+            for scope in [None, Some(text.as_str())] {
+                for row in frequencies(&mut session, kind, scope).unwrap().rows {
+                    let found = crate::concordance::concordance_in(&mut session, &row.item, kind, crate::concordance::Match::Exact, scope).unwrap().total;
+                    assert_eq!(found, row.count, "{kind:?} {}", row.item);
+                }
+            }
         }
+        let lo = frequencies(&mut session, Kind::Morph, None).unwrap().rows.into_iter().find(|r| r.item == "lo").unwrap();
+        assert_eq!(lo.count, 1, "a word with lo twice counts once");
         assert!(words.rows.windows(2).all(|w| w[0].count >= w[1].count), "most frequent first");
         let morphs = frequencies(&mut session, Kind::Morph, None).unwrap();
         let kani = morphs.rows.iter().find(|r| r.item == "kani").expect("kani counted");
@@ -136,7 +159,6 @@ mod tests {
         let t = frequencies(&mut session, Kind::Translation, None).unwrap();
         assert!(t.rows.iter().any(|r| r.item.eq_ignore_ascii_case("three")));
         // One text: the sample has one, so it is the whole project.
-        let text = crate::session::list_texts(&mut session).unwrap()[0].id.clone();
         assert_eq!(frequencies(&mut session, Kind::Word, Some(&text)).unwrap().tokens, words.tokens);
         assert_eq!(frequencies(&mut session, Kind::Word, Some("txt_none")).unwrap().tokens, 0);
         assert!(frequencies(&mut session, Kind::Sense, None).is_err());

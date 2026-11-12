@@ -529,8 +529,8 @@
     list_texts: () => texts,
     link_recording: () => null,
     frequencies: ({ kind }) => ({
-      tokens: 412,
-      types: 6,
+      tokens: kind === "gloss" ? 29 : 65,
+      types: kind === "gloss" ? 3 : 6,
       rows:
         kind === "gloss"
           ? [{ item: "1SG", count: 14, texts: 3 }, { item: "count", count: 9, texts: 2 }, { item: "FOC", count: 6, texts: 2 }]

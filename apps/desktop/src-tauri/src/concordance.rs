@@ -266,7 +266,20 @@ pub(crate) fn morphs_of(p: &Project, token: &str) -> Result<Vec<CorpusMorph>, St
 }
 
 pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Concordance, String> {
+    concordance_in(session, query, kind, Match::Glob, None)
+}
+
+/// How a query meets an item: as a pattern (`*`, `?`), or exactly (a row
+/// clicked in Frequencies, whose spelling may hold a `?` glottal stop).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Match {
+    Glob,
+    Exact,
+}
+
+pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match, only_text: Option<&str>) -> Result<Concordance, String> {
     let p = project(session)?;
+    let meets = |pattern: &[char], item: &[char]| if how == Match::Exact { pattern == item } else { glob(pattern, item) };
     let key = |s: &str| wugs_model::fold_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
     // Morphs and glosses meet without their edge markers, on both sides.
     let bare_key = |s: &str| wugs_model::lexicon_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
@@ -275,17 +288,17 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
         Kind::Word | Kind::Translation => key(query.trim()),
         Kind::Sense => query.trim().chars().collect(),
     };
-    if pattern.is_empty() || pattern.iter().all(|c| *c == '*') {
+    if pattern.is_empty() || (how == Match::Glob && pattern.iter().all(|c| *c == '*')) {
         return Ok(Concordance { hits: Vec::new(), total: 0 });
     }
     let mut hits = Vec::new();
     let mut total = 0usize;
-    each_segment(p, kind == Kind::Translation, None, |seg| {
+    each_segment(p, kind == Kind::Translation, only_text, |seg| {
         let mut found: Vec<(usize, Option<String>, Option<String>)> = Vec::new();
         match kind {
             Kind::Word | Kind::Translation => {
                 for (i, w) in seg.words.iter().enumerate() {
-                    if glob(&pattern, &key(w)) {
+                    if meets(&pattern, &key(w)) {
                         found.push((i, None, None));
                     }
                 }
@@ -300,7 +313,7 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
                             matched |= m.sense.as_ref().is_some_and(|s| s.chars().eq(pattern.iter().copied()));
                         } else {
                             let probe = if kind == Kind::Morph { bare(&m.surface) } else { m.gloss.as_str() };
-                            matched |= !probe.is_empty() && glob(&pattern, &bare_key(probe));
+                            matched |= !probe.is_empty() && meets(&pattern, &bare_key(probe));
                         }
                         glosses.push((if m.gloss.is_empty() { "?".to_string() } else { bare(&m.gloss).to_string() }, m.kind.clone()));
                         morphs.push((bare(&m.surface).to_string(), m.kind));

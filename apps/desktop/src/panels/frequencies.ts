@@ -5,7 +5,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, frequencies } from "../api";
 import { KINDS, type ConcordanceKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
-import { asTsv, filterRows, FREQ_SORTS, perThousand, sortRows, summary, type FreqSort, type Frequencies } from "../frequencies/logic";
+import { asTsv, filterRows, FREQ_SORTS, perThousand, ranked, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
@@ -29,6 +29,8 @@ export const frequenciesPanel: PanelDef = {
     let sortBy: FreqSort = "count";
     let scope = "";
     let data: Frequencies | null = null;
+    let rankedRows: RankedRow[] = [];
+    let countedAt = "";
     let seq = 0;
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Count" });
     const scopePicker = h("select", { className: "fq-scope", title: "Count in the whole project or one text" });
@@ -38,6 +40,7 @@ export const frequenciesPanel: PanelDef = {
     const filter = h("input", { type: "search", className: "fq-filter", placeholder: "Filter the list", spellcheck: false });
     filter.setAttribute("aria-label", "Filter");
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy the list as a table to paste into a spreadsheet" });
+    const recount = h("button", { type: "button", textContent: "Recount", title: "Count again (the list counts when the panel opens, the project syncs or texts change)" });
     const count = h("p", { className: "note fq-count" });
     const table = h("table", { className: "fq-table" });
 
@@ -64,7 +67,7 @@ export const frequenciesPanel: PanelDef = {
       scopePicker.value = scope;
     };
 
-    const shownRows = () => (data === null ? [] : sortRows(filterRows(data.rows, filter.value), sortBy));
+    const shownRows = () => sortRows(filterRows(rankedRows, filter.value), sortBy);
 
     const drawRows = () => {
       if (data === null) {
@@ -73,24 +76,27 @@ export const frequenciesPanel: PanelDef = {
       }
       const rows = shownRows();
       const tokens = data.tokens;
-      count.textContent = summary(data, NOUNS[kind]) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "");
+      const perWord = kind === "morph" || kind === "gloss" ? ` Each counts once per word, as the Concordance shows one line per word.` : "";
+      const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn; filter to find the others (Copy table has them all).` : "";
+      count.textContent = summary(data, NOUNS[kind]) + perWord + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
       const head = h("tr", {}, ...["#", NOUNS[kind].one[0]!.toUpperCase() + NOUNS[kind].one.slice(1), "Count", "Per 1000", "Texts"].map((t) => h("th", { textContent: t, scope: "col" })));
       table.replaceChildren(
         h("thead", {}, head),
         h(
           "tbody",
           {},
-          ...rows.slice(0, DRAWN).map((r, i) => {
+          ...rows.slice(0, DRAWN).map((r) => {
             const tr = h(
               "tr",
               { tabIndex: 0, title: `Show every «${r.item}» in the Concordance` },
-              h("td", { className: "fq-rank", textContent: String(i + 1) }),
+              h("td", { className: "fq-rank", textContent: String(r.rank) }),
               h("td", { className: "fq-item", textContent: r.item }),
               h("td", { className: "fq-num", textContent: r.count.toLocaleString("en") }),
               h("td", { className: "fq-num", textContent: perThousand(r.count, tokens) }),
               h("td", { className: "fq-num", textContent: String(r.texts) }),
             );
-            const open = () => askConcordance(r.item, kind);
+            const text = scope === "" ? null : { id: scope, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
+            const open = () => askConcordance(r.item, kind, text);
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
@@ -109,10 +115,16 @@ export const frequenciesPanel: PanelDef = {
     async function load(): Promise<void> {
       const mine = ++seq;
       count.textContent = "Counting…";
+      // No row of an earlier count stays clickable while this one runs.
+      data = null;
+      rankedRows = [];
+      table.replaceChildren();
       try {
         const r = await frequencies({ kind, textId: scope === "" ? null : scope });
         if (mine !== seq) return;
         data = r;
+        rankedRows = ranked(r.rows);
+        countedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         drawRows();
       } catch (e) {
         if (mine !== seq) return;
@@ -131,8 +143,9 @@ export const frequenciesPanel: PanelDef = {
       drawRows();
     };
     filter.oninput = drawRows;
+    recount.onclick = () => void load();
     copy.onclick = () => {
-      if (data === null || data.rows.length === 0) return;
+      if (data === null || rankedRows.length === 0) return;
       const rows = shownRows();
       void writeText(asTsv(rows, data.tokens)).then(
         () => showToast({ tone: "info", lines: [`Copied ${rows.length} rows. Paste them into a spreadsheet.`] }),
@@ -165,7 +178,7 @@ export const frequenciesPanel: PanelDef = {
       }
       drawChips();
       drawScopes();
-      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sorter, copy), chips, h("div", { className: "cc-bar" }, filter), count, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter), count, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };

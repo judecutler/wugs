@@ -489,13 +489,13 @@ Click a line to open its segment on the Timeline and in Transcribe and Gloss. Cl
 
 ## Count words, morphs and glosses
 
-The **Frequencies** panel lists every word in the project with how often it occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.
+The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.
 
 1. Choose what to count: **Words**, **Morphs**, **Glosses** or words of **Translations**.
 2. Count in the **Whole project** or pick one text.
 3. Sort by count, alphabetically, or by how many texts a word is in, and type in **Filter the list** to find one.
 
-**Per 1000** is how often it occurs in every thousand. Capital letters count together (Kesi and kesi are one word, shown as the spelling used most); diacritics do not (ŋa and na are two). Click a row to see every occurrence in the Concordance: the number of lines there is always the count here. **Copy table** copies the list to paste into a spreadsheet.
+**Per 1000** is how often it occurs in every thousand. Capital letters count together (Kesi and kesi are one word, shown as the spelling used most); diacritics do not (ŋa and na are two). A morph or gloss counts once per word that has it, so a word with PL twice counts once. Click a row to see its occurrences in the Concordance, looked up exactly (a `?` in a word is a letter there, not a wildcard) and in the chosen text: the number of lines matches the count. The list counts again when the project syncs or texts change; after glossing or typing, click **Recount**. Up to 5,000 items are listed and the first 500 drawn; filter to find the rest. The **#** column is each item's frequency rank, whatever the order shown. **Copy table** copies the list to paste into a spreadsheet.
 
 ## Hear any segment from anywhere
 

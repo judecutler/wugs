@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asTsv, filterRows, perThousand, sortRows, summary } from "./logic.ts";
+import { asTsv, filterRows, perThousand, ranked, sortRows, summary } from "./logic.ts";
 
 const rows = [
   { item: "kesi", count: 5, texts: 1 },
@@ -31,5 +31,11 @@ test("summary and table", () => {
   assert.equal(summary({ rows: [], tokens: 0, types: 0 }, noun), "No words yet.");
   assert.equal(summary({ rows, tokens: 11, types: 3 }, noun), "11 words, 3 different.");
   assert.match(summary({ rows, tokens: 1200, types: 9000 }, noun), /The 3 most frequent are listed/);
-  assert.equal(asTsv(rows.slice(0, 1), 10).split("\n")[1], "1\tkesi\t5\t500\t1");
+  assert.equal(asTsv(ranked(rows).slice(0, 1), 10).split("\n")[1], "1\tkesi\t5\t500\t1");
+});
+
+test("a row keeps its frequency rank through sorting and filtering", () => {
+  const r = sortRows(filterRows(ranked(rows), "a"), "alpha");
+  assert.deepEqual(r.map((x) => [x.item, x.rank]), [["Ata", 3], ["ŋai", 2]]);
+  assert.equal(asTsv(r, 11).split("\n")[1]!.split("\t")[0], "3");
 });
