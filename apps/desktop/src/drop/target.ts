@@ -8,6 +8,10 @@ import { h } from "../dom";
 import { getState, refreshAll, selectText, showToast, touchLexicon, wantMedia } from "../store";
 import { chunks, classify, outcomeLines, overlayWords, progressLine, unsupportedReason, type Dragged, type Outcome } from "./logic";
 
+// The spec lets a still drag repeat dragover only every 350 ms ± 200 ms
+// (WebKit keeps to it), so a shorter silence would flicker the overlay.
+const QUIET_MS = 1000;
+
 const carriesFiles = (e: DragEvent) => e.dataTransfer?.types.includes("Files") ?? false;
 
 function dragged(e: DragEvent): Dragged {
@@ -34,7 +38,7 @@ export function dropTarget(): HTMLElement {
     detail.textContent = words.detail;
     overlay.hidden = false;
     window.clearTimeout(quiet);
-    quiet = window.setTimeout(hide, 400);
+    quiet = window.setTimeout(hide, QUIET_MS);
   };
 
   window.addEventListener(
@@ -56,7 +60,7 @@ export function dropTarget(): HTMLElement {
       if (e.dataTransfer !== null) e.dataTransfer.dropEffect = getState().kind === "open" ? "copy" : "none";
       if (overlay.hidden) show(e);
       window.clearTimeout(quiet);
-      quiet = window.setTimeout(hide, 400);
+      quiet = window.setTimeout(hide, QUIET_MS);
     },
     true,
   );
