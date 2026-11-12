@@ -48,7 +48,8 @@ You need Node.js 22 and this folder.
 - Workers on the free plan take 100,000 requests a day, far more than feedback needs.
 - Email and GitHub are each skipped when their secrets are unset, so either can be turned off.
 - Two copies of one report arriving at the same moment can make two issues. The app sends one report at a time, so this needs a person sending the same request by hand.
-- An attachment that fails part way is sent again from the start; a large video over a slow connection can take a long time.
+- An attachment that fails part way is sent again from the start; a large video over a slow connection can take a long time. Upload bytes count against the day only once a file has arrived whole.
+- With only one way set up (only GitHub, or only email), a report whose notice keeps failing is retried by the person's app until it goes through; their other reports are not held up by it. Setting up both avoids this.
 - Resend's free plan sends 100 emails a day.
 
 ## Test

@@ -90,20 +90,20 @@ export function safeName(name) {
 }
 
 async function receiveReport(request, env, id) {
-  if (!ID.test(id)) return json(400, { error: "That is not a report id." });
+  if (!ID.test(id)) return refuse(400, "That is not a report id.");
   const declared = request.headers.get("Content-Length");
-  if (declared === null) return json(411, { error: "The report needs a Content-Length." });
-  if (Number(declared) > MAX_REPORT_BYTES) return json(413, { error: "The report is too long." });
+  if (declared === null) return refuse(411, "The report needs a Content-Length.");
+  if (Number(declared) > MAX_REPORT_BYTES) return refuse(413, "The report is too long.");
   const text = await request.text();
-  if (text.length > MAX_REPORT_BYTES) return json(413, { error: "The report is too long." });
+  if (text.length > MAX_REPORT_BYTES) return refuse(413, "The report is too long.");
   let body;
   try {
     body = JSON.parse(text);
   } catch {
-    return json(400, { error: "The report is not JSON." });
+    return refuse(400, "The report is not JSON.");
   }
   const parsed = parseReport(body);
-  if (parsed.error) return json(400, { error: parsed.error });
+  if (parsed.error) return refuse(400, parsed.error);
 
   const key = `reports/${id}/report.json`;
   const stored = await env.REPORTS.get(key);
@@ -175,9 +175,11 @@ async function receiveAttachment(request, env, id) {
   if (!record.attachment) return json(400, { error: "This report has no attachment." });
   if (record.file === null) {
     const length = Number(request.headers.get("Content-Length") ?? "NaN");
-    if (length !== record.attachment.bytes) return json(400, { error: "The attachment's size does not match the report." });
-    if (request.body === null) return json(400, { error: "The attachment is empty." });
-    if (!(await withinDailyCap(env, { reports: 0, bytes: length }))) return json(503, { error: FULL });
+    if (length !== record.attachment.bytes) return refuse(400, "The attachment's size does not match the report.");
+    if (request.body === null) return refuse(400, "The attachment is empty.");
+    // Checked now, counted only once the whole file has arrived, so an
+    // upload cut off part way and sent again is not counted twice.
+    if (!(await withinDailyCap(env, { reports: 0, bytes: length }, false))) return json(503, { error: FULL });
     // Prefixed, so no file name can land on the record's own key.
     const fileKey = `reports/${id}/file-${record.attachment.name}`;
     // Streamed: a 95 MB video never sits in the Worker's memory.
@@ -186,6 +188,7 @@ async function receiveAttachment(request, env, id) {
     });
     record.file = fileKey;
     await env.REPORTS.put(key, JSON.stringify(record));
+    await withinDailyCap(env, { reports: 0, bytes: length });
   }
   // A repeat (the app lost the answer, or telling the maintainer failed)
   // only tells the maintainer what is still untold.
@@ -198,13 +201,14 @@ async function receiveAttachment(request, env, id) {
 /** A soft cap on reports and upload bytes a day, so a flood cannot run up
  * storage or use every email the plan allows. Counted per UTC day in R2;
  * two requests at once can both slip under it, which a soft cap allows. */
-async function withinDailyCap(env, add) {
+async function withinDailyCap(env, add, count = true) {
   const maxReports = Number(env.DAILY_REPORTS ?? 200);
   const maxBytes = Number(env.DAILY_UPLOAD_MB ?? 2000) * 1e6;
   const key = `daily/${new Date().toISOString().slice(0, 10)}.json`;
   const got = await env.REPORTS.get(key);
   const day = got ? await got.json() : { reports: 0, bytes: 0 };
   if (day.reports + add.reports > maxReports || day.bytes + add.bytes > maxBytes) return false;
+  if (!count) return true;
   await env.REPORTS.put(key, JSON.stringify({ reports: day.reports + add.reports, bytes: day.bytes + add.bytes }));
   return true;
 }
@@ -251,7 +255,11 @@ export function issueText(record) {
   lines.push(`- Reply to: ${record.contact ? `\`${record.contact.replace(/`/g, "")}\`` : "no address given"}`);
   if (record.attachment) lines.push(`- Attachment: ${mdText(record.attachment.name)} (${sizeWords(record.attachment.bytes)}), linked once it arrives`);
   lines.push(`- Report id: \`${record.id}\``);
-  if (record.details) lines.push("", "Technical details:", "", fence(JSON.stringify(record.details, null, 2), "json"));
+  if (record.details) {
+    // GitHub refuses issue bodies over 65,536 characters.
+    const pretty = JSON.stringify(record.details, null, 2);
+    lines.push("", "Technical details:", "", fence(pretty.length > 40_000 ? JSON.stringify(record.details) : pretty, "json"));
+  }
   return { title, body: lines.join("\n") };
 }
 
@@ -343,6 +351,12 @@ async function verify(env, what, hex) {
   if (!/^[0-9a-f]{64}$/.test(hex)) return false;
   const mac = new Uint8Array(hex.match(/../g).map((h) => parseInt(h, 16)));
   return crypto.subtle.verify("HMAC", await hmacKey(env), mac, new TextEncoder().encode(what));
+}
+
+/** The service refusing the report itself: the app sets it aside instead of
+ * trying again. Every other failure means "try later". */
+function refuse(status, error) {
+  return json(status, { error, refused: true });
 }
 
 function json(status, value) {

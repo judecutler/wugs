@@ -42,14 +42,6 @@ pub struct AttachmentInfo {
     pub bytes: u64,
 }
 
-/// Where one report has got to, kept beside it in the outbox.
-#[derive(Serialize, Deserialize, Default, Debug)]
-struct Progress {
-    /// The service has the report; an attachment still needs this token.
-    upload_token: Option<String>,
-    reported: bool,
-}
-
 #[derive(Serialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Outcome {
@@ -190,38 +182,49 @@ pub fn waiting(app_data: &Path) -> Vec<String> {
     ids
 }
 
-/// Send every waiting report, oldest first, stopping at the first that cannot
-/// go (offline, or the service is down). `focus` is the report the person just
+/// Send every waiting report, oldest first. A report the service cannot
+/// take yet is skipped, so it never holds up the ones behind it; no
+/// connection at all stops the round. `focus` is the report the person just
 /// wrote, whose fate is reported.
 pub fn send_waiting(app_data: &Path, net: &dyn Transport, focus: Option<&str>) -> Outcome {
     sweep_unfinished(app_data);
-    let mut problem = None;
+    let mut offline = None;
+    let mut focus_problem = None;
     let mut tried = std::collections::BTreeSet::new();
     // Looked up again after each report, so one written while this runs goes too.
     while let Some(id) = waiting(app_data).into_iter().find(|id| !tried.contains(id)) {
         tried.insert(id.clone());
         match send_one(app_data, net, &id) {
             Ok(()) => {}
-            Err(Failure::Later(why)) => {
-                problem = Some(why);
+            Err(Failure::Unreachable(why)) => {
+                offline = Some(why);
                 break;
+            }
+            Err(Failure::Later(why)) => {
+                if focus == Some(id.as_str()) {
+                    focus_problem = Some(why);
+                }
             }
             Err(Failure::Refused(why)) => {
                 // The service will never take this one as it is: keep it aside
-                // rather than retrying it forever, and say why.
-                let dir = outbox(app_data).join(&id);
-                let refused = app_data.join("feedback").join("refused").join(&id);
-                let _ = fs::create_dir_all(refused.parent().unwrap_or(app_data));
-                let _ = fs::rename(&dir, &refused);
-                if focus == Some(id.as_str()) {
-                    problem = Some(why);
+                // with the reason rather than retrying it forever.
+                let refused = refused_dir(app_data).join(&id);
+                let _ = fs::create_dir_all(refused_dir(app_data));
+                if fs::rename(outbox(app_data).join(&id), &refused).is_ok() {
+                    let _ = fs::write(refused.join("reason.txt"), &why);
                 }
             }
         }
     }
     let left = waiting(app_data);
-    let sent = focus.is_some_and(|f| !left.iter().any(|w| w == f) && !app_data.join("feedback").join("refused").join(f).exists());
+    let refused_reason = focus.and_then(|f| fs::read_to_string(refused_dir(app_data).join(f).join("reason.txt")).ok());
+    let sent = focus.is_some_and(|f| !left.iter().any(|w| w == f) && !refused_dir(app_data).join(f).exists());
+    let problem = if sent { None } else { focus_problem.or(refused_reason).or(offline) };
     Outcome { sent, waiting: left.len(), problem, configured: true }
+}
+
+fn refused_dir(app_data: &Path) -> PathBuf {
+    app_data.join("feedback").join("refused")
 }
 
 /// A report half-written when the app stopped never became one; its folder
@@ -237,7 +240,9 @@ fn sweep_unfinished(app_data: &Path) {
 }
 
 enum Failure {
-    /// Try again later: no connection, rate limit or a server problem.
+    /// No answer at all (offline): stop this round.
+    Unreachable(String),
+    /// The service answered but cannot take this report yet: try it later.
     Later(String),
     /// The service refused the report itself.
     Refused(String),
@@ -247,19 +252,14 @@ fn send_one(app_data: &Path, net: &dyn Transport, id: &str) -> Result<(), Failur
     let dir = outbox(app_data).join(id);
     let report_text = fs::read_to_string(dir.join("report.json")).map_err(|e| Failure::Later(e.to_string()))?;
     let report: Report = serde_json::from_str(&report_text).map_err(|e| Failure::Refused(e.to_string()))?;
-    let progress_path = dir.join("progress.json");
-    let mut progress: Progress = fs::read(&progress_path).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default();
-
-    if !progress.reported {
-        let reply = net.post_report(id, &report_text).map_err(Failure::Later)?;
-        classify(&reply)?;
-        let answer: Value = serde_json::from_str(&reply.body).unwrap_or(Value::Null);
-        progress.upload_token = answer.pointer("/upload/token").and_then(Value::as_str).map(str::to_owned);
-        progress.reported = true;
-        let _ = fs::write(&progress_path, serde_json::to_vec(&progress).unwrap_or_default());
-    }
-    if let (Some(info), Some(token)) = (&report.attachment, &progress.upload_token) {
-        let reply = net.put_attachment(id, token, &dir.join("attachment"), content_type(&info.name)).map_err(Failure::Later)?;
+    // Posted on every try: the service files it once per id, and its answer
+    // says whether it still needs the attachment, so a file it already has is
+    // never uploaded again, and a fresh upload token comes with each answer.
+    let reply = net.post_report(id, &report_text).map_err(Failure::Unreachable)?;
+    classify(&reply)?;
+    let answer: Value = serde_json::from_str(&reply.body).unwrap_or(Value::Null);
+    if let (Some(info), Some(token)) = (&report.attachment, answer.pointer("/upload/token").and_then(Value::as_str)) {
+        let reply = net.put_attachment(id, token, &dir.join("attachment"), content_type(&info.name)).map_err(Failure::Unreachable)?;
         classify(&reply)?;
     }
     let _ = fs::remove_dir_all(&dir);
@@ -267,16 +267,18 @@ fn send_one(app_data: &Path, net: &dyn Transport, id: &str) -> Result<(), Failur
 }
 
 fn classify(reply: &Reply) -> Result<(), Failure> {
-    let ours = serde_json::from_str::<Value>(&reply.body).ok().and_then(|v| v.get("error").and_then(Value::as_str).map(str::to_owned));
-    match (reply.status, ours) {
-        (200..=299, _) => Ok(()),
-        (408 | 429, Some(said)) => Err(Failure::Later(said)),
-        // Only the service's own answer refuses a report. Anything else (a
-        // proxy, a Cloudflare challenge, a redeploy) means try again later.
-        (400..=499, Some(said)) => Err(Failure::Refused(said)),
-        (_, Some(said)) => Err(Failure::Later(said)),
-        (status, None) => Err(Failure::Later(format!("The feedback service could not be reached properly (it answered {status}). It will be sent later."))),
+    if (200..=299).contains(&reply.status) {
+        return Ok(());
     }
+    let answer = serde_json::from_str::<Value>(&reply.body).unwrap_or(Value::Null);
+    let said = answer.get("error").and_then(Value::as_str).map(str::to_owned);
+    // Only the service's own checks refuse a report (they say `refused`).
+    // Anything else (a proxy, a Cloudflare page, a redeploy, an old address)
+    // means try again later.
+    if answer.get("refused").and_then(Value::as_bool) == Some(true) {
+        return Err(Failure::Refused(said.unwrap_or_else(|| "The feedback service refused the report.".into())));
+    }
+    Err(Failure::Later(said.unwrap_or_else(|| format!("The feedback service could not take it just now (it answered {}). It will be sent later.", reply.status))))
 }
 
 /// The type the service stores the attachment as, from its extension.
@@ -404,7 +406,7 @@ mod tests {
     }
 
     #[test]
-    fn a_report_already_received_is_not_posted_again_when_only_its_upload_failed() {
+    fn an_upload_cut_off_is_tried_again_with_a_fresh_token() {
         let app = tmp();
         let video = app.join("clip.webm");
         fs::write(&video, b"abc").unwrap();
@@ -422,15 +424,49 @@ mod tests {
         assert!(!send_waiting(&app, &first, Some(&id)).sent);
         let net = Fake::default();
         assert!(send_waiting(&app, &net, Some(&id)).sent);
-        assert_eq!(net.posts.borrow().len(), 0, "the report itself had arrived");
         assert_eq!(net.puts.borrow().len(), 1);
+    }
+
+    #[test]
+    fn a_file_the_service_already_has_is_not_uploaded_again() {
+        let app = tmp();
+        let video = app.join("clip.webm");
+        fs::write(&video, b"abc").unwrap();
+        let id = enqueue(&app, "x", "", None, Some(&video)).unwrap();
+        // No upload token in the answer: the service has the file.
+        let net = Fake { answer: Some((200, r#"{"id":"x"}"#)), ..Fake::default() };
+        assert!(send_waiting(&app, &net, Some(&id)).sent);
+        assert!(net.puts.borrow().is_empty());
+    }
+
+    #[test]
+    fn a_stuck_report_does_not_hold_up_the_ones_behind_it() {
+        let app = tmp();
+        let stuck = enqueue(&app, "stuck", "", None, None).unwrap();
+        let next = enqueue(&app, "next", "", None, None).unwrap();
+        struct StuckFirst(Fake, String);
+        impl Transport for StuckFirst {
+            fn post_report(&self, id: &str, r: &str) -> Result<Reply, String> {
+                if id == self.1 {
+                    return Ok(Reply { status: 503, body: r#"{"error":"could not be told yet"}"#.into() });
+                }
+                self.0.post_report(id, r)
+            }
+            fn put_attachment(&self, a: &str, b: &str, c: &Path, d: &str) -> Result<Reply, String> {
+                self.0.put_attachment(a, b, c, d)
+            }
+        }
+        let out = send_waiting(&app, &StuckFirst(Fake::default(), stuck.clone()), Some(&next));
+        assert!(out.sent);
+        assert_eq!(out.problem, None, "the stuck report's trouble is not this one's");
+        assert_eq!(waiting(&app), vec![stuck]);
     }
 
     #[test]
     fn a_refused_report_is_set_aside_with_the_reason() {
         let app = tmp();
         let id = enqueue(&app, "x", "", None, None).unwrap();
-        let net = Fake { answer: Some((400, r#"{"error":"The report has no message."}"#)), ..Fake::default() };
+        let net = Fake { answer: Some((400, r#"{"error":"The report has no message.","refused":true}"#)), ..Fake::default() };
         let out = send_waiting(&app, &net, Some(&id));
         assert!(!out.sent);
         assert_eq!(out.waiting, 0);
@@ -447,6 +483,9 @@ mod tests {
         assert_eq!(out.waiting, 1);
         assert!(out.problem.unwrap().contains("later"));
         let out = send_waiting(&app, &Fake { answer: Some((404, "")), ..Fake::default() }, Some(&id));
+        assert_eq!(out.waiting, 1);
+        // The service's own catch-all 404 is not a refusal of the report either.
+        let out = send_waiting(&app, &Fake { answer: Some((404, r#"{"error":"Not found."}"#)), ..Fake::default() }, Some(&id));
         assert_eq!(out.waiting, 1);
     }
 

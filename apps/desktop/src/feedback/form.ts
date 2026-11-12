@@ -68,10 +68,13 @@ export function openFeedback(page: Record<string, unknown>): void {
     opener?.focus();
   };
   const onKey = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && !keeping) {
+    if (e.key === "Escape") {
+      // The form is in front: nothing behind it reacts to Escape.
       e.stopPropagation();
       // Escape never throws away what was typed: Cancel does that.
+      if (keeping) return;
       if (message.value.trim() === "") close();
+      else why.textContent = "To close without sending, click Cancel. What you wrote will be discarded.";
     }
     if (e.key === "Tab") {
       // Keep the keyboard inside the form while it is open.
@@ -102,9 +105,9 @@ export function openFeedback(page: Record<string, unknown>): void {
       id = await feedbackKeep({ message: message.value, contact: contact.value, details: includeDetails.checked ? page : null, attachment });
     } catch (e) {
       // Checked before anything was kept (too large, unreadable): fix and send again.
-      why.textContent = String(e);
       keeping = false;
       refresh();
+      why.textContent = String(e);
       return;
     }
     // Kept on this computer: nothing is lost from here, so the form can go.

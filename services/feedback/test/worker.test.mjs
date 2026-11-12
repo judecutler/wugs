@@ -231,6 +231,27 @@ test("a day's reports and uploads are capped", async () => {
   assert.equal((await post(env, { message: "a" }, "01JC0000000000000000000001")).status, 200);
 });
 
+test("an upload cut off part way is not counted against the day twice", async () => {
+  const env = { ...ENV(), DAILY_UPLOAD_MB: "1" };
+  const r = await post(env, { message: "x", attachment: { name: "a.mp4", bytes: 600_000 } });
+  const { upload: up } = await r.json();
+  const real = env.REPORTS.put;
+  env.REPORTS.put = async (key, value, opts) => {
+    if (key.includes("/file-")) throw new Error("connection lost");
+    return real.call(env.REPORTS, key, value, opts);
+  };
+  for (let i = 0; i < 3; i++) assert.equal((await upload(env, up.token, new Uint8Array(600_000))).status, 500);
+  env.REPORTS.put = real;
+  assert.equal((await upload(env, up.token, new Uint8Array(600_000))).status, 201);
+});
+
+test("only the report's own checks say refused", async () => {
+  const env = ENV();
+  assert.equal((await (await post(env, { message: " " })).json()).refused, true);
+  const notFound = await worker.fetch(new Request("https://fb.example/v1/nope"), env);
+  assert.equal((await notFound.json()).refused, undefined);
+});
+
 test("a report without a length is refused before it is read", async () => {
   const env = ENV();
   const r = await worker.fetch(new Request(`https://fb.example/v1/reports/${ID}`, { method: "POST", body: "{}" }), env);
