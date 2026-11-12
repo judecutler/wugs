@@ -5,6 +5,8 @@ import { h } from "../dom";
 import { chooseEmphasisPattern, choosePattern, chooseTheme, emphasisPatternOn, PATTERNS, savedPattern, savedTheme, THEMES } from "../theme/theme";
 
 export type SettingsActions = {
+  /** A project is open: the workspace rows act on its panels. */
+  projectOpen(): boolean;
   /** Closed panels this kit offers, to bring back. */
   closedPanels(): { id: string; title: string }[];
   showPanel(id: string): void;
@@ -14,12 +16,16 @@ export type SettingsActions = {
   setTabsAlways(on: boolean): void;
   visitsOn(): boolean;
   setVisitsOn(on: boolean): void;
-  checkForUpdates(): void;
+  /** True when a newer version was found and its offer is showing. */
+  checkForUpdates(): Promise<boolean>;
   autoChecks(): boolean;
   setAutoChecks(on: boolean): void;
-  version: string;
+  /** The running version, or "" until it is known. */
+  version(): string;
   /** After any change, so the top bar and dock follow. */
   changed(): void;
+  /** The sheet has closed. */
+  closed(): void;
 };
 
 /** What each pattern tile is used for, in the order families list them. */
@@ -32,24 +38,47 @@ export function openSettings(a: SettingsActions): void {
     current.querySelector<HTMLElement>(".settings-close")?.focus();
     return;
   }
-  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const body = h("div", { className: "settings-body" });
   const close = () => {
+    if (current !== overlay) return;
+    current = null;
     overlay.classList.add("settings-leaving");
     window.removeEventListener("keydown", onKey, true);
     window.setTimeout(() => overlay.remove(), 160);
-    if (current === overlay) current = null;
-    opener?.focus();
+    // Every change re-renders the top bar, so find its Settings button again.
+    document.querySelector<HTMLElement>(".settings-button")?.focus();
+    a.closed();
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "Escape") {
       e.stopImmediatePropagation();
       close();
+    } else if (e.key === "Tab") {
+      // The sheet is modal: the keyboard stays inside it.
+      const stops = [...sheet.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled)")].filter((el) => el.tabIndex >= 0 && el.offsetParent !== null);
+      const first = stops[0];
+      const last = stops[stops.length - 1];
+      if (first === undefined || last === undefined) return;
+      if (!sheet.contains(document.activeElement)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   };
+  // Redrawing replaces the controls, so the one in use is found again by its key.
   const redraw = () => {
-    body.replaceChildren(...sections(a, redraw));
+    const key = (document.activeElement as HTMLElement | null)?.dataset?.key;
+    body.replaceChildren(...sections(a, redraw, close));
     a.changed();
+    if (key === undefined) return;
+    // A chip that went away (its panel is back) hands focus to Close.
+    (body.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`) ?? sheet.querySelector<HTMLElement>(".settings-close"))?.focus();
   };
   const sheet = h(
     "aside",
@@ -58,26 +87,28 @@ export function openSettings(a: SettingsActions): void {
     body,
   );
   const overlay = h("div", { className: "settings-overlay" }, h("div", { className: "settings-scrim", onclick: close }), sheet);
-  body.replaceChildren(...sections(a, redraw));
+  body.replaceChildren(...sections(a, redraw, close));
   window.addEventListener("keydown", onKey, true);
   document.body.append(overlay);
   current = overlay;
   sheet.querySelector<HTMLElement>(".settings-close")?.focus();
 }
 
-function sections(a: SettingsActions, redraw: () => void): HTMLElement[] {
+function sections(a: SettingsActions, redraw: () => void, close: () => void): HTMLElement[] {
   const theme = savedTheme(localStorage);
   const pattern = savedPattern(localStorage);
-  const closed = a.closedPanels();
+  const open = a.projectOpen();
+  const closed = open ? a.closedPanels() : [];
+  const version = a.version();
   return [
     section(
       "Colours",
       "How the whole workspace looks on this computer.",
-      h(
-        "div",
-        { className: "settings-cards", role: "radiogroup", ariaLabel: "Colours" },
-        ...THEMES.map((t) =>
-          card(t.label, t.note, theme === t.id, themePreview(t.swatches), () => {
+      radioGroup(
+        "Colours",
+        "settings-cards",
+        THEMES.map((t) =>
+          card(`theme:${t.id}`, t.label, t.note, theme === t.id, themePreview(t.swatches), () => {
             chooseTheme(localStorage, t.id);
             redraw();
           }),
@@ -87,19 +118,20 @@ function sections(a: SettingsActions, redraw: () => void): HTMLElement[] {
     section(
       "Patterns",
       "Each family has three: one for the page behind the panels, one across the side panels, and one you can add to emphasised strips.",
-      h(
-        "div",
-        { className: "settings-cards settings-cards-wide", role: "radiogroup", ariaLabel: "Patterns" },
-        ...PATTERNS.map((p) =>
-          card(p.label, p.note, pattern === p.id, patternPreview(p.tiles), () => {
+      radioGroup(
+        "Patterns",
+        "settings-cards settings-cards-wide",
+        PATTERNS.map((p) =>
+          card(`pattern:${p.id}`, p.label, p.note, pattern === p.id, patternPreview(p.tiles), () => {
             choosePattern(localStorage, p.id);
             redraw();
           }),
         ),
       ),
       toggle(
+        "emphasis",
         "Pattern on emphasised strips",
-        "The third pattern on the tier names beside the timeline, the vowel palette and Import and export.",
+        "The third pattern on the tier names beside the timeline, the IPA palette and Import and export.",
         emphasisPatternOn(localStorage),
         () => {
           chooseEmphasisPattern(localStorage, !emphasisPatternOn(localStorage));
@@ -111,11 +143,11 @@ function sections(a: SettingsActions, redraw: () => void): HTMLElement[] {
     section(
       "Workspace",
       "",
-      toggle("Always show panel tabs", "Otherwise they rise when you reach for the top edge of a panel.", a.tabsAlways(), () => {
+      toggle("tabs", "Always show panel tabs", "Otherwise they rise when you reach for the top edge of a panel.", a.tabsAlways(), () => {
         a.setTabsAlways(!a.tabsAlways());
         redraw();
       }),
-      toggle("Let the wug visit", "Now and then it peeks over the panel you are in. Touch it and it hides.", a.visitsOn(), () => {
+      toggle("visits", "Let the wug visit", "Now and then it peeks over the panel you are in. Touch it and it hides.", a.visitsOn(), () => {
         a.setVisitsOn(!a.visitsOn());
         redraw();
       }),
@@ -125,43 +157,85 @@ function sections(a: SettingsActions, redraw: () => void): HTMLElement[] {
             "div",
             { className: "settings-row" },
             h("span", { className: "settings-row-label", textContent: "Closed panels" }),
-            h("div", { className: "settings-chips" }, ...closed.map((p) => h("button", { textContent: `Show ${p.title}`, onclick: () => (a.showPanel(p.id), redraw()) }))),
+            h("div", { className: "settings-chips" }, ...closed.map((p) => keyed(`show:${p.id}`, h("button", { textContent: `Show ${p.title}`, onclick: () => (a.showPanel(p.id), redraw()) })))),
           ),
-      h(
-        "div",
-        { className: "settings-row" },
-        h("span", { className: "settings-row-label", textContent: `Arrange the panels as ${a.kitName} starts` }),
-        h("button", { textContent: "Reset layout", onclick: () => (a.resetLayout(), redraw()) }),
-      ),
+      !open
+        ? null
+        : h(
+            "div",
+            { className: "settings-row" },
+            h("span", { className: "settings-row-label", textContent: `Arrange the panels as ${a.kitName} starts` }),
+            keyed("reset", h("button", { textContent: "Reset layout", onclick: () => (a.resetLayout(), redraw()) })),
+          ),
     ),
     section(
       "Updates",
-      `This is wugs ${a.version}. Checking asks GitHub for a newer version (Online, a few kB); nothing downloads until you say so.`,
-      toggle("Check when wugs starts", "", a.autoChecks(), () => {
+      `${version === "" ? "" : `This is wugs ${version}. `}Checking asks GitHub for a newer version (Online, a few kB); nothing downloads until you say so.`,
+      toggle("autocheck", "Check when wugs starts", "", a.autoChecks(), () => {
         a.setAutoChecks(!a.autoChecks());
         redraw();
       }),
-      h("div", { className: "settings-row" }, h("button", { textContent: "Check for updates now", onclick: () => a.checkForUpdates() })),
+      h("div", { className: "settings-row" }, checkNow(a, close)),
     ),
   ];
+}
+
+/** "Check for updates now": says it is checking, and when a newer version is
+ * found closes the sheet, because its offer shows under the top bar. */
+function checkNow(a: SettingsActions, close: () => void): HTMLButtonElement {
+  const button = h("button", { textContent: "Check for updates now" });
+  button.dataset.key = "check";
+  button.onclick = async () => {
+    button.disabled = true;
+    button.textContent = "Checking…";
+    const found = await a.checkForUpdates();
+    if (found) close();
+    else if (button.isConnected) {
+      button.disabled = false;
+      button.textContent = "Check for updates now";
+      button.focus();
+    }
+  };
+  return button;
+}
+
+/** A row of cards that behaves as one radio group: one Tab stop (the chosen
+ * card), arrow keys move between cards and choose. */
+function radioGroup(label: string, className: string, cards: HTMLButtonElement[]): HTMLElement {
+  const chosen = cards.findIndex((c) => c.getAttribute("aria-checked") === "true");
+  cards.forEach((c, i) => (c.tabIndex = i === (chosen < 0 ? 0 : chosen) ? 0 : -1));
+  const group = h("div", { className, role: "radiogroup", ariaLabel: label }, ...cards);
+  group.addEventListener("keydown", (e) => {
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (step === 0) return;
+    e.preventDefault();
+    const at = cards.indexOf(document.activeElement as HTMLButtonElement);
+    const next = cards[(Math.max(0, at) + step + cards.length) % cards.length];
+    next?.focus();
+    next?.click();
+  });
+  return group;
 }
 
 function section(title: string, lede: string, ...content: (HTMLElement | null)[]): HTMLElement {
   return h("section", { className: "settings-section" }, h("h3", { textContent: title }), lede === "" ? null : h("p", { className: "settings-lede", textContent: lede }), ...content);
 }
 
-function card(label: string, note: string, on: boolean, preview: HTMLElement, choose: () => void): HTMLElement {
-  return h(
+function card(key: string, label: string, note: string, on: boolean, preview: HTMLElement, choose: () => void): HTMLButtonElement {
+  const button = h(
     "button",
     { className: `settings-card${on ? " is-on" : ""}`, role: "radio", ariaChecked: String(on), onclick: choose, title: note },
     preview,
     h("span", { className: "settings-card-label", textContent: label }),
     h("span", { className: "settings-card-note", textContent: note }),
   );
+  button.dataset.key = key;
+  return button;
 }
 
-function toggle(label: string, note: string, on: boolean, flip: () => void, disabled = false): HTMLElement {
+function toggle(key: string, label: string, note: string, on: boolean, flip: () => void, disabled = false): HTMLElement {
   const box = h("input", { type: "checkbox", checked: on, disabled, onchange: flip });
+  box.dataset.key = key;
   return h("label", { className: `settings-toggle${disabled ? " is-disabled" : ""}` }, box, h("span", {}, h("span", { className: "settings-toggle-label", textContent: label }), note === "" ? null : h("span", { className: "settings-toggle-note", textContent: note })));
 }
 
@@ -172,6 +246,8 @@ function themePreview([bg, accent, ink]: readonly string[]): HTMLElement {
   preview.style.setProperty("--p-bg", bg ?? "#fff");
   preview.style.setProperty("--p-accent", accent ?? "#000");
   preview.style.setProperty("--p-ink", ink ?? "#000");
+  // A dark theme's panels are a shade lighter than its page, not near-white.
+  if (isDark(bg ?? "#fff")) preview.style.setProperty("--p-panel", `color-mix(in srgb, ${bg} 88%, white)`);
   preview.append(
     h("span", { className: "tp-panel" }, h("span", { className: "tp-line tp-head" }), h("span", { className: "tp-line" }), h("span", { className: "tp-line tp-short" }), h("span", { className: "tp-button" })),
     h("span", { className: "tp-panel tp-side" }, h("span", { className: "tp-line" }), h("span", { className: "tp-line tp-short" })),
@@ -191,4 +267,16 @@ function patternPreview(tiles: readonly string[]): HTMLElement {
       return h("span", { className: "pattern-cell" }, swatch, h("span", { className: "pattern-role", textContent: TILE_ROLES[i] ?? "" }));
     }),
   );
+}
+
+function keyed<T extends HTMLElement>(key: string, el: T): T {
+  el.dataset.key = key;
+  return el;
+}
+
+function isDark(hex: string): boolean {
+  const n = Number.parseInt(hex.replace("#", "").slice(0, 6), 16);
+  if (Number.isNaN(n)) return false;
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 96;
 }

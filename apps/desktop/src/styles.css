@@ -219,8 +219,6 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   position: relative;
   overflow: hidden;
 }
-/* The strip: transparent over the cream, so the tabs read as dividers
-   standing up from the top of the card. At rest it is a 9px lip. */
 /* The strip keeps a 9px slot in the layout; revealed, it grows to the tabs'
    full height and pushes the card's content down (owner, 2026-11-12: risen
    tabs must never cover what someone is reading). */
@@ -231,28 +229,29 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
   position: relative;
   z-index: 3;
   border: none;
-  transition: height 140ms ease-out;
 }
+/* Keyboard focus on a tab raises its strip; a mouse click leaves the strip
+   to the pointer, so the content does not jump at the next click. The height
+   changes in one step: a transition would re-lay out the panel every frame. */
 .dv-reveal .dv-tabs-and-actions-container,
 .dv-dragging-tab .dv-tabs-and-actions-container,
-.dv-tabs-and-actions-container:focus-within { height: 30px; }
+.dv-tabs-and-actions-container:has(:focus-visible) { height: 30px; }
 .dockview-theme-light-spaced .dv-tabs-and-actions-container > * {
   height: 9px;
   overflow: hidden;
   align-self: flex-start;
-  transition: height 140ms ease-out;
 }
 .dv-reveal .dv-tabs-and-actions-container > *,
 .dv-dragging-tab .dv-tabs-and-actions-container > *,
-.dv-tabs-and-actions-container:focus-within > *,
+.dv-tabs-and-actions-container:has(:focus-visible) > *,
 .dock.tabs-always .dv-tabs-and-actions-container > * { height: 30px; }
 .dockview-theme-light-spaced .dv-tabs-and-actions-container > :not(.dv-scrollable, .dv-void-container) { opacity: 0; transition: opacity 140ms; }
 .dv-reveal .dv-tabs-and-actions-container > *,
 .dv-dragging-tab .dv-tabs-and-actions-container > *,
-.dv-tabs-and-actions-container:focus-within > *,
+.dv-tabs-and-actions-container:has(:focus-visible) > *,
 .dock.tabs-always .dv-tabs-and-actions-container > * { opacity: 1 !important; }
 /* Shown all the time (the setting), the strip takes its full height in the layout. */
-.dock.tabs-always .dockview-theme-light-spaced .dv-tabs-and-actions-container { height: 30px; filter: none; }
+.dock.tabs-always .dockview-theme-light-spaced .dv-tabs-and-actions-container { height: 30px; }
 .dockview-theme-light-spaced .dv-tab {
   height: 30px;
   min-width: 72px;
@@ -273,22 +272,21 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
    the ones behind it. Reaching for the tabs (or dragging one) brings the
    colour up, so it shows exactly when someone is about to switch. */
 .dockview-theme-light-spaced .dv-tab { transition: background-color 220ms ease, box-shadow 220ms ease; }
-.dockview-theme-light-spaced .dv-groupview:not(.dv-reveal) .dv-tabs-and-actions-container:not(:focus-within) .dv-tab.dv-active-tab { background: color-mix(in srgb, var(--accent-bright) 28%, var(--chrome)); }
-.dockview-theme-light-spaced .dv-groupview.dv-active-group:not(.dv-reveal) .dv-tabs-and-actions-container:not(:focus-within) .dv-tab.dv-active-tab { background: color-mix(in srgb, var(--ink) 30%, var(--chrome)); }
+.dockview-theme-light-spaced .dv-groupview:not(.dv-reveal) .dv-tabs-and-actions-container:not(:has(:focus-visible)) .dv-tab.dv-active-tab { background: color-mix(in srgb, var(--accent-bright) 28%, var(--chrome)); }
+.dockview-theme-light-spaced .dv-groupview.dv-active-group:not(.dv-reveal) .dv-tabs-and-actions-container:not(:has(:focus-visible)) .dv-tab.dv-active-tab { background: color-mix(in srgb, var(--ink) 30%, var(--chrome)); }
 .dv-dragging-tab .dockview-theme-light-spaced .dv-groupview .dv-tabs-and-actions-container .dv-tab.dv-active-tab { background: var(--surface-raised); }
 .dock.tabs-always .dv-groupview .dv-tab.dv-active-tab { background: var(--surface-raised) !important; }
 .dockview-theme-light-spaced .dv-tab.dv-inactive-tab:hover { background: color-mix(in srgb, var(--chrome) 60%, var(--surface-raised)); }
-/* The tab in front wears the brand mark on its top edge. */
 /* Risen, the tab in front wears the brand mark on its top edge. */
 :is(.dv-reveal, .dv-dragging-tab, .tabs-always) .dv-tab.dv-active-tab,
-.dv-tabs-and-actions-container:focus-within .dv-tab.dv-active-tab { box-shadow: inset 0 3px 0 var(--accent-bright); }
+.dv-tabs-and-actions-container:has(:focus-visible) .dv-tab.dv-active-tab { box-shadow: inset 0 3px 0 var(--accent-bright); }
 :is(.dv-reveal.dv-active-group, .dv-dragging-tab .dv-active-group, .tabs-always .dv-active-group) .dv-tab.dv-active-tab,
-.dv-active-group .dv-tabs-and-actions-container:focus-within .dv-tab.dv-active-tab { box-shadow: inset 0 3px 0 var(--ink); }
+.dv-active-group .dv-tabs-and-actions-container:has(:focus-visible) .dv-tab.dv-active-tab { box-shadow: inset 0 3px 0 var(--ink); }
 .dockview-theme-light-spaced .dv-tab .dv-default-tab-action { opacity: 0; transition: opacity 120ms; }
 .dockview-theme-light-spaced .dv-tab:hover .dv-default-tab-action { opacity: 0.6; }
-/* Only a tab drags (owner, 2026-11-12): the strip's empty stretch is not a
-   handle for the whole group, so it neither grabs nor starts a drag. */
-.dockview-theme-light-spaced .dv-void-container { pointer-events: none; cursor: default; }
+/* Only a tab drags (owner, 2026-11-12): the strip's empty stretch does not
+   look like a handle; dock-reveal.ts cancels a drag started there. */
+.dockview-theme-light-spaced .dv-void-container { cursor: default; }
 
 .panel { height: 100%; overflow: auto; padding: 14px 18px; }
 .panel h1 { font-family: var(--font-display); font-weight: 400; font-size: 20px; margin: 2px 0 10px; }
@@ -693,7 +691,7 @@ input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(0, 0, 0, 0.18
 .welcome-loading .welcome-wug { margin: 0 auto 10px; width: 96px; height: 96px; animation: wug-bob 1.2s ease-in-out infinite; }
 @keyframes wug-bob { 50% { transform: translateY(-6px); } }
 @media (prefers-reduced-motion: reduce) { .welcome-loading .welcome-wug { animation: none; } }
-body.welcome-on .panel-menu, body.welcome-on .project-menu { display: none; }
+body.welcome-on .project-menu { display: none; }
 .welcome-card {
   width: min(480px, 100%);
   text-align: center;
@@ -813,7 +811,7 @@ body::before {
 @media (prefers-reduced-motion: reduce) { .wug-peek { display: none; } .brand-wug.wug-away { transform: none; opacity: 1; } }
 
 /* Emphasised sections (the tier gutter, the IPA palette, import and export)
-   wear the --emphasis shade; with "Pattern on emphasised sections" on, the
+   wear the --emphasis shade; with "Pattern on emphasised strips" on, the
    third tile goes with that shade, here and nowhere else.
    The shade is opaque, so a side panel's tile never shows through. */
 :is(.tl-gutter, .tx-palette, .share) { isolation: isolate; background-color: var(--emphasis); }
@@ -893,7 +891,7 @@ body::before {
 .settings-card-note { color: var(--muted); font-size: 12px; font-weight: 400; line-height: 1.3; }
 /* A miniature workspace in the theme's own colours. */
 .theme-preview { display: flex; gap: 5px; height: 64px; padding: 6px; border-radius: var(--radius-sm); background: var(--p-bg); border: 1px solid color-mix(in srgb, var(--p-ink) 20%, transparent); }
-.tp-panel { flex: 2; display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 3px; background: color-mix(in srgb, var(--p-bg) 70%, white); border: 1px solid color-mix(in srgb, var(--p-ink) 25%, transparent); }
+.tp-panel { flex: 2; display: flex; flex-direction: column; gap: 4px; padding: 6px; border-radius: 3px; background: var(--p-panel, color-mix(in srgb, var(--p-bg) 70%, white)); border: 1px solid color-mix(in srgb, var(--p-ink) 25%, transparent); }
 .tp-side { flex: 1; }
 .tp-line { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--p-ink) 55%, transparent); }
 .tp-head { width: 60%; height: 5px; background: var(--p-ink); }

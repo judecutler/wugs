@@ -483,6 +483,9 @@ export class TimelineView {
     this.canvas.style.height = `${hgt}px`;
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     this.setVp({ ...this.vp(), widthPx: w });
+    // Setting the canvas size clears it, and this runs after the frame's
+    // draw: draw again now, or the frame paints blank.
+    this.draw();
   }
 
   // ------------------------------------------------------------- drawing
