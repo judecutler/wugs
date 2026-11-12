@@ -17,7 +17,7 @@ export const STOPS: Stop[] = [
     panel: "timeline",
     target: ".panel-timeline",
     title: "Hear it and cut it",
-    body: "The recording and its segments, like tracks in a video editor. Press Space to play. Drag across a track to make a segment, or click Auto-segment and wugs finds the speech for you.",
+    body: "The recording and its segments, like tracks in a video editor. Click ▶ to play, or click the timeline and press Space. Drag across a track to make a segment, or click Auto-segment and wugs finds the speech for you.",
   },
   {
     panel: "transcribe",
@@ -70,22 +70,33 @@ export function startTour(show: (panel: string) => void): void {
   let at = 0;
   const ring = h("div", { className: "tour-ring" });
   const card = h("div", { className: "tour-card", role: "dialog", ariaLabel: "Tour" });
+  card.setAttribute("aria-describedby", "tour-body");
   const layer = h("div", { className: "tour-layer" }, ring, card);
   const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  // The highlighted panel can change size (a window resize, a dragged divider).
+  const watch = new ResizeObserver(() => requestAnimationFrame(place));
+  const onResize = () => requestAnimationFrame(place);
   const end = () => {
     markDone();
+    watch.disconnect();
     window.removeEventListener("keydown", keys, true);
-    window.removeEventListener("resize", place);
+    window.removeEventListener("resize", onResize);
     layer.remove();
     running = null;
     if (back?.isConnected) back.focus();
   };
   const keys = (e: KeyboardEvent) => {
+    // The palette or Settings opened over the tour has the keyboard.
+    if (document.querySelector(".palette-overlay, .settings-overlay, .feedback-overlay") !== null) return;
     if (e.key === "Escape") {
       e.preventDefault();
       e.stopImmediatePropagation();
       end();
-    } else if (e.key === "ArrowRight") go(at + 1);
+      return;
+    }
+    // Arrows move the tour only from its own card: in a field they move the caret.
+    if (!card.contains(document.activeElement)) return;
+    if (e.key === "ArrowRight") go(at + 1);
     else if (e.key === "ArrowLeft") go(at - 1);
   };
   function place(): void {
@@ -126,7 +137,7 @@ export function startTour(show: (panel: string) => void): void {
     card.replaceChildren(
       h("p", { className: "tour-step", textContent: `${i + 1} of ${STOPS.length}` }),
       h("h2", { textContent: stop.title }),
-      h("p", { textContent: stop.body }),
+      h("p", { id: "tour-body", textContent: stop.body }),
       h(
         "div",
         { className: "tour-actions" },
@@ -136,14 +147,18 @@ export function startTour(show: (panel: string) => void): void {
       ),
     );
     // The panel may have just come forward: place once it has laid out.
+    const keepFocus = at === 0 || card.contains(document.activeElement) || document.activeElement === document.body;
+    watch.disconnect();
+    const target = document.querySelector(stop.target);
+    if (target !== null) watch.observe(target);
     requestAnimationFrame(() => {
       place();
-      next.focus();
+      if (keepFocus) next.focus();
     });
   }
   document.body.append(layer);
   window.addEventListener("keydown", keys, true);
-  window.addEventListener("resize", place);
+  window.addEventListener("resize", onResize);
   running = end;
   go(0);
 }
