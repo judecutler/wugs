@@ -27,7 +27,7 @@ export const keywordsPanel: PanelDef = {
     let seq = 0;
     const textPicker = h("select", { title: "The text to compare with the project's other texts" });
     textPicker.setAttribute("aria-label", "Text");
-    const min = h("select", { title: "Leave out words the text uses fewer times than this" }, ...MINIMUMS.map((n) => h("option", { value: String(n), textContent: n === 1 ? "Every word" : `${n}+ times in the text` })));
+    const min = h("select", { title: "Leave out rare words: one used more here needs this many uses here, one used less needs this many in the other texts" }, ...MINIMUMS.map((n) => h("option", { value: String(n), textContent: n === 1 ? "Every word" : `Seen ${n}+ times` })));
     min.setAttribute("aria-label", "Minimum");
     min.value = "2";
     const sorter = h("select", { title: "Order of the rows" }, ...KEYWORD_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
@@ -85,7 +85,7 @@ export const keywordsPanel: PanelDef = {
           ["Word", ""],
           ["Here", "Times in this text (per 1000 words on hover)"],
           ["Rest", "Times in the project's other texts (per 1000 words on hover)"],
-          ["LL", "Log-likelihood: how sure the difference is; 3.84 or more is p < 0.05"],
+          ["LL", "Log-likelihood (4-term, as AntConc): how sure the difference is; below zero when the text uses the word less"],
           ["Ratio", "Log ratio: 1 means twice as often here, −1 half as often (an absent word counts as 0.5)"],
         ].map(([t, tip]) => h("th", { textContent: t, scope: "col", title: tip })),
       );
@@ -98,8 +98,8 @@ export const keywordsPanel: PanelDef = {
           ...rows.slice(0, DRAWN).map((r) => {
             const tr = h(
               "tr",
-              { tabIndex: 0, title: `${perThousand(r.focus, data!.focusTokens)} per 1000 here, ${perThousand(r.reference, data!.referenceTokens)} in the rest; %DIFF ${r.percentDiff.toFixed(0)}. Show every «${r.item}» in this text in the Concordance` },
-              h("td", { className: "fq-item", textContent: (significant(r) ? "• " : "") + r.item }),
+              { tabIndex: 0, title: `${perThousand(r.focus, data!.focusTokens)} per 1000 here, ${perThousand(r.reference, data!.referenceTokens)} in the rest; %DIFF ${r.percentDiff.toFixed(0)}; simple maths ${r.simpleMaths.toFixed(2)}. Show every «${r.item}» ${r.focus > 0 ? "in this text" : "in the whole project"} in the Concordance` },
+              h("td", { className: "fq-item", textContent: (significant(r, data!.critical) ? "• " : "") + r.item }),
               h("td", { className: "fq-num", textContent: r.focus.toLocaleString("en") }),
               h("td", { className: "fq-num", textContent: r.reference.toLocaleString("en") }),
               h("td", { className: "fq-num", textContent: r.logLikelihood.toFixed(2) }),
@@ -131,7 +131,7 @@ export const keywordsPanel: PanelDef = {
       }
       note.textContent = "Counting…";
       try {
-        const r = await keywords({ kind, textId, minFocus: Number(min.value) });
+        const r = await keywords({ kind, textId, minCount: Number(min.value) });
         if (mine !== seq) return;
         data = r;
         drawRows();

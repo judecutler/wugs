@@ -71,7 +71,7 @@ export const frequencies = (args: { kind: import("./concordance/logic").Concorda
   invoke<import("./frequencies/logic").Frequencies>("frequencies", args);
 export const collocates = (args: { node: string; kind: "word" | "translation"; left: number; right: number; minTogether: number; textId: string | null }) =>
   invoke<import("./collocates/logic").Collocates>("collocates", args);
-export const keywords = (args: { kind: "word" | "translation"; textId: string; minFocus: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
+export const keywords = (args: { kind: "word" | "translation"; textId: string; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
 export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null }) => invoke<ConcordanceResult>("concordance", args);
 /** The sample project (roadmap 68), built the first time in this computer's app data. */
 export const openSample = (args: { researcher: string }) => invoke<ProjectInfo>("open_sample", args);
