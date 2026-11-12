@@ -1,4 +1,4 @@
-// The first-run tour (roadmap 68): five stops over the sample project, each a
+// The first-run tour (roadmap 68): five stops over the tutorial project, each a
 // highlighted panel and a card that says what it is for and one thing to try.
 // Skippable at every step, replayable from the command palette.
 import { h } from "../dom";
@@ -23,7 +23,7 @@ export const STOPS: Stop[] = [
     panel: "transcribe",
     target: ".panel-transcribe",
     title: "Type what you hear",
-    body: "One row per segment. Enter saves and plays the next one; Tab plays it again. The last segment of the sample is empty: try it, with the IPA palette below.",
+    body: "One row per segment. Enter saves and plays the next one; Tab plays it again. The last segment of the tutorial is empty: try it, with the IPA palette below.",
   },
   {
     panel: "gloss",

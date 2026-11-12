@@ -11,7 +11,7 @@ export type WelcomeActions = {
   open(): void;
   reopen: { label: string; run(): void } | null;
   join(): void;
-  /** Open the sample project: every panel already filled in, to look around. */
+  /** Open the tutorial project: every panel already filled in, to look around. */
   sample(): void;
 };
 
@@ -54,8 +54,8 @@ export function welcomeView(kit: Kit | null, a: WelcomeActions): HTMLElement {
       h(
         "div",
         { className: "welcome-sample" },
-        h("button", { textContent: "Open the sample project", onclick: a.sample }),
-        h("p", { className: "note", textContent: "A short made-up recording, already transcribed, glossed and in a dictionary, with a two-minute tour. Change anything; it is yours to try things on." }),
+        h("button", { textContent: "Open the tutorial project", onclick: a.sample }),
+        h("p", { className: "note", textContent: "A short recording, already transcribed, glossed and in a dictionary, with a two-minute tour. Change anything; it is yours to try things on." }),
       ),
       a.reopen === null ? null : h("button", { className: "welcome-link", textContent: a.reopen.label, onclick: a.reopen.run }),
       h("button", { className: "welcome-link", textContent: "Join a project from another device", onclick: a.join }),

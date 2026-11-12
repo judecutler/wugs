@@ -404,9 +404,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let mut session: Session = None;
         crate::sample::open_sample(&mut session, &dir, "tester").unwrap();
-        let w = concordance(&mut session, "KESI", Kind::Word).unwrap();
+        crate::sample::add_morphology(&mut session).unwrap();
+        let w = concordance(&mut session, "FAɪV", Kind::Word).unwrap();
         assert_eq!(w.total, 1);
-        assert_eq!(w.hits[0].words[w.hits[0].at], "kesi");
+        assert_eq!(w.hits[0].words[w.hits[0].at], "faɪv");
         let m = concordance(&mut session, "kani", Kind::Morph).unwrap();
         assert_eq!(m.total, 1);
         // With or without the marker, a morph meets.
@@ -417,8 +418,8 @@ mod tests {
         assert_eq!(m.hits[0].breakdown.as_deref(), Some("ni-kani"));
         assert_eq!(m.hits[0].glosses.as_deref(), Some("1SG-count"));
         assert_eq!(concordance(&mut session, "foc", Kind::Gloss).unwrap().total, 1);
-        // two, three, ten
-        assert_eq!(concordance(&mut session, "t*", Kind::Translation).unwrap().total, 3);
+        // two, three, to, ten
+        assert_eq!(concordance(&mut session, "t*", Kind::Translation).unwrap().total, 4);
         assert_eq!(concordance(&mut session, "*", Kind::Word).unwrap().total, 0);
         // A lexicon entry's occurrences: the words whose morphs link to its sense.
         let p = project(&mut session).unwrap();
