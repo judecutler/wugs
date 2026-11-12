@@ -1,7 +1,7 @@
 import { dropTarget } from "./drop/target";
 import { kitWug, setCurrentWug } from "./theme/wug";
 import { getVersion } from "@tauri-apps/api/app";
-import { applyEmphasisPattern, applyPattern, applyTheme, emphasisPatternOn, savedPattern, savedTheme } from "./theme/theme";
+import { applyEmphasisPattern, applyPattern, applyTheme, choosePattern, chooseTheme, emphasisPatternOn, PATTERNS, savedPattern, savedTheme, THEMES } from "./theme/theme";
 
 applyTheme(savedTheme(localStorage));
 applyPattern(savedPattern(localStorage));
@@ -17,7 +17,7 @@ import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import { captureReset, createProject, errorText, feedbackRetry, kitsList, onAssistDownload, openProject } from "./api";
 import { reloadModels } from "./panels/assist";
 import { closeBlocker, refuseProjectChange } from "./capture/session.ts";
-import { closedPanels, layoutKit, mountDock, showPanel } from "./dock";
+import { closedPanels, layoutKit, mountDock, offers, showPanel } from "./dock";
 import { setTabMode, tabMode } from "./dock-reveal";
 import type { DockviewApi } from "./dockview";
 import { h, wugArt } from "./dom";
@@ -31,6 +31,9 @@ import { PANELS, type PanelId } from "./panels/registry";
 import { attachDock } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
 import { openSettings } from "./settings/panel";
+import { provide } from "./palette/registry";
+import { openPalette, openShortcuts, wirePalette } from "./palette/ui";
+import type { Command } from "./palette/logic";
 import { autoChecks, checkForUpdates, setAutoChecks, setBeforeInstall, updateSlot } from "./updates/notice";
 import { activeKit, assistModelList, attempt, enterProject, getState, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
@@ -133,9 +136,6 @@ function renderTop() {
           renderTop();
         },
       });
-  const showOrFocus = (id: PanelId) => {
-    if (dock !== null) (dock.getPanel(id) ?? showPanel(dock, id))?.api.setActive();
-  };
   const project = menuButton("Project", () => [
     { label: "Open another project…", run: () => void pickProject("open") },
     { label: "Create a project…", run: () => void pickProject("create") },
@@ -146,37 +146,7 @@ function renderTop() {
     className: "menu-button settings-button",
     textContent: "Settings",
     title: "Colours, patterns, the workspace and updates",
-    onclick: () =>
-      openSettings({
-        projectOpen: () => getState().kind === "open" && dock !== null && kit !== null,
-        closedPanels: () => (dock === null || kit === null ? [] : closedPanels(dock, kit).map((id) => ({ id, title: PANELS[id].title }))),
-        showPanel: (id) => showOrFocus(id as PanelId),
-        kitName: kit?.name ?? "the kit",
-        resetLayout: () => {
-          if (dock !== null && kit !== null) layoutKit(dock, kit);
-        },
-        tabsAlways: () => tabMode(localStorage) === "always",
-        setTabsAlways: (on) => {
-          setTabMode(localStorage, on ? "always" : "reach");
-          host.classList.toggle("tabs-always", on);
-        },
-        visitsOn: () => visitsOn(localStorage),
-        setVisitsOn: (on) => {
-          setVisitsOn(localStorage, on);
-          // Turned on, the wug comes to say hello once the sheet is closed.
-          visitAfterSettings = on;
-          if (!on) visits?.stop();
-        },
-        checkForUpdates: () => checkForUpdates(true),
-        autoChecks,
-        setAutoChecks,
-        version: () => appVersion,
-        changed: () => renderTop(),
-        closed: () => {
-          if (visitAfterSettings) window.setTimeout(() => visits?.visitNow(), 400);
-          visitAfterSettings = false;
-        },
-      }),
+    onclick: openSettingsSheet,
   });
   project.classList.add("project-menu");
   setCurrentWug(kitWug(kit));
@@ -232,25 +202,109 @@ function renderTop() {
     h(
       "span",
       { className: "project" },
+      h(
+        "button",
+        { className: "menu-button palette-button", title: "Find any action or panel by name", onclick: openPalette },
+        "Find an action",
+        h("kbd", { textContent: /Mac|iPhone|iPad/u.test(navigator.platform || navigator.userAgent) ? "⌘K" : "Ctrl+K" }),
+      ),
       project,
       settings,
       h("button", {
         className: "menu-button feedback-button",
         textContent: "Feedback",
         title: "Tell the people who make wugs what went wrong or what would help (Online)",
-        onclick: () =>
-          openFeedback({
-            kit: kit === null ? null : `${kit.id} ${kit.version}`,
-            theme: savedTheme(localStorage),
-            pattern: savedPattern(localStorage),
-            projectOpen: s.kind === "open",
-            window: `${window.innerWidth}×${window.innerHeight} at ${window.devicePixelRatio}x`,
-            webview: navigator.userAgent,
-          }),
+        onclick: openFeedbackForm,
       }),
     ),
     ].filter((c) => c !== null),
   );
+}
+
+/** Bring a panel to the front, opening it if it is closed. */
+function showOrFocus(id: PanelId): void {
+  if (dock !== null) (dock.getPanel(id) ?? showPanel(dock, id))?.api.setActive();
+}
+
+/** Settings: from the top bar's button and the command palette. */
+function openSettingsSheet(): void {
+  const kit = activeKit();
+  openSettings({
+    projectOpen: () => getState().kind === "open" && dock !== null && kit !== null,
+    closedPanels: () => (dock === null || kit === null ? [] : closedPanels(dock, kit).map((id) => ({ id, title: PANELS[id].title }))),
+    showPanel: (id) => showOrFocus(id as PanelId),
+    kitName: kit?.name ?? "the kit",
+    resetLayout: () => {
+      if (dock !== null && kit !== null) layoutKit(dock, kit);
+    },
+    tabsAlways: () => tabMode(localStorage) === "always",
+    setTabsAlways: (on) => {
+      setTabMode(localStorage, on ? "always" : "reach");
+      host.classList.toggle("tabs-always", on);
+    },
+    visitsOn: () => visitsOn(localStorage),
+    setVisitsOn: (on) => {
+      setVisitsOn(localStorage, on);
+      // Turned on, the wug comes to say hello once the sheet is closed.
+      visitAfterSettings = on;
+      if (!on) visits?.stop();
+    },
+    checkForUpdates: () => checkForUpdates(true),
+    autoChecks,
+    setAutoChecks,
+    version: () => appVersion,
+    changed: () => renderTop(),
+    closed: () => {
+      if (visitAfterSettings) window.setTimeout(() => visits?.visitNow(), 400);
+      visitAfterSettings = false;
+    },
+  });
+}
+
+/** Feedback: from the top bar's button and the command palette. */
+function openFeedbackForm(): void {
+  const s = getState();
+  const kit = activeKit();
+  openFeedback({
+    kit: kit === null ? null : `${kit.id} ${kit.version}`,
+    theme: savedTheme(localStorage),
+    pattern: savedPattern(localStorage),
+    projectOpen: s.kind === "open",
+    window: `${window.innerWidth}×${window.innerHeight} at ${window.devicePixelRatio}x`,
+    webview: navigator.userAgent,
+  });
+}
+
+/** The shell's own commands for the palette: panels, look, project, help. */
+function shellCommands(): Command[] {
+  const kit = activeKit();
+  const opened = getState().kind === "open";
+  const noProject = () => (opened ? null : "Open a project first");
+  const panels: Command[] =
+    kit === null
+      ? []
+      : (Object.keys(PANELS) as PanelId[])
+          .filter((id) => offers(kit, id))
+          .map((id) => ({ id: `panel:${id}`, title: `Show ${PANELS[id].title}`, group: "Panels", words: ["open", "go to", "panel", "tab"], disabled: noProject, run: () => showOrFocus(id) }));
+  return [
+    ...panels,
+    { id: "app:settings", title: "Open Settings", group: "wugs", words: ["preferences", "options", "theme", "pattern"], run: openSettingsSheet },
+    { id: "app:shortcuts", title: "Show keyboard shortcuts", group: "Help", keys: "?", words: ["keys", "hotkeys"], run: openShortcuts },
+    { id: "app:feedback", title: "Send feedback", group: "Help", words: ["bug", "problem", "report", "contact"], run: openFeedbackForm },
+    { id: "app:reset-layout", title: "Reset layout", group: "Workspace", words: ["arrange", "panels", "default"], disabled: noProject, run: () => {
+      if (dock !== null && kit !== null) layoutKit(dock, kit);
+    } },
+    { id: "app:tabs-always", title: tabMode(localStorage) === "always" ? "Hide panel tabs until reached for" : "Always show panel tabs", group: "Workspace", run: () => {
+      const on = tabMode(localStorage) !== "always";
+      setTabMode(localStorage, on ? "always" : "reach");
+      host.classList.toggle("tabs-always", on);
+    } },
+    ...THEMES.map((t) => ({ id: `theme:${t.id}`, title: `Colours: ${t.label}`, group: "Look", words: ["theme", t.note], run: () => chooseTheme(localStorage, t.id) })),
+    ...PATTERNS.map((p) => ({ id: `pattern:${p.id}`, title: `Pattern: ${p.label}`, group: "Look", words: ["background", p.note], run: () => choosePattern(localStorage, p.id) })),
+    { id: "project:open", title: "Open another project…", group: "Project", words: ["folder"], run: () => void pickProject("open") },
+    { id: "project:create", title: "Create a project…", group: "Project", words: ["new"], run: () => void pickProject("create") },
+    { id: "app:updates", title: "Check for updates", group: "wugs", words: ["version", "upgrade"], run: () => void checkForUpdates(true) },
+  ];
 }
 
 function renderWelcome() {
@@ -397,6 +451,9 @@ if (app !== null) {
   host.classList.add("dock-veiled");
   subscribe(renderTop);
   subscribe(renderBanner);
+  // Ctrl+K finds any action; ? lists the keys (roadmap 70).
+  provide("shell", shellCommands);
+  wirePalette();
   subscribe(renderWelcome);
   renderWelcome();
   onDevicesChange(renderBanner);

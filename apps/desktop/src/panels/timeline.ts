@@ -14,6 +14,8 @@ import { clock } from "../timeline/tracks";
 import { ICONS, type IconName } from "../timeline/icons";
 import * as playback from "../playback";
 import type { PanelDef, PanelView } from "./panel";
+import { provide } from "../palette/registry";
+import type { Command } from "../palette/logic";
 
 const TEMPLATES: TierTemplate[] = ["transcription", "translation", "notes", "custom"];
 /** Auto-segment's last granularity on this machine. */
@@ -149,6 +151,24 @@ export const timelinePanel: PanelDef = {
       if (zoom !== shown.zoom && document.activeElement !== zoomSlider) zoomSlider.value = String(zoom);
       shown = { playing, now, total, zoom, hasRecording };
     }
+
+    // The Timeline's actions in the command palette, while the panel is open.
+    const needsView = () => (view === null ? "Open a text on the Timeline first" : null);
+    const needsRecording = () => needsView() ?? (view?.hasRecording() === true ? null : "Load a recording first");
+    const timelineCommands = (): Command[] => [
+      { id: "timeline:play", title: "Play or pause", group: "Timeline", keys: "Space", words: ["listen", "audio"], disabled: needsRecording, run: () => view?.playPause() },
+      { id: "timeline:fit", title: "Fit the whole recording", group: "Timeline", keys: "Shift+Z", words: ["zoom", "overview"], disabled: needsView, run: () => view?.fit() },
+      { id: "timeline:zoom-in", title: "Zoom in", group: "Timeline", keys: "+", disabled: needsView, run: () => view?.zoomBy(1.5) },
+      { id: "timeline:zoom-out", title: "Zoom out", group: "Timeline", keys: "-", disabled: needsView, run: () => view?.zoomBy(1 / 1.5) },
+      { id: "timeline:start", title: "Go to the start", group: "Timeline", keys: "Home", disabled: needsRecording, run: () => view?.seekTo(0) },
+      { id: "timeline:split", title: "Split at the playhead", group: "Timeline", keys: "S", words: ["cut"], disabled: () => needsView() ?? view?.editRules().split ?? null, run: () => void view?.splitAtPlayhead() },
+      { id: "timeline:merge", title: "Merge with the next segment", group: "Timeline", keys: "M", words: ["join", "combine"], disabled: () => needsView() ?? view?.editRules().merge ?? null, run: () => void view?.mergeWithNext() },
+      { id: "timeline:auto", title: "Auto-segment the recording", group: "Timeline", words: ["detect", "speech", "segments", "automatic"], disabled: needsRecording, run: () => autoButton.click() },
+      { id: "timeline:undo", title: "Undo a timeline edit", group: "Timeline", keys: "Ctrl+Z", disabled: needsView, run: () => void view?.undo() },
+      { id: "timeline:redo", title: "Redo a timeline edit", group: "Timeline", keys: "Ctrl+Shift+Z", disabled: needsView, run: () => void view?.redo() },
+      { id: "timeline:import", title: "Import audio…", group: "Timeline", words: ["recording", "wav", "mp3", "m4a"], run: () => importButton.click() },
+    ];
+    const unprovide = provide("timeline", timelineCommands);
 
     const gutter = h("div", { className: "tl-gutter" });
     const body = h("div", { className: "tl-body" });
@@ -366,6 +386,7 @@ export const timelinePanel: PanelDef = {
       element: el,
       render,
       dispose: () => {
+        unprovide();
         cancelAnimationFrame(tick);
         view?.dispose();
         view = null;
