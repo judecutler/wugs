@@ -115,9 +115,9 @@ Click the ruler or the waveform to move the playhead there. While the timeline h
 
 Each track has a header at the left of the timeline, as in a video editor:
 
-- The lock button stops a track's segments from changing. You can still select them and play them, but drawing, dragging, typing, splitting, merging, nudging and deleting are refused with a message. Click the lock again to unlock the track.
-- The eye button hides a track's segments, so you can work on another track without them in the way. A hidden track cannot be edited either.
-- The speaker button beside **Recording** mutes the sound. The playhead still moves, so you can follow along silently.
+- The lock button stops a track's segments from changing. You can still select them and play them, but drawing, dragging, typing, splitting, merging, nudging, deleting and Auto-segment are refused with a message. Click the lock again to unlock the track. Changes brought back from Praat are not stopped by a lock.
+- The eye button hides a track's segments, so you can work on another track without them in the way. A hidden track cannot be edited either. Hiding the track of the selected segment clears the selection.
+- The speaker button beside **Recording** mutes the Timeline's playing. The playhead still moves, so you can follow along silently. Replaying a segment from Transcribe still plays aloud.
 
 These settings belong to one text on this computer. They are not shared with other devices and they do not change the project.
 

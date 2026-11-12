@@ -72,7 +72,9 @@ type Drag =
   | { kind: "pan"; lastX: number }
   | { kind: "maybe-create"; lane: number; startX: number; anchorMs: number }
   | { kind: "create"; lane: number; anchorMs: number; currentMs: number }
-  | { kind: "resize"; id: string; edge: Edge; downX: number; offsetMs: number; active: boolean };
+  | { kind: "resize"; id: string; edge: Edge; downX: number; offsetMs: number; active: boolean }
+  /** A press on a locked or hidden track: a click seeks, a drag says why nothing moves. */
+  | { kind: "refused"; why: string; startX: number; downMs: number | null; told: boolean };
 
 /** A dragged segment's times. The store's rows are never mutated, so a failed
  * save leaves nothing to undo. */
@@ -382,6 +384,9 @@ export class TimelineView {
   }
 
   private setTracks(next: Tracks): void {
+    // The inline editor never outlives a lock or hide of its own track:
+    // keep what was typed, then the toggle applies.
+    if (this.editing !== null) this.closeEditor(true);
     this.tracks = next;
     playback.setMuted(next.muted);
     const id = this.text?.id;
@@ -438,7 +443,6 @@ export class TimelineView {
   fit(): void {
     const v = this.vp();
     this.setVp({ ...v, t0Ms: 0, pxPerSec: fitPxPerSec(v) });
-    this.onTracksChange();
   }
 
   private zoomTo(pxPerSec: number): void {
@@ -447,7 +451,6 @@ export class TimelineView {
     const onScreen = this.info !== null && head >= v.t0Ms && head <= v.t0Ms + visibleSpanMs(v);
     const anchorX = onScreen ? timeToX(v, head) : v.widthPx / 2;
     this.setVp(zoomAround(v, anchorX, pxPerSec / v.pxPerSec));
-    this.onTracksChange();
   }
 
   /** Move the playhead to t, scrolling it into view. */
@@ -745,9 +748,11 @@ export class TimelineView {
       }
       const found = this.hitAt(lane, x);
       // A locked or hidden track still selects and seeks, but nothing on it moves.
-      const blocked = this.laneBlock(lane) !== null;
+      const why = this.laneBlock(lane);
+      const blocked = why !== null;
       if (found !== null) {
         this.select(found.seg.id);
+        if (found.hit.kind === "edge" && why !== null) this.drag = { kind: "refused", why, startX: x, downMs: null, told: false };
         if (found.hit.kind === "edge" && !blocked) {
           const edgeMs = (found.hit.edge === "start" ? found.seg.startMs : found.seg.endMs) ?? tMs;
           this.drag = {
@@ -762,7 +767,7 @@ export class TimelineView {
         return;
       }
       this.select(null);
-      this.drag = blocked ? { kind: "maybe-pan", startX: x, downMs: tMs } : { kind: "maybe-create", lane: laneIdx, startX: x, anchorMs: tMs };
+      this.drag = why !== null ? { kind: "refused", why, startX: x, downMs: tMs, told: false } : { kind: "maybe-create", lane: laneIdx, startX: x, anchorMs: tMs };
     });
 
     this.windowMoves = (ev) => {
@@ -782,6 +787,12 @@ export class TimelineView {
         case "pan":
           this.setVp(pan(this.vp(), drag.lastX - x));
           drag.lastX = x;
+          break;
+        case "refused":
+          if (!drag.told && Math.abs(x - drag.startX) > DRAG_PX) {
+            drag.told = true;
+            showToast({ tone: "info", lines: [drag.why] });
+          }
           break;
         case "maybe-create":
           if (Math.abs(x - drag.startX) > DRAG_PX) {
@@ -822,6 +833,9 @@ export class TimelineView {
       switch (drag.kind) {
         case "maybe-pan":
           this.seek(drag.downMs);
+          break;
+        case "refused":
+          if (!drag.told && drag.downMs !== null) this.seek(drag.downMs);
           break;
         case "create":
           void this.track(this.commitCreate(drag.lane, drag.anchorMs, drag.currentMs));
@@ -1287,6 +1301,12 @@ export class TimelineView {
     const sel = this.selected === null ? null : this.findSegment(this.selected);
     // No selection: null, and the session picks the utterance tier it uses everywhere.
     const tierId = sel?.tier ?? null;
+    const target = this.lanes.find((l) => (tierId !== null ? l.tierId === tierId : text.tiers.some((t) => t.id === l.tierId && t.utterance === true)));
+    const why = this.laneBlock(target);
+    if (why !== null) {
+      showToast({ tone: "info", lines: [why] });
+      return;
+    }
     const stack = this.history();
     try {
       const out = await autoSegment({ textId: text.id, source, tierId, granularity });

@@ -32,6 +32,8 @@ export type TierRow = {
   /** What the track is for: transcription, translation, note, or a kit's own. */
   role: string | null;
   language: string | null;
+  /** Where segments go when no tier is named (Auto-segment with nothing selected). */
+  utterance?: boolean;
 };
 
 export type SegmentRow = {

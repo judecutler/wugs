@@ -15,7 +15,7 @@
   ];
 
   const tiers = [
-    { id: "tier-utt", name: "utterance", kind: "time-aligned", role: "transcription", language: "x-tok" },
+    { id: "tier-utt", name: "utterance", kind: "time-aligned", role: "transcription", language: "x-tok", utterance: true },
     { id: "tier-tr", name: "translation", kind: "time-aligned", role: "translation", language: "en" },
   ];
 

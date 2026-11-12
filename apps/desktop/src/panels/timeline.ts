@@ -103,10 +103,10 @@ export const timelinePanel: PanelDef = {
     const clockNow = h("span", { className: "tl-clock-now", textContent: "0:00.0" });
     const clockTotal = h("span", { className: "tl-clock-total", textContent: "0:00.0" });
     const clockBox = h("span", { className: "tl-clock", title: "Playhead and length. J steps back, K stops, L plays." }, clockNow, " / ", clockTotal);
-    const zoomOut = h("button", { className: "tl-zoom-step", textContent: "−", title: "Zoom out (-)" });
+    const zoomOut = h("button", { className: "tl-zoom-step", textContent: "−", title: "Zoom out (-)", ariaLabel: "Zoom out" });
     const zoomSlider = h("input", { className: "tl-zoom", type: "range", min: "0", max: "1000", step: "1", value: "0", title: "Zoom" });
     zoomSlider.setAttribute("aria-label", "Zoom");
-    const zoomIn = h("button", { className: "tl-zoom-step", textContent: "+", title: "Zoom in (+)" });
+    const zoomIn = h("button", { className: "tl-zoom-step", textContent: "+", title: "Zoom in (+)", ariaLabel: "Zoom in" });
     const fitButton = h("button", { textContent: "Fit", title: "Show the whole recording (Shift+Z)" });
     const transport = h(
       "div",
@@ -121,6 +121,8 @@ export const timelinePanel: PanelDef = {
     zoomIn.onclick = () => view?.zoomBy(1.5);
     fitButton.onclick = () => view?.fit();
     zoomSlider.oninput = () => view?.setZoomSlider(Number(zoomSlider.value));
+    // Let go, the slider follows the wheel and keys again.
+    zoomSlider.onchange = () => zoomSlider.blur();
 
     // The clock, play icon and slider follow the view every frame, so a
     // wheel zoom or another panel's playback shows here too.
@@ -264,7 +266,9 @@ export const timelinePanel: PanelDef = {
       if (view === null) return;
       const v = view;
       const rows = v.trackRows();
-      const muteButton = toggleButton(v.muted, "muted", "sound", v.muted ? "Unmute the recording" : "Mute the recording", () => v.toggleMute());
+      // Toggling redraws the headers: keep keyboard focus on the same toggle.
+      const focused = (document.activeElement as HTMLElement | null)?.dataset?.key;
+      const muteButton = toggleButton("mute", v.muted, "muted", "sound", "Mute the recording", () => v.toggleMute());
       gutter.replaceChildren(
         placed("tl-gutter-wave", RULER_H, WAVE_H, h("span", { className: "tl-track-name", textContent: "Recording" }), h("span", { className: "tl-track-toggles" }, muteButton)),
         ...rows.map((row, i) => {
@@ -275,8 +279,8 @@ export const timelinePanel: PanelDef = {
               : h(
                   "span",
                   { className: "tl-track-toggles" },
-                  toggleButton(row.locked, "lock", "unlock", row.locked ? `Unlock ${row.name}` : `Lock ${row.name} so its segments cannot change`, () => v.toggleTrack(tierId, "locked")),
-                  toggleButton(row.hidden, "eyeOff", "eye", row.hidden ? `Show ${row.name}` : `Hide ${row.name}`, () => v.toggleTrack(tierId, "hidden")),
+                  toggleButton(`lock:${tierId}`, row.locked, "lock", "unlock", `Lock ${row.name}`, () => v.toggleTrack(tierId, "locked")),
+                  toggleButton(`hide:${tierId}`, row.hidden, "eyeOff", "eye", `Hide ${row.name}`, () => v.toggleTrack(tierId, "hidden")),
                 );
           const div = placed("tl-gutter-tier", RULER_H + WAVE_H + i * TIER_H, TIER_H, h("span", { className: "tl-track-name", textContent: row.name, title: row.name }), toggles);
           div.classList.toggle("is-hidden", row.hidden);
@@ -285,6 +289,7 @@ export const timelinePanel: PanelDef = {
         }),
         placed("tl-gutter-add", RULER_H + WAVE_H + rows.length * TIER_H + 6, null, addTrackControl()),
       );
+      if (focused !== undefined) gutter.querySelector<HTMLElement>(`[data-key="${CSS.escape(focused)}"]`)?.focus();
     }
 
     const render = () => {
@@ -376,9 +381,10 @@ function iconButton(icon: IconName, title: string): HTMLButtonElement {
   return b;
 }
 
-/** A track toggle: shows its on icon while pressed. */
-function toggleButton(on: boolean, onIcon: IconName, offIcon: IconName, title: string, act: () => void): HTMLButtonElement {
+/** A track toggle: one fixed name, its state in aria-pressed and the icon. */
+function toggleButton(key: string, on: boolean, onIcon: IconName, offIcon: IconName, title: string, act: () => void): HTMLButtonElement {
   const b = iconButton(on ? onIcon : offIcon, title);
+  b.dataset.key = key;
   b.classList.add("tl-track-toggle");
   b.setAttribute("aria-pressed", String(on));
   // Keep focus on the timeline, so its keys keep working after a click.

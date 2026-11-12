@@ -31,16 +31,27 @@ export const currentMs = (): number => audio.currentTime * 1000;
 export const isPlaying = (): boolean => !audio.paused;
 export const pause = (): void => ctl.pause();
 export const seek = (tMs: number): void => ctl.seek(tMs);
-/** The recording track's mute: silence without stopping the playhead. */
+/** The Timeline's recording-track mute (docs/design/EDITOR.md): it
+ * silences the Timeline's own playing (Space, the play button, J/K/L), not a
+ * range another panel plays, such as Transcribe's replay. */
+let timelineMuted = false;
 export const setMuted = (on: boolean): void => {
-  audio.muted = on;
+  timelineMuted = on;
+  if (!audio.paused && !rangePlaying) audio.muted = on;
 };
+let rangePlaying = false;
 
 export function toggle(): void {
-  if (hasSource()) ctl.toggle();
+  if (!hasSource()) return;
+  rangePlaying = false;
+  audio.muted = timelineMuted;
+  ctl.toggle();
 }
 
 /** Play from startMs and stop at endMs. A no-op without a recording. */
 export function playRange(startMs: number, endMs: number): void {
-  if (hasSource()) ctl.playRange(startMs, endMs);
+  if (!hasSource()) return;
+  rangePlaying = true;
+  audio.muted = false;
+  ctl.playRange(startMs, endMs);
 }

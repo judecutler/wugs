@@ -127,6 +127,8 @@ pub struct TierRow {
     /// What the tier is for (`transcription`, `translation`, `note`, …); core never reads it.
     pub role: Option<String>,
     pub language: Option<String>,
+    /// The session's utterance tier: where segments go when no tier is named.
+    pub utterance: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -359,6 +361,7 @@ pub fn get_text(session: &mut Session, text_id: &str) -> Result<TextDetail, Stri
             kind: p.proj.field_str(&id, "kind")?,
             role: p.proj.field_str(&id, "role")?,
             language: p.proj.field_str(&id, "language")?,
+            utterance: p.proj.field_str(&id, "origin")?.as_deref() == Some(UTTERANCE_ORIGIN),
             id,
         });
     }
@@ -519,7 +522,7 @@ pub fn add_tier(session: &mut Session, template: &str, name: Option<&str>) -> Re
     let name = name.map(str::trim).filter(|n| !n.is_empty()).unwrap_or(template);
     let p = project(session)?;
     let (id, _) = p.add_tier(name, "time-aligned", *role, None)?;
-    Ok(TierRow { id, name: name.to_string(), kind: Some("time-aligned".to_string()), role: role.map(str::to_string), language: None })
+    Ok(TierRow { id, name: name.to_string(), kind: Some("time-aligned".to_string()), role: role.map(str::to_string), language: None, utterance: false })
 }
 
 /// One past the largest existing pos, so a new segment sorts last even when
