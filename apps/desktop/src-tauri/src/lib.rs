@@ -1268,6 +1268,8 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        // Copy example (roadmap 69) puts an HTML table and plain text on the clipboard.
+        .plugin(tauri_plugin_clipboard_manager::init())
         // Size, position and maximized state come back on the next launch; a
         // machine with no saved state keeps the size from tauri.conf.json.
         .plugin(tauri_plugin_window_state::Builder::default().build())

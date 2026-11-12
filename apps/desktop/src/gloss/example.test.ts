@@ -43,7 +43,7 @@ test("gb4e and ExPex set grammatical glosses in small capitals and escape LaTeX"
 test("the Word format is a table with small capitals and the plain text beside it", () => {
   const html = asHtml(ex);
   assert.match(html, /<table/);
-  assert.match(html, /dog-<span style="font-variant: small-caps">pl<\/span>/);
+  assert.match(html, /dog-<span style="font-size: 80%">PL<\/span>/);
   assert.match(html, /‘The dogs ran\.’/);
   assert.doesNotMatch(asHtml({ ...ex, translation: "<b>" }), /<b>/);
   const both = clipboardFor(ex, "word");
@@ -55,4 +55,27 @@ test("an unknown remembered format falls back to Word", () => {
   assert.equal(parseFormat(null), "word");
   assert.equal(parseFormat("expex"), "expex");
   assert.equal(parseFormat("pdf"), "word");
+});
+
+test("a gloss with a space stays one LaTeX column; infix brackets print as < and >", () => {
+  const ex2: Example = {
+    number: 1,
+    translation: null,
+    words: [
+      { form: "lumabas", morphs: [{ surface: "l", type: "root", gloss: "go out" }, { surface: "um", type: "infix", gloss: "AV" }, { surface: "abas", type: "root", gloss: null }] },
+      { form: "na", morphs: [{ surface: "na", type: "root", gloss: "already" }] },
+    ],
+  };
+  const g = asGb4e(ex2);
+  assert.match(g, /\\gll l\\textless\{\}um\\textgreater\{\}abas na\\\\/);
+  assert.match(g, /\{go out\\textless\{\}\\textsc\{av\}\\textgreater\{\}\} already\\\\/);
+  // No translation: no empty quotes.
+  assert.doesNotMatch(g, /\\glt/);
+  assert.doesNotMatch(asExpex(ex2), /\\glft/);
+});
+
+test("the root around an infix is glossed once", () => {
+  const w = { form: "sumulat", morphs: [{ surface: "s", type: "root", gloss: "write" }, { surface: "um", type: "infix", gloss: "AV" }, { surface: "ulat", type: "root", gloss: "write" }] };
+  assert.deepEqual(wordLines(w), { morphs: "s<um>ulat", glosses: "write<AV>" });
+  assert.equal(wordLines({ ...w, morphs: [w.morphs[0]!, w.morphs[1]!, { ...w.morphs[2]!, gloss: null }] }).glosses, "write<AV>");
 });

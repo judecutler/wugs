@@ -19,6 +19,7 @@ import { forms } from "../gloss/tokenizer";
 import { needsTranslationTrack, translationLines } from "../gloss/translation";
 import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { provide } from "../palette/registry";
+import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { emptyState, h } from "../dom";
 import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, showToast, subscribeSelection, touchLexicon } from "../store";
 import { createComposition, formatRange, imeBusy } from "../transcribe/logic";
@@ -632,14 +633,16 @@ export const glossPanel: PanelDef = {
         const segs = sel.text.segments
           .filter((x) => x.tier === sel.segment.tier)
           .slice()
-          .sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0));
+          // Untimed segments after the timed ones, as the Timeline lists them.
+          .sort((a, b) => (a.startMs ?? Number.MAX_SAFE_INTEGER) - (b.startMs ?? Number.MAX_SAFE_INTEGER));
         const number = Math.max(1, segs.findIndex((x) => x.id === sel.segment.id) + 1);
         const translation = translationLines(sel.segment, sel.text.segments, sel.text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
         const ex: Example = { number, translation, words: v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) })) };
         const out = clipboardFor(ex, format);
         const label = EXAMPLE_FORMATS.find((f) => f.id === format)?.label ?? "";
         void copyToClipboard(out.text, out.html).then(
-          () => showToast({ tone: "info", lines: [`Copied example (${number}) for ${label}. Paste it into your paper.`] }),
+          // gb4e and ExPex number examples themselves.
+          () => showToast({ tone: "info", lines: [`Copied ${format === "gb4e" || format === "expex" ? "the example" : `example (${number})`} for ${label}. Paste it into your paper.`] }),
           (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
         );
       };
@@ -742,18 +745,12 @@ export const glossPanel: PanelDef = {
   },
 };
 
-/** Plain text always; HTML too where the webview can, so word processors get a table. */
+/** Through the clipboard plugin, not the webview's clipboard API: the same on
+ * WebView2, WKWebView and WebKitGTK, with no user-gesture or secure-context
+ * rules. HTML goes with plain text beside it, for word processors. */
 async function copyToClipboard(text: string, html: string | null): Promise<void> {
-  const Item = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
-  if (html !== null && Item !== undefined && navigator.clipboard?.write !== undefined) {
-    try {
-      await navigator.clipboard.write([new Item({ "text/plain": new Blob([text], { type: "text/plain" }), "text/html": new Blob([html], { type: "text/html" }) })]);
-      return;
-    } catch {
-      // Some webviews refuse HTML on the clipboard: plain text still lines up.
-    }
-  }
-  await navigator.clipboard.writeText(text);
+  if (html !== null) await writeHtml(html, text);
+  else await writeText(text);
 }
 
 function readStored(key: string): string | null {
