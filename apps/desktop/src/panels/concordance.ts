@@ -2,7 +2,7 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { concordance, errorText } from "../api";
-import { asTsv, clip, countLine, keyword, KINDS, left, right, SORTS, sortHits, type ConcordanceKind, type Hit, type SortBy } from "../concordance/logic";
+import { asTsv, clip, countLine, isRtl, keyword, KINDS, left, right, SORTS, sortHits, type ConcordanceKind, type Hit, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
 import { provide } from "../palette/registry";
@@ -14,10 +14,16 @@ import type { PanelDef, PanelView } from "./panel";
 const CONTEXT = 48;
 
 async function open(hit: Hit, play: boolean): Promise<void> {
+  // A recording is not tied to a text: only one already showing this text
+  // on the Timeline can be the right one to play.
+  const before = getState();
+  const sameText = before.kind === "open" && before.text?.id === hit.textId;
   await selectText(hit.textId);
   const s = getState();
   if (s.kind === "open" && s.text?.id === hit.textId) selectSegment({ textId: hit.textId, tierId: hit.tierId, segmentId: hit.segmentId });
-  if (play && hit.startMs !== null && hit.endMs !== null) playback.playRange(hit.startMs, hit.endMs);
+  if (!play || hit.startMs === null || hit.endMs === null) return;
+  if (sameText && playback.hasSource()) playback.playRange(hit.startMs, hit.endMs);
+  else showToast({ tone: "info", lines: [`Opened «${hit.textTitle}». Load its recording in the Timeline, then press ▶ again to hear it.`] });
 }
 
 export const concordancePanel: PanelDef = {
@@ -75,7 +81,7 @@ export const concordancePanel: PanelDef = {
           };
           const row = h(
             "div",
-            { className: "cc-row", role: "listitem", tabIndex: 0, title: `${hit.textTitle}: open this segment` },
+            { className: "cc-row", role: "listitem", tabIndex: 0, title: `${hit.textTitle}: open this segment`, dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },
             play,
             h("span", { className: "cc-left", textContent: clip(left(hit), CONTEXT, "left") }),
             h("span", { className: "cc-key", textContent: keyword(hit) }),
@@ -125,7 +131,11 @@ export const concordancePanel: PanelDef = {
             drawRows();
           },
           (e) => {
-            if (mine === seq) count.textContent = `Could not search: ${errorText(e)}`;
+            if (mine !== seq) return;
+            hits = [];
+            total = 0;
+            rows.replaceChildren();
+            count.textContent = `Could not search: ${errorText(e)}`;
           },
         );
       }, 200);
@@ -139,7 +149,11 @@ export const concordancePanel: PanelDef = {
     copy.onclick = () => {
       if (hits.length === 0) return;
       void writeText(asTsv(sortHits(hits, sortBy))).then(
-        () => showToast({ tone: "info", lines: [`Copied ${hits.length} rows. Paste them into a spreadsheet.`] }),
+        () =>
+          showToast({
+            tone: "info",
+            lines: [total > hits.length ? `Copied the first ${hits.length} of ${total} rows. Narrow the search to copy the rest.` : `Copied ${hits.length} rows. Paste them into a spreadsheet.`],
+          }),
         (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
       );
     };
