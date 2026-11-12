@@ -2,6 +2,8 @@
 // side, sortable by the words to the left or right. Pure: no DOM.
 
 export type ConcordanceKind = "word" | "morph" | "gloss" | "translation";
+/** What the backend searches: the panel's kinds, or a sense id (a lexicon entry's occurrences). */
+export type QueryKind = ConcordanceKind | "sense";
 
 export type Hit = {
   textId: string;

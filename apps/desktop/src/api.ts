@@ -23,6 +23,8 @@ export type TextRow = {
   title: string;
   kind: string | null;
   segments: number;
+  /** The recording the text was transcribed from, when it has audio (roadmap 72). */
+  recording: string | null;
 };
 
 export type TierRow = {
@@ -65,7 +67,7 @@ export const openProject = (args: ProjectArgs) => invoke<ProjectInfo>("open_proj
 export const createProject = (args: ProjectArgs) => invoke<ProjectInfo>("create_project", args);
 export type ConcordanceResult = { hits: import("./concordance/logic").Hit[]; total: number };
 /** Every occurrence of a word, morph, gloss or translation word, with its segment's words (roadmap 71). */
-export const concordance = (args: { query: string; kind: import("./concordance/logic").ConcordanceKind }) => invoke<ConcordanceResult>("concordance", args);
+export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind }) => invoke<ConcordanceResult>("concordance", args);
 /** The sample project (roadmap 68), built the first time in this computer's app data. */
 export const openSample = (args: { researcher: string }) => invoke<ProjectInfo>("open_sample", args);
 export const listTexts = () => invoke<TextRow[]>("list_texts");
@@ -227,6 +229,8 @@ export type PeaksSlice = {
 /** WAV only for now; anything else rejects with an error naming WAV. */
 export const importMedia = (args: { path: string }) => invoke<SourceRow>("import_media", args);
 export const peaksInfo = (args: { sourceId: string }) => invoke<PeaksInfo>("peaks_info", args);
+/** Remember which recording a text was transcribed from (null forgets it). */
+export const linkRecording = (args: { textId: string; sourceId: string | null }) => invoke<void>("link_recording", args);
 export const peaksQuery = (args: {
   sourceId: string;
   channel: number;

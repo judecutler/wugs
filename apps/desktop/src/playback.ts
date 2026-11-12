@@ -27,6 +27,8 @@ export function setSource(url: string | null): void {
 }
 
 export const hasSource = (): boolean => audio.hasAttribute("src");
+/** The URL loaded, as set: so a second load of the same recording can be skipped. */
+export const sourceUrl = (): string | null => audio.getAttribute("src");
 export const currentMs = (): number => audio.currentTime * 1000;
 export const isPlaying = (): boolean => !audio.paused;
 export const pause = (): void => ctl.pause();

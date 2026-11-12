@@ -23,6 +23,7 @@ import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { emptyState, h } from "../dom";
 import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, showToast, subscribeSelection, touchLexicon } from "../store";
 import { createComposition, formatRange, imeBusy } from "../transcribe/logic";
+import { hear, playButton } from "../hear/hear";
 import type { PanelDef, PanelView } from "./panel";
 
 const LANG_KEY = "wugs.gloss-lang";
@@ -685,6 +686,7 @@ export const glossPanel: PanelDef = {
       const head = h(
         "div",
         { className: "gl-head" },
+        playButton("Play this segment", () => void hear({ textId: sel.text.id, tierId: sel.segment.tier, segmentId: sel.segment.id, startMs: sel.segment.startMs, endMs: sel.segment.endMs }, false)),
         h("span", { className: "gl-time", textContent: formatRange(sel.segment.startMs, sel.segment.endMs) }),
         h("span", { className: "gl-spacer" }),
         v.words.length > 0 ? copyControl(sel, v) : null,

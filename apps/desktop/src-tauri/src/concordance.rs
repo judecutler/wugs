@@ -34,6 +34,8 @@ pub enum Kind {
     Gloss,
     /// Words of free translations.
     Translation,
+    /// Words with a morph linked to this sense (the query is the sense's id): a lexicon entry's occurrences.
+    Sense,
 }
 
 #[derive(Debug, Serialize)]
@@ -175,6 +177,7 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
     let pattern = match kind {
         Kind::Morph | Kind::Gloss => bare_key(query.trim()),
         Kind::Word | Kind::Translation => key(query.trim()),
+        Kind::Sense => query.trim().chars().collect(),
     };
     if pattern.is_empty() || pattern.iter().all(|c| *c == '*') {
         return Ok(Concordance { hits: Vec::new(), total: 0 });
@@ -223,7 +226,7 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
                         }
                     }
                 }
-                Kind::Morph | Kind::Gloss => {
+                Kind::Morph | Kind::Gloss | Kind::Sense => {
                     for (i, token) in tokens.iter().enumerate() {
                         let mut morphs = Vec::new();
                         let mut glosses = Vec::new();
@@ -232,8 +235,12 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
                             let surface = p.proj.field_str(&m, "surface")?.unwrap_or_default();
                             let gloss = p.proj.field_str(&m, "gloss")?.unwrap_or_default();
                             let kind_of = p.proj.field_str(&m, "type")?.unwrap_or_else(|| "root".to_string());
-                            let probe = if kind == Kind::Morph { bare(&surface) } else { gloss.as_str() };
-                            matched |= !probe.is_empty() && glob(&pattern, &bare_key(probe));
+                            if kind == Kind::Sense {
+                                matched |= p.proj.field_str(&m, "sense")?.is_some_and(|s| s.chars().eq(pattern.iter().copied()));
+                            } else {
+                                let probe = if kind == Kind::Morph { bare(&surface) } else { gloss.as_str() };
+                                matched |= !probe.is_empty() && glob(&pattern, &bare_key(probe));
+                            }
                             glosses.push((if gloss.is_empty() { "?".to_string() } else { bare(&gloss).to_string() }, kind_of.clone()));
                             morphs.push((bare(&surface).to_string(), kind_of));
                         }
@@ -324,6 +331,12 @@ mod tests {
         // two, three, ten
         assert_eq!(concordance(&mut session, "t*", Kind::Translation).unwrap().total, 3);
         assert_eq!(concordance(&mut session, "*", Kind::Word).unwrap().total, 0);
+        // A lexicon entry's occurrences: the words whose morphs link to its sense.
+        let p = project(&mut session).unwrap();
+        let count = p.proj.entities_of_kind("sense").unwrap().into_iter().find(|s| p.proj.field_str(s, "gloss").unwrap().as_deref() == Some("count")).unwrap();
+        let used = concordance(&mut session, &count, Kind::Sense).unwrap();
+        assert_eq!(used.total, 1);
+        assert_eq!(used.hits[0].breakdown.as_deref(), Some("ni-kani"));
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

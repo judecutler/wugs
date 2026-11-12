@@ -485,7 +485,16 @@ The **Concordance** panel lists every place a word is used, one line per occurre
 2. Type it. Capital letters do not matter, but diacritics do: ŋa never finds na. Morph markers do not matter either: `-ra` and `ra` find the same morph. Use `*` for any letters (`ni*` finds every word starting with ni) and `?` for one letter.
 3. Sort the lines **By the word before** or **By the word after** to see patterns, as in a concordancer such as AntConc.
 
-Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. If the line is from another text, ▶ opens that text first; load its recording in the Timeline and press ▶ again. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
+Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
+
+## Hear any segment from anywhere
+
+Every segment has a ▶ beside it: the lines in Transcribe, the top of the Gloss panel, each line of the Concordance, and the words a lexicon entry is used in. In the Lexicon, click **used in 3 words** (or however many) under a sense to list those words, then ▶ to hear each one.
+
+▶ plays from the text's own recording. A text learns its recording the first time you pick a recording for it in the Timeline's list (or import or drop one while the text is open), and from then on the Timeline opens the text with it and ▶ works from every panel, even while another text is on the Timeline. A text whose recording was never picked plays only while it is the text on screen and the recording loaded is not another text's; elsewhere ▶ says to pick its recording first. The sample project comes with its recording picked.
+
+A text with no sharing level of its own shares like its recording, so picking a restricted recording makes the text restricted too; wugs says so when a pick changes this.
+
 ## Work with other devices
 
 Two or more computers can share one project. They sync directly over the local network, with no server.

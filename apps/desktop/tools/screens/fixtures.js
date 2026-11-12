@@ -9,9 +9,9 @@
   const projectInfo = { projectId: PROJECT, path: PROJECT_PATH, texts: 3, conflicts: 2, relocation: null };
 
   const texts = [
-    { id: "t-count", title: "Counting to ten", kind: "elicitation", segments: 10 },
-    { id: "t-fox", title: "The fox and the well", kind: "narrative", segments: 24 },
-    { id: "t-market", title: "Greetings at the market", kind: "conversation", segments: 7 },
+    { id: "t-count", title: "Counting to ten", kind: "elicitation", segments: 10, recording: "src-count" },
+    { id: "t-fox", title: "The fox and the well", kind: "narrative", segments: 24, recording: "src-fox" },
+    { id: "t-market", title: "Greetings at the market", kind: "conversation", segments: 7, recording: null },
   ];
 
   const tiers = [
@@ -527,6 +527,7 @@
       ],
     }),
     list_texts: () => texts,
+    link_recording: () => null,
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),
     conflict_count: () => conflicts.length,
     list_sources: () => SOURCES,

@@ -1356,6 +1356,20 @@ impl Project {
         t.commit()
     }
 
+    /// The recording a text was transcribed from (`source` on the text, a
+    /// ref), or none. A person's choice, so a resolving write; in the
+    /// text's own scope, since it is part of the text.
+    pub fn set_text_source(&mut self, text: &str, source: Option<&str>) -> Result<CommitResult, String> {
+        self.require(text, "text")?;
+        if let Some(s) = source {
+            self.require(s, "source")?;
+        }
+        let value = source.map_or(Value::Null, Value::str);
+        let mut t = self.intent("set-text-source").resolving();
+        t.set("text", text, text, "source", value)?;
+        t.commit()
+    }
+
     /// A writing system (DATA-MODEL §3): `charset` feeds validator #5,
     /// `sort` is the alphabet order in the format `wugs_model::sortkey`
     /// parses (units separated by whitespace, variants of one unit joined
@@ -2517,6 +2531,20 @@ mod tests {
         for &(text, ok) in wugs_model::REF_VECTORS {
             assert_eq!(check_blob_ref(text).is_ok(), ok, "{text:?}");
         }
+    }
+
+    #[test]
+    fn a_text_remembers_its_recording_and_forgets_it() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let src = p.add_source("Elicitation 1", None, "audio", None).unwrap();
+        let txt = p.create_text("T").unwrap();
+        p.set_text_source(&txt, Some(&src)).unwrap();
+        assert_eq!(p.proj.field_str(&txt, "source").unwrap().as_deref(), Some(src.as_str()));
+        assert!(p.set_text_source(&txt, Some(&txt)).is_err(), "only a source");
+        assert!(p.set_text_source(&src, Some(&src)).is_err(), "only on a text");
+        p.set_text_source(&txt, None).unwrap();
+        assert!(matches!(p.proj.field(&txt, "source").unwrap(), Some((Value::Null, _))), "cleared");
+        fs::remove_dir_all(root).ok();
     }
 
     #[test]

@@ -331,7 +331,10 @@ export class TimelineView {
     this.analysis.setSource(info !== null ? sourceId : null);
     this.info = info;
     this.strips = info !== null && sourceId !== null ? new StripCache(sourceId, info.sampleRate, info.durationMs) : null;
-    playback.setSource(info !== null ? convertFileSrc(info.mediaPath) : null);
+    // Another panel may have loaded this recording to play a segment
+    // (src/hear.ts): loading it again would cut that playing short.
+    const url = info !== null ? convertFileSrc(info.mediaPath) : null;
+    if (url === null || playback.sourceUrl() !== url) playback.setSource(url);
     setMediaSource(info !== null ? sourceId : null);
     // Spans for snapping come in the background, computed once per
     // recording; until they arrive, edges simply do not snap.

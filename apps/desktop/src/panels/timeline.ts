@@ -4,10 +4,10 @@
 // tier gutter, the editing buttons (Auto-segment, Split, Merge, Undo, Redo)
 // and the perf toggle.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { addTier, importMedia, listSources, peaksInfo, type SourceRow, type TierTemplate } from "../api";
+import { addTier, importMedia, linkRecording, listSources, peaksInfo, type SourceRow, type TierTemplate } from "../api";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
-import { attempt, dataGeneration, getSelection, getState, refreshText, takeWantedMedia } from "../store";
+import { attempt, dataGeneration, getSelection, getState, mediaSource, refreshText, reloadTexts, showToast, takeWantedMedia } from "../store";
 import { parseGranularity } from "../timeline/edit-rules";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
 import { clock } from "../timeline/tracks";
@@ -30,11 +30,13 @@ export const timelinePanel: PanelDef = {
     let selectedSource: string | null = null;
     let lastSlice = "";
     let lastText = "";
+    let lastTextId = "";
+    let seenMedia: string | null = null;
     let lastGeneration = -1;
     let lastProject = "";
 
     const sourcePicker = h("select", { className: "tl-sources", title: "The recording behind this timeline" });
-    sourcePicker.onchange = () => void loadSource(sourcePicker.value || null);
+    sourcePicker.onchange = () => void pickSource(sourcePicker.value || null);
     const importButton = h("button", { textContent: "Import audio…", title: "Add a recording to this project (WAV, M4A, MP3, FLAC, Ogg, AIFF; compressed files are decoded to WAV)" });
     const perfButton = h("button", { textContent: "Perf", title: "Show frame times and strip-cache hits on the canvas" });
     const praat = praatControls(() => {
@@ -198,7 +200,7 @@ export const timelinePanel: PanelDef = {
         try {
           const row = await importMedia({ path });
           await refreshSources();
-          await loadSource(row.id);
+          await pickSource(row.id);
         } finally {
           importButton.disabled = false;
         }
@@ -219,15 +221,44 @@ export const timelinePanel: PanelDef = {
       }
       const wanted = takeWantedMedia(sources.map((s) => s.id));
       if (wanted !== null) {
-        await loadSource(wanted);
+        // A recording dropped while a text is open is picked for it, like Import.
+        await pickSource(wanted);
         return;
       }
-      // One recording and nothing picked: load it without a click.
+      // One recording, nothing picked, and no other text's: load it without a click.
       const only = sources.length === 1 ? sources[0] : undefined;
-      if (selectedSource === null && only !== undefined) await loadSource(only.id);
+      const st = getState();
+      const elsewhere = st.kind === "open" && st.texts.some((t) => t.recording === only?.id && t.id !== st.text?.id);
+      if (selectedSource === null && only !== undefined && !elsewhere) await loadSource(only.id);
     }
 
+    /** The person chose this recording for the text on screen: the text
+     * remembers it, so every panel can play its segments (roadmap 72). The
+     * text is the one on screen when they chose, even if the load is slow. */
+    async function pickSource(sourceId: string | null): Promise<void> {
+      const before = getState();
+      const textId = before.kind === "open" ? (before.text?.id ?? null) : null;
+      const previous = before.kind === "open" ? (before.texts.find((t) => t.id === textId)?.recording ?? null) : null;
+      await loadSource(sourceId);
+      const s = getState();
+      if (s.kind !== "open" || textId === null || s.text?.id !== textId || sourceId === null || previous === sourceId) return;
+      await attempt(async () => {
+        await linkRecording({ textId, sourceId });
+        await reloadTexts();
+      });
+      // A text with no access level of its own shares like its recording
+      // (DATA-MODEL §4): say so when the pick changes that.
+      const level = (id: string | null) => (id === null ? null : (sources.find((x) => x.id === id)?.access ?? null)) ?? "open";
+      if (level(previous) !== level(sourceId)) {
+        showToast({ tone: "warn", lines: [`This text now shares like its recording: ${level(sourceId)}. A level set on the text itself still wins.`] });
+      }
+    }
+
+    /** Only the newest load lands: a slow one overtaken by another is dropped. */
+    let loadSeq = 0;
+
     async function loadSource(sourceId: string | null): Promise<void> {
+      const mine = ++loadSeq;
       selectedSource = sourceId;
       if (view === null) return;
       if (sourceId === null) {
@@ -235,8 +266,10 @@ export const timelinePanel: PanelDef = {
         return;
       }
       await attempt(async () => {
-        view?.setMedia(await peaksInfo({ sourceId }), sourceId);
+        const info = await peaksInfo({ sourceId });
+        if (mine === loadSeq) view?.setMedia(info, sourceId);
       });
+      if (mine !== loadSeq) return;
       sourcePicker.value = sourceId;
       praat.refresh();
       updateEditButtons();
@@ -373,6 +406,24 @@ export const timelinePanel: PanelDef = {
       } else if (lastGeneration !== dataGeneration()) {
         lastGeneration = dataGeneration();
         void refreshSources();
+      }
+      // A text opens with the recording it was transcribed from; a text
+      // with none drops a recording that belongs to another text (the wrong
+      // audio is worse than none). The Timeline also follows a recording
+      // another panel loaded to play a segment, only when that changed since
+      // the last look, so its own slow loads never chase each other.
+      const linked = s.texts.find((t) => t.id === s.text?.id)?.recording ?? null;
+      const media = mediaSource();
+      const mediaMoved = media !== seenMedia;
+      seenMedia = media;
+      if (s.text.id !== lastTextId) {
+        lastTextId = s.text.id;
+        const textId = s.text.id;
+        const othersOwn = selectedSource !== null && s.texts.some((t) => t.recording === selectedSource && t.id !== textId);
+        if (linked !== null && linked !== selectedSource) void loadSource(linked);
+        else if (linked === null && othersOwn) void loadSource(null);
+      } else if (mediaMoved && media !== null && media !== selectedSource) {
+        void loadSource(media);
       }
       const textStamp = `${s.text.id}|${JSON.stringify(s.text.tiers)}|${JSON.stringify(s.text.segments)}`;
       if (textStamp !== lastText) {
