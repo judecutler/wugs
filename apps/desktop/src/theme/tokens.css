@@ -14,7 +14,7 @@
 
   /* text */
   --ink: #1b1a17;
-  --muted: #6b6453;           /* 4.8:1 or better on every surface */
+  --muted: #625b4a;           /* 4.8:1 or better on every surface, --line included */
   --chrome-ink: #4a4436;
   --on-accent: #ffffff;       /* text on an accent, warn or error fill */
 

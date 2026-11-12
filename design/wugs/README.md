@@ -7,8 +7,9 @@ monocle and glasses lenses, the helmet visor) are rebuilt from the inside of
 their outlines when traced; the see-through parts are drawn at 35% opacity,
 as set in Procreate.
 
-`python3 -I tools/brand/trace_wugs.py` (needs `pip install potracer pillow
-scipy numpy`) traces them into:
+`python3 tools/brand/trace_wugs.py` (needs `rsvg-convert` and `pip install
+potracer pillow scipy numpy`; the script's header records the versions used)
+traces them into:
 
 - `apps/desktop/src/theme/wug-parts.json`: every part as a vector path, which
   `src/theme/wug.ts` stacks into a wug with any body colour and accessories;

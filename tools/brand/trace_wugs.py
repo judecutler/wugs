@@ -7,12 +7,16 @@ Reads design/wugs/layers/NN-<part>.png (Procreate layers, numbered bottom to
 top, each exported over a white background) and writes:
     apps/desktop/src/theme/wug-parts.json   every part's path, in stacking order
     apps/desktop/public/brand/logo.svg      the plain wug for the top bar
-    design/wugs/icon.svg                     the app icon source (npx tauri icon)
+    design/wugs/icon.svg, icon.png           the app icon source (npx tauri icon)
 
-Needs: pip install potracer pillow scipy numpy
+Needs rsvg-convert (librsvg) and: pip install potracer==0.0.4 pillow scipy numpy
+(the committed output was made with numpy 2.5.3, scipy 1.18.1, Pillow 12.3.0;
+other versions can move paths by a fraction of a pixel). `potracer` installs
+as the module `potrace`, as does the unrelated `pypotrace`: install only one.
 """
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -115,7 +119,7 @@ def path_el(part, fill=None):
 
 
 def main():
-    files = sorted(LAYERS.glob("*.png"))
+    files = sorted(LAYERS.glob("*.png"), key=lambda f: int(f.stem.split("-", 1)[0]))
     names = {re.sub(r"^\d+-", "", f.stem): f for f in files}
     cov = {n: coverage(read(f)) for n, f in names.items()}
     parts = []
@@ -145,7 +149,9 @@ def main():
     # The icon: the wug on a cream tile with a thick black rim, as drawn in the brand sheet.
     tile = (f'<rect x="20" y="20" width="472" height="472" rx="104" fill="{CREAM}" stroke="#000" stroke-width="28"/>'
             f'<g transform="translate(24 -16) scale(0.92)">{plain}</g>')
-    (ROOT / "design" / "wugs" / "icon.svg").write_text(svg(tile))
+    icon = ROOT / "design" / "wugs" / "icon.svg"
+    icon.write_text(svg(tile))
+    subprocess.run(["rsvg-convert", "-w", "1024", "-h", "1024", str(icon), "-o", str(icon.with_suffix(".png"))], check=True)
 
 
 if __name__ == "__main__":

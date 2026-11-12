@@ -44,14 +44,16 @@ export const KIT_WUGS: Readonly<Record<string, WugLook>> = {
 };
 
 /** A kit's wug: its own look when built in, else the brand wug. */
-export const kitWug = (kitId: string | undefined): WugLook => KIT_WUGS[kitId ?? ""] ?? KIT_WUGS.wugs!;
+export const kitWug = (kitId: string | undefined): WugLook =>
+  kitId !== undefined && Object.hasOwn(KIT_WUGS, kitId) ? KIT_WUGS[kitId]! : KIT_WUGS.wugs!;
 
 export type Layer = { id: string; d: string; fill: string; opacity: number };
 
 /** The layers to draw, bottom to top. */
 export function wugLayers(look: WugLook): Layer[] {
   const bySlot = new Map<Slot, AccessoryId>();
-  for (const a of look.accessories) bySlot.set(ACCESSORIES[a].slot, a);
+  // An id this build does not know (a newer kit file) is left off, never fatal.
+  for (const a of look.accessories) if (Object.hasOwn(ACCESSORIES, a)) bySlot.set(ACCESSORIES[a].slot, a);
   const wanted = new Set<string>(["body-shape", "body-line", "eye-shape", "eye-line"]);
   for (const a of bySlot.values()) for (const p of ACCESSORIES[a].parts) wanted.add(p);
   return PARTS.filter((p) => wanted.has(p.id)).map((p) => ({

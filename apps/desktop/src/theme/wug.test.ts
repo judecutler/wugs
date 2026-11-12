@@ -56,6 +56,15 @@ test("built-in kits have their own wug; any other kit gets the brand wug", () =>
   assert.equal(kitWug("someones-kit").body, kitWug(undefined).body);
 });
 
+test("a kit id that names an Object property still gets the brand wug", () => {
+  assert.equal(kitWug("constructor").body, kitWug(undefined).body);
+  assert.equal(kitWug("toString").body, kitWug(undefined).body);
+});
+
+test("an accessory this build does not know is left off", () => {
+  assert.deepEqual(ids({ body: "#000", accessories: ["jetpack" as never] }), ["body-shape", "body-line", "eye-shape", "eye-line"]);
+});
+
 test("svg markup escapes the label and colours", () => {
   const svg = wugSvg({ body: '"><x', accessories: [] }, 'a "b"');
   assert.ok(!svg.includes('"><x'));
