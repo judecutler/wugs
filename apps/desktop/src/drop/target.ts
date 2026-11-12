@@ -17,6 +17,7 @@ import {
   overlayWords,
   progressLine,
   projectChangedReason,
+  projectClosedReason,
   unsupportedReason,
   type DragAction,
   type Dragged,
@@ -152,17 +153,20 @@ async function drain() {
   const report: string[] = [];
   let refused = 0;
   let total = 0;
-  let lastText: string | null = null;
+  let lastText: { id: string; project: string } | null = null;
   let lexicon = false;
   try {
     while (queue.length > 0) {
       const { file, project } = queue.shift()!;
       total += 1;
       const progress = (sent: number) => showToast({ tone: "info", lines: [...report, progressLine(file.name, sent, file.size, queue.length)] });
-      const outcome: Outcome = openProject() === project ? await importOne(file, project, progress) : { kind: "refused", reason: projectChangedReason };
+      const now = openProject();
+      const outcome: Outcome =
+        now === project ? await importOne(file, project, progress) : { kind: "refused", reason: now === null ? projectClosedReason : projectChangedReason };
       if (outcome.kind === "refused") refused += 1;
       if (outcome.kind === "file") {
-        lastText = outcome.text ?? lastText;
+        // Only a text of the project still open can be selected afterwards.
+        if (outcome.text != null) lastText = { id: outcome.text, project };
         lexicon ||= outcome.lexicon;
       }
       report.push(...outcomeLines(file.name, outcome));
@@ -170,15 +174,16 @@ async function drain() {
   } finally {
     draining = false;
   }
-  // The report first: a failed refresh below must not hide what was imported.
-  showToast({ tone: refused === 0 ? "info" : refused === total ? "error" : "warn", lines: report });
+  // Refresh first (it reports its own failures), then the report, so no
+  // other toast can replace what was and was not imported.
   try {
     if (lexicon) touchLexicon();
     await refreshAll();
-    if (lastText !== null) await selectText(lastText);
+    if (lastText !== null && openProject() === lastText.project) await selectText(lastText.id);
   } catch (e) {
-    showToast({ tone: "warn", lines: [...report, `The panels could not be refreshed: ${errorText(e)}`] });
+    report.push(`The panels could not be refreshed: ${errorText(e)}`);
   }
+  showToast({ tone: refused === 0 ? "info" : refused === total ? "error" : "warn", lines: report });
 }
 
 async function importOne(file: File, project: string, progress: (sent: number) => void): Promise<Outcome> {

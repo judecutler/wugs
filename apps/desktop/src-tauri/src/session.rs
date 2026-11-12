@@ -690,9 +690,14 @@ pub fn project_root(session: &mut Session) -> Result<PathBuf, String> {
 /// one project, such as a dropped file, must not land in another.
 pub fn require_root(session: &mut Session, expected: &Path) -> Result<(), String> {
     let root = project_root(session)?;
+    if root == expected {
+        return Ok(());
+    }
     match (root.canonicalize(), expected.canonicalize()) {
         (Ok(now), Ok(then)) if now == then => Ok(()),
-        _ => Err("another project was opened after the files were dropped; nothing was imported".into()),
+        (Ok(_), Ok(_)) => Err("another project was opened after the files were dropped; nothing was imported".into()),
+        // Some virtual drives cannot resolve a path: say what really happened.
+        _ => Err(format!("wugs could not tell whether {} is still the open project; nothing was imported", expected.display())),
     }
 }
 

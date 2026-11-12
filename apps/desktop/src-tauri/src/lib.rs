@@ -210,7 +210,15 @@ fn import_recording(s: &SessionThread, file: &std::path::Path, label: String, ex
     }
     // Compressed audio is decoded to a WAV in the project's cache, off the
     // session thread, then imported like any WAV under its own file name.
-    let root = s.run(session::project_root)?;
+    // A drop meant for a project that is no longer open is refused before
+    // minutes of decoding; the check inside the import below stays the guard.
+    let root = match expected_root.clone() {
+        Some(expected) => {
+            s.run(move |s| session::require_root(s, &expected))?;
+            s.run(session::project_root)?
+        }
+        None => s.run(session::project_root)?,
+    };
     let dir = root.join("cache").join("convert");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     convert::sweep(&dir);
@@ -273,7 +281,7 @@ fn import_dropped(s: &SessionThread, staged: drops::Staged) -> Result<Dropped, S
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn drop_cancel(drops: State<drops::Drops>, drop_id: String) {
     drops.cancel(&drop_id);
 }
