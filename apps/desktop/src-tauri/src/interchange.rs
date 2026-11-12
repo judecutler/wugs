@@ -138,18 +138,21 @@ fn not_carried(map: &std::collections::BTreeMap<String, usize>) -> Option<String
 
 /// Import one file into the open project.
 pub fn import_file(s: &mut Session, path: &str) -> Result<Imported, String> {
-    let path = Path::new(path);
-    let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let format = detect(path, &bytes).ok_or_else(|| {
-        format!(
-            "{} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm/.txt)",
-            path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()
-        )
+    let name = Path::new(path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    import_file_named(s, path, &name)
+}
+
+/// Import the file at `path` as if it were named `file_name`: the format
+/// comes from that name's extension, a new text's title from its stem.
+pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result<Imported, String> {
+    let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
+    let named = Path::new(file_name);
+    let format = detect(named, &bytes).ok_or_else(|| {
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm/.txt)")
     })?;
-    let stem = path.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
-    let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
-        Format::Elan | Format::FlexText | Format::Lift => decode_xml(&bytes, &file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift => decode_xml(&bytes, file_name)?,
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16.
         Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
     };

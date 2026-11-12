@@ -7,7 +7,7 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { addTier, importMedia, listSources, peaksInfo, type SourceRow, type TierTemplate } from "../api";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
-import { attempt, dataGeneration, getSelection, getState, refreshText } from "../store";
+import { attempt, dataGeneration, getSelection, getState, refreshText, takeWantedMedia } from "../store";
 import { parseGranularity } from "../timeline/edit-rules";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
 import type { PanelDef, PanelView } from "./panel";
@@ -135,6 +135,11 @@ export const timelinePanel: PanelDef = {
       } else if (selectedSource !== null) {
         selectedSource = null;
         view?.setMedia(null, null);
+      }
+      const wanted = takeWantedMedia(sources.map((s) => s.id));
+      if (wanted !== null) {
+        await loadSource(wanted);
+        return;
       }
       // One recording and nothing picked: load it without a click.
       const only = sources.length === 1 ? sources[0] : undefined;

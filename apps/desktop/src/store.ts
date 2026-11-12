@@ -161,6 +161,21 @@ export function setMediaSource(id: string | null) {
   for (const f of listeners) f();
 }
 
+let wantedMedia: string | null = null;
+
+/** Ask the Timeline to load this recording the next time it lists them (a dropped recording). */
+export function wantMedia(id: string) {
+  wantedMedia = id;
+}
+
+/** The recording asked for, once it is among `listed`; a listing that does not have it yet leaves it asked for. */
+export function takeWantedMedia(listed: string[]): string | null {
+  const id = wantedMedia;
+  if (id === null || !listed.includes(id)) return null;
+  wantedMedia = null;
+  return id;
+}
+
 /** Speech-assist models and whether each is downloaded. */
 export const assistModelList = (): AssistModel[] => models;
 

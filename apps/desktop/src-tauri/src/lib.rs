@@ -4,6 +4,7 @@ pub mod capture;
 pub mod conflicts;
 pub mod convert;
 pub mod corrections;
+pub mod drops;
 pub mod elicit;
 pub mod gloss;
 pub mod identity;
@@ -187,12 +188,21 @@ fn add_tier(s: State<SessionThread>, template: String, name: Option<String>) -> 
 
 #[tauri::command(async)]
 fn import_media(s: State<SessionThread>, path: String) -> Result<SourceRow, String> {
+    let file = std::path::Path::new(&path);
+    let label = file.file_name().and_then(|n| n.to_str()).unwrap_or("Recording").to_string();
+    import_recording(&s, file, label, None)
+}
+
+/// A recording picked or dropped: a WAV goes in as it is, anything else is
+/// decoded to a WAV first. `expected_root`: the project a dropped file was
+/// meant for, checked in the same session-thread call that imports, so a
+/// project opened during a long decode gets nothing.
+fn import_recording(s: &SessionThread, file: &std::path::Path, label: String, expected_root: Option<std::path::PathBuf>) -> Result<SourceRow, String> {
     // The open project's blobs/ is already in the asset scope: every way a
     // project opens (open, create, join) passes through allow_media.
-    let file = std::path::PathBuf::from(&path);
-    if convert::is_wav(&file) {
-        let wav = path.clone();
-        match s.run(move |s| session::import_media(s, &wav)) {
+    if convert::is_wav(file) {
+        let (wav, label, expected) = (file.to_path_buf(), label.clone(), expected_root.clone());
+        match s.run(move |s| session::import_media_named(s, &wav, &label, expected.as_deref())) {
             // 8-bit, A-law, μ-law and ADPCM WAVs are decoded like compressed audio.
             Err(e) if e.contains("unsupported WAV") => {}
             done => return done,
@@ -200,17 +210,80 @@ fn import_media(s: State<SessionThread>, path: String) -> Result<SourceRow, Stri
     }
     // Compressed audio is decoded to a WAV in the project's cache, off the
     // session thread, then imported like any WAV under its own file name.
-    let root = s.run(session::project_root)?;
+    // A drop meant for a project that is no longer open is refused before
+    // minutes of decoding; the check inside the import below stays the guard.
+    let root = match expected_root.clone() {
+        Some(expected) => {
+            s.run(move |s| session::require_root(s, &expected))?;
+            s.run(session::project_root)?
+        }
+        None => s.run(session::project_root)?,
+    };
     let dir = root.join("cache").join("convert");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     convert::sweep(&dir);
     let wav = dir.join(format!("{}.wav", wugs_model::ulid()));
-    convert::to_wav(&file, &wav)?;
-    let label = file.file_name().and_then(|n| n.to_str()).unwrap_or("Recording").to_string();
+    convert::to_wav(file, &wav)?;
     let converted = wav.clone();
-    let row = s.run(move |s| session::import_media_named(s, &converted, &label));
+    let row = s.run(move |s| session::import_media_named(s, &converted, &label, expected_root.as_deref()));
     std::fs::remove_file(&wav).ok();
     row
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum Dropped {
+    Recording { source: SourceRow },
+    File { imported: interchange::Imported },
+}
+
+/// Start copying a dropped file into `project`, the project open when it
+/// was dropped; refused if another one is open now. Returns the drop's id.
+#[tauri::command(async)]
+fn drop_begin(s: State<SessionThread>, drops: State<drops::Drops>, project: String, name: String, size: u64) -> Result<String, String> {
+    let root = s.run(move |s| session::require_root(s, std::path::Path::new(&project)).and_then(|()| session::project_root(s)))?;
+    drops.begin(&root, &name, size)
+}
+
+/// The body is the next piece of the file, raw; the drop id rides in a header.
+#[tauri::command(async)]
+fn drop_chunk(drops: State<drops::Drops>, request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("drop_chunk expects a binary body".into());
+    };
+    let id = request
+        .headers()
+        .get("x-drop-id")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("drop_chunk is missing the x-drop-id header")?;
+    drops.chunk(id, bytes)
+}
+
+/// Import the whole dropped file the way a picked one is imported, then
+/// remove the staged copy whatever happened.
+#[tauri::command(async)]
+fn drop_finish(s: State<SessionThread>, drops: State<drops::Drops>, drop_id: String) -> Result<Dropped, String> {
+    let staged = drops.finish(&drop_id)?;
+    let dir = staged.dir.clone();
+    let result = import_dropped(&s, staged);
+    std::fs::remove_dir_all(&dir).ok();
+    result
+}
+
+/// Every import below checks, in the call that writes, that the project
+/// the file was dropped into is still the open one.
+fn import_dropped(s: &SessionThread, staged: drops::Staged) -> Result<Dropped, String> {
+    match drops::route(&staged.path) {
+        drops::Route::Recording => {
+            import_recording(s, &staged.path, staged.name.clone(), Some(staged.root.clone())).map(|source| Dropped::Recording { source })
+        }
+        drops::Route::File => s.run(move |s| drops::import_file(s, &staged)).map(|imported| Dropped::File { imported }),
+    }
+}
+
+#[tauri::command(async)]
+fn drop_cancel(drops: State<drops::Drops>, drop_id: String) {
+    drops.cancel(&drop_id);
 }
 
 #[tauri::command(async)]
@@ -1122,6 +1195,18 @@ pub fn run() {
         // minisign signature against tauri.conf.json's key. The webview has
         // no updater permission; it goes through `updater::update_*`.
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // The webview never leaves the app's own page. With native
+        // drag-and-drop off (tauri.conf.json), WebView2 accepts a link
+        // dragged in from a browser and would navigate to it, taking the
+        // whole UI (and any take being recorded) with it.
+        .plugin(
+            tauri::plugin::Builder::<tauri::Wry>::new("stay-in-app")
+                .on_navigation(|webview, url| {
+                    let dev_url = if cfg!(debug_assertions) { webview.app_handle().config().build.dev_url.clone() } else { None };
+                    capture::is_app_origin(url, dev_url.as_ref())
+                })
+                .build(),
+        )
         // Recording needs the microphone, so the engine's own prompt is
         // skipped, but only for the app's own page: wry hands this handler
         // no origin, so the closure reads the webview's current URL.
@@ -1138,6 +1223,7 @@ pub fn run() {
         .manage(SessionThread::spawn())
         .manage(Reachable::default())
         .manage(Captures::default())
+        .manage(drops::Drops::default())
         .manage(updater::Staged::default())
         .manage(assist::Downloads::default())
         .manage(assist::Worker::spawn())
@@ -1243,6 +1329,10 @@ pub fn run() {
             import_media,
             capture_begin,
             capture_chunk,
+            drop_begin,
+            drop_chunk,
+            drop_finish,
+            drop_cancel,
             capture_finish,
             capture_discard,
             capture_keep,

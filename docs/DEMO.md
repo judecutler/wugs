@@ -20,7 +20,7 @@ Do these the day before. Two of them download large files.
 - In **Texts**, type a title and click **New text**.
 
 ### 2. Bring in the recording (30 s)
-- On the **Timeline**, click **Import audio…** and pick the voice memo. M4A, MP3, FLAC and WAV all work; compressed files are decoded to WAV, the format archives ask for.
+- On the **Timeline**, click **Import audio…** and pick the voice memo, or drop it onto the window. M4A, MP3, FLAC and WAV all work; compressed files are decoded to WAV, the format archives ask for.
 - Or record live: **Media**, then the record button. A crash or a power cut loses at most the last five seconds.
 - The waveform appears. Scroll to zoom and drag to pan.
 
