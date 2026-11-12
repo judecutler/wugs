@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectSystem, installers, size, version } from "../download.js";
+import { detectSystem, installers, primaryChoice, size, version } from "../download.js";
 
 test("the visitor's system comes from what the browser reports", () => {
   assert.equal(detectSystem({ userAgentData: { platform: "Windows" } }), "windows");
@@ -44,4 +44,16 @@ test("sizes and versions read plainly", () => {
   assert.equal(size(1_300_000_000), "1.3 GB");
   assert.equal(size(0), "");
   assert.equal(version("v0.1.0"), "0.1.0");
+});
+
+test("the main button offers the visitor's installer, or says why it cannot", () => {
+  const files = installers(release);
+  assert.equal(primaryChoice("windows", files, "0.1.0", "R").href, "w");
+  assert.equal(primaryChoice("windows", files, "0.1.0", "R").text, "Download for Windows");
+  const empty = primaryChoice("windows", installers({ assets: [] }), "0.1.0", "R");
+  assert.equal(empty.href, "R");
+  assert.match(empty.meta, /still being prepared/);
+  assert.equal(primaryChoice("unknown", files, "0.1.0", "R").href, "#systems");
+  assert.match(primaryChoice("mobile", installers({ assets: [] }), "0.1.0", "R").meta, /still being prepared/);
+  assert.equal(primaryChoice("mobile", files, "0.1.0", "R").text, "See all downloads");
 });

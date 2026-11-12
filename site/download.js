@@ -29,6 +29,26 @@ export function installers(release) {
 
 export const SYSTEM_NAMES = { windows: "Windows", mac: "macOS", linux: "Linux" };
 
+/** What the main button says and where it goes, for a published release. */
+export function primaryChoice(system, files, v, releasesUrl) {
+  const mine = system in SYSTEM_NAMES ? files[system] : null;
+  if (mine) {
+    return {
+      text: `Download for ${SYSTEM_NAMES[system]}`,
+      href: mine.browser_download_url,
+      meta: [`Version ${v}`, size(mine.size), system === "mac" ? "Apple silicon and Intel" : ""].filter(Boolean).join(" · "),
+    };
+  }
+  // A release published before its installers were attached.
+  if (!Object.values(files).some(Boolean)) {
+    return { text: "See releases on GitHub", href: releasesUrl, meta: `Version ${v} is still being prepared. Check back later today.` };
+  }
+  if (system === "mobile") {
+    return { text: "See all downloads", href: "#systems", meta: `Version ${v} is for Windows, macOS and Linux. Open this page on your laptop.` };
+  }
+  return { text: "Choose your system below", href: "#systems", meta: `Version ${v}` };
+}
+
 /** "92 MB" from bytes. */
 export function size(bytes) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "";
@@ -59,16 +79,10 @@ function render(release) {
   }
 
   const v = version(release.tag_name);
-  const mine = system in SYSTEM_NAMES ? files[system] : null;
-  if (mine) {
-    primary.textContent = `Download for ${SYSTEM_NAMES[system]}`;
-    primary.href = mine.browser_download_url;
-    meta.textContent = [`Version ${v}`, size(mine.size), system === "mac" ? "Apple silicon and Intel" : ""].filter(Boolean).join(" · ");
-  } else {
-    primary.textContent = system === "mobile" ? "See all downloads" : "Choose your system below";
-    primary.href = "#systems";
-    meta.textContent = system === "mobile" ? `Version ${v} is for Windows, macOS and Linux. Open this page on your laptop.` : `Version ${v}`;
-  }
+  const choice = primaryChoice(system, files, v, RELEASES);
+  primary.textContent = choice.text;
+  primary.href = choice.href;
+  meta.textContent = choice.meta;
 
   const rows = [
     ["windows", "Windows 10 or 11", files.windows, "Installer"],
