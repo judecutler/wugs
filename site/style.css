@@ -1,9 +1,19 @@
-/* Junicode 2 (OFL), cut to Latin and IPA with only its weight axis kept. */
+/* Junicode 2 (OFL), cut by tools/brand/junicode.py with only its weight
+   axis kept. The IPA file loads only when a page shows one of its characters;
+   its unicode-range matches IPA in that script. */
 @font-face {
   font-family: "Junicode";
-  src: url(fonts/junicode-latin-ipa-wght.woff2) format("woff2-variations");
+  src: url(fonts/junicode-latin-wght.woff2) format("woff2-variations");
   font-weight: 300 700;
   font-display: swap;
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+  font-family: "Junicode";
+  src: url(fonts/junicode-ipa-wght.woff2) format("woff2-variations");
+  font-weight: 300 700;
+  font-display: swap;
+  unicode-range: U+0100-02FF, U+0300-036F, U+1D00-1DFF, U+1E00-1EFF, U+2190-2193, U+2C60-2C7F, U+A700-A7FF;
 }
 @font-face {
   font-family: "Figtree";
