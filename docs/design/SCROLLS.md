@@ -21,40 +21,60 @@ Scrolls keeps all of these steps in one project, over the same op log as Tongues
 
 1. **Drop files in, get a searchable corpus.** Plain text, CSV/TSV, CoNLL-U, TEI and the Tongues texts of the same project are read in one step. Sentence and token splitting run on import. Metadata per document (author, date, genre, speaker) comes from a CSV beside the files or from TEI headers.
 2. **Tag and lemmatize without a terminal.** A `morphosyntax` capability. Its providers are the existing taggers (§3), picked per language like any capability. Results are stored as ordinary ops, marked as machine output until a person checks them, exactly as speech assist marks transcriptions.
-3. **A concordance with queries people already know.** The Tongues concordance (row 71) grows CQP-style queries: `[lemma="go"] [pos="ADP"]`, `[word="ni.*"]`, distances, and metadata filters (`::match.text_genre="news"`). Sort by left or right context, as now.
-4. **Counts that stay correct.** Frequency lists (word, lemma, tag, n-grams), collocations (MI, log-Dice, t-score) and keyness against a reference corpus (log-likelihood, %DIFF). All are computed from the live projection, so they change when a tag is corrected.
+3. **A concordance with queries people already know.** The Tongues concordance (row 71) grows CQP-style queries: `[lemma="go"] [upos="ADP"]`, `[word="ni.*"]`, distances, and metadata filters (`:: match.text_genre="news"`). Sort by left or right context, as now. Rather than writing a CQP engine of our own (the rebuilding the owner asked to avoid), the first version translates the common subset into queries on the typed tables. A project can also be exported to CWB and searched with the real `cqp` where it is installed.
+4. **Counts that stay correct.** Frequency lists (word, lemma, tag, n-grams), collocations (MI, log-Dice, t-score) and keyness against a reference corpus (log-likelihood, %DIFF, log ratio), where the reference corpus is another project or a frequency-list dataset package. All are computed from the live projection, so they change when a tag is corrected.
 5. **Correct where you look.** A CoNLL-U view of one sentence (a table and a dependency arc diagram), editable in place. A correction made in the concordance (re-tag this hit, or all hits like it) is one intent, undoable.
-6. **Hand off to anything.** Export to CoNLL-U, TEI, CSV, CWB vertical format (what CQPweb and Sketch Engine import), and AntConc's plain-text and tagged formats. Sealing for an archive works as in Tongues.
+6. **Hand off to anything.** Export to CoNLL-U, TEI, CSV, CWB vertical format (what CQPweb and Sketch Engine import), and plain text for AntConc (one file per document, optionally with `word_TAG` tags, which AntConc reads). Sealing for an archive works as in Tongues.
 
 ## 2. Data model
 
-Nothing new at the core. A corpus document is a `text`. Its sentences are `segment`s on a sentence tier, untimed for written text. Tokens are the existing `token` entities, with new fields:
+A corpus document is a `text`, and its sentences are `segment`s on a sentence tier (untimed for written text). Syntactic words are the existing `token` entities. Nothing new is added at the core. What matters is how much gets written, because a 10-million-token corpus is the sizing target.
 
-- `lemma`
-- `upos`, `xpos`
-- `feats` (the UD features string)
-- `head` (a ref to a token)
-- `deprel`
-- `misc`
+**Scale first.** Writing each annotation as its own field would cost about a dozen ops per token: lemma, UPOS, XPOS, features, head and relation, plus a machine record for each. That is over 100 million ops for 10 million tokens. The repo's own gate is 500k ops replayed in 45 s with a 643 MB projection, so replay would take hours, the projection would reach ~150 GB, and sync would move tens of GB. So:
 
-A field written by a machine carries an `x.tag:<op id>` record (provider, confidence), as `x.asr:` does for speech assist. Multi-word tokens (CoNLL-U `1-2` ranges) are a `token` whose members are its syntactic words, using the membership lists the glossing model already has (`GLOSSING-MODEL.md`).
+- **One `analysis` field per sentence** (on the segment) holds the sentence's annotation as one value. It is a JSON array of rows in CoNLL-U column order, keyed by token id: lemma, UPOS, XPOS, FEATS, HEAD, DEPREL, DEPS, MISC. A re-tag, a re-parse or a person's fix of one sentence is therefore one op.
+  - A tree is never half one device's parse and half another's. Concurrent edits to one sentence's analysis are a conflict on one field, shown in the Conflicts panel like any other.
+- **One machine record per sentence write** (`x.tag:<op id>`: provider, model, confidence per row), not one per field.
+- Tokens keep only `form` (and `kind`, below). A sentence's tokens are written once at import, in one txn per document.
+- `wugs-bench` gets a corpus gate before import is built: 10M tokens imported and tagged, replay time, projection size and log size, each with a limit.
 
-Document metadata is fields on the `text` (`meta:<key>`), so a filter is a field query. A corpus can be large: 10 million tokens is a normal thesis corpus. The EAV projection is not made for counting at that size, so this is where DATA-MODEL §8's typed tables earn their place. A `tokens` table (text, segment, position, form key, lemma key, upos, …) is maintained by the projector, and the concordance, frequency and collocation queries run on it. This is the "real tool query" CLAUDE.md names as the trigger for typed tables.
+**CoNLL-U, all of it.**
+- **Word lines:** a segment lists its syntactic words only, so nothing is counted twice.
+- **Multi-word tokens** (`1-2`) are kept as a range on the segment (`mwt`: surface form plus first and last word). HEAD and IDs always point at syntactic words, as in CoNLL-U.
+- **Empty nodes** (`8.1`) are rows in `analysis` with a decimal id and no token.
+- **Sentence comments** (`# sent_id`, `# text`, any other) are kept in `comments` on the segment.
+
+Import followed by export therefore gives back the same file, a fidelity test like the ELAN and FLEx ones.
+
+**Trees stay well formed.** A validator (warn-only, like every validator) flags:
+- a sentence whose heads form a cycle;
+- more than one root;
+- a head pointing at a token that is no longer in the sentence.
+
+A retokenize goes through the existing diff-based retokenize, so token ids survive and heads keep pointing at the same words.
+
+**Checked, not just unedited.** Speech assist leaves a machine transcription marked until a person changes it. Taggers are right about 97% of the time, so most rows will never be changed. Scrolls therefore adds a **Mark checked** intent (one sentence, or every hit in a concordance) that clears the mark without changing the analysis.
+
+**Metadata** for a document is fields on its `text` (`meta:<key>`), so a filter is a field query.
+
+**Typed tables come first.** The EAV projection is not made for counting 10M tokens. A typed `tokens` table maintained by the projector serves the concordance, frequency and collocation queries: text, segment, position, form key, plus lemma and UPOS keys unpacked from `analysis`. This is the "real tool query" CLAUDE.md names as the trigger for DATA-MODEL §8's typed tables, and it is built with import (step 2 below), before any counting.
 
 ## 3. Taggers: existing tools behind one capability
 
-The `morphosyntax` capability takes sentences of tokens and returns lemma, UPOS, XPOS, features, head and relation, each optional. Providers, all through the bundle's integration manifests (`BUNDLES.md` §5):
+The `morphosyntax` capability takes a sentence of tokens and returns its `analysis`. **It never retokenizes:** providers get the sentence pretokenized (UDPipe, Stanza and spaCy all accept that), so the corpus's tokenization, and every id that hangs off it, is the person's. Multi-word tokens a tagger would split are kept as the `mwt` ranges import found. The providers are listed below. Each is reached through a **shell-known adapter** (`BUNDLES.md` §5).
 
-| Provider | How it runs | Licence of the models | Notes |
+| Provider | How it runs | Models and licence | Notes |
 | --- | --- | --- | --- |
 | Built-in tokenizer | in the app | (no model) | Always ready: Unicode word and sentence boundaries plus the Gloss panel's edge-punctuation rule. It does no tagging. |
-| UDPipe REST service (LINDAT) | Online, HTTPS | CC BY-NC-SA (UD 2.15: 147 treebanks, 78 languages) | No install. Free for non-commercial use, which the install screen says in words. Our hosted services never use it commercially. |
-| UDPipe 1 program | external program, like Praat | CC BY-NC-SA | Offline. A single binary per OS, small models. Found like Praat or downloaded on request. |
-| Stanza (Python) | external program, if installed | per model (Apache-2.0 code; models on Hugging Face) | For people who already have Python. Never required. |
-| spaCy (Python) | external program, if installed | per model | Same as Stanza. |
+| UDPipe 2 through the LINDAT REST service | Online, HTTPS | UD 2.15: 147 treebanks, 78 languages; CC BY-NC-SA 4.0, non-commercial | No install. Sends text to LINDAT, so it is **off until the project opts in** (below). The service's own terms page names the models' licence and nothing else, so no rate rules are assumed. |
+| UDPipe 1 program | external program, like Praat | UD 2.5 models (fewer languages, older treebanks); CC BY-NC-SA 4.0 | Offline. ÚFAL publishes UDPipe 1 binaries for Linux, Windows and macOS. The person picks the program, or wugs downloads ÚFAL's release pinned by hash. |
+| Stanza (Python) | external program, if installed | Apache-2.0 code; each model's licence follows its treebank | For people who already have Python. Never required. |
+| spaCy (Python) | external program, if installed | per model | Its English models use ClearNLP dependency labels, not UD, so the adapter maps them to UD and says so. |
 | ONNX taggers | `tract` in the app, like the phone models | per model | Later. They need a model family we can export and test the way wav2vec2 and ZIPA were. |
 
-"Automatic" picks the best published score for the language, as for phone transcription. The UD treebank scores published by UDPipe and Stanza are the evaluation. Pins per project work as today.
+- **Scores are per provider and model.** "Automatic" compares the published score of each model on the same treebank's test set: UDPipe 1's UD 2.5 numbers against UDPipe 1, UDPipe 2's UD 2.15 numbers against UDPipe 2. It never compares across UD versions as if they were one table. Pins per project work as today.
+- **Text going online is the project's decision.** The online provider is off until the project opts in once ("Send this project's texts to LINDAT for tagging"). A text marked restricted is named in a notice before it is sent. The notice informs and never blocks (DECISIONS 2026-11-11).
+- **Non-commercial models stay off the paid hosted services.** Hosting is commercial use. The paid hosted tagging that the business model allows (CLAUDE.md, "Open source with paid hosted services") would therefore use only models whose licences permit it.
 
 ## 4. Switching kits (row 73)
 
@@ -69,9 +89,9 @@ Panels that both kits use (Search, Concordance, Texts, Conflicts, Devices, Kits)
 
 ## 5. Order of work
 
-1. **Kit switcher (row 73)** and a minimal Scrolls `kit.toml` (bundle form, `BUNDLES.md`) offering Texts, Search, Concordance and a first Corpus panel. Scrolls then exists and can be switched to.
-2. **Corpus import:** plain text and CSV with sentence and token splitting, and CoNLL-U with every column kept. Each is one txn per document, reported in words.
-3. **Frequency list panel** (word, lemma, tag; per document, or the whole corpus, filtered by metadata), with copy and export.
-4. **`morphosyntax` capability** with the built-in tokenizer and the UDPipe REST provider; machine marks; then the UDPipe 1 program provider.
-5. **CQP-style queries** in the concordance, and typed `tokens` tables in the projection.
-6. **Collocations and keywords;** the Sentence (CoNLL-U) editor; exports to CoNLL-U, TEI, CWB vertical and AntConc.
+1. **Kit switcher (row 73)** and a built-in Scrolls kit offering Texts, Concordance, Search, Gloss, Lexicon and Transcribe, so Scrolls exists and can be switched to.
+2. **Corpus import with the typed `tokens` table:** plain text and CSV with sentence and token splitting, and CoNLL-U with every column, multi-word ranges, empty nodes and comments kept (round-trip fidelity test). One txn per document; the `wugs-bench` corpus gate (§2) set up before import ships.
+3. **Frequency list panel** (word, lemma, tag; per document, or the whole corpus, filtered by metadata), with copy and export, on the typed table.
+4. **`morphosyntax` capability:** the built-in tokenizer, then UDPipe 1 (offline), then the opt-in UDPipe 2 REST provider; a sentence's analysis in one field; machine marks; Mark checked; the tree validator.
+5. **CQP-subset queries** in the concordance; export to CWB for real `cqp`.
+6. **Collocations and keywords;** the Sentence (CoNLL-U) editor; exports to CoNLL-U, TEI, CWB vertical and AntConc text.
