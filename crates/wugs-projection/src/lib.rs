@@ -277,6 +277,12 @@ CREATE TABLE IF NOT EXISTS legacy_writes(
   hlc TEXT NOT NULL,
   PRIMARY KEY(target, field, actor)
 ) WITHOUT ROWID;
+-- Per log file (`<scope dir>/<file>`), the byte offset up to which every
+-- op is applied or pending here: the open-time catch-up reads only past it.
+CREATE TABLE IF NOT EXISTS log_ends(
+  file TEXT PRIMARY KEY,
+  end_offset INTEGER NOT NULL
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS fts_map(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   target TEXT NOT NULL,
@@ -324,6 +330,7 @@ impl Projection {
             "list_writes",
             "field_refs",
             "field_heads",
+            "log_ends",
         ] {
             db.exec(&format!("DROP TABLE IF EXISTS {t}"))?;
         }
@@ -356,6 +363,28 @@ impl Projection {
     pub fn rollback_to(&self, name: &str) -> Result<(), String> {
         self.db
             .exec(&format!("ROLLBACK TO {name}; RELEASE {name}"))
+    }
+
+    /// Where each log file was read up to by the last replay or catch-up.
+    pub fn log_ends(&self) -> Result<std::collections::HashMap<String, u64>, String> {
+        let mut s = self.db.prepare("SELECT file, end_offset FROM log_ends")?;
+        let mut out = std::collections::HashMap::new();
+        while s.step()? {
+            out.insert(s.col_text(0), s.col_i64(1) as u64);
+        }
+        Ok(out)
+    }
+
+    /// Record that every op of `file` before `end` is applied or pending.
+    /// The caller writes it in the transaction that applied them.
+    pub fn set_log_end(&self, file: &str, end: u64) -> Result<(), String> {
+        let mut s = self
+            .db
+            .prepare("INSERT OR REPLACE INTO log_ends(file, end_offset) VALUES(?1, ?2)")?;
+        s.bind_text(1, file)?;
+        s.bind_i64(2, end as i64)?;
+        s.step()?;
+        Ok(())
     }
 
     pub fn already_applied(&self, op_id: &str) -> Result<bool, String> {
