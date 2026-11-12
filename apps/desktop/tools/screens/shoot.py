@@ -360,6 +360,18 @@ def main():
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
 
+            # Media bin (roadmap 66): a card dragged onto the Timeline is used for the text on screen.
+            run.front("media", "Media")
+            fox = run.page.locator(".panel-media .bin-card", has_text="Fox story")
+            fox.wait_for()
+            fox.drag_to(run.page.locator(".panel-timeline .tl-body"))
+            run.page.wait_for_timeout(600)
+            if run.page.locator(".tl-sources").input_value() != "src-fox":
+                failures.append("dragging a media card onto the Timeline did not load it")
+            run.page.locator(".tl-sources").select_option("src-count")
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+
             # Hear it everywhere (roadmap 72): a lexicon sense lists where it is used, each with ▶.
             run.front("lexicon", "Lexicon")
             run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()

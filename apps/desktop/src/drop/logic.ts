@@ -11,9 +11,10 @@ export type Kind = "recording" | "file" | "unsupported";
  * a page. */
 export type DragAction = "import" | "pass" | "refuse";
 
-export function dragAction(drag: { files: boolean; dock: boolean; editable: boolean }): DragAction {
+export function dragAction(drag: { files: boolean; dock: boolean; editable: boolean; card?: boolean }): DragAction {
   if (drag.files) return "import";
-  if (drag.dock || drag.editable) return "pass";
+  // A media bin card is the Timeline's to take (it carries no link, so nothing to navigate to).
+  if (drag.dock || drag.editable || drag.card === true) return "pass";
   return "refuse";
 }
 

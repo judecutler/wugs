@@ -7,6 +7,7 @@
 // else is refused. The navigation guard in lib.rs is the second layer.
 import { dropBegin, dropCancel, dropChunk, dropFinish, errorText } from "../api";
 import { h } from "../dom";
+import { CARD_TYPE } from "../media/logic";
 import { getPaneData, getPanelData } from "../dockview";
 import { getState, refreshAll, selectText, showToast, touchLexicon, wantMedia } from "../store";
 import {
@@ -44,6 +45,7 @@ function action(e: DragEvent): DragAction {
     files: e.dataTransfer?.types.includes("Files") ?? false,
     dock: getPanelData() !== undefined || getPaneData() !== undefined,
     editable: takesText(e.target),
+    card: e.dataTransfer?.types.includes(CARD_TYPE) ?? false,
   });
 }
 

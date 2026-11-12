@@ -169,6 +169,13 @@ export function wantMedia(id: string) {
   wantedMedia = id;
 }
 
+/** Load this recording on the Timeline for the text on screen, and link it
+ * (a media bin card): the Timeline takes it on its next draw. */
+export function useRecording(id: string) {
+  wantedMedia = id;
+  for (const f of listeners) f();
+}
+
 /** The recording asked for, once it is among `listed`; a listing that does not have it yet leaves it asked for. */
 export function takeWantedMedia(listed: string[]): string | null {
   const id = wantedMedia;

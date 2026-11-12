@@ -11,6 +11,7 @@ import { attempt, dataGeneration, getSelection, getState, mediaSource, refreshTe
 import { parseGranularity } from "../timeline/edit-rules";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
 import { clock } from "../timeline/tracks";
+import { CARD_TYPE } from "../media/logic";
 import { ICONS, type IconName } from "../timeline/icons";
 import * as playback from "../playback";
 import type { PanelDef, PanelView } from "./panel";
@@ -25,6 +26,24 @@ export const timelinePanel: PanelDef = {
   title: "Timeline",
   create(): PanelView {
     const el = h("div", { className: "panel panel-timeline" });
+    // A media bin card dropped here is picked for the text on screen (docs/design/EDITOR.md).
+    const carries = (e: DragEvent) => e.dataTransfer?.types.includes(CARD_TYPE) ?? false;
+    el.addEventListener("dragover", (e) => {
+      if (!carries(e) || getState().kind !== "open" || view === null) return;
+      e.preventDefault();
+      if (e.dataTransfer !== null) e.dataTransfer.dropEffect = "link";
+      el.classList.add("is-drop-target");
+    });
+    el.addEventListener("dragleave", (e) => {
+      if (e.relatedTarget === null || !el.contains(e.relatedTarget as Node)) el.classList.remove("is-drop-target");
+    });
+    el.addEventListener("drop", (e) => {
+      el.classList.remove("is-drop-target");
+      if (!carries(e) || view === null) return;
+      e.preventDefault();
+      const id = e.dataTransfer?.getData(CARD_TYPE) ?? "";
+      if (sources.some((x) => x.id === id)) void pickSource(id);
+    });
     let view: TimelineView | null = null;
     let sources: SourceRow[] = [];
     let selectedSource: string | null = null;
@@ -406,6 +425,11 @@ export const timelinePanel: PanelDef = {
       } else if (lastGeneration !== dataGeneration()) {
         lastGeneration = dataGeneration();
         void refreshSources();
+      }
+      // A recording asked for from the media bin (a card's Use, a double-click).
+      if (sources.length > 0) {
+        const asked = takeWantedMedia(sources.map((x) => x.id));
+        if (asked !== null) void pickSource(asked);
       }
       // A text opens with the recording it was transcribed from; a text
       // with none drops a recording that belongs to another text (the wrong

@@ -987,6 +987,20 @@ body::before {
 .cc-rows { display: flex; flex-direction: column; }
 .cc-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "play left key right" ". meta meta meta"; align-items: baseline; column-gap: 6px; padding: 4px; border-radius: var(--radius-sm); cursor: pointer; font-family: var(--font-ipa, inherit); }
 .cc-row:hover, .cc-row:focus-visible { background: var(--accent-soft); outline: none; }
+/* Media bin cards (roadmap 66). */
+.bin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 4px 0; }
+.bin-card { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); cursor: grab; }
+.bin-card:hover { border-color: var(--accent); }
+.bin-card.is-current { box-shadow: inset 0 0 0 2px var(--accent-bright); }
+.bin-wave { height: 32px; background: var(--panel); border-radius: var(--radius-sm); overflow: hidden; }
+.bin-wave svg { width: 100%; height: 100%; display: block; }
+.bin-wave path { fill: var(--accent); }
+.bin-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bin-meta { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: var(--text-xs); }
+.bin-time { font-variant-numeric: tabular-nums; color: var(--muted); }
+.bin-where { font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bin-card button { font-size: var(--text-xs); }
+.panel-timeline.is-drop-target { box-shadow: inset 0 0 0 3px var(--accent-bright); }
 /* Frequencies (Scrolls). */
 .panel-frequencies { display: flex; flex-direction: column; gap: 6px; }
 .fq-filter { flex: 1; }

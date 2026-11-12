@@ -44,4 +44,5 @@ test("only files are imported; dock tabs and text fields keep their drags; anyth
   assert.equal(dragAction({ files: false, dock: true, editable: false }), "pass");
   assert.equal(dragAction({ files: false, dock: false, editable: true }), "pass");
   assert.equal(dragAction({ files: false, dock: false, editable: false }), "refuse", "a link from a browser never reaches the webview");
+  assert.equal(dragAction({ files: false, dock: false, editable: false, card: true }), "pass", "a media bin card goes to the Timeline");
 });

@@ -1,6 +1,7 @@
 import { token } from "../theme/tokens";
 import { THEME_EVENT } from "../theme/theme";
-import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, type Recovered, type SourceRow } from "../api";
+import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, peaksInfo, peaksQuery, type Recovered, type SourceRow } from "../api";
+import { CARD_TYPE, cards, duration, normalized, wavePath, type Card } from "../media/logic";
 import { canRecord } from "../capture/recorder.ts";
 import { defaultLabel, formatElapsed, meterFill } from "../capture/pcm.ts";
 import {
@@ -21,16 +22,21 @@ import {
 } from "../capture/session.ts";
 import { isLive } from "../capture/take.ts";
 import { emptyState, h } from "../dom";
-import { attempt, dataGeneration, getState, refreshAll, showToast } from "../store";
-import { sliced, type PanelDef } from "./panel";
+import { attempt, dataGeneration, getState, refreshAll, showToast, useRecording } from "../store";
+import { SHOW_PANEL, sliced, type PanelDef } from "./panel";
+
+/** A card's waveform box, in SVG units. */
+const WAVE_W = 120;
+const WAVE_H = 32;
 
 const MIC_KEY = "wugs.mic";
 
 // The media bin: record straight into the project, and list its sources.
 // The take itself lives in capture/session.ts, so this panel can be closed
 // and reopened mid-recording; it only draws what that module holds.
-// Speaker and recording date join the row once the Person and Session
-// workflows land; dragging onto the timeline comes with step 2.
+// Recordings show as cards (docs/design/EDITOR.md): a waveform, the name,
+// the length, the sharing level and which texts use it; drag one onto the
+// Timeline, double-click it, or click Use, to use it for the text on screen.
 export const mediaPanel: PanelDef = {
   title: "Media",
   create() {
@@ -243,33 +249,93 @@ export const mediaPanel: PanelDef = {
         );
         return;
       }
+      const st = getState();
+      const texts = st.kind === "open" ? st.texts : [];
+      const shown = st.kind === "open" ? (st.text?.id ?? null) : null;
+      const bin = cards(sources, texts, shown);
+      const others = sources.filter((x) => !(x.kind === "audio" && x.hasMedia));
       list.replaceChildren(
-        h(
-          "table",
-          { className: "dense" },
-          h("thead", {}, h("tr", {}, h("th", { textContent: "Source" }), h("th", { textContent: "Kind" }), h("th", { textContent: "Access" }))),
-          h(
-            "tbody",
-            {},
-            ...sources.map((src) =>
-              h(
-                "tr",
-                { title: src.hasMedia ? src.id : `${src.id} (no media file attached)` },
-                h("td", { textContent: src.label || "(unlabelled)" }),
-                h("td", { textContent: src.kind ?? "" }),
-                h("td", {}, h("span", { className: `access access-${src.access ?? "open"}`, textContent: src.access ?? "open" })),
-              ),
-            ),
-          ),
-        ),
+        bin.length === 0 ? emptyState("No recordings yet", "Record above, import one on the Timeline, or drop a recording here.", "Nothing for the wug to listen to yet.") : h("div", { className: "bin-grid", role: "list" }, ...bin.map((c) => card(c, shown))),
+        others.length === 0
+          ? ""
+          : h("p", { className: "note bin-others", textContent: `Also in the project, without audio here: ${others.map((x) => x.label || x.id).join(", ")}.` }),
       );
     };
+
+    /** Waveforms by recording, for this project: drawn once, from the coarsest peaks. */
+    const waves = new Map<string, { path: string; durationMs: number } | "loading" | "failed">();
+    let wavesFor = "";
+    function wave(id: string, into: HTMLElement, time: HTMLElement) {
+      const done = waves.get(id);
+      const paint = (w: { path: string; durationMs: number }) => {
+        into.innerHTML = `<svg viewBox="0 0 ${WAVE_W} ${WAVE_H}" preserveAspectRatio="none" aria-hidden="true"><path d="${w.path}"/></svg>`;
+        time.textContent = duration(w.durationMs);
+      };
+      if (typeof done === "object") return paint(done);
+      if (done !== undefined) return;
+      waves.set(id, "loading");
+      const project = wavesFor;
+      void (async () => {
+        try {
+          const info = await peaksInfo({ sourceId: id });
+          const slice = await peaksQuery({ sourceId: id, channel: 0, startFrame: 0, endFrame: info.frames, pixels: WAVE_W });
+          if (project !== wavesFor) return;
+          const n = normalized(slice.mins, slice.maxs);
+          waves.set(id, { path: wavePath(n.mins, n.maxs, WAVE_W, WAVE_H), durationMs: info.durationMs });
+        } catch {
+          if (project !== wavesFor) return;
+          waves.set(id, "failed");
+        }
+        drawList();
+      })();
+    }
+
+    function card(c: Card, shown: string | null): HTMLElement {
+      const art = h("div", { className: "bin-wave" });
+      const time = h("span", { className: "bin-time" });
+      wave(c.id, art, time);
+      const use = () => {
+        useRecording(c.id);
+        window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "timeline" }));
+      };
+      const where = c.inThisText ? "In this text" : c.usedBy.length > 0 ? `In ${c.usedBy.map((t) => `«${t}»`).join(", ")}` : "Not in a text yet";
+      const button = h("button", {
+        type: "button",
+        textContent: c.inThisText ? "In use" : "Use for this text",
+        disabled: c.inThisText || shown === null,
+        title: shown === null ? "Select a text first" : "Load it on the Timeline for the text on screen; the text remembers it",
+      });
+      button.onclick = use;
+      const el = h(
+        "div",
+        { className: c.inThisText ? "bin-card is-current" : "bin-card", role: "listitem", draggable: true, title: `${c.label}: drag onto the Timeline, or double-click, to use it for the text on screen` },
+        art,
+        h("div", { className: "bin-name", textContent: c.label }),
+        h("div", { className: "bin-meta" }, time, h("span", { className: `access access-${c.access}`, textContent: c.access })),
+        h("div", { className: "note bin-where", textContent: where }),
+        button,
+      );
+      el.ondragstart = (e) => {
+        e.dataTransfer?.setData(CARD_TYPE, c.id);
+        if (e.dataTransfer !== null) e.dataTransfer.effectAllowed = "link";
+      };
+      el.ondblclick = () => {
+        if (shown !== null && !c.inThisText) use();
+      };
+      return el;
+    }
+
     const slice = () => {
       const s = getState();
-      return s.kind === "open" ? `${s.info.projectId}|${dataGeneration()}` : "closed";
+      return s.kind === "open" ? `${s.info.projectId}|${dataGeneration()}|${s.text?.id ?? ""}|${s.texts.map((t) => `${t.id}:${t.title}:${t.recording ?? ""}`).join(",")}` : "closed";
     };
     const view = sliced(el, slice, () => {
       const s = getState();
+      const project = s.kind === "open" ? s.info.projectId : "";
+      if (project !== wavesFor) {
+        wavesFor = project;
+        waves.clear();
+      }
       drawList();
       drawBar();
       if (s.kind === "open") {
