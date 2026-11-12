@@ -42,10 +42,13 @@ body {
   font: 400 1.0625rem/1.6 var(--sans);
   position: relative;
 }
-/* The girih tile as a faint mask, like the app's background. */
+/* The girih tile as a faint mask over the whole page, like the app's
+   background. A pattern never stops at an edge unless a container frames it. */
+html { min-height: 100%; }
+body { min-height: 100vh; }
 body::before {
   content: "";
-  position: fixed;
+  position: absolute;
   inset: 0;
   z-index: -1;
   background: var(--accent);
@@ -90,7 +93,7 @@ h2 { font-size: 2rem; font-weight: 500; margin: 0 0 1.25rem; }
   align-items: flex-end;
   gap: 1.25rem;
 }
-.answer img { display: block; width: min(36rem, 100%); height: auto; }
+.answer img { display: block; flex: 0 1 36rem; min-width: 0; height: auto; }
 .blank { font-size: 2rem; line-height: 1; color: var(--muted); padding-bottom: 0.3rem; }
 .lede { font-size: 1.25rem; max-width: 36rem; margin: 0 0 2rem; }
 
