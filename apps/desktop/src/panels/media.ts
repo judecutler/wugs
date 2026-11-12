@@ -238,7 +238,14 @@ export const mediaPanel: PanelDef = {
       );
     }
 
+    // A card replaced mid-drag never gets its dragend, so redraws wait for the drag to end.
+    let redrawAfterDrag = false;
     const drawList = () => {
+      if (cardDrag.active()) {
+        redrawAfterDrag = true;
+        return;
+      }
+      redrawAfterDrag = false;
       if (getState().kind === "closed") {
         list.replaceChildren(emptyState("Media bin", "Recordings of the open project appear here."));
         return;
@@ -347,7 +354,10 @@ export const mediaPanel: PanelDef = {
         e.dataTransfer?.setData(CARD_TYPE, c.id);
         if (e.dataTransfer !== null) e.dataTransfer.effectAllowed = "link";
       };
-      el.ondragend = () => cardDrag.end();
+      el.ondragend = () => {
+        cardDrag.end();
+        if (redrawAfterDrag) drawList();
+      };
       el.ondblclick = use;
       return el;
     }

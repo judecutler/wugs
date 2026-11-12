@@ -11,7 +11,7 @@ import { attempt, dataGeneration, getSelection, getState, mediaSource, refreshTe
 import { parseGranularity } from "../timeline/edit-rules";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
 import { clock } from "../timeline/tracks";
-import { CARD_TYPE, cardDrag } from "../media/logic";
+import { CARD_TYPE, cardDrag, isCardDrag } from "../media/logic";
 import { ICONS, type IconName } from "../timeline/icons";
 import * as playback from "../playback";
 import type { PanelDef, PanelView } from "./panel";
@@ -27,7 +27,7 @@ export const timelinePanel: PanelDef = {
   create(): PanelView {
     const el = h("div", { className: "panel panel-timeline" });
     // A media bin card dropped here is picked for the text on screen (docs/design/EDITOR.md).
-    const carries = (e: DragEvent) => cardDrag.active() && (e.dataTransfer?.types.includes(CARD_TYPE) ?? false);
+    const carries = (e: DragEvent) => isCardDrag(cardDrag.active(), [...(e.dataTransfer?.types ?? [])]);
     el.addEventListener("dragover", (e) => {
       if (!carries(e) || getState().kind !== "open" || view === null) return;
       e.preventDefault();

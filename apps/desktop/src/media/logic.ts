@@ -77,3 +77,10 @@ export const cardDrag = {
   },
   active: (now = Date.now()) => draggingSince !== null && now - draggingSince < LAPSE_MS,
 };
+
+/** Whether a drag is a bin card: one started in the app that carries the
+ * card's type and no link or file, so a page's link dragged in while a lost
+ * `dragend` left the flag up is still refused. */
+export function isCardDrag(active: boolean, types: readonly string[]): boolean {
+  return active && types.includes(CARD_TYPE) && !types.includes("text/uri-list") && !types.includes("Files");
+}
