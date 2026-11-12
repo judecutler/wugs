@@ -55,6 +55,7 @@
 | # | Item | Status | Notes |
 | --- | --- | --- | --- |
 | 32 | Package installers for Windows, macOS, Linux | 🟡 | CI builds unsigned installers on tag/dispatch (PR #27); in-app updater from GitHub Releases, updates signed in the `release` environment, ask before download (feat/updater); code-signing certificates (SmartScreen, Gatekeeper) still pending |
+| 64 | Download page at wugs.judec.us: one button for the visitor's system from the newest GitHub release, every other installer, and the first-run steps for unsigned installers | 🟡 | Owner, 2026-11-11 (onboarding early users). Branch `site/download`: a static page in `site/` (no build step, brand fonts and wugs bundled), deployed by `.github/workflows/pages.yml` from `main`. Needs the owner to set Pages to GitHub Actions with the custom domain and a DNS CNAME `wugs` → `judecutler.github.io` |
 | 35 | Ship Tongues 1.0 | ⬜ | |
 
 ## Sub-priority

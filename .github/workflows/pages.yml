@@ -1,0 +1,54 @@
+name: pages
+
+# The download page at wugs.judec.us, built from site/. The custom domain is
+# set in the repository's Pages settings (source: GitHub Actions).
+
+on:
+  push:
+    branches: [main]
+    paths: [site/**, .github/workflows/pages.yml]
+  pull_request:
+    paths: [site/**, .github/workflows/pages.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test
+        working-directory: site
+        run: npm test
+      - name: Collect the public files
+        run: |
+          mkdir _site
+          cp -r site/index.html site/style.css site/download.js site/img site/fonts _site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
