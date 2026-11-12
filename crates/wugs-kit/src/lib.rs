@@ -740,6 +740,10 @@ impl Reader<'_> {
             return None;
         }
         let mut out = Bundle::default();
+        // A shared kit's version names its install folder, so it is checked even when `[package]` does not repeat it.
+        if !kit_version.is_empty() && !valid_version(kit_version) {
+            self.fail(root.get("kit").and_then(Item::as_table).and_then(|k| k.get("version")).and_then(Item::span), "kit.version of a shared kit is letters, digits, '.', '-', '+' and '_', like \"1.2.0\"");
+        }
         if let Some(p) = package {
             let kind = self.string(Some(p), "package", "type", NAME_MAX, true);
             if !kind.is_empty() && kind != "kit" {
@@ -757,7 +761,8 @@ impl Reader<'_> {
             }
             out.license = self.string(Some(p), "package", "license", NAME_MAX, false);
             out.source = self.string(Some(p), "package", "source", TEXT_MAX, false);
-            if !out.source.is_empty() && out.source.strip_prefix("https://").is_none_or(|rest| rest.split('/').next().is_none_or(|host| !host.contains('.'))) {
+            let host_ok = |host: &str| host.contains('.') && !host.starts_with('.') && !host.ends_with('.') && !host.contains('@') && !host.contains("..");
+            if !out.source.is_empty() && out.source.strip_prefix("https://").is_none_or(|rest| rest.split(['/', '?', '#']).next().is_none_or(|host| !host_ok(host))) {
                 self.fail(p.get("source").and_then(Item::span), "package.source is an https:// address, like \"https://github.com/you/your-kit\"");
             }
         }

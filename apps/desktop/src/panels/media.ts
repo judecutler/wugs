@@ -240,11 +240,16 @@ export const mediaPanel: PanelDef = {
 
     // A card replaced mid-drag never gets its dragend, so redraws wait for the drag to end.
     let redrawAfterDrag = false;
+    let redrawTimer = 0;
     const drawList = () => {
       if (cardDrag.active()) {
         redrawAfterDrag = true;
+        // A dragend the webview lost would leave the bin stale: look again once the drag has lapsed.
+        window.clearTimeout(redrawTimer);
+        redrawTimer = window.setTimeout(drawList, cardDrag.remaining() + 50);
         return;
       }
+      window.clearTimeout(redrawTimer);
       redrawAfterDrag = false;
       if (getState().kind === "closed") {
         list.replaceChildren(emptyState("Media bin", "Recordings of the open project appear here."));

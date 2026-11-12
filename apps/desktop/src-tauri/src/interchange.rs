@@ -84,7 +84,9 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         })
     };
     let first: Vec<&str> = head.lines().filter(|l| !l.trim().is_empty()).take(10).collect();
-    let marker = first.first().is_some_and(|l| is_marker(l)) && first.iter().filter(|l| is_marker(l)).count() * 2 > first.len();
+    let markers = first.iter().filter(|l| is_marker(l)).count();
+    // A long `\de` may run over continuation lines, so three markers also do.
+    let marker = first.first().is_some_and(|l| is_marker(l)) && (markers >= 3 || markers * 2 > first.len());
     if head.starts_with("\\_sh") || marker {
         Some(Format::Toolbox)
     } else if head.starts_with("File type = \"ooTextFile\"") {

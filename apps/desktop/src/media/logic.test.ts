@@ -44,7 +44,9 @@ test("a card drag is live from its start until its end, and lapses", () => {
   assert.equal(cardDrag.active(0), false);
   cardDrag.start(1000);
   assert.equal(cardDrag.active(2000), true);
+  assert.equal(cardDrag.remaining(2000), 59_000);
   assert.equal(cardDrag.active(70_000), false, "a lost dragend never leaves the guard open");
+  assert.equal(cardDrag.remaining(70_000), 0);
   cardDrag.end();
   assert.equal(cardDrag.active(2000), false);
 });
