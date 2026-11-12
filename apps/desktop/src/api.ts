@@ -555,3 +555,12 @@ export const updateDownload = () => invoke<void>("update_download");
 export const updateInstall = () => invoke<void>("update_install");
 export const onUpdateProgress = (f: (p: { done: number; total: number | null }) => void): Promise<UnlistenFn> =>
   listen<{ done: number; total: number | null }>("update-progress", (ev) => f(ev.payload));
+
+// Send feedback (roadmap 65). Online; offline it waits in the outbox.
+export type FeedbackOutcome = { sent: boolean; waiting: number; problem: string | null; configured: boolean };
+export const feedbackDetails = (args: { page: Record<string, unknown> }) => invoke<Record<string, unknown>>("feedback_details", args);
+/** Checks and keeps a report; returns its id. */
+export const feedbackKeep = (args: { message: string; contact: string; details: Record<string, unknown> | null; attachment: string | null }) =>
+  invoke<string>("feedback_keep", args);
+export const feedbackDeliver = (args: { id: string }) => invoke<FeedbackOutcome>("feedback_deliver", args);
+export const feedbackRetry = () => invoke<FeedbackOutcome>("feedback_retry");

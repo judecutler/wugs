@@ -1,0 +1,9 @@
+{
+  "name": "wugs-feedback",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "deploy": "npx wrangler@4 deploy"
+  }
+}

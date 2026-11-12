@@ -6,7 +6,7 @@ applyTheme(savedTheme(localStorage));
 applyPattern(savedPattern(localStorage));
 applyEmphasisPattern(emphasisPatternOn(localStorage));
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
-import { captureReset, createProject, errorText, kitsList, onAssistDownload, openProject } from "./api";
+import { captureReset, createProject, errorText, feedbackRetry, kitsList, onAssistDownload, openProject } from "./api";
 import { reloadModels } from "./panels/assist";
 import { closeBlocker, refuseProjectChange } from "./capture/session.ts";
 import { closedPanels, layoutKit, mountDock, showPanel } from "./dock";
@@ -21,6 +21,7 @@ import { folderName, welcomeView } from "./welcome";
 import { onDevicesChange, relocationBanner, wireDeviceEvents } from "./panels/devices";
 import { PANELS, type PanelId } from "./panels/registry";
 import { attachDock } from "./kits/workspace";
+import { openFeedback } from "./feedback/form";
 import { autoChecks, checkForUpdates, setAutoChecks, setBeforeInstall, updateSlot } from "./updates/notice";
 import { activeKit, assistModelList, attempt, enterProject, getState, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
@@ -264,7 +265,27 @@ function renderTop() {
           }),
         )
       : null,
-    h("span", { className: "project" }, project, workspace, updates),
+    h(
+      "span",
+      { className: "project" },
+      project,
+      workspace,
+      updates,
+      h("button", {
+        className: "menu-button feedback-button",
+        textContent: "Feedback",
+        title: "Tell the people who make wugs what went wrong or what would help (Online)",
+        onclick: () =>
+          openFeedback({
+            kit: kit === null ? null : `${kit.id} ${kit.version}`,
+            theme: savedTheme(localStorage),
+            pattern: savedPattern(localStorage),
+            projectOpen: s.kind === "open",
+            window: `${window.innerWidth}×${window.innerHeight} at ${window.devicePixelRatio}x`,
+            webview: navigator.userAgent,
+          }),
+      }),
+    ),
     ].filter((c) => c !== null),
   );
 }
@@ -442,9 +463,17 @@ if (app !== null) {
       await reopenLast();
       // After the window is up and the project is back; never awaited by anything.
       void checkForUpdates(false);
+      // Feedback written offline goes once wugs can reach the internet.
+      void sendWaitingFeedback();
+      window.addEventListener("online", () => void sendWaitingFeedback());
     } finally {
       booting = false;
       renderWelcome();
     }
   })();
+}
+
+/** Send feedback that waited for a connection, quietly. */
+function sendWaitingFeedback() {
+  return feedbackRetry().catch(() => null);
 }

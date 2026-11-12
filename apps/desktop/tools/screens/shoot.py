@@ -291,6 +291,15 @@ def main():
             run.shot("state-toast")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
 
+            run.page.get_by_role("button", name="Feedback").click()
+            run.page.locator(".feedback-message").fill("The timeline froze after I imported a long recording.")
+            run.page.locator(".feedback-details summary").click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-feedback")
+            run.page.get_by_role("button", name="Send feedback").click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-feedback-sent")
+
             unknown |= set(run.unknown())
             failures += run.errors
             browser.close()

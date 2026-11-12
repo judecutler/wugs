@@ -55,6 +55,7 @@
 | # | Item | Status | Notes |
 | --- | --- | --- | --- |
 | 32 | Package installers for Windows, macOS, Linux | 🟡 | CI builds unsigned installers on tag/dispatch (PR #27); in-app updater from GitHub Releases, updates signed in the `release` environment, ask before download (feat/updater); code-signing certificates (SmartScreen, Gatekeeper) still pending |
+| 65 | Send feedback from the app: what happened, an optional reply address, an optional screenshot or screen recording, and technical details the person can see and leave out, delivered privately to the maintainer | 🟡 | Owner, 2026-11-12 (early users are not technical; email and a private repository both). Branch `feat/feedback`: a **Feedback** button and form in the top bar; reports wait in an outbox in app data and send when online (`src-tauri/src/feedback.rs`); `services/feedback/` is a Cloudflare Worker that files each report as an issue in a private repository, emails it through Resend and streams attachments (up to 95 MB) into R2. Waits on the owner deploying the service (`services/feedback/README.md`) and filling in `ENDPOINT` |
 | 35 | Ship Tongues 1.0 | ⬜ | |
 
 ## Sub-priority
