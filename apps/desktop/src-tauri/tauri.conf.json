@@ -45,6 +45,7 @@
       }
     },
     "macOS": {
+      "signingIdentity": "-",
       "dmg": { "background": "installer/dmg-background.png" }
     }
   },

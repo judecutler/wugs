@@ -22,3 +22,10 @@ To add an accessory: draw its line and fill as separate layers on the same
 512×512 canvas, hide the background layer, export, add the files here with a
 number that puts them in the right place in the stack, rerun the script, and
 list the parts under a new entry in `ACCESSORIES` in `src/theme/wug.ts`.
+
+## The wordmark
+
+The full logo on the brand sheet (WUG_1.pdf, page 1) sets "WUG" in FreeSerif
+outlines with the wug as the S. `tools/brand/wordmark.py` lifts those outlines
+from the sheet and adds the traced wug, writing `site/img/wordmark.svg`
+(instructions in the script).

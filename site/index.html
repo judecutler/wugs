@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wugs: tools for linguists</title>
+<meta name="description" content="wugs is a free, open-source desktop app for linguistic fieldwork: record, segment, transcribe, gloss, build a lexicon and seal an archive deposit. Works offline.">
+<meta property="og:title" content="wugs: tools for linguists">
+<meta property="og:description" content="Record, transcribe, gloss and archive. Free, open source, and it works offline.">
+<meta property="og:image" content="https://wugs.judec.us/img/icon.png">
+<link rel="icon" href="img/wug.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/junicode-latin-wght.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+<script type="module" src="download.js"></script>
+</head>
+<body>
+<main>
+  <section class="hero" aria-labelledby="title">
+    <div class="test">
+      <figure class="frame">
+        <img src="img/wug-blue.svg" alt="" width="180" height="180">
+        <figcaption>This is a wug.</figcaption>
+      </figure>
+      <figure class="frame">
+        <span class="pair">
+          <img src="img/wug-blue.svg" alt="" width="132" height="132">
+          <img src="img/wug-tongues.svg" alt="" width="132" height="132">
+        </span>
+        <figcaption>Now there is another one. There are two of them. There are two</figcaption>
+      </figure>
+    </div>
+    <h1 id="title" class="answer"><span class="blank" aria-hidden="true">_____</span><img src="img/wordmark.svg" alt="wugs" width="623" height="146"></h1>
+    <p class="lede">A desktop app for linguistic fieldwork. Record and segment, transcribe in IPA, gloss, build the lexicon and seal a version for the archive. Free, open source, and it works without an internet connection.</p>
+    <div class="get">
+      <a class="button" data-primary href="https://github.com/judecutler/wugs/releases">See releases on GitHub</a>
+      <p class="meta" data-meta>Finding the newest version…</p>
+    </div>
+  </section>
+
+  <section class="what" aria-labelledby="what">
+    <h2 id="what">What it does today</h2>
+    <dl>
+      <div><dt>Record and segment</dt><dd>Record in the app or drop in WAV, M4A, MP3 or FLAC. Auto-segment by utterance or by word, then split, merge and nudge with undo.</dd></div>
+      <div><dt>Transcribe</dt><dd>A keyboard loop over the segments with an IPA palette. A phone recognizer can suggest a first pass, marked until a person checks it.</dd></div>
+      <div><dt>Gloss</dt><dd>Leipzig-style interlinear glossing that learns from your earlier analyses, tied to the lexicon.</dd></div>
+      <div><dt>Lexicon and elicitation</dt><dd>Entries, senses, semantic domains and paradigm grids. Swadesh and Leipzig-Jakarta lists to work through.</dd></div>
+      <div><dt>Work together</dt><dd>Sync between laptops on the same network, no server or account. Edits from two people merge, and real disagreements wait in a queue for you.</dd></div>
+      <div><dt>Keep it</dt><dd>Open in Praat and bring changes back. Import and export ELAN, FLEx, Praat and Toolbox. Seal a version as an archive-ready BagIt package.</dd></div>
+    </dl>
+    <p class="note">wugs is early. Keep a copy of your project folder, and <a href="https://github.com/judecutler/wugs/issues">tell us</a> what breaks.</p>
+  </section>
+
+  <section class="systems" id="systems" aria-labelledby="systems-title">
+    <h2 id="systems-title">All downloads</h2>
+    <div class="list" data-others>
+      <a class="system" href="https://github.com/judecutler/wugs/releases"><span class="system-name">Releases on GitHub</span><span class="system-kind">Every version and file</span></a>
+    </div>
+  </section>
+
+  <section class="first" aria-labelledby="first">
+    <h2 id="first">Opening it the first time</h2>
+    <p>The installers are not yet signed by Microsoft or Apple, so your computer asks once whether you trust them.</p>
+    <details data-system="windows">
+      <summary>Windows</summary>
+      <ol>
+        <li>Open the downloaded <code>-setup.exe</code>.</li>
+        <li>If Windows says <em>Windows protected your PC</em>, choose <strong>More info</strong>, then <strong>Run anyway</strong>.</li>
+        <li>Finish the installer. wugs is in the Start menu.</li>
+      </ol>
+    </details>
+    <details data-system="mac">
+      <summary>macOS</summary>
+      <ol>
+        <li>Open the <code>.dmg</code> and drag wugs into Applications.</li>
+        <li>Open wugs. When macOS says it could not verify wugs, choose <strong>Done</strong>.</li>
+        <li>Open <strong>System Settings</strong>, then <strong>Privacy &amp; Security</strong>. Near the bottom, choose <strong>Open Anyway</strong> beside the message about wugs.</li>
+      </ol>
+    </details>
+    <details data-system="linux">
+      <summary>Linux</summary>
+      <ol>
+        <li>AppImage: make it executable (<code>chmod +x wugs_*.AppImage</code>) and run it.</li>
+        <li>Debian or Ubuntu: <code>sudo apt install ./wugs_*.deb</code>.</li>
+      </ol>
+    </details>
+    <p>After that, wugs updates itself. Each update is signed, and it asks before installing.</p>
+  </section>
+</main>
+<footer>
+  <div class="foot">
+  <img src="img/wug.svg" alt="" width="40" height="40">
+  <p><a href="https://github.com/judecutler/wugs/blob/main/docs/USER-GUIDE.md">User guide</a> · <a href="https://github.com/judecutler/wugs">Source code</a> · <a href="https://github.com/judecutler/wugs/blob/main/LICENSE">MPL-2.0</a></p>
+  <p class="small">The name comes from Jean Berko Gleason's 1958 wug test, which showed that children apply the rules of their language to words they have never heard.</p>
+  </div>
+</footer>
+</body>
+</html>
