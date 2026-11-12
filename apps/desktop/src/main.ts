@@ -140,6 +140,7 @@ function renderTop() {
   const project = menuButton("Project", () => [
     { label: "Open another project…", run: () => void pickProject("open") },
     { label: "Create a project…", run: () => void pickProject("create") },
+    { label: "Open the sample project", run: () => void enterSample() },
   ]);
   // Settings (owner, 2026-11-12): one panel for how the workspace looks and
   // behaves and for updates, with themes and patterns shown, not named.
@@ -429,7 +430,7 @@ async function pickProject(mode: "open" | "create") {
 async function enterSample() {
   if (refuseProjectChange()) return;
   await attempt(async () => {
-    await enterProject(await openSample({ researcher: researcher() }));
+    await enterProject(await openSample({ researcher: researcher() }), false);
     const s = getState();
     const first = s.kind === "open" ? s.texts[0] : undefined;
     if (first !== undefined) await selectText(first.id);

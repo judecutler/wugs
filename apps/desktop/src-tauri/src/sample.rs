@@ -189,17 +189,31 @@ pub fn synth_wav() -> Vec<u8> {
 
 pub const TITLE: &str = "Counting to ten (sample)";
 
+/// Written last, when the sample is whole. A folder without it is a build
+/// that did not finish (a full disk, a crash), so it is wiped and built again;
+/// the folder is the app's own, in app data, where nobody else writes.
+const COMPLETE: &str = "sample-complete";
+
 /// Open the sample project at `dir`, building it first when it is not there.
 pub fn open_sample(session: &mut Session, dir: &Path, researcher: &str) -> Result<ProjectInfo, String> {
     let path = dir.to_string_lossy().to_string();
-    if dir.join("project.json").is_file() {
+    if dir.join(COMPLETE).is_file() && dir.join("project.json").is_file() {
         return session::open_project(session, &path, researcher);
     }
-    std::fs::create_dir_all(dir).map_err(|e| format!("could not make the sample folder: {e}"))?;
-    session::create_project(session, &path, researcher)?;
-    if let Err(e) = build(session, dir) {
-        return Err(format!("the sample project is incomplete: {e}"));
+    // Close whatever is open first: a half-built sample may be the open project.
+    *session = None;
+    if dir.exists() {
+        std::fs::remove_dir_all(dir).map_err(|e| format!("could not clear an unfinished sample: {e}"))?;
     }
+    std::fs::create_dir_all(dir).map_err(|e| format!("could not make the sample folder: {e}"))?;
+    let built = session::create_project(session, &path, researcher).and_then(|_| build(session, dir));
+    if let Err(e) = built {
+        // Nothing half-built stays open or on disk; the next click starts over.
+        *session = None;
+        let _ = std::fs::remove_dir_all(dir);
+        return Err(format!("the sample project could not be made: {e}"));
+    }
+    std::fs::write(dir.join(COMPLETE), "1\n").map_err(|e| e.to_string())?;
     session::open_project(session, &path, researcher)
 }
 
@@ -315,6 +329,12 @@ mod tests {
         // Opening it again reuses it rather than building a second copy.
         let again = open_sample(&mut session, &dir, "tester").unwrap();
         assert_eq!(again.texts, 1);
+        // An unfinished build (no completion mark) is wiped and made again.
+        drop(session);
+        std::fs::remove_file(dir.join(COMPLETE)).unwrap();
+        let mut session: Session = None;
+        let rebuilt = open_sample(&mut session, &dir, "tester").unwrap();
+        assert_eq!(rebuilt.texts, 1);
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }
