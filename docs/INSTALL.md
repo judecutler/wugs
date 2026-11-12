@@ -41,7 +41,7 @@ wugs can update itself from the repository's GitHub Releases. This is an **Onlin
 - **Installing.** wugs downloads the update with a progress bar, checks its signature against the key built into the app, installs it and restarts. If a recording is in progress, wugs refuses to restart until you stop it; a finished download waits.
 - On Windows wugs finishes what it was saving, closes the project and hands over to the installer, which opens the new version. On Linux, an AppImage replaces itself; a `.deb` install downloads the new `.deb` and asks for your password (`pkexec dpkg -i`). A `.deb` install is never given the AppImage.
 
-Installs older than the first release with the updater (0.0.1) must install the next release by hand once.
+0.1.0 is the first published release; builds made before it (0.0.1 and earlier, never published) update by hand once.
 
 ## Cut a release
 
