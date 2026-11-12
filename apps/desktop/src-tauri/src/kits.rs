@@ -13,11 +13,21 @@ use wugs_model::ulid;
 
 pub const BUNDLED: &str = include_str!("../../../../kits/tongues/kit.toml");
 pub const BUNDLED_ID: &str = "org.wugs.tongues";
+/// The corpus kit (roadmap 41), built in beside Tongues.
+pub const SCROLLS: &str = include_str!("../../../../kits/scrolls/kit.toml");
+pub const SCROLLS_ID: &str = "org.wugs.scrolls";
+/// Every built-in kit, Tongues first (the default).
+pub const BUILT_IN: [(&str, &str); 2] = [(BUNDLED_ID, BUNDLED), (SCROLLS_ID, SCROLLS)];
+
+/// A built-in kit's file, or None for a user kit.
+pub fn built_in(id: &str) -> Option<&'static str> {
+    BUILT_IN.iter().find(|(k, _)| *k == id).map(|(_, text)| *text)
+}
 
 /// Ids no user kit may take: the built-in kit's, and the name its saved
 /// arrangement had before kits had ids (`layouts/tongues.json`).
 fn reserved(id: &str) -> bool {
-    id == BUNDLED_ID || id == crate::layout::LEGACY_TONGUES
+    built_in(id).is_some() || id == crate::layout::LEGACY_TONGUES
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,10 +183,6 @@ fn user_path(app_data: &Path, id: &str) -> Result<PathBuf, String> {
     Ok(dir(app_data).join(format!("{id}.toml")))
 }
 
-fn bundled() -> Kit {
-    wugs_kit::parse(BUNDLED).expect("the bundled kit parses (tested)")
-}
-
 /// Write by temp file and rename, so a crash never leaves half a kit.
 fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
     let parent = path.parent().expect("kits dir");
@@ -188,10 +194,13 @@ fn write_atomic(path: &Path, text: &str) -> Result<(), String> {
 
 /// Every installed kit, the bundled one first, then the user's by name.
 pub fn list(app_data: &Path) -> Result<KitsView, String> {
-    let mut kits = vec![KitEntry {
-        kit: KitDto::from(&bundled()),
-        bundled: true,
-    }];
+    let mut kits: Vec<KitEntry> = BUILT_IN
+        .iter()
+        .map(|(_, text)| KitEntry {
+            kit: KitDto::from(&wugs_kit::parse(text).expect("the built-in kits parse (tested)")),
+            bundled: true,
+        })
+        .collect();
     let mut broken = Vec::new();
     let entries = match fs::read_dir(dir(app_data)) {
         Ok(entries) => entries.filter_map(Result::ok).collect(),
@@ -286,15 +295,15 @@ fn read_capped(path: &Path) -> Result<String, String> {
 
 /// The kit's file as written, comments and all, for the code view.
 pub fn code(app_data: &Path, id: &str) -> Result<String, String> {
-    if id == BUNDLED_ID {
-        return Ok(BUNDLED.to_string());
+    if let Some(text) = built_in(id) {
+        return Ok(text.to_string());
     }
     read_capped(&user_path(app_data, id)?)
 }
 
 fn refuse_bundled(id: &str) -> Result<(), String> {
-    if id == BUNDLED_ID {
-        Err("The bundled kit cannot be changed. Duplicate it to make your own.".into())
+    if built_in(id).is_some() {
+        Err("A built-in kit cannot be changed. Duplicate it to make your own.".into())
     } else {
         Ok(())
     }
@@ -427,7 +436,7 @@ pub fn install(app_data: &Path, file: &Path) -> Result<KitEntry, String> {
 }
 
 pub fn set_active(app_data: &Path, id: &str) -> Result<(), String> {
-    if id != BUNDLED_ID && !user_path(app_data, id)?.exists() {
+    if built_in(id).is_none() && !user_path(app_data, id)?.exists() {
         return Err(format!("no kit {id:?} is installed"));
     }
     write_atomic(&dir(app_data).join("active"), id)

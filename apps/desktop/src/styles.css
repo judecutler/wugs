@@ -979,3 +979,7 @@ body::before {
 .cc-right { grid-area: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cc-meta { grid-area: meta; display: flex; gap: 8px; justify-content: space-between; font-family: var(--font-ui, inherit); font-size: var(--text-xs); color: var(--muted); min-width: 0; }
 .cc-meta span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* The kit switcher (roadmap 73): the kit's name in the top bar opens the list of kits. */
+.brand-kit { display: flex; align-items: baseline; gap: 8px; }
+.menu-button.kit-switcher { font-family: var(--font-display); font-weight: 400; font-size: 20px; line-height: 1; padding: 2px 4px; color: var(--ink); }
