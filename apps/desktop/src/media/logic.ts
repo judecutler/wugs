@@ -76,6 +76,8 @@ export const cardDrag = {
     draggingSince = null;
   },
   active: (now = Date.now()) => draggingSince !== null && now - draggingSince < LAPSE_MS,
+  /** Milliseconds until a drag still flagged lapses (0 when none is). */
+  remaining: (now = Date.now()) => (draggingSince === null ? 0 : Math.max(0, LAPSE_MS - (now - draggingSince))),
 };
 
 /** Whether a drag is a bin card: one started in the app that carries the
