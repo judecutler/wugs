@@ -92,10 +92,35 @@ fn recognizing_audio_runs_end_to_end() {
 }
 
 #[test]
+fn one_symbolic_plan_serves_every_length() {
+    let mut r = FbankRecognizer::load(&fixture("tiny-zipformer.onnx"), tokens()).unwrap();
+    assert!(r.has_symbolic_plan(), "the fp32 fixture should build the symbolic plan at load");
+    r.log_probs_for_features(173, feats(173)).unwrap();
+    r.log_probs_for_features(211, feats(211)).unwrap();
+    assert_eq!(r.per_length_plans(), 0, "no per-length plan was built");
+
+    // The point of the plan: a fresh length costs only the run. Timed
+    // against the fallback path in the same process, two fresh lengths
+    // per side; each side's first absorbs warm-up, compare the seconds.
+    for (fresh, label) in [(157usize, "symbolic"), (293, "symbolic")] {
+        let t0 = std::time::Instant::now();
+        r.log_probs_for_features(fresh, feats(fresh)).unwrap();
+        eprintln!("{label}: fresh length {fresh} in {:?}", t0.elapsed());
+    }
+    r.drop_symbolic_plan();
+    for (fresh, label) in [(158usize, "per-length"), (294, "per-length")] {
+        let t0 = std::time::Instant::now();
+        r.log_probs_for_features(fresh, feats(fresh)).unwrap();
+        eprintln!("{label}: fresh length {fresh} in {:?} (plan built)", t0.elapsed());
+    }
+}
+
+#[test]
 fn the_int8_release_format_runs_too() {
     // ZIPA's INT8 files quantize every MatMul (DynamicQuantizeLinear +
     // MatMulInteger); quantization rounds a little differently in tract.
     let r = FbankRecognizer::load(&fixture("tiny-zipformer.int8.onnx"), tokens()).unwrap();
+    assert!(r.has_symbolic_plan(), "the int8 fixture builds the symbolic plan too");
     let (t, v, got) = r.log_probs_for_features(173, feats(173)).unwrap();
     let want = f32s("tiny-zipformer.int8.173.out.f32");
     let worst = got.iter().zip(&want).map(|(a, b)| (a - b).abs()).fold(0f32, f32::max);
@@ -114,7 +139,9 @@ fn the_real_zipa_release_matches_onnxruntime() {
     let dir = PathBuf::from(std::env::var("WUGS_ZIPA_DIR").expect("set WUGS_ZIPA_DIR"));
     let vocab = Vocab::from_tokens_txt(&std::fs::read_to_string(dir.join("tokens.txt")).unwrap()).unwrap();
     {
+        let t0 = std::time::Instant::now();
         let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab).unwrap();
+        eprintln!("loaded in {:?}; symbolic plan: {}", t0.elapsed(), r.has_symbolic_plan());
         for t in [500usize, 3000] {
             let t0 = std::time::Instant::now();
             let (frames, v, got) = r.log_probs_for_features(t, feats(t)).unwrap();
@@ -122,12 +149,45 @@ fn the_real_zipa_release_matches_onnxruntime() {
             let t0 = std::time::Instant::now();
             r.log_probs_for_features(t, feats(t)).unwrap();
             let peak = std::fs::read_to_string("/proc/self/status").ok().and_then(|s| s.lines().find(|l| l.starts_with("VmHWM")).map(str::to_string)).unwrap_or_default();
-            eprintln!("{t} input frames, first run {first:?} (plan built), again {:?}; {peak}", t0.elapsed());
+            eprintln!("{t} input frames, first run {first:?}, again {:?}; per-length plans {}; {peak}", t0.elapsed(), r.per_length_plans());
             let want: Vec<f32> = std::fs::read(dir.join(format!("ref.{t}.out.f32"))).unwrap().chunks_exact(4).map(|c| f32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
             assert_eq!(got.len(), want.len());
             let agree = got.chunks(v).zip(want.chunks(v)).filter(|(a, b)| best(a) == best(b)).count();
             assert!(agree * 100 >= frames * 99, "best symbol agrees on only {agree} of {frames} frames");
         }
+    }
+}
+
+/// Both plan paths across segment lengths on the real release, so the
+/// length where the symbolic plan stops paying is measured, not guessed.
+/// Each length is fresh on each path: the per-length side pays its plan
+/// build, the symbolic side only runs. Prints, asserts nothing.
+#[test]
+#[ignore]
+fn the_real_zipa_release_speed_by_length() {
+    let dir = PathBuf::from(std::env::var("WUGS_ZIPA_DIR").expect("set WUGS_ZIPA_DIR"));
+    let vocab = || Vocab::from_tokens_txt(&std::fs::read_to_string(dir.join("tokens.txt")).unwrap()).unwrap();
+    let rss = || {
+        let s = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+        let kb = |k: &str| s.lines().find(|l| l.starts_with(k)).and_then(|l| l.split_whitespace().nth(1)).unwrap_or("?").to_string();
+        format!("rss {} kB, peak {} kB", kb("VmRSS"), kb("VmHWM"))
+    };
+    let lengths = [150usize, 300, 500, 700, 1000, 1500, 2000, 3000];
+    {
+        let mut r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab()).unwrap();
+        r.drop_symbolic_plan();
+        for t in lengths {
+            let t0 = std::time::Instant::now();
+            r.log_probs_for_features(t, feats(t)).unwrap();
+            eprintln!("per-length {t} frames: {:?} (build + run); {}", t0.elapsed(), rss());
+        }
+    }
+    let r = FbankRecognizer::load(&dir.join("model.int8.onnx"), vocab()).unwrap();
+    assert!(r.has_symbolic_plan());
+    for t in lengths {
+        let t0 = std::time::Instant::now();
+        r.log_probs_for_features(t, feats(t)).unwrap();
+        eprintln!("symbolic {t} frames: {:?} (run); {}", t0.elapsed(), rss());
     }
 }
 
