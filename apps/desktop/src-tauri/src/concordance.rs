@@ -2,9 +2,21 @@
 //! translation word, each with the words of its segment so the panel can
 //! show it in context (keyword in the middle) and sort by either side.
 //!
-//! Matching is exact up to case (NFC first, then lowercase): diacritics and
-//! IPA marks are distinctions a linguist means, so `ŋa` never finds `na`.
-//! `*` stands for any run of characters (`kan*`, `*ma`), `?` for one.
+//! Matching is exact up to case (NFC, then the app's `fold_key`, which also
+//! folds Turkic dotted and dotless i): diacritics and IPA marks are
+//! distinctions a linguist means, so `ŋa` never finds `na`. Morphs and glosses
+//! compare without their edge markers (`lexicon_key`), so `-ra`, `ra` and a
+//! FLEx morph stored as `-ra` all meet. `*` stands for any run of characters
+//! (`kan*`, `*ma`), `?` for one.
+//!
+//! Which tiers: words, morphs and glosses come from transcription tiers;
+//! translation words from translation tiers (role `translation`, FLEx's free
+//! translation, or an ELAN association tier with no role). A segment whose
+//! tier is gone is skipped.
+//!
+//! Cost: a query reads every segment, token and morph of the project on the
+//! session thread (about a second per 20k words in a debug build); typed
+//! tables (SCROLLS.md §2) are the fix once corpora grow.
 
 use serde::Serialize;
 
@@ -79,13 +91,63 @@ pub fn glob(pattern: &[char], text: &[char]) -> bool {
     p == pattern.len()
 }
 
-/// Words of a line: split on white space, punctuation at the edges left out,
-/// the way the Gloss panel breaks a transcription into words.
+const MARKERS: [char; 5] = ['-', '=', '~', '<', '>'];
+
+/// Combining marks and the spacing modifier letters IPA spells with (tone
+/// letters, ʼ), which std's `is_alphanumeric` leaves out.
+fn is_mark_or_modifier(c: char) -> bool {
+    matches!(c as u32, 0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F | 0x02B0..=0x02FF | 0xA700..=0xA71F)
+}
+fn is_substance(c: char) -> bool {
+    c.is_alphanumeric() || is_mark_or_modifier(c)
+}
+fn is_word_char(c: char) -> bool {
+    is_substance(c) || MARKERS.contains(&c)
+}
+const APOSTROPHES: [char; 2] = ['\'', '\u{2019}'];
+
+/// Words of a line, by the Gloss panel's rules (`src/gloss/tokenizer.ts`):
+/// white space separates words; punctuation at a word's edge is left out but
+/// an edge apostrophe stays (a glottal stop or ejective: `ka'`) unless the
+/// word is wrapped in quotes; a chunk with no letter, mark or number in it is
+/// punctuation alone and is not a word.
 pub fn words_of(line: &str) -> Vec<String> {
-    line.split_whitespace()
-        .map(|w| w.trim_matches(|c: char| c.is_ascii_punctuation() || "«»“”‘’„¿¡…".contains(c)).to_string())
-        .filter(|w| !w.is_empty())
-        .collect()
+    let mut out = Vec::new();
+    for chunk in line.split(|c: char| c.is_whitespace()) {
+        if !chunk.chars().any(is_substance) {
+            continue;
+        }
+        let chars: Vec<char> = chunk.chars().collect();
+        let (mut a, mut b) = (0, chars.len());
+        let trim = |a: &mut usize, b: &mut usize| {
+            while *a < *b && !is_word_char(chars[*a]) && !APOSTROPHES.contains(&chars[*a]) {
+                *a += 1;
+            }
+            while *b > *a && !is_word_char(chars[*b - 1]) && !APOSTROPHES.contains(&chars[*b - 1]) {
+                *b -= 1;
+            }
+        };
+        trim(&mut a, &mut b);
+        let opened_by_quote = a > 0 && chars[a - 1] == '\u{2018}';
+        if opened_by_quote && b - a > 1 && APOSTROPHES.contains(&chars[b - 1]) {
+            b -= 1;
+            trim(&mut a, &mut b);
+        } else if b - a > 2 && chars[a] == '\'' && APOSTROPHES.contains(&chars[b - 1]) {
+            a += 1;
+            b -= 1;
+            trim(&mut a, &mut b);
+        }
+        let core: String = chars[a..b].iter().collect();
+        if !core.is_empty() {
+            out.push(core);
+        }
+    }
+    out
+}
+
+/// A morph's surface without the edge markers some importers keep (FLEx `-ler`).
+fn bare(surface: &str) -> &str {
+    surface.trim_matches(|c| MARKERS.contains(&c))
 }
 
 const MARK: [(&str, &str, &str); 5] = [("prefix", "", "-"), ("suffix", "-", ""), ("infix", "<", ">"), ("clitic", "=", ""), ("reduplication", "", "~")];
@@ -107,29 +169,46 @@ fn joined(parts: &[(String, String)]) -> String {
 
 pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Concordance, String> {
     let p = project(session)?;
-    let key = |s: &str| p.proj.nfc(s).to_lowercase().chars().collect::<Vec<char>>();
-    let pattern = key(query.trim());
+    let key = |s: &str| wugs_model::fold_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
+    // Morphs and glosses meet without their edge markers, on both sides.
+    let bare_key = |s: &str| wugs_model::lexicon_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
+    let pattern = match kind {
+        Kind::Morph | Kind::Gloss => bare_key(query.trim()),
+        Kind::Word | Kind::Translation => key(query.trim()),
+    };
     if pattern.is_empty() || pattern.iter().all(|c| *c == '*') {
         return Ok(Concordance { hits: Vec::new(), total: 0 });
     }
-    let translation_tiers: Vec<String> = p
-        .proj
-        .entities_of_kind("tier")?
-        .into_iter()
-        .filter(|t| p.proj.field_str(t, "role").ok().flatten().as_deref() == Some("translation"))
-        .collect();
+    // Live tiers only: a segment whose tier was deleted is skipped.
+    let mut translation_tiers = Vec::new();
+    let mut transcription_tiers = Vec::new();
+    for t in p.proj.entities_of_kind("tier")? {
+        let role = p.proj.field_str(&t, "role")?;
+        let origin = p.proj.field_str(&t, "origin")?;
+        let tier_kind = p.proj.field_str(&t, "kind")?;
+        let translation = role.as_deref() == Some("translation")
+            || origin.as_deref() == Some(wugs_flex::flextext::TIER_FREE)
+            || (role.is_none() && tier_kind.as_deref() == Some("symbolic-association"));
+        if translation {
+            translation_tiers.push(t);
+        } else if matches!(role.as_deref(), None | Some("transcription")) && matches!(tier_kind.as_deref(), None | Some("time-aligned")) {
+            transcription_tiers.push(t);
+        }
+    }
     let mut hits = Vec::new();
     let mut total = 0usize;
     for text in p.proj.entities_of_kind("text")? {
         let title = p.proj.field_str(&text, "title")?.unwrap_or_default();
         for seg in p.proj.ordered_children("text", &text, "segment")? {
             let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
-            let is_translation = translation_tiers.contains(&tier);
-            if is_translation != (kind == Kind::Translation) {
+            let wanted = if kind == Kind::Translation { &translation_tiers } else { &transcription_tiers };
+            if !wanted.contains(&tier) {
                 continue;
             }
             let content = p.proj.field_str(&seg, "content")?.unwrap_or_default();
-            let tokens: Vec<String> = if kind == Kind::Translation { Vec::new() } else { p.proj.members(&seg)? };
+            let mut tokens: Vec<String> = if kind == Kind::Translation { Vec::new() } else { p.proj.members(&seg)? };
+            // FLEx keeps punctuation as tokens of their own; they are not words.
+            tokens.retain(|t| p.proj.field_str(t, "x.flex.kind").ok().flatten().as_deref() != Some("punct"));
             let words: Vec<String> = if tokens.is_empty() {
                 words_of(&content)
             } else {
@@ -153,10 +232,10 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
                             let surface = p.proj.field_str(&m, "surface")?.unwrap_or_default();
                             let gloss = p.proj.field_str(&m, "gloss")?.unwrap_or_default();
                             let kind_of = p.proj.field_str(&m, "type")?.unwrap_or_else(|| "root".to_string());
-                            let probe = if kind == Kind::Morph { &surface } else { &gloss };
-                            matched |= !probe.is_empty() && glob(&pattern, &key(probe));
-                            glosses.push((if gloss.is_empty() { "?".to_string() } else { gloss }, kind_of.clone()));
-                            morphs.push((surface, kind_of));
+                            let probe = if kind == Kind::Morph { bare(&surface) } else { gloss.as_str() };
+                            matched |= !probe.is_empty() && glob(&pattern, &bare_key(probe));
+                            glosses.push((if gloss.is_empty() { "?".to_string() } else { bare(&gloss).to_string() }, kind_of.clone()));
+                            morphs.push((bare(&surface).to_string(), kind_of));
                         }
                         if matched {
                             found.push((i, Some(joined(&morphs)), Some(joined(&glosses))));
@@ -206,8 +285,14 @@ mod tests {
     }
 
     #[test]
-    fn words_leave_edge_punctuation_out() {
+    fn words_follow_the_gloss_panels_tokenizer() {
         assert_eq!(words_of("«Ŋai», toɾu… kesi."), vec!["Ŋai", "toɾu", "kesi"]);
+        // An edge apostrophe is a glottal stop; a quoted word loses its quotes.
+        assert_eq!(words_of("ka' 'ayo ‘word’"), vec!["ka'", "'ayo", "word"]);
+        // Punctuation alone is not a word; Arabic and CJK punctuation is trimmed too.
+        assert_eq!(words_of("— ... كتاب، 本。"), vec!["كتاب", "本"]);
+        // Combining marks and tone letters spell words.
+        assert_eq!(words_of("ma˥˩ a\u{0301}"), vec!["ma˥˩", "a\u{0301}"]);
     }
 
     #[test]
@@ -228,6 +313,11 @@ mod tests {
         assert_eq!(w.hits[0].words[w.hits[0].at], "kesi");
         let m = concordance(&mut session, "kani", Kind::Morph).unwrap();
         assert_eq!(m.total, 1);
+        // With or without the marker, a morph meets.
+        assert_eq!(concordance(&mut session, "ni-", Kind::Morph).unwrap().total, 1);
+        assert_eq!(concordance(&mut session, "=ma", Kind::Morph).unwrap().total, 1);
+        // Translations never show among words.
+        assert_eq!(concordance(&mut session, "three", Kind::Word).unwrap().total, 0);
         assert_eq!(m.hits[0].breakdown.as_deref(), Some("ni-kani"));
         assert_eq!(m.hits[0].glosses.as_deref(), Some("1SG-count"));
         assert_eq!(concordance(&mut session, "foc", Kind::Gloss).unwrap().total, 1);
@@ -236,5 +326,12 @@ mod tests {
         assert_eq!(concordance(&mut session, "*", Kind::Word).unwrap().total, 0);
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn turkic_i_folds_like_the_rest_of_the_app() {
+        let g = |p: &str, t: &str| glob(&wugs_model::fold_key(p).chars().collect::<Vec<_>>(), &wugs_model::fold_key(t).chars().collect::<Vec<_>>());
+        assert!(g("istanbul", "İstanbul"));
+        assert!(g("ışık", "Işık"));
     }
 }

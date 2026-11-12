@@ -983,3 +983,7 @@ body::before {
 /* The kit switcher (roadmap 73): the kit's name in the top bar opens the list of kits. */
 .brand-kit { display: flex; align-items: baseline; gap: 8px; }
 .menu-button.kit-switcher { font-family: var(--font-display); font-weight: 400; font-size: 20px; line-height: 1; padding: 2px 4px; color: var(--ink); }
+/* A right-to-left row: the grid runs from the right, so what came before the
+   keyword sits on its right; that side is cut at its far (right) end. */
+.cc-row[dir="rtl"] .cc-left { direction: ltr; text-align: left; }
+.cc-row[dir="rtl"] .cc-right { direction: rtl; text-align: right; unicode-bidi: plaintext; }
