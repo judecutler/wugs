@@ -105,7 +105,7 @@ fn a_plain_text_comes_in_a_sentence_per_segment_and_goes_out_a_line_per_segment(
     let dir = TempDir::new();
     let mut a = project(&dir, "a");
     let f = dir.0.join("Fox essay.txt");
-    fs::write(&f, "The fox came. It drank\nfrom the well!\n\nThen it left.\n").unwrap();
+    fs::write(&f, "The fox came. It drank from the well!\n\nThen it left.\n").unwrap();
     let imported = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
     let text = imported.text.clone().unwrap();
     let detail = session::get_text(&mut a, &text).unwrap();
