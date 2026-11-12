@@ -38,9 +38,9 @@ export type WugLook = {
 export const BRAND_BLUE = "#00c1e3";
 export const KIT_WUGS: Readonly<Record<string, WugLook>> = {
   wugs: { body: BRAND_BLUE, accessories: [] },
-  tongues: { body: "#f08060", accessories: ["hat", "recorder"] },
-  scrolls: { body: "#e8b030", accessories: ["monocle", "scroll"] },
-  glyphs: { body: "#70b850", accessories: ["glasses", "tablet"] },
+  "org.wugs.tongues": { body: "#f08060", accessories: ["hat", "recorder"] },
+  "org.wugs.scrolls": { body: "#e8b030", accessories: ["monocle", "scroll"] },
+  "org.wugs.glyphs": { body: "#70b850", accessories: ["glasses", "tablet"] },
 };
 
 /** A kit's wug: its own look when built in, else the brand wug. */

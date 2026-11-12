@@ -52,7 +52,7 @@ test("see-through parts keep the drawing's 35% opacity", () => {
 });
 
 test("built-in kits have their own wug; any other kit gets the brand wug", () => {
-  assert.deepEqual(kitWug("tongues").accessories, ["hat", "recorder"]);
+  assert.deepEqual(kitWug("org.wugs.tongues").accessories, ["hat", "recorder"]);
   assert.equal(kitWug("someones-kit").body, kitWug(undefined).body);
 });
 
