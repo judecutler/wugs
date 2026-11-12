@@ -1,22 +1,29 @@
-//! Collocates (Scrolls, SCROLLS.md §5 step 3): which words keep company with
+//! Collocates (Scrolls, SCROLLS.md §5 step 6, started early): which words keep company with
 //! a word, the way AntConc's Collocates tool and Sketch Engine's collocation
 //! lists measure it. For every occurrence of the node (a word or a `*`/`?`
 //! pattern, met as the Concordance meets it) the words up to `left` before
 //! and `right` after it in the same segment are counted; a window never
 //! crosses a segment, since a segment is an utterance or sentence.
 //!
-//! Each collocate gets two association scores over the 2×2 table of "in a
-//! node's window or not" against "this word or not":
-//! - **Log-likelihood** (Dunning 1993), the default sort in AntConc 4: how
-//!   surprising the co-occurrence count is. Negative when the pair occurs
-//!   less often than chance would put it together.
+//! Windows that overlap (two nodes close together) cover each word slot
+//! once, Evert's "surface co-occurrence", so a slot near two nodes is not
+//! counted twice and the 2×2 table of "in a node's window or not" against
+//! "this word or not" stays a real table: window slots never exceed the
+//! words in the scope, and a word is never together more often than it
+//! occurs. A slot is before or after the node nearest it. Each collocate
+//! gets the scores corpus tools offer:
+//! - **Log-likelihood** (Dunning 1993): how surprising the co-occurrence
+//!   count is; negative when the pair occurs less often than chance.
 //! - **Mutual information** (Church and Hanks 1990): log2 of observed over
-//!   expected; high for rare pairs, so a minimum co-occurrence count goes
-//!   with it.
+//!   expected; high for rare pairs, so a minimum count goes with it.
+//! - **logDice** (Rychlý 2008), Sketch Engine's default: 14 + log2(2·together
+//!   / (node + collocate frequency)); comparable across corpus sizes.
+//! - **t-score**: (observed − expected) / √observed; favours frequent pairs.
 //!
-//! The expected count is `window tokens × f(collocate) / N`, where the window
-//! tokens are every word slot the node's windows cover and N every word in
-//! the scope. Words are counted under the Concordance's keys (`fold_key`),
+//! The expected count is `window slots × f(collocate) / N`. Two differences
+//! from AntConc: windows stop at a segment's edge, and the window is
+//! compared with the rest of the scope rather than with the whole of it, so
+//! the numbers are close but not equal on the same file. Words are counted under the Concordance's keys (`fold_key`),
 //! each row showing the spelling met most often.
 
 use std::collections::HashMap;
@@ -38,6 +45,8 @@ pub struct CollocateRow {
     pub freq: usize,
     pub log_likelihood: f64,
     pub mutual_information: f64,
+    pub log_dice: f64,
+    pub t_score: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -98,6 +107,8 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
         for (k, _) in &words {
             *freq.entry(k.clone()).or_default() += 1;
         }
+        // Each slot once, owned by the nearest node: (node index, distance).
+        let mut owner: Vec<Option<(usize, usize)>> = vec![None; words.len()];
         for (i, (k, _)) in words.iter().enumerate() {
             if !glob(&pattern, &k.chars().collect::<Vec<_>>()) {
                 continue;
@@ -105,22 +116,26 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
             nodes += 1;
             let from = i.saturating_sub(left);
             let to = (i + right).min(words.len().saturating_sub(1));
-            for (j, (ck, spelling)) in words.iter().enumerate().take(to + 1).skip(from) {
-                if j == i {
-                    continue;
+            for (j, slot) in owner.iter_mut().enumerate().take(to + 1).skip(from) {
+                if j != i && slot.is_none_or(|(_, d)| i.abs_diff(j) < d) {
+                    *slot = Some((i, i.abs_diff(j)));
                 }
-                slots += 1;
-                let t = near.entry(ck.clone()).or_default();
-                t.together += 1;
-                if j < i {
-                    t.left += 1;
-                } else {
-                    t.right += 1;
-                }
-                match t.spellings.iter_mut().find(|(s, _)| s == spelling) {
-                    Some((_, n)) => *n += 1,
-                    None => t.spellings.push((spelling.clone(), 1)),
-                }
+            }
+        }
+        for (j, slot) in owner.iter().enumerate() {
+            let Some((i, _)) = slot else { continue };
+            let (ck, spelling) = &words[j];
+            slots += 1;
+            let t = near.entry(ck.clone()).or_default();
+            t.together += 1;
+            if j < *i {
+                t.left += 1;
+            } else {
+                t.right += 1;
+            }
+            match t.spellings.iter_mut().find(|(s, _)| s == spelling) {
+                Some((_, n)) => *n += 1,
+                None => t.spellings.push((spelling.clone(), 1)),
             }
         }
         Ok(())
@@ -132,8 +147,11 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
         .map(|(key, t)| {
             let f = freq.get(&key).copied().unwrap_or(t.together);
             let (ll, mi) = scores(t.together, slots, f, tokens);
+            let log_dice = 14.0 + (2.0 * t.together as f64 / (nodes + f) as f64).log2();
+            let expected = slots as f64 * f as f64 / tokens.max(1) as f64;
+            let t_score = (t.together as f64 - expected) / (t.together as f64).sqrt();
             let item = t.spellings.iter().fold(None::<&(String, usize)>, |best, s| if best.is_none_or(|b| s.1 > b.1) { Some(s) } else { best }).map(|s| s.0.clone()).unwrap_or(key);
-            CollocateRow { item, together: t.together, left: t.left, right: t.right, freq: f, log_likelihood: ll, mutual_information: mi }
+            CollocateRow { item, together: t.together, left: t.left, right: t.right, freq: f, log_likelihood: ll, mutual_information: mi, log_dice, t_score }
         })
         .collect();
     rows.sort_by(|a, b| b.log_likelihood.total_cmp(&a.log_likelihood).then(b.together.cmp(&a.together)).then(a.item.cmp(&b.item)));
@@ -149,15 +167,12 @@ pub fn scores(o11: usize, window: usize, f: usize, n: usize) -> (f64, f64) {
     if n == 0.0 || r1 == 0.0 || c1 == 0.0 {
         return (0.0, 0.0);
     }
-    // The other three cells; the window can count a word more than once
-    // (overlapping windows), so cells are kept at zero or above.
-    let o12 = (r1 - o11).max(0.0);
-    let o21 = (c1 - o11).max(0.0);
-    let o22 = (n - r1 - o21).max(0.0);
-    let r2 = o21 + o22;
-    let c2 = o12 + o22;
-    let total = o11 + o12 + o21 + o22;
-    let e = |r: f64, c: f64| r * c / total;
+    // The other three cells (a real table: o11 ≤ c1 and r1 ≤ n, since every
+    // slot is counted once).
+    let (o12, o21) = (r1 - o11, c1 - o11);
+    let o22 = n - r1 - o21;
+    let (r2, c2) = (n - r1, n - c1);
+    let e = |r: f64, c: f64| r * c / n;
     let term = |o: f64, e: f64| if o > 0.0 && e > 0.0 { o * (o / e).ln() } else { 0.0 };
     let (e11, e12, e21, e22) = (e(r1, c1), e(r1, c2), e(r2, c1), e(r2, c2));
     let ll = 2.0 * (term(o11, e11) + term(o12, e12) + term(o21, e21) + term(o22, e22));
@@ -210,6 +225,15 @@ mod tests {
         assert_eq!(collocates(&mut session, "*", Kind::Word, 1, 1, 1, None).unwrap().node, 0);
         assert!(collocates(&mut session, "fox", Kind::Word, 0, 0, 1, None).is_err());
         assert!(collocates(&mut session, "fox", Kind::Gloss, 1, 1, 1, None).is_err());
+        // Overlapping windows count each word once: «very» three times
+        // before «good» puts «good» in the windows once, not three times.
+        crate::session::add_segment(&mut session, &text, None, Some(40_000.0), Some(40_900.0), "very very very good").unwrap();
+        let v = collocates(&mut session, "very", Kind::Word, 3, 3, 1, None).unwrap();
+        let good = v.rows.iter().find(|r| r.item == "good").expect("good");
+        assert_eq!((good.together, good.freq), (1, 1));
+        let very = v.rows.iter().find(|r| r.item == "very").expect("very near very");
+        assert!(very.together <= very.freq);
+        assert!(v.rows.iter().all(|r| r.log_dice <= 14.0 && r.t_score.is_finite()));
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -1,6 +1,6 @@
-// Collocates (Scrolls, SCROLLS.md §5 step 3): which words keep company with a
-// word, scored by log-likelihood and mutual information like AntConc's
-// Collocates tool. A row opens the Concordance on the node, where the pairs
+// Collocates (Scrolls, SCROLLS.md §5 step 6): which words keep company with a
+// word, with the scores AntConc and Sketch Engine offer (log-likelihood,
+// mutual information, logDice, t-score). A row opens the Concordance on the node, where the pairs
 // can be read in context.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { collocates, errorText } from "../api";
@@ -46,7 +46,7 @@ export const collocatesPanel: PanelDef = {
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Look among" });
     const scopePicker = h("select", { title: "Look in the whole project or one text" });
     scopePicker.setAttribute("aria-label", "Where to look");
-    const sorter = h("select", { title: "Order of the rows" }, ...COLLOCATE_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
+    const sorter = h("select", { className: "co-sort", title: "Order of the rows. Windows stop at a segment's edge, so numbers are close to AntConc's but not equal on the same file." }, ...COLLOCATE_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
     sorter.setAttribute("aria-label", "Sort");
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy the list as a table to paste into a spreadsheet" });
     const note = h("p", { className: "note fq-count" });
@@ -88,11 +88,11 @@ export const collocatesPanel: PanelDef = {
         {},
         ...[
           ["Collocate", ""],
-          ["Near", "Times it occurs within the window"],
-          ["L / R", "How many of those are before (left of) the word, and how many after"],
+          ["Near", "Times it occurs within the window (each word counted once even where windows overlap); hover a row for before / after"],
           ["Freq", "Times it occurs anywhere here"],
           ["LL", "Log-likelihood: how surprising the pairing is; below zero means rarer than chance"],
           ["MI", "Mutual information: high for pairs that rarely occur apart"],
+          ["Dice", "logDice, Sketch Engine's default: up to 14, comparable between corpora of different sizes"],
         ].map(([t, tip]) => h("th", { textContent: t, scope: "col", title: tip })),
       );
       const text = scope === "" ? null : { id: scope, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
@@ -104,15 +104,15 @@ export const collocatesPanel: PanelDef = {
           ...rows.slice(0, DRAWN).map((r) => {
             const tr = h(
               "tr",
-              { tabIndex: 0, title: `Read «${asked}» in context in the Concordance (sort by the word before or after to bring «${r.item}» together)` },
+              { tabIndex: 0, title: `${r.left} before, ${r.right} after; t-score ${score(r.tScore)}. Read «${asked}» in context in the Concordance (sort by the word before or after to bring «${r.item}» together)` },
               h("td", { className: "fq-item", textContent: r.item }),
               h("td", { className: "fq-num", textContent: r.together.toLocaleString("en") }),
-              h("td", { className: "fq-num", textContent: `${r.left} / ${r.right}` }),
               h("td", { className: "fq-num", textContent: r.freq.toLocaleString("en") }),
               h("td", { className: r.logLikelihood < 0 ? "fq-num co-neg" : "fq-num", textContent: score(r.logLikelihood) }),
               h("td", { className: "fq-num", textContent: score(r.mutualInformation) }),
+              h("td", { className: "fq-num", textContent: score(r.logDice) }),
             );
-            const open = () => askConcordance(asked, kind, text);
+            const open = () => askConcordance(asked, kind, text, false);
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
