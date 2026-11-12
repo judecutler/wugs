@@ -15,7 +15,7 @@ use wugs_sqlite::Db;
 
 /// Bump when the cache schema changes shape; an old cache is wiped and
 /// `wiped` tells the caller to replay (the cache is disposable by design).
-const CACHE_SCHEMA: i64 = 14;
+const CACHE_SCHEMA: i64 = 15;
 
 pub struct Projection {
     /// Collaborative-text engine (DATA-MODEL §2.3). None = the spec's
@@ -283,6 +283,33 @@ CREATE TABLE IF NOT EXISTS log_ends(
   file TEXT PRIMARY KEY,
   end_offset INTEGER NOT NULL
 ) WITHOUT ROWID;
+-- The corpus index (DATA-MODEL §8's first typed tables, SCROLLS.md §2): the
+-- words of every segment, as the corpus tools count them (a segment's
+-- tokens, FLEx punctuation left out, else its content split by
+-- `wugs_model::words_of`), with the folded key they are counted under. A
+-- write only marks its segment in `corpus_dirty`; `refresh_corpus` rebuilds
+-- marked segments before any corpus read. Deleted texts, tiers and parent
+-- sentences are filtered when read, so they never mark anything.
+CREATE TABLE IF NOT EXISTS corpus_segments(
+  id INTEGER PRIMARY KEY,
+  segment TEXT NOT NULL UNIQUE,
+  text TEXT NOT NULL,
+  tier TEXT NOT NULL,
+  pos TEXT NOT NULL,
+  parent TEXT
+);
+CREATE INDEX IF NOT EXISTS corpus_segments_order ON corpus_segments(text, pos, segment);
+CREATE TABLE IF NOT EXISTS corpus_words(
+  seg INTEGER NOT NULL,
+  pos INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  form TEXT NOT NULL,
+  PRIMARY KEY(seg, pos)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS corpus_words_key ON corpus_words(key);
+CREATE TABLE IF NOT EXISTS corpus_dirty(
+  segment TEXT PRIMARY KEY
+) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS fts_map(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   target TEXT NOT NULL,
@@ -331,6 +358,9 @@ impl Projection {
             "field_refs",
             "field_heads",
             "log_ends",
+            "corpus_segments",
+            "corpus_words",
+            "corpus_dirty",
         ] {
             db.exec(&format!("DROP TABLE IF EXISTS {t}"))?;
         }
@@ -450,6 +480,9 @@ impl Projection {
             for (k, v) in fields {
                 self.lww_write(&op.target, k, v, op, None, stats)?;
             }
+        }
+        if op.entity == "segment" {
+            self.corpus_mark(&op.target)?;
         }
         stats.applied += 1;
         self.drain_pending(&op.target, stats)?;
@@ -632,6 +665,12 @@ impl Projection {
         s.bind_i64(1, flag)?;
         s.bind_text(2, &op.target)?;
         s.step()?;
+        drop(s);
+        match op.entity.as_str() {
+            "segment" => self.corpus_mark(&op.target)?,
+            "token" => self.corpus_mark_token(&op.target)?,
+            _ => {}
+        }
         stats.applied += 1;
         Ok(false)
     }
@@ -894,6 +933,10 @@ impl Projection {
     }
 
     fn upsert_field(&self, target: &str, field: &str, value: &Value, op: &Op) -> Result<(), String> {
+        // A create marks its segment once (`apply_create`), not once per field.
+        if op.verb != "create" || op.entity == "token" {
+            self.corpus_mark_write(target, &op.entity, field, value)?;
+        }
         let mut s = self.db.prepare(
             "INSERT INTO fields(target,field,value,hlc,op_id,verb,legacy_actor) VALUES(?1,?2,?3,?4,?5,?6,?7)
              ON CONFLICT(target,field) DO UPDATE SET value=?3, hlc=?4, op_id=?5, verb=?6, legacy_actor=?7",
@@ -938,6 +981,199 @@ impl Projection {
         s.bind_text(2, kind)?;
         s.bind_text(3, &key)?;
         s.step()?;
+        Ok(())
+    }
+
+    /// Mark the segment a write changes the words of: a segment's content,
+    /// token list, text, tier, parent or position; a token's form, segment, position
+    /// or FLEx kind (its old segment, and its new one when it moves).
+    fn corpus_mark_write(&self, target: &str, kind: &str, field: &str, value: &Value) -> Result<(), String> {
+        match (kind, field) {
+            ("segment", "content" | "tokens" | "text" | "tier" | "parent" | "pos") => self.corpus_mark(target),
+            ("token", "form" | "segment" | "pos" | "x.flex.kind") => {
+                self.corpus_mark_token(target)?;
+                if field == "segment" {
+                    if let Some(seg) = value.as_str() {
+                        self.corpus_mark(seg)?;
+                    }
+                }
+                Ok(())
+            }
+            _ => Ok(()),
+        }
+    }
+
+    fn corpus_mark_token(&self, token: &str) -> Result<(), String> {
+        match self.field_str(token, "segment")? {
+            Some(seg) => self.corpus_mark(&seg),
+            None => Ok(()),
+        }
+    }
+
+    fn corpus_mark(&self, segment: &str) -> Result<(), String> {
+        let mut s = self.db.prepare("INSERT OR IGNORE INTO corpus_dirty(segment) VALUES(?1)")?;
+        s.bind_text(1, segment)?;
+        s.step()?;
+        Ok(())
+    }
+
+    /// Rebuild the corpus index for every segment written since the last
+    /// refresh, in one savepoint. Every corpus read calls it first; after a
+    /// replay the first read builds the whole index. Returns how many
+    /// segments it rebuilt.
+    pub fn refresh_corpus(&self) -> Result<usize, String> {
+        let mut dirty = Vec::new();
+        {
+            let mut s = self.db.prepare("SELECT segment FROM corpus_dirty")?;
+            while s.step()? {
+                dirty.push(s.col_text(0));
+            }
+        }
+        if dirty.is_empty() {
+            return Ok(0);
+        }
+        self.savepoint("corpus_refresh")?;
+        match self.rebuild_corpus_segments(&dirty) {
+            Ok(()) => {
+                self.release("corpus_refresh")?;
+                Ok(dirty.len())
+            }
+            Err(e) => {
+                self.rollback_to("corpus_refresh")?;
+                Err(e)
+            }
+        }
+    }
+
+    fn rebuild_corpus_segments(&self, dirty: &[String]) -> Result<(), String> {
+        let mut del_words = self.db.prepare("DELETE FROM corpus_words WHERE seg=(SELECT id FROM corpus_segments WHERE segment=?1)")?;
+        let mut del_seg = self.db.prepare("DELETE FROM corpus_segments WHERE segment=?1")?;
+        let mut add_seg = self.db.prepare("INSERT INTO corpus_segments(segment,text,tier,parent,pos) VALUES(?1,?2,?3,?4,?5) RETURNING id")?;
+        let mut add_word = self.db.prepare("INSERT INTO corpus_words(seg,pos,key,form) VALUES(?1,?2,?3,?4)")?;
+        let mut live = self.db.prepare("SELECT 1 FROM entities WHERE id=?1 AND kind='segment' AND tombstone=0")?;
+        let mut fields = self.db.prepare(
+            "SELECT field, value FROM fields WHERE target=?1 AND field IN ('text','tier','parent','pos','content','tokens')",
+        )?;
+        // A child token, live or not: without one and without a token list,
+        // the segment's words are its content split (no members view needed).
+        let mut has_child = self.db.prepare("SELECT 1 FROM fields WHERE field='segment' AND value=?1 LIMIT 1")?;
+        for seg in dirty {
+            del_words.bind_text(1, seg)?;
+            del_words.step()?;
+            del_words.reset();
+            del_seg.bind_text(1, seg)?;
+            del_seg.step()?;
+            del_seg.reset();
+            live.bind_text(1, seg)?;
+            let is_live = live.step()?;
+            live.reset();
+            if !is_live {
+                continue;
+            }
+            let (mut text, mut tier, mut parent, mut pos, mut content, mut listed) = (None, None, None, String::new(), String::new(), false);
+            fields.bind_text(1, seg)?;
+            while fields.step()? {
+                let value = json::parse(&fields.col_text(1)).unwrap_or(Value::Null);
+                let as_str = value.as_str().map(str::to_string);
+                match fields.col_text(0).as_str() {
+                    "text" => text = as_str,
+                    "tier" => tier = as_str,
+                    "parent" => parent = as_str.filter(|p| !p.is_empty()),
+                    "pos" => pos = as_str.unwrap_or_default(),
+                    "content" => content = as_str.unwrap_or_default(),
+                    "tokens" => listed = matches!(value, Value::Arr(_)),
+                    _ => {}
+                }
+            }
+            fields.reset();
+            let (Some(text), Some(tier)) = (text, tier) else {
+                continue;
+            };
+            has_child.bind_text(1, &Value::str(seg).to_json())?;
+            let children = has_child.step()?;
+            has_child.reset();
+            let mut tokens = if listed || children { self.members(seg)? } else { Vec::new() };
+            // FLEx keeps punctuation as tokens of their own; they are not words.
+            tokens.retain(|t| self.field_str(t, "x.flex.kind").ok().flatten().as_deref() != Some("punct"));
+            let words: Vec<String> = if tokens.is_empty() {
+                wugs_model::words_of(&content)
+            } else {
+                tokens.iter().map(|t| self.field_str(t, "form").map(Option::unwrap_or_default)).collect::<Result<_, _>>()?
+            };
+            add_seg.bind_text(1, seg)?;
+            add_seg.bind_text(2, &text)?;
+            add_seg.bind_text(3, &tier)?;
+            match &parent {
+                Some(p) => add_seg.bind_text(4, p)?,
+                None => add_seg.bind_null(4)?,
+            }
+            add_seg.bind_text(5, &pos)?;
+            add_seg.step()?;
+            let id = add_seg.col_i64(0);
+            add_seg.reset();
+            for (i, w) in words.iter().enumerate() {
+                let form = self.nfc(w);
+                add_word.bind_i64(1, id)?;
+                add_word.bind_i64(2, i as i64)?;
+                add_word.bind_text(3, &wugs_model::fold_key(&form))?;
+                add_word.bind_text(4, &form)?;
+                add_word.step()?;
+                add_word.reset();
+            }
+        }
+        self.db.exec("DELETE FROM corpus_dirty")
+    }
+
+    /// Every live segment of `tiers` (one text, or all) with its words
+    /// (NFC), in the order texts and segments are read elsewhere (text id,
+    /// segment `pos`, segment id), from the corpus index. Skips segments of
+    /// deleted texts or tiers and segments whose parent sentence was deleted
+    /// (a translation goes with its sentence). `visit` gets (segment, text,
+    /// tier, words); a segment with no words gets an empty list.
+    pub fn each_corpus_segment(
+        &self,
+        tiers: &[String],
+        text: Option<&str>,
+        mut visit: impl FnMut(&str, &str, &str, &[String]) -> Result<(), String>,
+    ) -> Result<(), String> {
+        self.refresh_corpus()?;
+        let tiers_json = Value::Arr(tiers.iter().map(|t| Value::str(t)).collect()).to_json();
+        let mut s = self.db.prepare(
+            "SELECT s.segment, s.text, s.tier, w.form
+               FROM corpus_segments s
+               JOIN entities t ON t.id = s.text AND t.tombstone = 0
+               JOIN entities r ON r.id = s.tier AND r.tombstone = 0
+               LEFT JOIN entities p ON p.id = s.parent
+               LEFT JOIN corpus_words w ON w.seg = s.id
+              WHERE s.tier IN (SELECT value FROM json_each(?1))
+                AND (?2 IS NULL OR s.text = ?2)
+                AND (p.id IS NULL OR p.tombstone = 0)
+              ORDER BY s.text, s.pos, s.segment, w.pos",
+        )?;
+        s.bind_text(1, &tiers_json)?;
+        match text {
+            Some(t) => s.bind_text(2, t)?,
+            None => s.bind_null(2)?,
+        }
+        let mut current: Option<(String, String, String)> = None;
+        let mut words: Vec<String> = Vec::new();
+        while s.step()? {
+            let seg = s.col_text(0);
+            if current.as_ref().is_some_and(|(c, _, _)| *c != seg) {
+                let (c, t, r) = current.take().expect("checked");
+                visit(&c, &t, &r, &words)?;
+                words.clear();
+            }
+            if current.is_none() {
+                current = Some((seg, s.col_text(1), s.col_text(2)));
+            }
+            if let Some(form) = s.col_opt_text(3) {
+                words.push(form);
+            }
+        }
+        if let Some((c, t, r)) = current {
+            visit(&c, &t, &r, &words)?;
+        }
         Ok(())
     }
 
@@ -1753,6 +1989,72 @@ mod tests {
         let (_, hlc) = p.field(&t1, "form").unwrap().unwrap();
         p.apply(&op(&mut clock, "prs_A", "set", "token", &t1, Some("form"), Value::Null, Some(&hlc)), &mut stats).unwrap();
         assert!(p.by_lookup_key("token", "kedi").unwrap().is_empty(), "a non-string form clears the key");
+    }
+
+    #[test]
+    fn the_corpus_index_follows_edits_tokens_and_deletions() {
+        let p = Projection::open_memory().unwrap();
+        let mut st = ApplyStats::default();
+        let mut c = Clock::new("dvc_A".into());
+        let (text, tier, other, seg, tr) = (new_id("txt"), new_id("tir"), new_id("tir"), new_id("seg"), new_id("seg"));
+        let mut run = |c: &mut Clock, verb: &str, entity: &str, id: &str, field: Option<&str>, v: Value| {
+            let base = field.and_then(|f| p.field(id, f).unwrap().map(|(_, h)| h));
+            p.apply(&op(c, "prs_A", verb, entity, id, field, v, base.as_deref()), &mut st).unwrap();
+        };
+        run(&mut c, "create", "text", &text, None, Value::obj(vec![("title", Value::str("T"))]));
+        run(&mut c, "create", "tier", &tier, None, Value::obj(vec![]));
+        run(&mut c, "create", "tier", &other, None, Value::obj(vec![]));
+        run(&mut c, "create", "segment", &seg, None, Value::obj(vec![("text", Value::str(&text)), ("tier", Value::str(&tier)), ("content", Value::str("Ni kani, ni KANI."))]));
+        run(&mut c, "create", "segment", &tr, None, Value::obj(vec![("text", Value::str(&text)), ("tier", Value::str(&other)), ("parent", Value::str(&seg)), ("content", Value::str("I count"))]));
+        let counts = |text_only: Option<&str>, tiers: &[&String]| {
+            let tiers: Vec<String> = tiers.iter().map(|t| t.to_string()).collect();
+            let mut v: Vec<(String, String, u64)> = Vec::new();
+            p.each_corpus_segment(&tiers, text_only, |_, _, _, words| {
+                for w in words {
+                    let key = wugs_model::fold_key(w);
+                    match v.iter_mut().find(|r| r.0 == key && r.1 == *w) {
+                        Some(r) => r.2 += 1,
+                        None => v.push((key, w.clone(), 1)),
+                    }
+                }
+                Ok(())
+            })
+            .unwrap();
+            v.sort();
+            v
+        };
+        assert_eq!(
+            counts(None, &[&tier]),
+            vec![("kani".into(), "KANI".into(), 1), ("kani".into(), "kani".into(), 1), ("ni".into(), "Ni".into(), 1), ("ni".into(), "ni".into(), 1)],
+            "content split like the Gloss panel, keyed folded, spellings kept"
+        );
+        assert_eq!(counts(None, &[&other]).len(), 2, "tiers are read separately");
+        assert_eq!(p.refresh_corpus().unwrap(), 0, "nothing to rebuild once read");
+
+        run(&mut c, "set", "segment", &seg, Some("content"), Value::str("toru"));
+        assert_eq!(counts(None, &[&tier]), vec![("toru".into(), "toru".into(), 1)], "an edit rebuilds the segment");
+
+        // Tokens win over content once the segment is broken into words.
+        let (t1, t2, p1) = (new_id("tok"), new_id("tok"), new_id("tok"));
+        run(&mut c, "create", "token", &t1, None, Value::obj(vec![("segment", Value::str(&seg)), ("form", Value::str("toru")), ("pos", Value::str("0"))]));
+        run(&mut c, "create", "token", &p1, None, Value::obj(vec![("segment", Value::str(&seg)), ("form", Value::str(",")), ("pos", Value::str("1")), ("x.flex.kind", Value::str("punct"))]));
+        run(&mut c, "create", "token", &t2, None, Value::obj(vec![("segment", Value::str(&seg)), ("form", Value::str("kesi")), ("pos", Value::str("2"))]));
+        assert_eq!(counts(None, &[&tier]).iter().map(|r| r.0.as_str()).collect::<Vec<_>>(), ["kesi", "toru"], "FLEx punctuation is not a word");
+        run(&mut c, "set", "token", &t2, Some("form"), Value::str("mopa"));
+        assert!(counts(None, &[&tier]).iter().any(|r| r.0 == "mopa"), "a token's edit reaches its segment");
+        run(&mut c, "delete", "token", &t2, None, Value::Null);
+        assert_eq!(counts(None, &[&tier]), vec![("toru".into(), "toru".into(), 1)], "a deleted token drops out");
+
+        run(&mut c, "delete", "segment", &seg, None, Value::Null);
+        assert!(counts(None, &[&tier]).is_empty(), "a deleted segment drops out");
+        assert!(counts(None, &[&other]).is_empty(), "and its translation goes with it");
+        run(&mut c, "restore", "segment", &seg, None, Value::Null);
+        assert_eq!(counts(Some(&text), &[&tier]).len(), 1, "a restore brings it back");
+        run(&mut c, "delete", "tier", &tier, None, Value::Null);
+        assert!(counts(None, &[&tier]).is_empty(), "a deleted tier is not read");
+        run(&mut c, "delete", "text", &text, None, Value::Null);
+        assert!(counts(None, &[&other]).is_empty(), "nor a deleted text");
+        assert!(counts(Some("txt_none"), &[&other]).is_empty());
     }
 
     #[test]

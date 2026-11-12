@@ -30,7 +30,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::concordance::{each_segment, glob, Kind};
+use crate::concordance::{Read, each_segment, glob, Kind};
 use crate::session::{project, Session};
 
 #[derive(Debug, Serialize)]
@@ -93,7 +93,7 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
     let mut freq: HashMap<String, usize> = HashMap::new();
     let mut near: HashMap<String, Tally> = HashMap::new();
     let (mut tokens, mut nodes, mut slots) = (0usize, 0usize, 0usize);
-    each_segment(p, kind == Kind::Translation, text, |seg| {
+    each_segment(p, Read::of(kind), text, |seg| {
         let words: Vec<(String, String)> = seg
             .words
             .iter()

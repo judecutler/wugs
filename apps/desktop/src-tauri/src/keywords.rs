@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::concordance::{each_segment, Kind};
+use crate::concordance::{Read, each_segment, Kind};
 use crate::session::{project, Session};
 
 #[derive(Debug, Serialize)]
@@ -77,7 +77,7 @@ pub fn keywords(session: &mut Session, kind: Kind, text: &str, min_count: usize)
     let p = project(session)?;
     let mut tallies: HashMap<String, Tally> = HashMap::new();
     let (mut c, mut d) = (0usize, 0usize);
-    each_segment(p, kind == Kind::Translation, None, |seg| {
+    each_segment(p, Read::of(kind), None, |seg| {
         let here = seg.text == text;
         for w in &seg.words {
             let spelling = p.proj.nfc(w);

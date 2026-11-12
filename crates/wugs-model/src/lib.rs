@@ -74,6 +74,62 @@ pub fn lexicon_key(s: &str) -> String {
     fold_key(s).trim_matches(|c| matches!(c, '-' | '=' | '~' | '<' | '>')).to_string()
 }
 
+/// Morph markers a word may carry at its edges (`-ler`, `=ki`, `<um>`).
+pub const MARKERS: [char; 5] = ['-', '=', '~', '<', '>'];
+
+/// Combining marks and the spacing modifier letters IPA spells with (tone
+/// letters, ʼ), which std's `is_alphanumeric` leaves out.
+fn is_mark_or_modifier(c: char) -> bool {
+    matches!(c as u32, 0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F | 0x02B0..=0x02FF | 0xA700..=0xA71F)
+}
+fn is_substance(c: char) -> bool {
+    c.is_alphanumeric() || is_mark_or_modifier(c)
+}
+fn is_word_char(c: char) -> bool {
+    is_substance(c) || MARKERS.contains(&c)
+}
+const APOSTROPHES: [char; 2] = ['\'', '\u{2019}'];
+
+/// Words of a line, by the Gloss panel's rules (`apps/desktop/src/gloss/tokenizer.ts`),
+/// shared by the projector's corpus index and the desktop corpus tools:
+/// white space separates words; punctuation at a word's edge is left out but
+/// an edge apostrophe stays (a glottal stop or ejective: `ka'`) unless the
+/// word is wrapped in quotes; a chunk with no letter, mark or number in it is
+/// punctuation alone and is not a word.
+pub fn words_of(line: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for chunk in line.split(|c: char| c.is_whitespace()) {
+        if !chunk.chars().any(is_substance) {
+            continue;
+        }
+        let chars: Vec<char> = chunk.chars().collect();
+        let (mut a, mut b) = (0, chars.len());
+        let trim = |a: &mut usize, b: &mut usize| {
+            while *a < *b && !is_word_char(chars[*a]) && !APOSTROPHES.contains(&chars[*a]) {
+                *a += 1;
+            }
+            while *b > *a && !is_word_char(chars[*b - 1]) && !APOSTROPHES.contains(&chars[*b - 1]) {
+                *b -= 1;
+            }
+        };
+        trim(&mut a, &mut b);
+        let opened_by_quote = a > 0 && chars[a - 1] == '\u{2018}';
+        if opened_by_quote && b - a > 1 && APOSTROPHES.contains(&chars[b - 1]) {
+            b -= 1;
+            trim(&mut a, &mut b);
+        } else if b - a > 2 && chars[a] == '\'' && APOSTROPHES.contains(&chars[b - 1]) {
+            a += 1;
+            b -= 1;
+            trim(&mut a, &mut b);
+        }
+        let core: String = chars[a..b].iter().collect();
+        if !core.is_empty() {
+            out.push(core);
+        }
+    }
+    out
+}
+
 /// Current op schema version (DATA-MODEL.md §10).
 pub const SCHEMA_VERSION: u32 = 2;
 

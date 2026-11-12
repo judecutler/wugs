@@ -5,6 +5,14 @@
 //! Run: cargo run -p wugs-bench --release -- [N_OPS] [--keep] [--contested]
 //! Gates: cold replay of 500k ops ≤ 60 s; steady memory ≤ 300 MB.
 //!
+//! Corpus gate (SCROLLS.md §2): `-- [N_TOKENS] --corpus` writes a plain-text
+//! corpus the way `import_written_text` does (one txn per document of 500
+//! sentences, 20 words each from a Zipf vocabulary of 50k types, segments
+//! untokenized), replays it, then builds the corpus index (the first read
+//! does) and reads a whole-corpus frequency list from it. Gates at 10M
+//! tokens: replay ≤ 60 s, index build ≤ 120 s, frequency list ≤ 15 s,
+//! peak memory ≤ 300 MB.
+//!
 //! The default workload is one device's work with no concurrent writes, the
 //! shape the gate was set for. `--contested` adds a second device whose
 //! glosses cross the first one's: one gloss in 8 gets a concurrent write (a
@@ -236,6 +244,127 @@ fn generate(target_ops: usize, log: &LogDir, contested: bool) -> usize {
     g.written
 }
 
+/// A deterministic xorshift generator: the corpus is the same every run.
+struct Rng(u64);
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        self.0
+    }
+    fn unit(&mut self) -> f64 {
+        (self.next() >> 11) as f64 / (1u64 << 53) as f64
+    }
+}
+
+const TYPES: usize = 50_000;
+const SENTENCE_WORDS: usize = 20;
+const DOC_SENTENCES: usize = 500;
+
+/// Invented words from syllables, so no real text is involved.
+fn vocabulary() -> Vec<String> {
+    const ONSETS: [&str; 12] = ["k", "t", "p", "m", "n", "s", "l", "ŋ", "w", "j", "ʔ", "r"];
+    const VOWELS: [&str; 6] = ["a", "e", "i", "o", "u", "ə"];
+    (0..TYPES)
+        .map(|i| {
+            let mut n = i + 1;
+            let mut w = String::new();
+            while n > 0 {
+                w.push_str(ONSETS[n % ONSETS.len()]);
+                n /= ONSETS.len();
+                w.push_str(VOWELS[n % VOWELS.len()]);
+                n /= VOWELS.len();
+            }
+            w
+        })
+        .collect()
+}
+
+/// Writes about `tokens` running words as plain-text documents; returns ops written.
+fn generate_corpus(tokens: usize, log: &LogDir) -> usize {
+    let mut g = Gen {
+        clock: Clock::new(new_id("dvc")),
+        peer: Clock::new(new_id("dvc")),
+        actor: new_id("prs"),
+        ops: Vec::with_capacity(CHUNK + 1024),
+        log,
+        written: 0,
+    };
+    let vocab = vocabulary();
+    // Zipf with exponent 1.07, near what English and most corpora show.
+    let mut cum = Vec::with_capacity(TYPES);
+    let mut total = 0.0;
+    for r in 1..=TYPES {
+        total += 1.0 / (r as f64).powf(1.07);
+        cum.push(total);
+    }
+    let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
+    let tier = new_id("tir");
+    let cfg = new_id("txn");
+    g.create("tier", "tir", "config", &cfg, "add-tier", vec![("name", Value::str("utterance"))]);
+    g.ops.last_mut().unwrap().target = tier.clone();
+    let mut words = 0usize;
+    let mut doc = 0usize;
+    while words < tokens {
+        let txn = new_id("txn");
+        let txt = g.create("text", "txt", "", &txn, "import-written-text", vec![("title", Value::str(&format!("Document {doc}")))]);
+        g.ops.last_mut().unwrap().scope = txt.clone();
+        for s in 0..DOC_SENTENCES {
+            if words >= tokens {
+                break;
+            }
+            let mut line = String::new();
+            for w in 0..SENTENCE_WORDS {
+                let x = rng.unit() * total;
+                let r = cum.partition_point(|c| *c < x).min(TYPES - 1);
+                if w > 0 {
+                    line.push(' ');
+                }
+                line.push_str(&vocab[r]);
+            }
+            line.push('.');
+            words += SENTENCE_WORDS;
+            g.create(
+                "segment", "seg", &txt, &txn, "import-written-text",
+                vec![
+                    ("text", Value::str(&txt)),
+                    ("tier", Value::str(&tier)),
+                    ("pos", Value::str(&pos_seq(s))),
+                    ("content", Value::str(&line)),
+                ],
+            );
+        }
+        g.flush_if_full();
+        doc += 1;
+    }
+    g.flush();
+    g.written
+}
+
+/// The corpus gate after replay: build the index, then read a frequency list.
+fn corpus_gate(proj: &Projection) -> (f64, f64) {
+    let tier = proj.entities_of_kind("tier").unwrap();
+    let t = Instant::now();
+    let rebuilt = proj.refresh_corpus().unwrap();
+    let index = t.elapsed();
+    println!("corpus index build: {index:.2?} ({rebuilt} segments)");
+    let t = Instant::now();
+    let mut counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    let mut running = 0u64;
+    proj.each_corpus_segment(&tier, None, |_, _, _, words| {
+        for w in words {
+            running += 1;
+            *counts.entry(wugs_model::fold_key(w)).or_insert(0) += 1;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let freq = t.elapsed();
+    println!("frequency list: {freq:.2?} ({running} running words, {} types)", counts.len());
+    (index.as_secs_f64(), freq.as_secs_f64())
+}
+
 fn vm_hwm_mb() -> f64 {
     fs::read_to_string("/proc/self/status")
         .ok()
@@ -258,15 +387,16 @@ fn main() {
         .unwrap_or(500_000);
     let keep = args.iter().any(|a| a == "--keep");
     let contested = args.iter().any(|a| a == "--contested");
+    let corpus = args.iter().any(|a| a == "--corpus");
 
     let root = std::env::temp_dir().join(format!("wugs-bench-{}", wugs_model::ulid()));
     fs::create_dir_all(&root).unwrap();
-    println!("bench root: {} ({} ops{})", root.display(), n, if contested { ", contested" } else { "" });
+    println!("bench root: {} ({} {}{})", root.display(), n, if corpus { "corpus tokens" } else { "ops" }, if contested { ", contested" } else { "" });
 
     // ---- phase 1: generate + write the log (chunked; memory stays flat)
     let log = LogDir::new(&root);
     let t0 = Instant::now();
-    let written = generate(n, &log, contested);
+    let written = if corpus { generate_corpus(n, &log) } else { generate(n, &log, contested) };
     let log_bytes = dir_size(&root.join("log"));
     println!(
         "generate+write: {:>8.2?}  ({} ops, {:.1} MB on disk)",
@@ -315,6 +445,11 @@ fn main() {
         fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0) as f64 / 1e6
     );
 
+    let corpus_times = corpus.then(|| corpus_gate(&proj));
+    if corpus {
+        println!("projection size after the index: {:.1} MB", fs::metadata(&db_path).map(|m| m.len()).unwrap_or(0) as f64 / 1e6);
+    }
+
     // ---- phase 3: incremental apply latency (single-op txns)
     let mut lat_us: Vec<u128> = Vec::with_capacity(1000);
     let mut clock = Clock::new(new_id("dvc"));
@@ -362,13 +497,22 @@ fn main() {
     println!("  replay ≤ 60 s      : {}", pf(gate_time));
     println!("  memory ≤ 300 MB    : {}", pf(gate_mem));
     println!("  incr p95 ≤ 5 ms    : {}", pf(gate_lat));
+    let mut gate_corpus = true;
+    if let Some((index, freq)) = corpus_times {
+        // Limits are for 10M tokens; smaller runs are held to their share.
+        let scale = (n as f64 / 10_000_000.0).max(0.1);
+        let (gi, gf) = (index <= 120.0 * scale, freq <= 15.0 * scale);
+        println!("  corpus index ≤ {:.0} s : {}", 120.0 * scale, pf(gi));
+        println!("  frequency list ≤ {:.1} s : {}", 15.0 * scale, pf(gf));
+        gate_corpus = gi && gf;
+    }
 
     if keep {
         println!("kept: {}", root.display());
     } else {
         fs::remove_dir_all(&root).ok();
     }
-    if !(gate_time && gate_mem && gate_lat) {
+    if !(gate_time && gate_mem && gate_lat && gate_corpus) {
         std::process::exit(1);
     }
 }

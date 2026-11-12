@@ -95,59 +95,7 @@ pub fn glob(pattern: &[char], text: &[char]) -> bool {
     p == pattern.len()
 }
 
-const MARKERS: [char; 5] = ['-', '=', '~', '<', '>'];
-
-/// Combining marks and the spacing modifier letters IPA spells with (tone
-/// letters, ʼ), which std's `is_alphanumeric` leaves out.
-fn is_mark_or_modifier(c: char) -> bool {
-    matches!(c as u32, 0x0300..=0x036F | 0x1AB0..=0x1AFF | 0x1DC0..=0x1DFF | 0x20D0..=0x20FF | 0xFE20..=0xFE2F | 0x02B0..=0x02FF | 0xA700..=0xA71F)
-}
-fn is_substance(c: char) -> bool {
-    c.is_alphanumeric() || is_mark_or_modifier(c)
-}
-fn is_word_char(c: char) -> bool {
-    is_substance(c) || MARKERS.contains(&c)
-}
-const APOSTROPHES: [char; 2] = ['\'', '\u{2019}'];
-
-/// Words of a line, by the Gloss panel's rules (`src/gloss/tokenizer.ts`):
-/// white space separates words; punctuation at a word's edge is left out but
-/// an edge apostrophe stays (a glottal stop or ejective: `ka'`) unless the
-/// word is wrapped in quotes; a chunk with no letter, mark or number in it is
-/// punctuation alone and is not a word.
-pub fn words_of(line: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for chunk in line.split(|c: char| c.is_whitespace()) {
-        if !chunk.chars().any(is_substance) {
-            continue;
-        }
-        let chars: Vec<char> = chunk.chars().collect();
-        let (mut a, mut b) = (0, chars.len());
-        let trim = |a: &mut usize, b: &mut usize| {
-            while *a < *b && !is_word_char(chars[*a]) && !APOSTROPHES.contains(&chars[*a]) {
-                *a += 1;
-            }
-            while *b > *a && !is_word_char(chars[*b - 1]) && !APOSTROPHES.contains(&chars[*b - 1]) {
-                *b -= 1;
-            }
-        };
-        trim(&mut a, &mut b);
-        let opened_by_quote = a > 0 && chars[a - 1] == '\u{2018}';
-        if opened_by_quote && b - a > 1 && APOSTROPHES.contains(&chars[b - 1]) {
-            b -= 1;
-            trim(&mut a, &mut b);
-        } else if b - a > 2 && chars[a] == '\'' && APOSTROPHES.contains(&chars[b - 1]) {
-            a += 1;
-            b -= 1;
-            trim(&mut a, &mut b);
-        }
-        let core: String = chars[a..b].iter().collect();
-        if !core.is_empty() {
-            out.push(core);
-        }
-    }
-    out
-}
+use wugs_model::{words_of, MARKERS};
 
 /// A morph's surface without the edge markers some importers keep (FLEx `-ler`).
 pub(crate) fn bare(surface: &str) -> &str {
@@ -212,7 +160,7 @@ pub(crate) struct CorpusSegment {
 pub(crate) fn tests_word_counts(session: &mut Session) -> Vec<usize> {
     let p = project(session).unwrap();
     let mut out = Vec::new();
-    each_segment(p, false, None, |seg| {
+    each_segment(p, Read::Words, None, |seg| {
         out.push(seg.words.iter().filter(|w| !wugs_model::fold_key(&p.proj.nfc(w)).is_empty()).count());
         Ok(())
     })
@@ -220,37 +168,68 @@ pub(crate) fn tests_word_counts(session: &mut Session) -> Vec<usize> {
     out
 }
 
-/// Calls `visit` with every segment on a transcription tier (or, with
-/// `translations`, a translation tier), text by text in order; `only_text`
-/// keeps one text.
+/// What a corpus reader needs from each segment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Read {
+    /// Transcription words, from the corpus index (no tokens).
+    Words,
+    /// Translation words, from the corpus index.
+    Translations,
+    /// Transcription words and the tokens behind them, for morphs and glosses.
+    Analyses,
+}
+
+impl Read {
+    pub(crate) fn of(kind: Kind) -> Read {
+        match kind {
+            Kind::Word => Read::Words,
+            Kind::Translation => Read::Translations,
+            Kind::Morph | Kind::Gloss | Kind::Sense => Read::Analyses,
+        }
+    }
+}
+
+/// Calls `visit` with every segment on a transcription tier (or, for
+/// `Read::Translations`, a translation tier), text by text in order (text id,
+/// then segment `pos`); `only_text` keeps one text. Words and translations
+/// come from the projection's corpus index (`each_corpus_segment`), which
+/// splits words the same way; `Read::Analyses` also reads each segment's
+/// tokens from the entity tables.
 pub(crate) fn each_segment(
     p: &Project,
-    translations: bool,
+    read: Read,
     only_text: Option<&str>,
     mut visit: impl FnMut(&CorpusSegment) -> Result<(), String>,
 ) -> Result<(), String> {
     let (translation_tiers, transcription_tiers) = corpus_tiers(p)?;
-    let wanted = if translations { &translation_tiers } else { &transcription_tiers };
+    let mut titles: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut title_of = |text: &str| -> Result<String, String> {
+        if let Some(t) = titles.get(text) {
+            return Ok(t.clone());
+        }
+        let t = p.proj.field_str(text, "title")?.unwrap_or_default();
+        titles.insert(text.to_string(), t.clone());
+        Ok(t)
+    };
+    if read != Read::Analyses {
+        let tiers = if read == Read::Translations { &translation_tiers } else { &transcription_tiers };
+        return p.proj.each_corpus_segment(tiers, only_text, |seg, text, tier, words| {
+            let title = title_of(text)?;
+            visit(&CorpusSegment { text: text.to_string(), title, id: seg.to_string(), tier: tier.to_string(), tokens: Vec::new(), words: words.to_vec() })
+        });
+    }
     for text in p.proj.entities_of_kind("text")? {
         if only_text.is_some_and(|t| t != text) {
             continue;
         }
-        let title = p.proj.field_str(&text, "title")?.unwrap_or_default();
+        let title = title_of(&text)?;
         for seg in p.proj.ordered_children("text", &text, "segment")? {
             let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
-            if !wanted.contains(&tier) {
+            if !transcription_tiers.contains(&tier) {
                 continue;
             }
-            // A translation whose sentence was deleted goes with it.
-            if translations {
-                if let Some(parent) = p.proj.field_str(&seg, "parent")?.filter(|v| !v.is_empty()) {
-                    if p.proj.is_tombstoned(&parent)? {
-                        continue;
-                    }
-                }
-            }
             let content = p.proj.field_str(&seg, "content")?.unwrap_or_default();
-            let mut tokens: Vec<String> = if translations { Vec::new() } else { p.proj.members(&seg)? };
+            let mut tokens: Vec<String> = p.proj.members(&seg)?;
             // FLEx keeps punctuation as tokens of their own; they are not words.
             tokens.retain(|t| p.proj.field_str(t, "x.flex.kind").ok().flatten().as_deref() != Some("punct"));
             let words: Vec<String> = if tokens.is_empty() {
@@ -321,7 +300,7 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
     }
     let mut hits = Vec::new();
     let mut total = 0usize;
-    each_segment(p, kind == Kind::Translation, only_text, |seg| {
+    each_segment(p, Read::of(kind), only_text, |seg| {
         let mut found: Vec<(usize, Option<String>, Option<String>)> = Vec::new();
         match kind {
             Kind::Word | Kind::Translation if !phrase.is_empty() => {
