@@ -446,6 +446,10 @@ fn a_bundle_is_checked_like_any_kit_input() {
     assert!(m.contains("package.type of a kit file") && m.contains("differs from kit.id"), "{m}");
     assert!(messages(&bundled("").replace("https://github.com", "http://github.com")).join("\n").contains("https://"));
     assert!(messages(&bundled("").replace("https://github.com/someone/kit", "https://")).join("\n").contains("https://"));
+    for bad in ["https://.", "https://github.com@evil.com/x", "https://a..b/x"] {
+        assert!(messages(&bundled("").replace("https://github.com/someone/kit", bad)).join("\n").contains("https://"), "{bad}");
+    }
+    assert!(messages(&bundled("").replace("version = \"1.0.0\"\n\n[bundle]", "version = \"../../evil\"\n\n[bundle]")).join("\n").contains("kit.version of a shared kit"));
     // Versions and ids name folders; a misspelt key is named.
     let m = messages(&bundled(&format!(
         "[[requires]]\ntype = \"dataset\"\nid = \"Upper\"\nversion = \"../../x\"\nfiles_sha256 = \"{SHA}\"\nrecomended = true\n\n[examples]\nproject = \"a./b\"\n"
