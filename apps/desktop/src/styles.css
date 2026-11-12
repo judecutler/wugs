@@ -447,8 +447,12 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 
 /* Gloss panel: Leipzig-style interlinear text */
 .panel-gloss { display: flex; flex-direction: column; gap: 6px; }
-.gl-head { display: flex; align-items: center; gap: 8px; font-size: var(--text-xs); color: var(--muted); }
+.gl-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: var(--text-xs); color: var(--muted); }
 .gl-spacer { flex: 1; }
+.gl-copy-group { display: inline-flex; align-items: center; gap: 0; white-space: nowrap; }
+.gl-time { white-space: nowrap; }
+.gl-copy-group .gl-copy { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.gl-copy-group .gl-copy-format { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; font-size: var(--text-xs); max-width: 160px; }
 .gl-lang { display: inline-flex; align-items: center; gap: 4px; }
 .gl-lang-off { padding: 0 6px; }
 .gl-lang-input { width: 120px; }
