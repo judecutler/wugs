@@ -37,12 +37,16 @@ export function score(query: string, text: string): number {
   return total;
 }
 
+/** Groups that are about the whole app rather than the work at hand. */
+const GENERAL = new Set(["Panels", "Look", "Workspace", "Project", "wugs", "Help"]);
+
 export const fold = (s: string): string => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
 
 /** The commands to list for a query: best first, then by group and title.
- * With no query, the order they were given (most useful first). */
+ * With no query, the given order with the panels' own commands first:
+ * what can be done where the person is comes before going elsewhere. */
 export function rank(query: string, commands: readonly Command[]): Command[] {
-  if (query.trim() === "") return [...commands];
+  if (query.trim() === "") return [...commands.filter((c) => !GENERAL.has(c.group)), ...commands.filter((c) => GENERAL.has(c.group))];
   return commands
     .map((c, i) => ({ c, i, s: Math.max(score(query, c.title) * 2, score(query, [c.title, c.group, ...(c.words ?? [])].join(" "))) }))
     .filter((x) => x.s > 0)
@@ -58,9 +62,10 @@ export function keyLabel(keys: string, mac: boolean): string {
   return mac ? keys.replace(/\bCtrl\+/gu, "⌘").replace(/\bAlt\+/gu, "⌥").replace(/\bShift\+/gu, "⇧") : keys;
 }
 
-/** The palette opens on Ctrl+K or Cmd+K, wherever focus is. */
-export const opensPalette = (e: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }): boolean =>
-  (e.key === "k" || e.key === "K") && (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey;
+/** The palette opens on Cmd+K on a Mac and Ctrl+K elsewhere, wherever focus
+ * is. On a Mac, Ctrl+K stays the text fields' "delete to end of line". */
+export const opensPalette = (e: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean; shiftKey: boolean }, mac = false): boolean =>
+  (e.key === "k" || e.key === "K") && (mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey) && !e.altKey && !e.shiftKey;
 
 /** `?` opens the shortcuts sheet, except while typing (where it is a question mark). */
 export const opensShortcuts = (e: { key: string; ctrlKey: boolean; metaKey: boolean; altKey: boolean }, typing: boolean): boolean =>
@@ -73,42 +78,46 @@ export const SHORTCUTS: { where: string; keys: [string, string][] }[] = [
     where: "Anywhere",
     keys: [
       ["Ctrl+K", "Find any action or panel"],
-      ["?", "Show these shortcuts"],
-      ["Escape", "Close a sheet, menu or form"],
+      ["?", "Show these shortcuts (outside text fields)"],
+      ["Escape", "Close a sheet, menu or empty form"],
     ],
   },
   {
-    where: "Timeline",
+    where: "Timeline (click it first)",
     keys: [
       ["Space", "Play or pause"],
-      ["J / K / L", "Back two seconds / stop / play"],
+      ["J / K / L", "Back two seconds / pause / play"],
       ["Home / End", "Go to the start / end"],
-      ["+ / -", "Zoom in / out"],
+      ["+ or = / -", "Zoom in / out"],
       ["Shift+Z", "Fit the whole recording"],
       ["S", "Split the selected segment at the playhead"],
       ["M", "Merge the selected segment with the next"],
       ["[ / ]", "Move the start edge 10 ms earlier / later"],
       ["Shift+[ / Shift+]", "Move the end edge 10 ms earlier / later"],
-      ["Delete", "Delete the selected segment (asks first)"],
+      ["Delete or Backspace", "Delete the selected segment (asks first)"],
+      ["Escape", "Clear the selection"],
       ["Ctrl+Z", "Undo"],
       ["Ctrl+Shift+Z or Ctrl+Y", "Redo"],
       ["Alt + drag", "Place an edge without snapping"],
     ],
   },
   {
-    where: "Transcribe",
+    where: "Transcribe (in a row)",
     keys: [
       ["Enter", "Save and go to the next segment"],
       ["Shift+Enter", "Save and go back"],
-      ["Tab", "Play the segment again"],
+      ["Tab or Ctrl+Enter", "Play the segment again"],
       ["Escape", "Undo what you typed in this row"],
     ],
   },
   {
-    where: "Gloss",
+    where: "Gloss (in a field)",
     keys: [
       ["Enter", "Save the field (on an empty breakdown: accept the suggestion)"],
-      ["Tab", "Next field"],
+      ["Shift+Enter", "Save and go back a field"],
+      ["Tab / Shift+Tab", "Next / previous field"],
+      ["↑ / ↓", "Move through the lexicon suggestions"],
+      ["Escape", "Close the suggestions, or undo what you typed"],
     ],
   },
 ];

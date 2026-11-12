@@ -28,6 +28,8 @@ test("ranking finds by title, group and extra words, title first", () => {
   assert.deepEqual(rank("dark", all).map((c) => c.id), ["night"]);
   assert.deepEqual(rank("lex", all).map((c) => c.id), ["lex"]);
   assert.equal(rank("", all).length, all.length);
+  // With nothing typed, the work at hand comes before panels and looks.
+  assert.equal(rank("", all)[0]?.id, "split");
   assert.deepEqual(rank("open", all).map((c) => c.id), ["settings", "lex"]);
 });
 
@@ -40,7 +42,10 @@ test("arrow keys wrap", () => {
 test("Ctrl+K or Cmd+K opens the palette; ? opens shortcuts only outside text fields", () => {
   const k = { key: "k", ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
   assert.ok(opensPalette(k));
-  assert.ok(opensPalette({ ...k, ctrlKey: false, metaKey: true }));
+  assert.ok(!opensPalette({ ...k, ctrlKey: false, metaKey: true }));
+  assert.ok(opensPalette({ ...k, ctrlKey: false, metaKey: true }, true));
+  // On a Mac, Ctrl+K stays the text field's delete-to-end-of-line.
+  assert.ok(!opensPalette(k, true));
   assert.ok(!opensPalette({ ...k, ctrlKey: false }));
   assert.ok(!opensPalette({ ...k, shiftKey: true }));
   const q = { key: "?", ctrlKey: false, metaKey: false, altKey: false };
@@ -54,6 +59,6 @@ test("keys read the Mac way on a Mac", () => {
 });
 
 test("the shortcuts sheet lists the timeline's keys", () => {
-  const timeline = SHORTCUTS.find((g) => g.where === "Timeline");
+  const timeline = SHORTCUTS.find((g) => g.where.startsWith("Timeline"));
   assert.ok(timeline?.keys.some(([k]) => k === "S"));
 });

@@ -929,7 +929,8 @@ body::before {
 .palette-list { list-style: none; margin: 0; padding: 0 6px 6px; overflow: auto; }
 .palette-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-md); cursor: pointer; }
 .palette-row.is-at { background: var(--accent-soft); }
-.palette-row.is-off { opacity: 0.55; cursor: default; }
+.palette-row.is-off { cursor: default; }
+.palette-row.is-off .palette-title, .palette-row.is-off .palette-keys { opacity: 0.55; }
 .palette-title { flex: 1; min-width: 0; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette-group { color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
 .palette-keys, .shortcut-group kbd { font-family: inherit; font-size: var(--text-xs); padding: 1px 6px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: var(--radius-sm); background: var(--panel); color: var(--chrome-ink); white-space: nowrap; }
