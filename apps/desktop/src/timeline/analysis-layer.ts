@@ -19,7 +19,7 @@ const colors = () =>
     pitch: token("--pitch", FALLBACK.pitch),
     intensity: token("--intensity", FALLBACK.intensity),
     formants: token("--formants", FALLBACK.formants),
-    muted: token("--muted", "#7a756c"),
+    muted: token("--muted", "#625b4a"),
   });
 const color = (kind: Kind): string => colors()[kind];
 

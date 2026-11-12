@@ -191,7 +191,7 @@ export class TimelineView {
   private observer: ResizeObserver;
   private windowMoves: (ev: MouseEvent) => void = () => {};
   private windowUps: (ev: MouseEvent) => void = () => {};
-  private colors = { line: "#dcd8cf", ink: "#1f1d1a", muted: "#7a756c", accent: "#2e5e4e", wave: "#4a7a68", box: "#ffffff", warn: "#8a5a00", overlay: "rgba(31, 29, 26, 0.82)", overlayInk: "#ffffff", mono: "monospace" };
+  private colors = { line: "#e7dbb2", ink: "#1b1a17", muted: "#625b4a", accent: "#00718a", selectedBox: "#d6f3f9", wave: "#00819a", box: "#fffdf4", warn: "#8a5a00", overlay: "rgba(31, 29, 26, 0.82)", overlayInk: "#ffffff", mono: "monospace" };
 
   constructor() {
     this.element = h("div", { className: "tl-wrap", tabIndex: 0 }, this.canvas, this.editBox, this.confirmBar);
@@ -203,6 +203,7 @@ export class TimelineView {
       ink: token("--ink", this.colors.ink),
       muted: token("--muted", this.colors.muted),
       accent: token("--accent", this.colors.accent),
+      selectedBox: token("--accent-soft", this.colors.selectedBox),
       wave: token("--wave", this.colors.wave),
       box: token("--surface-raised", this.colors.box),
       warn: token("--warn", this.colors.warn),
@@ -469,7 +470,7 @@ export class TimelineView {
     const selected = seg.id === this.selected;
     // Machine output stays tinted until a person edits it.
     const machine = seg.machine === null ? null : tint(seg.machine);
-    ctx.fillStyle = machine === "very-unsure" ? "rgba(196, 64, 48, 0.22)" : machine === "unsure" ? "rgba(214, 170, 40, 0.28)" : selected ? "rgba(46, 94, 78, 0.14)" : this.colors.box;
+    ctx.fillStyle = machine === "very-unsure" ? "rgba(196, 64, 48, 0.22)" : machine === "unsure" ? "rgba(214, 170, 40, 0.28)" : selected ? this.colors.selectedBox : this.colors.box;
     ctx.strokeStyle = selected ? this.colors.accent : this.colors.line;
     ctx.lineWidth = selected ? 2 : 1;
     ctx.fillRect(x0, y, x1 - x0, hgt);
