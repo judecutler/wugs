@@ -48,27 +48,73 @@ fn ends_sentence(line: &str) -> bool {
     line.trim_end().chars().rev().find(|c| !CLOSERS.contains(c)).is_some_and(|c| FINAL.contains(&c) || FINAL_TIGHT.contains(&c))
 }
 
+/// Characters of scripts written without spaces between words (Han, kana,
+/// CJK punctuation and full-width forms): a wrapped line of them joins the
+/// next with nothing between, and a wrap is measured by one character.
+fn tight(c: char) -> bool {
+    matches!(c as u32, 0x3000..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF | 0xFF00..=0xFFEF | 0x20000..=0x2FFFF)
+}
+
+/// A line laid out in columns (an interlinear gloss line, a table): a run
+/// of two spaces or a tab inside it. Such a line never joins another.
+fn aligned(line: &str) -> bool {
+    let t = line.trim();
+    t.contains("  ") || t.contains('\t')
+}
+
+fn has_final_mark(s: &str) -> bool {
+    s.chars().any(|c| FINAL.contains(&c) || FINAL_TIGHT.contains(&c))
+}
+
+/// Joins wrapped lines: a space between them unless both sides are `tight`.
+fn join_lines(run: &[&str]) -> String {
+    let mut out = String::new();
+    for line in run {
+        let line = line.trim();
+        if let (Some(prev), Some(next)) = (out.chars().last(), line.chars().next()) {
+            if !(tight(prev) && tight(next)) {
+                out.push(' ');
+            }
+        }
+        out.push_str(line);
+    }
+    collapse(&out)
+}
+
 /// The segments of a plain-text file, in order, none empty, and how it was cut.
 pub fn segments(text: &str) -> (Vec<String>, Cut) {
     let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n").replace('\r', "\n");
     let lines: Vec<&str> = text.lines().map(str::trim_end).collect();
     let paragraphs: Vec<&[&str]> = lines.split(|l| l.trim().is_empty()).filter(|p| !p.is_empty()).collect();
-    let longest = lines.iter().map(|l| l.trim().chars().count()).max().unwrap_or(0);
+    // The wrap width: the longest line not far past the median, so one long
+    // line (a title, an address) does not hide the wrapping of the rest.
+    let mut lengths: Vec<usize> = lines.iter().map(|l| l.trim().chars().count()).filter(|n| *n > 0).collect();
+    lengths.sort_unstable();
+    let median = lengths.get(lengths.len() / 2).copied().unwrap_or(0);
+    let width = lengths.iter().copied().filter(|n| *n * 10 <= median * 13).max().unwrap_or(0);
+    let len = |l: &str| l.trim().chars().count();
     // Whether line `a` broke only because `b`'s first word would not fit.
     let wrapped_before = |a: &str, b: &str| {
-        let next = b.split_whitespace().next().map_or(0, |w| w.chars().count());
-        !ends_sentence(a) && a.trim().chars().count() + 1 + next > longest
+        // The next word, and the space before it; a tight script needs no space.
+        let next = match b.trim().chars().next() {
+            Some(c) if tight(c) => 1,
+            _ => 1 + b.split_whitespace().next().map_or(0, |w| w.chars().count()),
+        };
+        !ends_sentence(a) && !aligned(a) && !aligned(b) && len(a) <= width && len(a) + next > width
     };
-    let (mut open, mut breaks) = (0, 0);
+    let (mut open, mut breaks, mut capitals) = (0, 0, 0);
     for p in &paragraphs {
         for w in p.windows(2) {
             if !ends_sentence(w[0]) {
                 open += 1;
                 breaks += usize::from(wrapped_before(w[0], w[1]));
+                capitals += usize::from(w[1].trim().chars().next().is_some_and(char::is_uppercase));
             }
         }
     }
-    let wrapped = longest >= 20 && breaks >= 2 && breaks * 10 >= open * 6;
+    // Verse starts nearly every line with a capital; wrapped prose does not.
+    let verse = open >= 3 && capitals * 10 >= open * 8;
+    let wrapped = width >= 20 && breaks >= 2 && breaks * 10 >= open * 6 && !verse;
     let mut units: Vec<String> = Vec::new();
     for p in &paragraphs {
         let mut run: Vec<&str> = Vec::new();
@@ -76,7 +122,13 @@ pub fn segments(text: &str) -> (Vec<String>, Cut) {
             run.push(line);
             let joins = wrapped && p.get(i + 1).is_some_and(|next| wrapped_before(line, next));
             if !joins {
-                units.push(collapse(&run.join(" ")));
+                let joined = join_lines(&run);
+                // A run with no sentence mark at all is lines, not a wrapped sentence.
+                if run.len() > 1 && !has_final_mark(&joined) {
+                    units.extend(run.iter().map(|l| collapse(l)));
+                } else {
+                    units.push(joined);
+                }
                 run.clear();
             }
         }
@@ -88,6 +140,16 @@ pub fn segments(text: &str) -> (Vec<String>, Cut) {
         return (units, Cut::ByLine);
     }
     (merge_bare_punctuation(units.iter().flat_map(|u| sentences(u)).collect()), Cut::BySentence)
+}
+
+/// An example number at the start of a line (`1.`, `12a.`, `(3)`, `b)`):
+/// it stays with the sentence after it.
+fn enumerator(piece: &str) -> bool {
+    let p = piece.strip_prefix('(').unwrap_or(piece);
+    let Some(body) = p.strip_suffix('.').or_else(|| p.strip_suffix(')')) else { return false };
+    let digits = body.chars().take_while(char::is_ascii_digit).count();
+    let rest: Vec<char> = body.chars().skip(digits).collect();
+    (1..=3).contains(&digits) && rest.len() <= 1 && rest.iter().all(char::is_ascii_lowercase) || digits == 0 && rest.len() == 1 && rest[0].is_ascii_lowercase()
 }
 
 /// A piece with no letter or digit (a lone `...`) joins the one before it.
@@ -146,7 +208,21 @@ fn sentences(para: &str) -> Vec<String> {
         i += 1;
     }
     push(&mut out, &chars[start..]);
-    out
+    let mut merged: Vec<String> = Vec::new();
+    let mut carry: Option<String> = None;
+    for piece in out {
+        let piece = match carry.take() {
+            Some(c) => format!("{c} {piece}"),
+            None => piece,
+        };
+        if merged.is_empty() && enumerator(&piece) {
+            carry = Some(piece);
+        } else {
+            merged.push(piece);
+        }
+    }
+    merged.extend(carry);
+    merged
 }
 
 fn push(out: &mut Vec<String>, piece: &[char]) {
@@ -199,12 +275,33 @@ mod tests {
         let text = "The fox came to the well and\nlooked down into the water for\na long time. Then it left the\nfield and went home.\n";
         assert_eq!(segments(text), (vec!["The fox came to the well and looked down into the water for a long time.".to_string(), "Then it left the field and went home.".into()], Cut::BySentence));
         // Indented paragraphs with no blank line: a short last line ends its paragraph.
-        let text = "The fox came to the well and looked\ndown into the water. Then it went.\n    Next day the fox came back to the\nwell, and the water was gone\n    So it left again\n";
+        let text = "The fox came to the well and looked\ndown into the water. Then it went.\n    Next day the fox came back to the\nwell, and the water was gone.\n    So it left again\n";
         assert_eq!(
             cut(text),
-            vec!["The fox came to the well and looked down into the water.", "Then it went.", "Next day the fox came back to the well, and the water was gone", "So it left again"]
+            vec!["The fox came to the well and looked down into the water.", "Then it went.", "Next day the fox came back to the well, and the water was gone.", "So it left again"]
         );
         assert_eq!(cut("The fox came to the well and\nlooked down into the water for\na long time.\n"), vec!["The fox came to the well and looked down into the water for a long time."]);
+    }
+
+    #[test]
+    fn linguists_files_keep_their_lines() {
+        // Numbered examples keep their numbers.
+        assert_eq!(segments("1. The dog ate the fish.\n2. The man saw the dog.\n(3) Who came?\n12a. Kesi mopa.\n"), (vec!["1. The dog ate the fish.".to_string(), "2. The man saw the dog.".into(), "(3) Who came?".into(), "12a. Kesi mopa.".into()], Cut::ByLine));
+        // Unpunctuated lines of similar length, Chinese and Japanese utterances: never one segment.
+        let text = "so we went down to the river that day\nand nobody there said a word to us\nthe old man kept on walking in front\nuntil we came to the place by the well\n";
+        assert_eq!(cut(text).len(), 4);
+        assert_eq!(cut("我们昨天去了河边看看那里的情况怎么样\n他说那里的水已经干了很久了不能再喝\n后来我们就回家吃饭了大家都很累\n").len(), 3);
+        // Hard-wrapped Chinese joins with nothing between the characters.
+        assert_eq!(cut("我们昨天去了河边，看了很久，然后我们回家\n吃饭了。他说河水已经干了，但是河水已经干\n了很久。\n"), vec!["我们昨天去了河边，看了很久，然后我们回家吃饭了。", "他说河水已经干了，但是河水已经干了很久。"]);
+        // Interlinear lines in columns stay apart.
+        let igt = "Kesi    mopa-n   toru\ndog     eat-PST  fish\n'The dog ate the fish.'\n";
+        assert_eq!(cut(igt).len(), 3);
+        // Verse keeps its lines even with commas at their ends.
+        let verse = "Shall I compare thee to a summer's day,\nThou art more lovely and more temperate,\nRough winds do shake the darling buds of May,\nAnd summer's lease hath all too short a date.\n";
+        assert_eq!(cut(verse).len(), 4);
+        // One long line does not hide the wrapping of the others.
+        let wrapped = "Source: https://example.org/archive/collection/item/0001/transcript-full.txt\n\nThe fox came to the well one morning and looked\ndown into the water for a long time, and then it\nturned away and went back across the field to\nits den under the old oak tree by the river.\n";
+        assert_eq!(cut(wrapped).len(), 2, "{:?}", cut(wrapped));
     }
 
     #[test]
