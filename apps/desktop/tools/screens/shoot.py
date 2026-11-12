@@ -33,6 +33,7 @@ PANELS = [
     ("lexicon", "Lexicon"),
     ("elicit", "Elicit"),
     ("search", "Search"),
+    ("concordance", "Concordance"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),
@@ -318,6 +319,15 @@ def main():
                 run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
                 tiers.nth(0).locator(".tl-track-toggle").nth(0).click()
                 tiers.nth(1).locator(".tl-track-toggle").nth(1).click()
+
+            # Concordance with a query (roadmap 71).
+            run.front("concordance", "Concordance")
+            run.page.fill(".panel-concordance .cc-query", "kani")
+            run.page.locator(".panel-concordance .scopes button", has_text="Morphs").click()
+            run.page.wait_for_timeout(500)
+            run.shot("state-concordance", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance .cc-row").count() == 0:
+                failures.append("the concordance showed no rows")
 
             # Command palette (Ctrl+K) and the shortcuts sheet (?).
             run.page.locator(".panel-timeline .tl-wrap").focus()

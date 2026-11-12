@@ -1,6 +1,7 @@
 pub mod assist;
 pub mod capability;
 pub mod capture;
+pub mod concordance;
 pub mod conflicts;
 pub mod convert;
 pub mod corrections;
@@ -121,6 +122,12 @@ fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>,
     allow_media(&app, &path);
     reach.follow(&s)?;
     Ok(info)
+}
+
+/// Every occurrence of a word, morph, gloss or translation word, in context (roadmap 71).
+#[tauri::command(async)]
+fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind) -> Result<concordance::Concordance, String> {
+    s.run(move |s| concordance::concordance(s, &query, kind))
 }
 
 #[tauri::command(async)]
@@ -1350,6 +1357,7 @@ pub fn run() {
             open_project,
             create_project,
             open_sample,
+            concordance,
             list_texts,
             get_text,
             create_text,
