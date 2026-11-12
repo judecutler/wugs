@@ -106,6 +106,7 @@ fn field_name(field: &str) -> String {
         "start" => "Start time",
         "end" => "End time",
         "access" => "Access",
+        "source" => "Recording",
         "skipped" => "Not applicable",
         "pos" => "Position",
         "type" => "Morph type",

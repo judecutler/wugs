@@ -18,9 +18,6 @@ import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, layout, otherFo
 import { dataGeneration, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
 import { hear, playButton } from "../hear/hear";
 import { keyword, type Hit } from "../concordance/logic";
-
-/** Occurrences listed under a sense; the Concordance has the rest. */
-const USES_SHOWN = 12;
 import type { PanelDef, PanelView } from "./panel";
 
 /** Shared with the Gloss panel: the second analysis language. */
@@ -28,6 +25,9 @@ const LANG_KEY = "wugs.gloss-lang";
 /** The paradigm template last chosen on this machine. */
 const PARADIGM_KEY = "wugs.lexicon.paradigm";
 const ATTRIBUTION = "SIL Semantic Domains v4 · © SIL Global · semdom.org · licensed CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0)";
+
+/** Occurrences listed under a sense; the Concordance has the rest. */
+const USES_SHOWN = 12;
 
 export const lexiconPanel: PanelDef = {
   title: "Lexicon",

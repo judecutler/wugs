@@ -7,27 +7,37 @@ import * as playback from "../playback";
 import { getState, mediaSource, selectSegment, selectText, setMediaSource, showToast } from "../store";
 import { h } from "../dom";
 import { ICONS } from "../timeline/icons";
-import { planHearing } from "./logic";
+import { planHearing, recordingOf } from "./logic";
 
 export type Heard = { textId: string; tierId: string; segmentId: string; startMs: number | null; endMs: number | null };
 
+/** The recording to hear (or transcribe) the text on screen from, or null
+ * (`recordingOf`): Suggest and Speech assist ask this, not the loaded one. */
+export function recordingForShown(): string | null {
+  const s = getState();
+  if (s.kind !== "open" || s.text === null) return null;
+  const id = s.text.id;
+  return recordingOf(s.texts.find((t) => t.id === id), s.texts, mediaSource(), id);
+}
+
 /** Open the segment (selecting its text if another is shown) and play it.
- * `select: false` plays without selecting (a panel that already did). */
-export async function hear(seg: Heard, select = true): Promise<void> {
+ * `select: false` plays without selecting (a panel that already did);
+ * `quiet` says nothing when there is no recording (a keystroke's replay). */
+export async function hear(seg: Heard, select = true, quiet = false): Promise<void> {
   const s = getState();
   if (s.kind !== "open") return;
-  const plan = planHearing(
-    s.texts.find((t) => t.id === seg.textId),
-    mediaSource(),
-    s.text?.id ?? null,
-  );
   if (select) {
     if (s.text?.id !== seg.textId) await selectText(seg.textId);
     const now = getState();
-    if (now.kind === "open" && now.text?.id === seg.textId) selectSegment({ textId: seg.textId, tierId: seg.tierId, segmentId: seg.segmentId });
+    // Overtaken by another selection, or the text failed to open: play nothing.
+    if (now.kind !== "open" || now.text?.id !== seg.textId) return;
+    selectSegment({ textId: seg.textId, tierId: seg.tierId, segmentId: seg.segmentId });
   }
+  const now = getState();
+  if (now.kind !== "open" || now.text?.id !== seg.textId) return;
+  const plan = planHearing(now.texts.find((t) => t.id === seg.textId), now.texts, mediaSource(), now.text.id);
   if (plan.kind === "none") {
-    showToast({ tone: "info", lines: [plan.reason] });
+    if (!quiet) showToast({ tone: "info", lines: [plan.reason] });
     return;
   }
   if (seg.startMs === null || seg.endMs === null) {
@@ -37,6 +47,8 @@ export async function hear(seg: Heard, select = true): Promise<void> {
   if (plan.load !== null) {
     try {
       const info = await peaksInfo({ sourceId: plan.load });
+      const after = getState();
+      if (after.kind !== "open" || after.text?.id !== seg.textId) return;
       playback.setSource(convertFileSrc(info.mediaPath));
       setMediaSource(plan.load);
     } catch (e) {
