@@ -509,6 +509,15 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .lx-attr { font-size: 11px; }
 .lx-sense-foot, .lx-foot { display: flex; align-items: center; gap: 8px; }
 .lx-foot { border-top: 1px solid var(--line); padding-top: 6px; }
+.lx-paradigm { border-top: 1px solid var(--line); padding: 6px 0; display: flex; flex-direction: column; gap: 6px; }
+.lx-pdg-head { display: flex; align-items: center; gap: 8px; }
+.lx-pdg-head h2 { font-size: var(--text-sm); margin: 0; }
+.lx-pdg { border-collapse: collapse; font-size: var(--text-sm); }
+.lx-pdg th { font-weight: normal; color: var(--muted); text-align: left; padding: 2px 8px 2px 0; }
+.lx-pdg td { padding: 2px 4px 2px 0; vertical-align: top; }
+.lx-pdg-form { display: flex; align-items: center; gap: 2px; }
+.lx-pdg-form + .lx-pdg-form { margin-top: 2px; }
+.lx-pdg-others ul { margin: 0; padding-left: 18px; font-size: var(--text-sm); }
 
 .panel-elicit { display: flex; flex-direction: column; gap: 6px; }
 .el-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

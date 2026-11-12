@@ -445,6 +445,28 @@ fn lexicon_entry(s: State<SessionThread>, id: String) -> Result<lexicon::EntryVi
     s.run(move |s| lexicon::lexicon_entry(s, &id))
 }
 
+#[tauri::command(async)]
+fn lexicon_paradigm(s: State<SessionThread>, id: String, axes: Vec<lexicon::Axis>) -> Result<lexicon::ParadigmView, String> {
+    s.run(move |s| lexicon::lexicon_paradigm(s, &id, &axes))
+}
+
+#[tauri::command(async)]
+fn lexicon_fill_cell(
+    s: State<SessionThread>,
+    id: String,
+    form_id: Option<String>,
+    features: std::collections::BTreeMap<String, String>,
+    surface: String,
+    axes: Vec<lexicon::Axis>,
+) -> Result<lexicon::ParadigmEdit, String> {
+    s.run(move |s| lexicon::lexicon_fill_cell(s, &id, form_id.as_deref(), &features, &surface, &axes))
+}
+
+#[tauri::command(async)]
+fn lexicon_delete_form(s: State<SessionThread>, id: String, form_id: String, axes: Vec<lexicon::Axis>) -> Result<lexicon::ParadigmEdit, String> {
+    s.run(move |s| lexicon::lexicon_delete_form(s, &id, &form_id, &axes))
+}
+
 // People and consent (roadmap 61): src/people.rs. Each returns the whole view.
 #[tauri::command(async)]
 fn people_view(s: State<SessionThread>) -> Result<people::PeopleView, String> {
@@ -1302,6 +1324,9 @@ pub fn run() {
             lexicon_delete_sense,
             lexicon_assign_domain,
             lexicon_unassign_domain,
+            lexicon_paradigm,
+            lexicon_fill_cell,
+            lexicon_delete_form,
             domains_list,
             domains_load_sil,
             concept_lists_bundled,
