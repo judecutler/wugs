@@ -130,6 +130,12 @@ fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind) 
     s.run(move |s| concordance::concordance(s, &query, kind))
 }
 
+/// Remember which recording a text was transcribed from, or forget it (roadmap 72).
+#[tauri::command(async)]
+fn link_recording(s: State<SessionThread>, text_id: String, source_id: Option<String>) -> Result<(), String> {
+    s.run(move |s| session::link_recording(s, &text_id, source_id.as_deref()))
+}
+
 #[tauri::command(async)]
 fn list_texts(s: State<SessionThread>) -> Result<Vec<TextRow>, String> {
     s.run(session::list_texts)
@@ -1359,6 +1365,7 @@ pub fn run() {
             open_sample,
             concordance,
             list_texts,
+            link_recording,
             get_text,
             create_text,
             import_file,

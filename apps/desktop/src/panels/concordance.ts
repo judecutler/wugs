@@ -4,7 +4,7 @@
 import { concordance, errorText } from "../api";
 import { asTsv, clip, countLine, isRtl, keyword, KINDS, left, right, SORTS, sortHits, type ConcordanceKind, type Hit, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
-import * as playback from "../playback";
+import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
 import { getState, selectSegment, selectText, showToast } from "../store";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -13,17 +13,15 @@ import type { PanelDef, PanelView } from "./panel";
 /** Characters of context shown on each side of the keyword. */
 const CONTEXT = 48;
 
+/** A row opens its segment; ▶ also plays it, from the text's own recording (roadmap 72). */
 async function open(hit: Hit, play: boolean): Promise<void> {
-  // A recording is not tied to a text: only one already showing this text
-  // on the Timeline can be the right one to play.
-  const before = getState();
-  const sameText = before.kind === "open" && before.text?.id === hit.textId;
+  if (play) {
+    await hear(hit);
+    return;
+  }
   await selectText(hit.textId);
   const s = getState();
   if (s.kind === "open" && s.text?.id === hit.textId) selectSegment({ textId: hit.textId, tierId: hit.tierId, segmentId: hit.segmentId });
-  if (!play || hit.startMs === null || hit.endMs === null) return;
-  if (sameText && playback.hasSource()) playback.playRange(hit.startMs, hit.endMs);
-  else showToast({ tone: "info", lines: [`Opened «${hit.textTitle}». Load its recording in the Timeline, then press ▶ again to hear it.`] });
 }
 
 export const concordancePanel: PanelDef = {
@@ -72,13 +70,9 @@ export const concordancePanel: PanelDef = {
       count.textContent = countLine(hits.length, total, texts);
       rows.replaceChildren(
         ...sortHits(hits, sortBy).map((hit) => {
-          const play = h("button", { type: "button", className: "tl-icon cc-play", textContent: "▶", title: "Open this segment and play it" });
-          play.setAttribute("aria-label", "Play");
+          const play = playButton("Open this segment and play it", () => void open(hit, true));
+          play.classList.add("cc-play");
           play.disabled = hit.startMs === null;
-          play.onclick = (e) => {
-            e.stopPropagation();
-            void open(hit, true);
-          };
           const row = h(
             "div",
             { className: "cc-row", role: "listitem", tabIndex: 0, title: `${hit.textTitle}: open this segment`, dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },

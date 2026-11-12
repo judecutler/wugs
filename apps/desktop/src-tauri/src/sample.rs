@@ -224,9 +224,10 @@ fn build(session: &mut Session, dir: &Path) -> Result<(), String> {
     std::fs::write(&wav, synth_wav()).map_err(|e| e.to_string())?;
     let imported = session::import_media_named(session, &wav, "Counting to ten (synthetic voice)", None);
     std::fs::remove_file(&wav).ok();
-    imported?;
+    let recording = imported?;
 
     let text = session::create_text(session, TITLE)?;
+    session::link_recording(session, &text, Some(&recording.id))?;
     let translation = session::add_tier(session, "translation", None)?.id;
 
     // The lexicon first, so each glossed morph links to its sense.
@@ -325,7 +326,15 @@ mod tests {
         // Four utterances, three translations; the last utterance is left to transcribe.
         assert_eq!(detail.segments.iter().filter(|s| detail.tiers.iter().any(|t| t.id == s.tier && t.utterance)).count(), 4);
         assert!(detail.segments.iter().any(|s| s.content.is_empty()));
-        assert_eq!(session::list_sources(&mut session).unwrap().len(), 1);
+        let sources = session::list_sources(&mut session).unwrap();
+        assert_eq!(sources.len(), 1);
+        // The text knows its recording, so every panel can play it.
+        assert_eq!(texts[0].recording.as_deref(), Some(sources[0].id.as_str()));
+        // Picking the same recording again writes nothing; forgetting it clears the link.
+        session::link_recording(&mut session, &texts[0].id, Some(&sources[0].id)).unwrap();
+        session::link_recording(&mut session, &texts[0].id, None).unwrap();
+        assert_eq!(session::list_texts(&mut session).unwrap()[0].recording, None);
+        session::link_recording(&mut session, &texts[0].id, Some(&sources[0].id)).unwrap();
         // Opening it again reuses it rather than building a second copy.
         let again = open_sample(&mut session, &dir, "tester").unwrap();
         assert_eq!(again.texts, 1);

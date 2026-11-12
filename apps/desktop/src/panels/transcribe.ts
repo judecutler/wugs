@@ -5,6 +5,7 @@ import { assistSuggest, editSegmentContent, errorText, type SegmentRow, type Tie
 import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
+import { hear, playButton } from "../hear/hear";
 import { activeKit, capability, getSelection, getState, mediaSource, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
 import { IPA_GROUPS } from "../transcribe/ipa";
 import { createFieldController, type FieldController } from "../transcribe/field";
@@ -32,7 +33,8 @@ export const transcribePanel: PanelDef = {
     const selBadge = h("span", { className: "tx-unsaved", title: "The last save failed. Press Enter to retry." });
     const suggestButton = h("button", { type: "button", className: "tx-suggest", textContent: "Suggest", title: "Fill this empty segment with the phones a speech model hears (choose the model in Speech assist)." });
     /** The selected segment's row. It stays in the list across redraws so the field is never detached mid-composition. */
-    const selRow = h("div", { className: "tx-row selected" }, selTime, field, suggestButton, selBadge);
+    const selPlay = playButton("Play this segment (Tab in the field)", () => play(ctl?.segmentId != null ? stored(ctl.segmentId) : undefined));
+    const selRow = h("div", { className: "tx-row selected" }, selPlay, selTime, field, suggestButton, selBadge);
     let suggesting = false;
 
     /** Ask whatever powers phone transcription for the selected empty segment. */
@@ -107,8 +109,10 @@ export const transcribePanel: PanelDef = {
       field.value = ctl.value;
     }
 
+    /** Plays from the text's own recording, loading it if another is loaded (roadmap 72). */
     function play(seg: SegmentRow | undefined): void {
-      if (seg?.startMs != null && seg.endMs != null) playback.playRange(seg.startMs, seg.endMs);
+      if (seg?.startMs == null || seg.endMs == null) return;
+      void hear({ textId, tierId: seg.tier, segmentId: seg.id, startMs: seg.startMs, endMs: seg.endMs }, false);
     }
 
     function go(step: 1 | -1): void {
@@ -254,7 +258,8 @@ export const transcribePanel: PanelDef = {
 
       // A kit without the Timeline (Scrolls) has nowhere to load one: no hint there.
       const timeline = activeKit()?.tools.includes("timeline") ?? true;
-      hint.textContent = playback.hasSource() || !timeline ? "" : "Load a recording on the Timeline to hear segments.";
+      const linked = s.texts.find((t) => t.id === s.text?.id)?.recording ?? null;
+      hint.textContent = playback.hasSource() || linked !== null || !timeline ? "" : "Load a recording on the Timeline to hear segments.";
       const selIndex = selId === null ? 0 : ordered.findIndex((x) => x.id === selId);
       const [from, to] = renderWindow(ordered.length, selIndex, WINDOW_ROWS);
       moving = true;
@@ -274,6 +279,7 @@ export const transcribePanel: PanelDef = {
         const row = h(
           "div",
           { className: (label.unsaved ? "tx-row unsaved" : "tx-row") + machine, title: seg.machine === null ? "" : tintTitle(seg.machine) },
+          playButton("Play this segment", () => play(seg)),
           h("span", { className: "tx-time", textContent: formatRange(seg.startMs, seg.endMs) }),
           h("span", { className: "tx-text", textContent: label.text === "" ? "·" : label.text }),
           ...(label.unsaved ? [h("span", { className: "tx-unsaved", textContent: "not saved", title: "The last save failed. Select this segment and press Enter to retry." })] : []),

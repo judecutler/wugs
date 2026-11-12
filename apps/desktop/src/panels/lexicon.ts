@@ -6,7 +6,7 @@
 // entry's paradigm (roadmap item 50) is its own view, fetched for the chosen
 // template and returned whole by every form edit.
 import {
-  domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddSense, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
+  concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddSense, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
   lexiconDeleteForm, lexiconFillCell, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain,
   type DomainItem, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
@@ -15,7 +15,12 @@ import { emptyState, h } from "../dom";
 import { normalizeLangTag } from "../gloss/lang";
 import { filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, layout, otherFormLine, TEMPLATES, templateById, type Features, type Template } from "../lexicon/paradigms";
-import { dataGeneration, getState, lexiconRevision, showToast } from "../store";
+import { dataGeneration, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
+import { hear, playButton } from "../hear/hear";
+import { keyword, type Hit } from "../concordance/logic";
+
+/** Occurrences listed under a sense; the Concordance has the rest. */
+const USES_SHOWN = 12;
 import type { PanelDef, PanelView } from "./panel";
 
 /** Shared with the Gloss panel: the second analysis language. */
@@ -51,6 +56,8 @@ export const lexiconPanel: PanelDef = {
     let paradigm: ParadigmView | null = null;
     /** The sense whose domain picker is open, and what was typed in it. */
     let picker: { senseId: string; query: string; active: number } | null = null;
+    /** The sense whose occurrences are listed (roadmap 72), and the hits once they came. */
+    let uses: { senseId: string; hits: Hit[] | null; total: number } | null = null;
     /** An armed destructive button: its key; a second click carries it out. */
     let armed: string | null = null;
     let listSeq = 0;
@@ -518,11 +525,73 @@ export const lexiconPanel: PanelDef = {
         h(
           "div",
           { className: "lx-sense-foot" },
-          h("span", { className: "note", textContent: usageLabel(s.occurrences) }),
+          s.occurrences === 0 ? h("span", { className: "note", textContent: usageLabel(0) }) : usesToggle(s),
           h("span", { className: "gl-spacer" }),
           e.senses.length > 1 ? confirmButton(`dels:${s.id}`, "Delete sense", () => void run(() => lexiconDeleteSense({ senseId: s.id }), true)) : null,
         ),
+        uses?.senseId === s.id ? usesBlock(uses) : null,
       );
+    }
+
+    /** "used in 3 words" opens the list of those words, each one to hear. */
+    function usesToggle(s: SenseView) {
+      const shown = uses?.senseId === s.id;
+      const b = h("button", { type: "button", className: "link-button", textContent: usageLabel(s.occurrences), title: shown ? "Hide where it is used" : "Show where it is used, to hear each" });
+      b.dataset.key = `uses:${s.id}`;
+      b.setAttribute("aria-expanded", String(shown));
+      b.onclick = () => {
+        if (shown) {
+          uses = null;
+          drawEditor();
+          return;
+        }
+        void loadUses(s.id);
+      };
+      return b;
+    }
+
+    async function loadUses(senseId: string) {
+      uses = { senseId, hits: null, total: 0 };
+      drawEditor();
+      const gen = projectGen;
+      try {
+        const r = await concordance({ query: senseId, kind: "sense" });
+        if (gen !== projectGen || uses?.senseId !== senseId) return;
+        uses = { senseId, hits: r.hits, total: r.total };
+      } catch (e) {
+        if (uses?.senseId === senseId) uses = null;
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      drawEditor();
+    }
+
+    function usesBlock(u: { hits: Hit[] | null; total: number }) {
+      if (u.hits === null) return h("div", { className: "lx-uses note", textContent: "Finding where it is used…" });
+      const shown = u.hits.slice(0, USES_SHOWN);
+      return h(
+        "ul",
+        { className: "lx-uses" },
+        ...shown.map((hit) =>
+          h(
+            "li",
+            {},
+            playButton(`Play «${keyword(hit)}» in «${hit.textTitle}»`, () => void hear(hit)),
+            h("button", {
+              type: "button",
+              className: "link-button lx-use",
+              title: "Open this segment",
+              onclick: () => void openHit(hit),
+            }, h("strong", { textContent: keyword(hit) }), hit.breakdown !== null && hit.breakdown !== keyword(hit) ? ` ${hit.breakdown}` : "", h("span", { className: "note", textContent: ` · ${hit.textTitle}` })),
+          ),
+        ),
+        u.total > shown.length ? h("li", { className: "note", textContent: `and ${u.total - shown.length} more (Concordance lists them all)` }) : null,
+      );
+    }
+
+    async function openHit(hit: Hit) {
+      await selectText(hit.textId);
+      const st = getState();
+      if (st.kind === "open" && st.text?.id === hit.textId) selectSegment({ textId: hit.textId, tierId: hit.tierId, segmentId: hit.segmentId });
     }
 
     function pickerBlock(s: SenseView) {
@@ -679,6 +748,7 @@ export const lexiconPanel: PanelDef = {
           paradigm = null;
           domains = null;
           picker = null;
+          uses = null;
           search.value = "";
           quietly(() => el.replaceChildren(search, addForm, body));
         } else {
@@ -686,6 +756,7 @@ export const lexiconPanel: PanelDef = {
           // arrived too. An open picker stays open on the same sense.
           domains = null;
           if (picker !== null) void ensureDomains();
+          if (uses !== null) void loadUses(uses.senseId);
         }
         void loadList().then(() => loadEntry(selected, true));
       },

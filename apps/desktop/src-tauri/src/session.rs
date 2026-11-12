@@ -116,6 +116,9 @@ pub struct TextRow {
     pub title: String,
     pub kind: Option<String>,
     pub segments: usize,
+    /// The recording the text was transcribed from (`source` on the text),
+    /// when it is a live recording with audio; any panel can play the text's segments from it.
+    pub recording: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -304,10 +307,33 @@ pub fn list_texts(session: &mut Session) -> Result<Vec<TextRow>, String> {
             title: p.proj.field_str(&id, "title")?.unwrap_or_default(),
             kind: p.proj.field_str(&id, "kind")?,
             segments: p.proj.children_by_ref("text", &id, "segment")?.len(),
+            recording: linked_recording(p, &id)?,
             id,
         });
     }
     Ok(rows)
+}
+
+/// The text's linked recording, if it is a live source whose audio is in
+/// the blob store; a cleared link (null), a deleted source or one without
+/// media is none.
+fn linked_recording(p: &Project, text: &str) -> Result<Option<String>, String> {
+    let Some(src) = p.proj.field_str(text, "source")? else { return Ok(None) };
+    if p.proj.entity_kind(&src)?.as_deref() != Some("source") || p.proj.is_tombstoned(&src)? {
+        return Ok(None);
+    }
+    Ok(audio_blob(p, &src).ok().map(|_| src))
+}
+
+/// Remember (or forget) which recording a text was transcribed from. Writes
+/// only when the link changes, so picking the same recording again is free.
+pub fn link_recording(session: &mut Session, text_id: &str, source_id: Option<&str>) -> Result<(), String> {
+    let p = project(session)?;
+    if linked_recording(p, text_id)?.as_deref() == source_id {
+        return Ok(());
+    }
+    p.set_text_source(text_id, source_id)?;
+    Ok(())
 }
 
 pub fn get_text(session: &mut Session, text_id: &str) -> Result<TextDetail, String> {

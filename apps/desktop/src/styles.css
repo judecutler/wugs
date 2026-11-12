@@ -420,6 +420,15 @@ form.inline input { flex: 1; min-width: 0; }
 .tx-keys { flex: none; font-size: var(--text-xs); color: var(--muted); }
 .tx-hint { color: var(--muted); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx-list { flex: 1; min-height: 0; overflow: auto; }
+/* Hear it everywhere (roadmap 72): the one ▶ beside a segment in every panel. */
+.play-seg { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--accent); cursor: pointer; }
+.play-seg:hover { background: var(--surface-raised); border-color: var(--line); }
+.play-seg svg { width: 12px; height: 12px; }
+.link-button { padding: 0; border: none; background: none; color: var(--accent); font: inherit; text-align: left; cursor: pointer; }
+.link-button:hover { text-decoration: underline; }
+.lx-uses { list-style: none; margin: 4px 0 0; padding: 0; font-size: var(--text-sm); }
+.lx-uses li { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
+.lx-use { color: var(--ink); }
 .tx-row { display: flex; gap: 10px; align-items: center; padding: 6px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); cursor: default; }
 .tx-row.selected { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent-bright); }
 .tx-time { flex: none; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -978,7 +987,8 @@ body::before {
 .cc-rows { display: flex; flex-direction: column; }
 .cc-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "play left key right" ". meta meta meta"; align-items: baseline; column-gap: 6px; padding: 4px; border-radius: var(--radius-sm); cursor: pointer; font-family: var(--font-ipa, inherit); }
 .cc-row:hover, .cc-row:focus-visible { background: var(--accent-soft); outline: none; }
-.cc-play { grid-area: play; width: 22px; height: 20px; font-size: 10px; }
+.cc-play { grid-area: play; }
+.play-seg:disabled { opacity: 0.4; cursor: default; }
 .cc-left { grid-area: left; text-align: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; unicode-bidi: plaintext; }
 .cc-key { grid-area: key; color: var(--ink); font-weight: 600; }
 .cc-right { grid-area: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

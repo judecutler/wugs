@@ -233,7 +233,11 @@ def open_workspace(run):
     # chrome, so the harness keeps working while the chrome is restyled.
     page.wait_for_function("window.__WUGS_CALLS__.includes('list_texts')", timeout=15000)
     page.evaluate("async () => (await import('/src/store.ts')).selectText('t-count')")
-    page.wait_for_selector(".tl-sources option[value='src-count']", state="attached")
+    try:
+        page.wait_for_selector(".tl-sources option[value='src-count']", state="attached")
+    except Exception:
+        print("\n".join(run.errors), file=sys.stderr)
+        raise
     page.select_option(".tl-sources", "src-count")
     page.evaluate(
         "async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u01' })"
@@ -344,6 +348,22 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+
+            # Hear it everywhere (roadmap 72): a lexicon sense lists where it is used, each with ▶.
+            run.front("lexicon", "Lexicon")
+            run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()
+            run.page.locator(".panel-lexicon").get_by_text("reckon", exact=False).first.wait_for()
+            uses = run.page.locator(".panel-lexicon .lx-sense-foot .link-button").first
+            if uses.count() == 0:
+                failures.append("no 'used in N words' button in the lexicon")
+            else:
+                uses.click()
+                run.page.wait_for_timeout(400)
+                run.shot("state-lexicon-uses", run.page.locator(".panel-lexicon"))
+                if run.page.locator(".panel-lexicon .lx-uses .play-seg").count() == 0:
+                    failures.append("the lexicon's uses list has no play buttons")
+            if run.page.locator(".panel-transcribe .play-seg").count() == 0:
+                failures.append("Transcribe rows have no play buttons")
 
             # Command palette (Ctrl+K) and the shortcuts sheet (?).
             run.page.locator(".panel-timeline .tl-wrap").focus()
