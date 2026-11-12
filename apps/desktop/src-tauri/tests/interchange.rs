@@ -193,3 +193,30 @@ fn a_table_of_sentences_comes_in_a_text_per_document() {
     assert!(again.lines.iter().any(|l| l.contains("2 documents matched")), "{:?}", again.lines);
     assert_eq!(texts(&mut a).len(), 2);
 }
+
+#[test]
+fn a_translation_column_lands_on_a_translation_track() {
+    let dir = TempDir::new();
+    let mut a = project(&dir, "a");
+    let f = dir.0.join("phrases.csv");
+    fs::write(&f, "sentence,translation,speaker\nkesi bara,the dog runs,Maria\nlo,,Jo\n").unwrap();
+    let imported = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert!(imported.lines.iter().any(|l| l.contains("1 translation from the column «translation»")), "{:?}", imported.lines);
+    assert!(imported.lines.iter().any(|l| l.contains("«speaker»") && !l.contains("«translation»")), "{:?}", imported.lines);
+    let text = texts(&mut a)[0].0.clone();
+    let detail = session::get_text(&mut a, &text).unwrap();
+    let track = detail.tiers.iter().find(|t| t.role.as_deref() == Some("translation")).expect("a translation track is made");
+    let sentence = detail.segments.iter().find(|s| s.content == "kesi bara").unwrap();
+    let translation = detail.segments.iter().find(|s| s.tier == track.id).unwrap();
+    assert_eq!((translation.content.as_str(), translation.parent.as_deref()), ("the dog runs", Some(sentence.id.as_str())));
+    // A second file reuses the track, and an untimed sentence takes a typed translation.
+    let g = dir.0.join("more.csv");
+    fs::write(&g, "text,free\nbara,runs\n").unwrap();
+    interchange::import_file(&mut a, g.to_str().unwrap()).unwrap();
+    let lo = detail.segments.iter().find(|s| s.content == "lo").unwrap().id.clone();
+    let added = session::add_translation(&mut a, &text, &track.id, &lo, "small").unwrap();
+    let p = a.as_mut().unwrap();
+    let tracks: Vec<String> = p.proj.entities_of_kind("tier").unwrap().into_iter().filter(|t| p.proj.field_str(t, "role").unwrap().as_deref() == Some("translation")).collect();
+    assert_eq!(tracks, [track.id.clone()]);
+    assert_eq!(p.proj.field_str(&added, "parent").unwrap().as_deref(), Some(lo.as_str()));
+}

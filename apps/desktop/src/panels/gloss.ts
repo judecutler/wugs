@@ -3,7 +3,7 @@
 // translation line up under the transcription. The project's earlier analyses
 // are one keypress away: Enter on an empty word accepts the ghost suggestion.
 import {
-  addSegment, addTier, editSegmentContent, errorText, glossAddLexeme, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossTokenize,
+  addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossTokenize,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
@@ -572,14 +572,10 @@ export const glossPanel: PanelDef = {
         box.append(h("p", { className: "note", textContent: "No translation track yet. A translation lives on its own track, lined up in time with the utterance." }), add);
         return box;
       }
-      if (segment.startMs === null || segment.endMs === null) {
-        box.append(h("p", { className: "note", textContent: "This segment has no times, so no translation can line up with it. Give it times on the Timeline." }));
-        return box;
-      }
       for (const line of translationLines(segment, detail.segments, detail.tiers)) {
         const cell = `t:${line.tier.id}`;
         const stored = line.segment?.content ?? "";
-        const input = h("input", { className: "gl-free-input", value: drafts.get(cell) ?? stored, spellcheck: false, placeholder: line.segment === null ? "Type a translation. It becomes a segment over this one." : "" });
+        const input = h("input", { className: "gl-free-input", value: drafts.get(cell) ?? stored, spellcheck: false, placeholder: line.segment === null ? (segment.startMs === null ? "Type a translation of this sentence." : "Type a translation. It becomes a segment over this one.") : "" });
         input.dataset.cell = cell;
         const commit = () => {
           const draft = drafts.get(cell);
@@ -592,7 +588,9 @@ export const glossPanel: PanelDef = {
                 })
               : draft.trim() === ""
                 ? Promise.resolve()
-                : addSegment({ textId: detail.id, tierId: line.tier.id, startMs: segment.startMs, endMs: segment.endMs, content: draft }).then(() => undefined);
+                : segment.startMs === null || segment.endMs === null
+                  ? addTranslation({ textId: detail.id, tierId: line.tier.id, segmentId: segment.id, content: draft }).then(() => undefined)
+                  : addSegment({ textId: detail.id, tierId: line.tier.id, startMs: segment.startMs, endMs: segment.endMs, content: draft }).then(() => undefined);
           void job.then(() => refreshConflicts()).then(() => refreshText(), (e) => {
             drafts.set(cell, draft);
             showToast({ tone: "error", lines: [errorText(e)] });

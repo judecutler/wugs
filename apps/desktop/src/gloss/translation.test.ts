@@ -24,6 +24,16 @@ test("segments that only touch, or an untimed utterance, have no translation", (
   assert.equal(translationLines(sel, [seg("a", "en", null, null)], tiers)[0]!.segment, null);
 });
 
+test("a translation that names the utterance as its parent wins, timed or not", () => {
+  const untimed = seg("u", "tx", null, null);
+  const paired = { ...seg("p", "en", null, null, "the dog runs"), parent: "u" };
+  assert.equal(translationLines(untimed, [untimed, seg("x", "en", null, null, "other"), paired], tiers)[0]!.segment?.id, "p");
+  const timed = seg("s", "tx", 1000, 3000);
+  const overlapping = seg("o", "en", 1000, 3000, "by time");
+  assert.equal(translationLines(timed, [timed, overlapping, { ...seg("q", "en", null, null, "by parent"), parent: "s" }], tiers)[0]!.segment?.id, "q");
+  assert.equal(translationLines(timed, [timed, overlapping, { ...seg("r", "en", null, null), parent: "elsewhere" }], tiers)[0]!.segment?.id, "o");
+});
+
 test("the offer to add a translation track shows only when there is none", () => {
   assert.equal(needsTranslationTrack(tiers), false);
   assert.equal(needsTranslationTrack([tiers[0]!, tiers[3]!]), true);

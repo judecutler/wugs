@@ -45,6 +45,8 @@ export type SegmentRow = {
   endMs: number | null;
   content: string;
   pos: string;
+  /** The segment this one belongs to (a translation's sentence), when it has one. */
+  parent?: string | null;
   /** Set while the transcription is still the one a phone model wrote. */
   machine: Machine | null;
 };
@@ -94,6 +96,8 @@ export const addSegment = (args: {
   endMs: number | null;
   content: string;
 }) => invoke<AddedSegment>("add_segment", args);
+/** A translation of an untimed segment: a segment on `tierId` whose parent is `segmentId`. */
+export const addTranslation = (args: { textId: string; tierId: string; segmentId: string; content: string }) => invoke<string>("add_translation", args);
 
 /** With `expect` (a timeline undo or redo), refused when it no longer holds: the segment was edited since. */
 export const editSegmentContent = (args: { textId: string; segmentId: string; content: string; expect?: SegmentCheck[] }) =>

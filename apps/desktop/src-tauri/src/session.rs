@@ -143,6 +143,9 @@ pub struct SegmentRow {
     pub end_ms: Option<f64>,
     pub content: String,
     pub pos: String,
+    /// The segment this one belongs to: a translation's sentence (FlexText,
+    /// a table's translation column) or an ELAN dependent annotation's parent.
+    pub parent: Option<String>,
     /// Set while the transcription is still the one a phone model wrote.
     pub machine: Option<MachineView>,
 }
@@ -354,6 +357,7 @@ pub fn get_text(session: &mut Session, text_id: &str) -> Result<TextDetail, Stri
             end_ms: p.proj.field_num(&id, "end")?,
             content: p.proj.field_str(&id, "content")?.unwrap_or_default(),
             pos: p.proj.field_str(&id, "pos")?.unwrap_or_default(),
+            parent: p.proj.field_str(&id, "parent")?.filter(|v| !v.is_empty()),
             machine: p.machine_mark(&id)?.map(|m| MachineView { model: m.model, confidence: m.confidence }),
             id,
         });
@@ -420,6 +424,15 @@ pub fn add_segment(
     let (id, res) = p.add_segment(text_id, &tier, index, start_ms, end_ms, content)?;
     let states = states(p, std::slice::from_ref(&id))?;
     Ok(AddedSegment { id, findings: finding_lines(&res), states })
+}
+
+/// A translation of `segment_id` on the translation track `tier_id`: an
+/// untimed segment whose `parent` is that segment, so it pairs with an
+/// untimed sentence (a table's or a FlexText's) the way time pairs the rest.
+pub fn add_translation(session: &mut Session, text_id: &str, tier_id: &str, segment_id: &str, content: &str) -> Result<String, String> {
+    let p = project(session)?;
+    let index = next_pos_index(p, text_id)?;
+    Ok(p.add_translation(text_id, tier_id, segment_id, index, content)?.0)
 }
 
 /// Retime one or both edges. An omitted edge is not written, so a drag of

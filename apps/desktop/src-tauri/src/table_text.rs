@@ -9,6 +9,11 @@
 //! - **Documents:** when a header is named document, doc, text_id, file, title
 //!   or source, rows are grouped into one text per value, in the order the
 //!   values first appear, titled by the value; else the file is one text.
+//! - **The translation column** is the first other header named translation
+//!   (or starting so, `Translation (English)`), free translation, free,
+//!   translated, english or meaning; its cell becomes the row's translation,
+//!   a segment on a translation track paired with the row's segment. A
+//!   gloss column stays a kept column: it may hold morpheme glosses.
 //! - **Every other column is kept** on its row's segment as `x.csv.<header>`
 //!   (the header lower-cased, spaces and punctuation as `-`), so speaker,
 //!   date or genre columns stay with their sentences.
@@ -21,11 +26,15 @@
 const TEXT_NAMES: [&str; 12] = ["sentence", "utterance", "transcription", "text", "content", "form", "word", "lexeme", "headword", "vernacular", "orthography", "ipa"];
 /// Columns that hold a translation of the text, never the text itself when guessing.
 const TRANSLATION_NAMES: [&str; 6] = ["gloss", "translation", "free", "english", "meaning", "translit"];
+/// Names of the translation column, most preferred first (`translation…` also matches by prefix).
+const TRANSLATION_COLUMN: [&str; 6] = ["translation", "free translation", "free", "translated", "english", "meaning"];
 const GROUP_NAMES: [&str; 6] = ["document", "doc", "text_id", "file", "title", "source"];
 
 #[derive(Debug, PartialEq)]
 pub struct Row {
     pub text: String,
+    /// The translation cell, or empty.
+    pub translation: String,
     /// `(x.csv.<header>, value)` for the other columns.
     pub extras: Vec<(String, String)>,
 }
@@ -36,6 +45,8 @@ pub struct Table {
     pub text_column: String,
     /// The header rows were grouped by, if any.
     pub group_column: Option<String>,
+    /// The header translations came from, if any.
+    pub translation_column: Option<String>,
     /// `(document title or None, rows)` in order.
     pub documents: Vec<(Option<String>, Vec<Row>)>,
     /// Headers kept as `x.csv.*` fields.
@@ -158,19 +169,25 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
             (0..raw.len()).filter(|&c| !numeric(&column(c))).max_by_key(|&c| {
                 let total: usize = records.iter().map(|r| r[c].chars().count()).sum();
                 // A gloss or translation column is the text's companion, ranked last.
-                let companion = TRANSLATION_NAMES.contains(&raw[c].to_lowercase().as_str());
+                let header = raw[c].to_lowercase();
+                let companion = TRANSLATION_NAMES.contains(&header.as_str()) || TRANSLATION_COLUMN.contains(&header.as_str()) || header.starts_with("translation");
                 (!companion, (total * 1000) / records.len().max(1))
             })
         })
         .ok_or_else(|| "no column holds text: every column is numbers or times".to_string())?;
     let group_at = GROUP_NAMES.iter().filter_map(|n| named(n)).find(|&g| g != text_at);
+    let translation_at = TRANSLATION_COLUMN
+        .iter()
+        .filter_map(|n| named(n))
+        .chain(raw.iter().position(|h| h.to_lowercase().starts_with("translation")))
+        .find(|&c| c != text_at && Some(c) != group_at && !numeric(&column(c)));
     // Excel's trailing columns with no header and nothing in them are dropped.
-    let kept: Vec<usize> = (0..raw.len()).filter(|&c| c != text_at && Some(c) != group_at && !(raw[c].is_empty() && records.iter().all(|r| r[c].is_empty()))).collect();
+    let kept: Vec<usize> = (0..raw.len()).filter(|&c| c != text_at && Some(c) != group_at && Some(c) != translation_at && !(raw[c].is_empty() && records.iter().all(|r| r[c].is_empty()))).collect();
     let mut documents: Vec<(Option<String>, Vec<Row>)> = Vec::new();
     let mut at: std::collections::HashMap<Option<String>, usize> = std::collections::HashMap::new();
     let mut ungrouped = 0;
     for r in records {
-        let row = Row { text: r[text_at].clone(), extras: kept.iter().map(|&c| (format!("x.csv.{}", names[c]), r[c].clone())).collect() };
+        let row = Row { text: r[text_at].clone(), translation: translation_at.map(|c| r[c].clone()).unwrap_or_default(), extras: kept.iter().map(|&c| (format!("x.csv.{}", names[c]), r[c].clone())).collect() };
         let key = group_at.map(|g| r[g].clone()).filter(|v| !v.is_empty());
         if group_at.is_some() && key.is_none() {
             ungrouped += 1;
@@ -182,7 +199,7 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
         documents[i].1.push(row);
     }
     documents.retain(|(_, rows)| rows.iter().any(|r| !r.text.is_empty()));
-    Ok(Table { text_column: raw[text_at].clone(), group_column: group_at.map(|g| raw[g].clone()), documents, kept: kept.iter().map(|&c| raw[c].clone()).collect(), delimiter: delim, ungrouped })
+    Ok(Table { text_column: raw[text_at].clone(), group_column: group_at.map(|g| raw[g].clone()), translation_column: translation_at.map(|c| raw[c].clone()), documents, kept: kept.iter().map(|&c| raw[c].clone()).collect(), delimiter: delim, ungrouped })
 }
 
 #[cfg(test)]
@@ -197,7 +214,7 @@ mod tests {
         assert_eq!(t.kept, ["speaker", "date"]);
         assert_eq!(t.documents.len(), 2);
         assert_eq!(t.documents[0].0.as_deref(), Some("A"));
-        assert_eq!(t.documents[0].1[0], Row { text: "Kesi mopa, toru.".into(), extras: vec![("x.csv.speaker".into(), "Maria".into()), ("x.csv.date".into(), "2024".into())] });
+        assert_eq!(t.documents[0].1[0], Row { text: "Kesi mopa, toru.".into(), translation: String::new(), extras: vec![("x.csv.speaker".into(), "Maria".into()), ("x.csv.date".into(), "2024".into())] });
         assert_eq!(t.documents[1].1[0].text, "Two lines");
     }
 
@@ -241,5 +258,24 @@ mod tests {
         assert_eq!(parse("text\tn\n\"Hi,\" she said\t1\n", true).unwrap().documents[0].1[0].text, "\"Hi,\" she said");
         // Rows with no document.
         assert_eq!(parse("doc,text\nA,x\n,y\n", false).unwrap().ungrouped, 1);
+    }
+
+    #[test]
+    fn a_translation_column_pairs_with_its_row() {
+        let t = parse("sentence,translation,speaker\nkesi bara,the dog runs,A\nlo,,B\n", false).unwrap();
+        assert_eq!(t.translation_column.as_deref(), Some("translation"));
+        assert_eq!(t.kept, ["speaker"], "the translation is not also kept");
+        assert_eq!(t.documents[0].1[0].translation, "the dog runs");
+        assert_eq!(t.documents[0].1[1].translation, "");
+        // By prefix, by other names, never the text column, and a gloss column stays kept.
+        assert_eq!(parse("Translation (English),text\nthe dog,kesi\n", false).unwrap().translation_column.as_deref(), Some("Translation (English)"));
+        assert_eq!(parse("Translation (English),utterance\nthe dog runs away fast,kesi\n", false).unwrap().text_column, "utterance");
+        assert_eq!(parse("text,free\nkesi,dog\n", false).unwrap().translation_column.as_deref(), Some("free"));
+        assert_eq!(parse("english,meaning\nthe dog,a dog\n", false).unwrap().text_column, "english");
+        assert_eq!(parse("english,meaning\nthe dog,a dog\n", false).unwrap().translation_column.as_deref(), Some("meaning"));
+        let t = parse("word,gloss\nkesi,dog\n", false).unwrap();
+        assert_eq!((t.translation_column, t.kept), (None, vec!["gloss".to_string()]));
+        // With no preferred text name the longer column is the text, the translation-named one never.
+        assert_eq!(parse("id,translation,line\n1,a very long translation here,kesi\n", false).unwrap().text_column, "line");
     }
 }
