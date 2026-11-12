@@ -60,7 +60,7 @@ async function importOne() {
   const path = await pickFile({
     title: "Import a file from ELAN, FLEx, Praat or Toolbox, or plain text",
     filters: [
-      { name: "ELAN, FLEx, Praat, Toolbox, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "txt"] },
+      { name: "ELAN, FLEx, Praat, Toolbox, tables of sentences, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "csv", "tsv", "txt"] },
       { name: "All files", extensions: ["*"] },
     ],
   });

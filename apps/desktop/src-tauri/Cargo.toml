@@ -21,6 +21,7 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+csv = "1"
 # protocol-asset serves project media (blobs/) to the webview's <audio>.
 tauri = { version = "2", features = ["protocol-asset"] }
 tauri-plugin-dialog = "2"

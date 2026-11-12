@@ -170,3 +170,26 @@ fn nothing_is_written_inside_the_project_folder() {
         assert!(interchange::export_lexicon(&mut a, Format::Lift, &folder).is_err());
     }
 }
+
+#[test]
+fn a_table_of_sentences_comes_in_a_text_per_document() {
+    let dir = TempDir::new();
+    let mut a = project(&dir, "a");
+    let f = dir.0.join("corpus.csv");
+    fs::write(&f, "doc,speaker,sentence\nFox,Maria,\"The fox came, slowly.\"\nFox,Jo,It drank.\nWell,Maria,The well was dry.\n").unwrap();
+    let imported = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert!(imported.lines.iter().any(|l| l.contains("2 new texts") && l.contains("«sentence»") && l.contains("«doc»")), "{:?}", imported.lines);
+    assert!(imported.lines.iter().any(|l| l.contains("«speaker»")), "{:?}", imported.lines);
+    let all = texts(&mut a);
+    assert_eq!(all.len(), 2);
+    let fox = all.iter().find(|t| t.1 == "Fox").expect("a text per document").0.clone();
+    let detail = session::get_text(&mut a, &fox).unwrap();
+    let contents: Vec<String> = detail.segments.iter().map(|s| s.content.clone()).collect();
+    assert_eq!(contents, ["The fox came, slowly.", "It drank."]);
+    let p = a.as_mut().unwrap();
+    assert_eq!(p.proj.field_str(&detail.segments[1].id, "x.csv.speaker").unwrap().as_deref(), Some("Jo"), "other columns are kept");
+    // The same file again adds nothing.
+    let again = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert!(again.lines.iter().any(|l| l.contains("2 documents matched")), "{:?}", again.lines);
+    assert_eq!(texts(&mut a).len(), 2);
+}

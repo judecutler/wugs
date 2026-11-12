@@ -6,6 +6,7 @@ test("each file takes the import its type needs", () => {
   assert.equal(classify("Interview 3.WAV"), "recording");
   assert.equal(classify("voice memo.m4a"), "recording");
   assert.equal(classify("song.flac"), "recording");
+  assert.equal(classify("corpus.CSV"), "file");
   assert.equal(classify("Frog story.eaf"), "file");
   assert.equal(classify("words.TextGrid"), "file");
   assert.equal(classify("dictionary.lift"), "file");
