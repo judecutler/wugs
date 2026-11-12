@@ -101,10 +101,40 @@ fn sealing_makes_a_new_package_each_time() {
 }
 
 #[test]
+fn a_plain_text_comes_in_a_sentence_per_segment_and_goes_out_a_line_per_segment() {
+    let dir = TempDir::new();
+    let mut a = project(&dir, "a");
+    let f = dir.0.join("Fox essay.txt");
+    fs::write(&f, "The fox came. It drank\nfrom the well!\n\nThen it left.\n").unwrap();
+    let imported = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    let text = imported.text.clone().unwrap();
+    let detail = session::get_text(&mut a, &text).unwrap();
+    assert_eq!(detail.title, "Fox essay");
+    let contents: Vec<String> = detail.segments.iter().map(|s| s.content.clone()).collect();
+    assert_eq!(contents, ["The fox came.", "It drank from the well!", "Then it left."], "{:?}", imported.lines);
+    // The same file again adds nothing.
+    let again = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert_eq!(again.text.as_deref(), Some(text.as_str()));
+    assert_eq!(texts(&mut a).len(), 1);
+    // Out as a line per segment, which reads back as the same text.
+    let out = dir.0.join("out");
+    fs::create_dir_all(&out).unwrap();
+    let file = interchange::export_text(&mut a, &text, Format::PlainText, &out).unwrap();
+    assert_eq!(fs::read_to_string(&file.path).unwrap(), "The fox came.\nIt drank from the well!\nThen it left.\n");
+    let mut b = project(&dir, "b");
+    let back = interchange::import_file(&mut b, &file.path).unwrap();
+    assert_eq!(session::get_text(&mut b, &back.text.unwrap()).unwrap().segments.len(), 3);
+    // A damaged file is refused, not garbled.
+    let bad = dir.0.join("bad.txt");
+    fs::write(&bad, b"caf\xE9").unwrap();
+    assert!(interchange::import_file(&mut a, bad.to_str().unwrap()).is_err());
+}
+
+#[test]
 fn an_unknown_file_is_refused_in_words() {
     let dir = TempDir::new();
     let mut a = project(&dir, "a");
-    let f = dir.0.join("notes.txt");
+    let f = dir.0.join("notes.md");
     fs::write(&f, "just some notes").unwrap();
     let err = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap_err();
     assert!(err.contains("not a file wugs can import"), "{err}");

@@ -87,4 +87,4 @@ export const projectChangedReason = "another project was opened after it was dro
 export const projectClosedReason = "the project it was dropped into is no longer open.";
 
 export const unsupportedReason =
-  "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF) and ELAN, FLEx, Praat and Toolbox files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex, .txt).";
+  "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF) ELAN, FLEx, Praat and Toolbox files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex) and plain text (.txt).";

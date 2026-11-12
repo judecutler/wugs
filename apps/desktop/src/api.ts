@@ -486,7 +486,7 @@ export const assistDelete = (args: { id: string }) => invoke<void>("assist_delet
 /** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
 // Import and export in other tools' formats: src-tauri/src/interchange.rs.
-export type TextFormat = "elan" | "flextext" | "textgrid";
+export type TextFormat = "elan" | "flextext" | "textgrid" | "plaintext";
 export type LexiconFormat = "lift" | "toolbox";
 /** `text`: the text to show afterwards; `lexicon`: the lexicon changed; `lines`: what happened, in words. */
 export type Imported = { format: string; text: string | null; lexicon: boolean; lines: string[] };

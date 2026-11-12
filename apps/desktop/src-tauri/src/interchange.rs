@@ -20,6 +20,9 @@ pub enum Format {
     TextGrid,
     Lift,
     Toolbox,
+    /// A `.txt` that is not Toolbox or Praat: a written text, a segment per
+    /// sentence in, a segment per line out (`plaintext`).
+    PlainText,
 }
 
 impl Format {
@@ -30,6 +33,7 @@ impl Format {
             "textgrid" => Format::TextGrid,
             "lift" => Format::Lift,
             "toolbox" => Format::Toolbox,
+            "plaintext" => Format::PlainText,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -40,7 +44,7 @@ impl Format {
             Format::FlexText => "flextext",
             Format::TextGrid => "TextGrid",
             Format::Lift => "lift",
-            Format::Toolbox => "txt",
+            Format::Toolbox | Format::PlainText => "txt",
         }
     }
 
@@ -51,6 +55,7 @@ impl Format {
             Format::TextGrid => "Praat TextGrid",
             Format::Lift => "LIFT lexicon",
             Format::Toolbox => "Toolbox lexicon",
+            Format::PlainText => "plain text",
         }
     }
 }
@@ -73,6 +78,8 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         Some(Format::Toolbox)
     } else if head.starts_with("File type = \"ooTextFile\"") {
         Some(Format::TextGrid)
+    } else if ext == "txt" {
+        Some(Format::PlainText)
     } else {
         None
     }
@@ -148,11 +155,12 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm/.txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
-        Format::Elan | Format::FlexText | Format::Lift => decode_xml(&bytes, file_name)?,
+        // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText => decode_xml(&bytes, file_name)?,
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16.
         Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
     };
@@ -215,6 +223,40 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             ));
             lines.extend(not_carried(&r.not_carried.0));
             (None, true)
+        }
+        Format::PlainText => {
+            let units = crate::plaintext::segments(input);
+            if units.is_empty() {
+                return Err(format!("{file_name} has no text in it; nothing was imported"));
+            }
+            // The same file again (same title, same sentences) adds nothing.
+            let (_, transcription) = crate::concordance::corpus_tiers(p)?;
+            let mut same = None;
+            for t in p.proj.entities_of_kind("text")? {
+                if p.proj.field_str(&t, "title")?.as_deref() != Some(stem.as_str()) {
+                    continue;
+                }
+                let mut held = Vec::new();
+                for seg in p.proj.ordered_children("text", &t, "segment")? {
+                    if transcription.contains(&p.proj.field_str(&seg, "tier")?.unwrap_or_default()) {
+                        held.push(p.proj.field_str(&seg, "content")?.unwrap_or_default());
+                    }
+                }
+                if held == units {
+                    same = Some(t);
+                    break;
+                }
+            }
+            if let Some(t) = same {
+                lines.push("It matched a text already here; nothing was added.".into());
+                (Some(t), false)
+            } else {
+                let tier = session::utterance_tier(p)?;
+                let refs: Vec<&str> = units.iter().map(String::as_str).collect();
+                let (text, _) = p.import_written_text(&stem, &tier, &refs)?;
+                lines.push(format!("A new text with {}.", plural(units.len(), "sentence", "sentences")));
+                (Some(text), false)
+            }
         }
         Format::Toolbox => {
             let r = wugs_legacy::import_toolbox(p, input).map_err(|e| e.to_string())?;
@@ -335,6 +377,16 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             }
             out.textgrid
         }
+        Format::PlainText => {
+            let (_, transcription) = crate::concordance::corpus_tiers(p)?;
+            let mut lines = Vec::new();
+            for seg in p.proj.ordered_children("text", text_id, "segment")? {
+                if transcription.contains(&p.proj.field_str(&seg, "tier")?.unwrap_or_default()) {
+                    lines.push(p.proj.field_str(&seg, "content")?.unwrap_or_default());
+                }
+            }
+            crate::plaintext::export(&lines)
+        }
         Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
     };
     let path = write_new(folder, &file_stem(&title, "text"), format.extension(), contents.as_bytes())?;
@@ -346,6 +398,7 @@ pub fn export_lexicon(s: &mut Session, format: Format, folder: &Path) -> Result<
     outside_project(s, folder)?;
     let p = session::project(s)?;
     let contents = match format {
+        Format::PlainText => return Err("plain text holds texts, not a lexicon".into()),
         Format::Lift => wugs_flex::export_lift(p)?,
         Format::Toolbox => wugs_legacy::export_toolbox(p)?,
         _ => return Err(format!("{} is a text format", format.name())),
@@ -423,7 +476,8 @@ mod tests {
         assert_eq!(detect(Path::new("a.TextGrid"), b""), Some(Format::TextGrid));
         assert_eq!(detect(Path::new("dict.txt"), b"\\_sh v3.0  400  Dictionary\n"), Some(Format::Toolbox));
         assert_eq!(detect(Path::new("x.txt"), b"File type = \"ooTextFile\"\n"), Some(Format::TextGrid));
-        assert_eq!(detect(Path::new("notes.txt"), b"hello"), None);
+        assert_eq!(detect(Path::new("notes.txt"), b"hello"), Some(Format::PlainText));
+        assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
         let mut utf16: Vec<u8> = vec![0xFF, 0xFE];
         utf16.extend("\\_sh v3.0".encode_utf16().flat_map(|u| u.to_le_bytes()));
         utf16.extend([0x3D, 0xD8]); // half a surrogate pair, cut at the sniffing limit
