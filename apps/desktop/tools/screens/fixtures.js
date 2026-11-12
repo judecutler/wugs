@@ -331,6 +331,7 @@
       { panel: "people", place: "below", of: "elicit", height: 240 },
     ],
     active: ["elicit"],
+    wug: { body: "#7a6cd8", accessories: ["crown", "scroll", "glasses"], colours: { "crown-shape": "#ffd135" } },
   };
   const kitsView = {
     active: tongues.id,
@@ -342,7 +343,7 @@
   };
   const kitCode = ({ id }) =>
     id === sprint.id
-      ? `[kit]\nid = "word-list-sprint"\nname = "Word-list sprint"\nsubtitle = "Elicitation"\nversion = "0.2.0"\ndescription = "Just the word lists, the lexicon and who said what."\n\n[tools]\nenabled = ["elicit", "lexicon", "search", "people"]\n\n[layout]\npanels = [\n  { panel = "elicit" },\n  { panel = "lexicon", place = "right", of = "elicit", width = 420 },\n  { panel = "search", place = "tab", of = "lexicon" },\n  { panel = "people", place = "below", of = "elicit", height = 240 },\n]\nactive = ["elicit"]\n`
+      ? `[kit]\nid = "word-list-sprint"\nname = "Word-list sprint"\nsubtitle = "Elicitation"\nversion = "0.2.0"\ndescription = "Just the word lists, the lexicon and who said what."\n\n[tools]\nenabled = ["elicit", "lexicon", "search", "people"]\n\n[layout]\npanels = [\n  { panel = "elicit" },\n  { panel = "lexicon", place = "right", of = "elicit", width = 420 },\n  { panel = "search", place = "tab", of = "lexicon" },\n  { panel = "people", place = "below", of = "elicit", height = 240 },\n]\nactive = ["elicit"]\n\n[wug]\nbody = "#7a6cd8"\naccessories = ["crown", "scroll", "glasses"]\ncolours = { crown-shape = "#ffd135" }\n`
       : `[kit]\nid = "org.wugs.tongues"\nname = "Tongues"\nsubtitle = "Fieldwork"\n`;
 
   // ------------------------------------------------------------ people

@@ -2,13 +2,16 @@
 // the installed kits, and an editor for the user's own. A kit is a
 // kit.toml (crates/wugs-kit); the form edits it in place, and View code
 // shows the same file to read or edit by hand. Tongues is built in and
-// read-only; "Duplicate" makes an editable copy.
+// read-only; "Duplicate" makes an editable copy. A kit's wug (its `[wug]`)
+// is picked here too, with a live preview.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { errorText, kitCode, kitDelete, kitDuplicate, kitInstall, kitSave, kitSaveCode, type KitEntry, type KitsView } from "../api";
 import { emptyState, h } from "../dom";
 import { describeLayout, kitNotes, withoutPanel, type Kit } from "../kits/logic";
+import { accessoryColour, paint, SLOTS, wear, wornIn } from "../kits/wug-picker";
 import { currentArrangement, reloadKits, useKit } from "../kits/workspace";
 import { getKits, setKits, showToast } from "../store";
+import { ACCESSORIES, isAccessory, kitWug, wugSvg, type WugLook } from "../theme/wug";
 import { sliced, type PanelDef, type PanelView } from "./panel";
 import { isPanelId, isPlatformPanel, PANELS, toolPanels } from "./registry";
 
@@ -247,6 +250,8 @@ export const kitsPanel: PanelDef = {
         textField(kit, "subtitle", "Subtitle", ro, 40),
         textField(kit, "version", "Version", ro, 40),
         textField(kit, "description", "About", ro, 500),
+        h("h4", { textContent: "Wug" }),
+        wugPicker(kit, ro),
         h("h4", { textContent: "Tools" }),
         h("p", { className: "kit-note", textContent: "Conflicts, Devices and Kits are always offered." }),
         h("div", { className: "kit-tools" }, ...toolPanels().map((id) => toolBox(kit, id, ro))),
@@ -286,6 +291,62 @@ export const kitsPanel: PanelDef = {
         if (e.key === "Enter") input.blur();
       };
       return h("div", { className: "field-row" }, h("label", { textContent: label }), input);
+    }
+
+    /** The kit's wug: a preview, and for a user kit a body colour and one
+     * accessory per slot, each with its colour when it has one to change.
+     * Colours preview while the picker moves and save when it closes. */
+    function wugPicker(kit: Kit, ro: boolean) {
+      const look = kitWug(kit);
+      // A colour save does not redraw while focus stays in the picker, so a
+      // preview starts from the newest saved look, never the one drawn last.
+      const now = () => kitWug(latest(kit.id) ?? kit);
+      const preview = h("div", { className: "kit-wug-preview" });
+      const show = (l: WugLook) => {
+        preview.innerHTML = wugSvg(l, `${kit.name} wug`);
+      };
+      show(look);
+      const note = kit.wug === undefined ? "This kit has no wug of its own yet, so it shows the wugs wug." : "Shown in the top bar and on empty panels while this kit is in use.";
+      if (ro) return h("div", { className: "kit-wug" }, preview, h("p", { className: "kit-note", textContent: note }));
+      const change = (f: (l: WugLook) => WugLook, quiet = false) => void save(kit.id, (k) => ({ ...k, wug: f(kitWug(k)) }), { quiet });
+      const colour = (key: string, value: string, label: string, draft: (c: string) => WugLook, saved: (l: WugLook, c: string) => WugLook) => {
+        const input = h("input", { type: "color", value, disabled: busy, ariaLabel: label, title: label });
+        input.dataset.focus = `wug:${kit.id}:${key}`;
+        input.oninput = () => show(draft(input.value));
+        input.onchange = () => change((l) => saved(l, input.value), true);
+        return input;
+      };
+      const slots = SLOTS.map(({ slot, label, accessories }) => {
+        const worn = wornIn(look, slot);
+        const select = h(
+          "select",
+          { disabled: busy, ariaLabel: label },
+          h("option", { value: "", textContent: "None", selected: worn === null }),
+          ...accessories.map((a) => h("option", { value: a, textContent: ACCESSORIES[a].label, selected: worn === a })),
+        );
+        select.dataset.focus = `wug:${kit.id}:${slot}`;
+        select.onchange = () => change((l) => wear(l, slot, isAccessory(select.value) ? select.value : null));
+        const shown = worn === null ? null : accessoryColour(look, worn);
+        return h(
+          "div",
+          { className: "kit-wug-row" },
+          h("span", { textContent: label }),
+          select,
+          worn === null || shown === null ? null : colour(slot, shown, `${ACCESSORIES[worn].label} colour`, (c) => paint(now(), worn, c), (l, c) => paint(l, worn, c)),
+        );
+      });
+      return h(
+        "div",
+        { className: "kit-wug" },
+        preview,
+        h(
+          "div",
+          { className: "kit-wug-parts" },
+          h("div", { className: "kit-wug-row" }, h("span", { textContent: "Body" }), colour("body", look.body, "Body colour", (c) => ({ ...now(), body: c }), (l, c) => ({ ...l, body: c }))),
+          ...slots,
+          kit.wug === undefined ? h("p", { className: "kit-note", textContent: note }) : null,
+        ),
+      );
     }
 
     function toolBox(kit: Kit, id: string, ro: boolean) {

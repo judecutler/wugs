@@ -43,6 +43,10 @@ panels = [
 ]
 active = ["texts", "timeline"]     # tabs brought to the front, in order
 
+[wug]                              # the kit's mascot, in the top bar and empty panels
+body = "#f08060"                   # coral; colours are "#" and six hex digits
+accessories = ["hat", "recorder"]  # one per slot; ids from apps/desktop/src/theme/wug.ts
+
 [templates.tiers]                  # default tier schema for new texts
 default = [
   { name = "utterance", kind = "time-aligned" },
