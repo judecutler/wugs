@@ -17,6 +17,8 @@ import { tokenState } from "../gloss/state";
 import { applyNeedsConfirm, applyOthersLabel, describe, matchCase } from "../gloss/suggest";
 import { forms } from "../gloss/tokenizer";
 import { needsTranslationTrack, translationLines } from "../gloss/translation";
+import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
+import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { emptyState, h } from "../dom";
 import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, showToast, subscribeSelection, touchLexicon } from "../store";
 import { createComposition, formatRange, imeBusy } from "../transcribe/logic";
@@ -611,6 +613,41 @@ export const glossPanel: PanelDef = {
       return box;
     }
 
+    /** Copy the segment as a numbered example for a paper (roadmap 69), in
+     * the format the person writes in, remembered on this computer. */
+    function copyControl(sel: NonNullable<ReturnType<typeof selected>>, v: GlossView): HTMLElement {
+      let format = parseFormat(readStored(FORMAT_KEY));
+      const picker = h(
+        "select",
+        { className: "gl-copy-format", title: "Where the example will go" },
+        ...EXAMPLE_FORMATS.map((f) => h("option", { value: f.id, textContent: f.label, title: f.note, selected: f.id === format })),
+      );
+      picker.setAttribute("aria-label", "Copy as");
+      picker.onchange = () => {
+        format = parseFormat(picker.value);
+        writeStored(FORMAT_KEY, format);
+      };
+      const button = h("button", { type: "button", className: "gl-copy", textContent: "Copy example", title: "Copy this segment as a numbered, glossed example for a paper" });
+      button.onclick = () => {
+        const segs = sel.text.segments
+          .filter((x) => x.tier === sel.segment.tier)
+          .slice()
+          // Untimed segments after the timed ones, as the Timeline lists them.
+          .sort((a, b) => (a.startMs ?? Number.MAX_SAFE_INTEGER) - (b.startMs ?? Number.MAX_SAFE_INTEGER));
+        const number = Math.max(1, segs.findIndex((x) => x.id === sel.segment.id) + 1);
+        const translation = translationLines(sel.segment, sel.text.segments, sel.text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
+        const ex: Example = { number, translation, words: v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) })) };
+        const out = clipboardFor(ex, format);
+        const label = EXAMPLE_FORMATS.find((f) => f.id === format)?.label ?? "";
+        void copyToClipboard(out.text, out.html).then(
+          // gb4e and ExPex number examples themselves.
+          () => showToast({ tone: "info", lines: [`Copied ${format === "gb4e" || format === "expex" ? "the example" : `example (${number})`} for ${label}. Paste it into your paper.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      };
+      return h("span", { className: "gl-copy-group" }, button, picker);
+    }
+
     // ---------------------------------------------------------------- draw
 
     function draw(force = false): void {
@@ -644,7 +681,14 @@ export const glossPanel: PanelDef = {
       closeMenu();
 
       const state = tokenState(sel.segment.content, v.words.map((w) => w.form));
-      const head = h("div", { className: "gl-head" }, h("span", { className: "gl-time", textContent: formatRange(sel.segment.startMs, sel.segment.endMs) }), h("span", { className: "gl-spacer" }), langControl());
+      const head = h(
+        "div",
+        { className: "gl-head" },
+        h("span", { className: "gl-time", textContent: formatRange(sel.segment.startMs, sel.segment.endMs) }),
+        h("span", { className: "gl-spacer" }),
+        v.words.length > 0 ? copyControl(sel, v) : null,
+        langControl(),
+      );
       const transcription = h("div", { className: "gl-transcription", textContent: sel.segment.content === "" ? "No transcription yet." : sel.segment.content, title: "Read-only here. Edit it in Transcribe." });
       const body: HTMLElement[] = [];
       const at = { textId: sel.text.id, segmentId: sel.segment.id };
@@ -682,3 +726,27 @@ export const glossPanel: PanelDef = {
     return { element: el, render: () => draw(), dispose: unsubscribe };
   },
 };
+
+/** Through the clipboard plugin, not the webview's clipboard API: the same on
+ * WebView2, WKWebView and WebKitGTK, with no user-gesture or secure-context
+ * rules. HTML goes with plain text beside it, for word processors. */
+async function copyToClipboard(text: string, html: string | null): Promise<void> {
+  if (html !== null) await writeHtml(html, text);
+  else await writeText(text);
+}
+
+function readStored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The choice still holds for this session.
+  }
+}
