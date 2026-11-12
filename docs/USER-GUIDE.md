@@ -487,6 +487,20 @@ To stop the check, open the **Updates** menu in the top bar and turn off **Check
 | A Praat button is missing. | wugs has not found Praat. Click **Praat…** and choose the Praat program. |
 | **Keep this** on a conflict card is refused. | Another device settled the conflict meanwhile. The card reloads. Choose again. |
 
+## Send feedback
+
+When something goes wrong or could work better, tell the people who make wugs. This needs an internet connection; without one, wugs keeps your feedback and sends it the next time it can.
+
+1. Click **Feedback** at the top right.
+2. Under **What happened?**, write what you were doing and what went wrong.
+3. Optional: add your email address if you would like a reply.
+4. Optional: click **Attach a screenshot or video…** and choose the file. The form shows the keys that record the screen on your computer. The file can be up to 95 MB, which is a few minutes of screen recording.
+5. Check what the attachment shows. A recording of the screen shows your project too: names, recordings and transcriptions.
+6. Leave **Include technical details** ticked unless you prefer not to send them. **See exactly what is included** shows them: the wugs version, your system, the kit, theme and window size. Nothing from your project is sent.
+7. Click **Send feedback**.
+
+Your feedback goes to the wugs maintainers privately. It is never posted publicly.
+
 ## Known limits
 
 wugs is young. These limits are known and stated so that you can plan around them:

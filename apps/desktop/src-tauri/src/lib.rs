@@ -6,6 +6,7 @@ pub mod convert;
 pub mod corrections;
 pub mod drops;
 pub mod elicit;
+pub mod feedback;
 pub mod gloss;
 pub mod identity;
 pub mod interchange;
@@ -865,6 +866,52 @@ struct DownloadEvent {
     finished: Option<Result<(), String>>,
 }
 
+/// The technical details a feedback report would carry: the page's own
+/// (kit, screen) plus the app version and system. Shown before sending.
+#[tauri::command]
+fn feedback_details(page: serde_json::Value) -> serde_json::Value {
+    feedback::details(page)
+}
+
+/// Keep a feedback report in the outbox, then send everything waiting.
+/// Online; offline, it waits and goes with the next send.
+#[tauri::command]
+async fn feedback_send(
+    app: AppHandle,
+    dir: State<'_, AppData>,
+    message: String,
+    contact: String,
+    details: Option<serde_json::Value>,
+    attachment: Option<String>,
+) -> Result<feedback::Outcome, String> {
+    let details = details.map(feedback::details);
+    let id = feedback::enqueue(&dir.0, &message, &contact, details, attachment.as_deref().map(std::path::Path::new))?;
+    send_feedback(app, dir.0.clone(), Some(id)).await
+}
+
+/// Send reports that are waiting (at start, and when the computer comes online).
+#[tauri::command]
+async fn feedback_retry(app: AppHandle, dir: State<'_, AppData>) -> Result<feedback::Outcome, String> {
+    send_feedback(app, dir.0.clone(), None).await
+}
+
+async fn send_feedback(app: AppHandle, dir: PathBuf, focus: Option<String>) -> Result<feedback::Outcome, String> {
+    if feedback::ENDPOINT.is_empty() {
+        return Ok(feedback::Outcome {
+            sent: false,
+            waiting: feedback::waiting(&dir).len(),
+            problem: Some("Feedback is kept on this computer: this build has no feedback service set up yet.".into()),
+        });
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        let sending = app.state::<feedback::Sending>();
+        let _one_at_a_time = sending.0.lock().unwrap_or_else(|p| p.into_inner());
+        feedback::send_waiting(&dir, &feedback::Https { endpoint: feedback::ENDPOINT.into() }, focus.as_deref())
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
 /// Start a model download in the background; progress arrives as
 /// `assist-download` events.
 #[tauri::command(async)]
@@ -1248,6 +1295,7 @@ pub fn run() {
         .manage(drops::Drops::default())
         .manage(updater::Staged::default())
         .manage(assist::Downloads::default())
+        .manage(feedback::Sending::default())
         .manage(assist::Worker::spawn())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
@@ -1258,6 +1306,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             assist_models,
+            feedback_details,
+            feedback_send,
+            feedback_retry,
             assist_download,
             assist_cancel,
             assist_delete,

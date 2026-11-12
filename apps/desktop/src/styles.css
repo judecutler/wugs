@@ -698,6 +698,7 @@ button.welcome-link:hover { text-decoration: underline; }
 
 /* Menus (src/menu.ts) */
 .menu-wrap { position: relative; display: inline-flex; }
+.menu-button.feedback-button::after { content: none; }
 .menu-button::after { content: ""; display: inline-block; width: 7px; height: 7px; margin-left: 8px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: translateY(-2px) rotate(45deg); opacity: 0.7; }
 .menu-button[aria-expanded="true"] { background: var(--surface-raised); border-color: var(--ink); }
 .menu-list {
@@ -809,3 +810,32 @@ body::before {
   mask: var(--pattern-band, none) repeat;
 }
 .share { margin-left: -18px; margin-right: -18px; padding: 12px 18px 14px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+
+/* Send feedback (roadmap 65): a card over the window, like the welcome card. */
+.feedback-overlay { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; padding: 24px; background: color-mix(in srgb, var(--bg) 70%, transparent); overflow: auto; }
+.feedback-card {
+  width: min(560px, 100%);
+  padding: 26px 30px 22px;
+  background: var(--surface-raised);
+  border: var(--ink-line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--ink-offset);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.feedback-card h2 { font-family: var(--font-display); font-weight: 400; font-size: 26px; margin: 0; }
+.feedback-lede, .feedback-tip, .feedback-why { margin: 0; color: var(--muted); }
+.feedback-label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.feedback-label textarea, .feedback-label input { font-weight: 400; width: 100%; }
+.feedback-message { resize: vertical; min-height: 110px; }
+.feedback-attach { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.feedback-file { font-weight: 600; overflow-wrap: anywhere; }
+.feedback-tip { font-size: var(--text-sm); }
+.feedback-caution { margin: 0; padding: 8px 12px; border-left: 4px solid var(--attention); background: color-mix(in srgb, var(--attention) 10%, var(--surface-raised)); font-size: var(--text-sm); }
+.feedback-check { display: flex; gap: 8px; align-items: baseline; }
+.feedback-details summary { cursor: pointer; color: var(--accent); font-size: var(--text-sm); }
+.feedback-details-text { max-height: 160px; overflow: auto; margin: 8px 0 0; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.feedback-why { min-height: 1.2em; color: var(--error); }
+.feedback-why:empty { min-height: 0; }
+.feedback-actions { display: flex; justify-content: flex-end; gap: 8px; }

@@ -1,0 +1,25 @@
+# The wugs feedback receiver. Setup and deploy steps: README.md beside this file.
+name = "wugs-feedback"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+# Where issues go: a private repository. Empty skips GitHub.
+FEEDBACK_REPO = "judecutler/wugs-feedback"
+
+[[r2_buckets]]
+binding = "REPORTS"
+bucket_name = "wugs-feedback"
+
+# Per address: at most 10 reports or uploads a minute (Cloudflare allows 10 or 60 s).
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "4741"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[observability]
+enabled = true
