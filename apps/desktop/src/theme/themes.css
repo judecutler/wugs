@@ -1,0 +1,70 @@
+/* Workspace themes: each is a set of token overrides on <html data-theme>.
+ * Cream (no attribute) is the brand default in tokens.css. Every pair of text
+ * and surface here was checked at 4.5:1 or better (ink, muted, accent, warn and
+ * error on every surface; on-accent on accent). Canvas tokens are literals,
+ * because canvas code reads them with getComputedStyle (src/theme/tokens.ts). */
+
+:root[data-theme="seafoam"] {
+  --bg: #e6f6f3;
+  --panel: #d3ede8;
+  --surface-raised: #f7fdfb;
+  --chrome: #c6e6e0;
+  --line: #b7dbd4;
+  --ink: #11201e;
+  --muted: #4b5f5b;
+  --chrome-ink: #2d403c;
+  --accent: #006d7e;
+  --accent-soft: #ccf1f6;
+  --highlight: #ffe58a;
+  --notice-soft: #e2f3c9;
+  --warn: #6e4800;
+  --wave: #00819a;
+}
+
+:root[data-theme="clay"] {
+  --bg: #fbeee4;
+  --panel: #f5e0d1;
+  --surface-raised: #fffaf6;
+  --chrome: #f0d5c2;
+  --line: #e8cab4;
+  --ink: #22170f;
+  --muted: #6a5444;
+  --chrome-ink: #4d382a;
+  --accent: #983823;
+  --accent-bright: #f08060;
+  --accent-soft: #fbe0d6;
+  --highlight: #ffe08a;
+  --notice-soft: #fbe9c4;
+  --warn: #6e4800;
+  --wave: #b5553c;
+}
+
+:root[data-theme="night"] {
+  color-scheme: dark;
+  --bg: #0f2128;
+  --panel: #16303a;
+  --surface-raised: #1b3842;
+  --chrome: #132b34;
+  --line: #2a4b55;
+  --ink: #f3ead2;
+  --muted: #a7b9b8;
+  --chrome-ink: #cfd9d4;
+  --on-accent: #0f2128;
+  --accent: #5ed6ee;
+  --accent-soft: #174a57;
+  --warn: #f0b84a;
+  --warn-soft: #3d3216;
+  --attention: #f0b84a;
+  --error: #ffa092;
+  --highlight: #5c4a12;
+  --notice-soft: #2a3a22;
+  --machine-unsure: rgba(240, 184, 74, 0.22);
+  --machine-very-unsure: rgba(255, 120, 100, 0.22);
+  --wave: #5ed6ee;
+  --pitch: #8fb8ff;
+  --intensity: #f0d24a;
+  --formants: #ff8a7a;
+  --meter-bg: #0a171c;
+  --overlay-bg: rgba(5, 14, 18, 0.88);
+  --shadow-pop: 0 10px 28px -10px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.3);
+}

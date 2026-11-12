@@ -41,7 +41,7 @@ fn record_to_archive() {
     let memo = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/audio/two-bursts.m4a");
     let wav = dir.0.join("memo.wav");
     convert::to_wav(&memo, &wav).unwrap();
-    let source = session::import_media_named(&mut s, &wav, "two-bursts.m4a").unwrap().id;
+    let source = session::import_media_named(&mut s, &wav, "two-bursts.m4a", None).unwrap().id;
 
     // 2. Auto-segment by utterance: two bursts of sound, two segments.
     let job = segmentation::job(&mut s, &source).unwrap();

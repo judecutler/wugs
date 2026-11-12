@@ -31,6 +31,7 @@ import { laneBounds, snapDragged, snapRange, type Span } from "./snap";
 import { editRules, type EditRules, type Granularity } from "./edit-rules";
 import { checkOf, edgeEntry, UndoHistory, type SegmentCheck, type UndoEntry, type UndoStack } from "./undo";
 import { StripCache } from "./strips";
+import { THEME_EVENT } from "../theme/theme";
 import {
   clamp,
   fitPxPerSec,
@@ -191,25 +192,15 @@ export class TimelineView {
   private observer: ResizeObserver;
   private windowMoves: (ev: MouseEvent) => void = () => {};
   private windowUps: (ev: MouseEvent) => void = () => {};
-  private colors = { line: "#dcd8cf", ink: "#1f1d1a", muted: "#7a756c", accent: "#2e5e4e", wave: "#4a7a68", box: "#ffffff", warn: "#8a5a00", overlay: "rgba(31, 29, 26, 0.82)", overlayInk: "#ffffff", mono: "monospace" };
+  private colors = { line: "#e7dbb2", ink: "#1b1a17", muted: "#625b4a", accent: "#00718a", selectedBox: "#d6f3f9", unsure: "rgba(214, 170, 40, 0.28)", veryUnsure: "rgba(196, 64, 48, 0.22)", wave: "#00819a", box: "#fffdf4", warn: "#8a5a00", overlay: "rgba(31, 29, 26, 0.82)", overlayInk: "#ffffff", mono: "monospace" };
 
   constructor() {
     this.element = h("div", { className: "tl-wrap", tabIndex: 0 }, this.canvas, this.editBox, this.confirmBar);
     const ctx = this.canvas.getContext("2d");
     if (ctx === null) throw new Error("no 2d canvas context");
     this.ctx = ctx;
-    this.colors = {
-      line: token("--line", this.colors.line),
-      ink: token("--ink", this.colors.ink),
-      muted: token("--muted", this.colors.muted),
-      accent: token("--accent", this.colors.accent),
-      wave: token("--wave", this.colors.wave),
-      box: token("--surface-raised", this.colors.box),
-      warn: token("--warn", this.colors.warn),
-      overlay: token("--overlay-bg", this.colors.overlay),
-      overlayInk: token("--on-accent", this.colors.overlayInk),
-      mono: token("--font-mono", this.colors.mono),
-    };
+    this.readColors();
+    window.addEventListener(THEME_EVENT, this.onTheme);
 
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(this.element);
@@ -230,7 +221,28 @@ export class TimelineView {
     this.raf = requestAnimationFrame(loop);
   }
 
+  /** The canvas cannot follow CSS, so it reads the theme's tokens again when the theme changes. */
+  private readColors() {
+    this.colors = {
+      line: token("--line", this.colors.line),
+      ink: token("--ink", this.colors.ink),
+      muted: token("--muted", this.colors.muted),
+      accent: token("--accent", this.colors.accent),
+      selectedBox: token("--accent-soft", this.colors.selectedBox),
+      unsure: token("--machine-unsure", this.colors.unsure),
+      veryUnsure: token("--machine-very-unsure", this.colors.veryUnsure),
+      wave: token("--wave", this.colors.wave),
+      box: token("--surface-raised", this.colors.box),
+      warn: token("--warn", this.colors.warn),
+      overlay: token("--overlay-bg", this.colors.overlay),
+      overlayInk: token("--overlay-ink", this.colors.overlayInk),
+      mono: token("--font-mono", this.colors.mono),
+    };
+  }
+  private onTheme = () => this.readColors();
+
   dispose(): void {
+    window.removeEventListener(THEME_EVENT, this.onTheme);
     cancelAnimationFrame(this.raf);
     this.unsubscribeSelection();
     this.observer.disconnect();
@@ -469,7 +481,7 @@ export class TimelineView {
     const selected = seg.id === this.selected;
     // Machine output stays tinted until a person edits it.
     const machine = seg.machine === null ? null : tint(seg.machine);
-    ctx.fillStyle = machine === "very-unsure" ? "rgba(196, 64, 48, 0.22)" : machine === "unsure" ? "rgba(214, 170, 40, 0.28)" : selected ? "rgba(46, 94, 78, 0.14)" : this.colors.box;
+    ctx.fillStyle = machine === "very-unsure" ? this.colors.veryUnsure : machine === "unsure" ? this.colors.unsure : selected ? this.colors.selectedBox : this.colors.box;
     ctx.strokeStyle = selected ? this.colors.accent : this.colors.line;
     ctx.lineWidth = selected ? 2 : 1;
     ctx.fillRect(x0, y, x1 - x0, hgt);

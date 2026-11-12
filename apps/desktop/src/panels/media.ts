@@ -1,4 +1,5 @@
 import { token } from "../theme/tokens";
+import { THEME_EVENT } from "../theme/theme";
 import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, type Recovered, type SourceRow } from "../api";
 import { canRecord } from "../capture/recorder.ts";
 import { defaultLabel, formatElapsed, meterFill } from "../capture/pcm.ts";
@@ -48,7 +49,10 @@ export const mediaPanel: PanelDef = {
 
     const meter = h("canvas", { className: "rec-meter", width: 240, height: 28 });
     const time = h("span", { className: "rec-time" });
-    const meterColors = { ok: token("--meter-ok", "#4d7c5a"), clip: token("--meter-clip", "#b3402f"), bg: token("--meter-bg", "#222") };
+    const readMeter = () => ({ ok: token("--meter-ok", "#4d7c5a"), clip: token("--meter-clip", "#b3402f"), bg: token("--meter-bg", "#222") });
+    let meterColors = readMeter();
+    const onTheme = () => (meterColors = readMeter());
+    window.addEventListener(THEME_EVENT, onTheme);
     const drawMeter = () => {
       const g = meter.getContext("2d");
       if (g === null) return;
@@ -295,6 +299,7 @@ export const mediaPanel: PanelDef = {
       unsubscribeTake();
       navigator.mediaDevices?.removeEventListener?.("devicechange", onDeviceChange);
       cancelAnimationFrame(raf);
+      window.removeEventListener(THEME_EVENT, onTheme);
     };
     return { ...view, dispose };
   },

@@ -1,4 +1,6 @@
-use wugs_kit::{parse, update, valid_id, Place, Placement, MAX_BYTES};
+use std::collections::BTreeMap;
+
+use wugs_kit::{parse, update, valid_colour, valid_id, Place, Placement, Wug, MAX_BYTES};
 
 const TONGUES: &str = include_str!("../../../kits/tongues/kit.toml");
 
@@ -31,6 +33,14 @@ fn the_bundled_tongues_kit_parses() {
     assert_eq!(kit.layout[1].at, Some((Place::Left, "timeline".into())));
     assert_eq!(kit.layout[1].width, Some(260));
     assert_eq!(kit.active, ["texts", "timeline"]);
+    assert_eq!(
+        kit.wug,
+        Some(Wug {
+            body: "#f08060".into(),
+            accessories: vec!["hat".into(), "recorder".into()],
+            colours: BTreeMap::new(),
+        })
+    );
 }
 
 #[test]
@@ -190,7 +200,14 @@ fn array_of_tables_placements_read_like_inline_ones() {
 
 #[test]
 fn ids_are_path_safe() {
-    for ok in ["tongues", "org.wugs.tongues", "my-kit-2", "console", "com10", "my.con"] {
+    for ok in [
+        "tongues",
+        "org.wugs.tongues",
+        "my-kit-2",
+        "console",
+        "com10",
+        "my.con",
+    ] {
         assert!(valid_id(ok), "{ok}");
     }
     for bad in [
@@ -206,4 +223,174 @@ fn ids_are_path_safe() {
     ] {
         assert!(!valid_id(bad), "{bad}");
     }
+}
+
+const PLAIN: &str = "[kit]\nid = \"k\"\nname = \"K\"\n";
+
+#[test]
+fn a_kit_without_a_wug_has_none() {
+    assert_eq!(parse(PLAIN).unwrap().wug, None);
+}
+
+#[test]
+fn a_wug_reads_colours_inline_or_as_a_table() {
+    let inline = format!("{PLAIN}[wug]\nbody = \"#ABCDEF\"\naccessories = [\"crown\"]\ncolours = {{ \"crown-shape\" = \"#00ff00\" }}\n");
+    let table = format!("{PLAIN}[wug]\nbody = \"#ABCDEF\"\naccessories = [\"crown\"]\n[wug.colours]\ncrown-shape = \"#00ff00\"\n");
+    let a = parse(&inline).unwrap().wug.unwrap();
+    assert_eq!(a, parse(&table).unwrap().wug.unwrap());
+    assert_eq!(a.body, "#ABCDEF");
+    assert_eq!(a.colours["crown-shape"], "#00ff00");
+}
+
+#[test]
+fn unknown_accessories_and_keys_are_kept_so_a_newer_kit_loads() {
+    let text = format!(
+        "{PLAIN}[wug]\nbody = \"#000000\"\naccessories = [\"jetpack\"]\neyes = \"sleepy\"\n"
+    );
+    assert_eq!(parse(&text).unwrap().wug.unwrap().accessories, ["jetpack"]);
+}
+
+#[test]
+fn wug_problems_carry_line_and_column() {
+    let text = format!(
+        "{PLAIN}[wug]\nbody = \"coral\"\naccessories = [\"hat\", \"hat\", \"../x\"]\ncolours = {{ hat-shape = \"red\", \"Bad Part\" = \"#000000\" }}\n"
+    );
+    let errs = parse(&text).unwrap_err();
+    let msgs: Vec<String> = errs.iter().map(ToString::to_string).collect();
+    let at = |needle: &str| {
+        errs.iter()
+            .find(|p| p.message.contains(needle))
+            .unwrap_or_else(|| panic!("no {needle:?} in {msgs:?}"))
+    };
+    assert_eq!(at("six hex digits").line, Some(5), "{msgs:?}");
+    assert_eq!(at("names \"hat\" twice").line, Some(6));
+    assert!(
+        msgs.iter()
+            .any(|m| m.contains("wug.accessories holds names")),
+        "{msgs:?}"
+    );
+    assert!(
+        msgs.iter()
+            .any(|m| m.contains("line 7") && m.contains("six hex digits")),
+        "{msgs:?}"
+    );
+    assert!(
+        msgs.iter().any(|m| m.contains("names drawing parts")),
+        "{msgs:?}"
+    );
+    assert!(at("six hex digits").column.is_some());
+}
+
+#[test]
+fn a_wug_needs_a_body_and_a_table_shape() {
+    let errs = messages(&format!("{PLAIN}[wug]\naccessories = []\n"));
+    assert!(
+        errs.iter().any(|e| e.contains("wug.body is required")),
+        "{errs:?}"
+    );
+    let errs = messages(&format!("wug = \"blue\"\n{PLAIN}"));
+    assert!(
+        errs.iter().any(|e| e.contains("[wug] must be a table")),
+        "{errs:?}"
+    );
+    let errs = messages(&format!(
+        "{PLAIN}[wug]\nbody = \"#000000\"\ncolours = [\"#000000\"]\n"
+    ));
+    assert!(
+        errs.iter()
+            .any(|e| e.contains("wug.colours must be a table")),
+        "{errs:?}"
+    );
+}
+
+#[test]
+fn wug_counts_are_bounded() {
+    let many: Vec<String> = (0..65).map(|i| format!("p{i} = \"#000000\"")).collect();
+    let errs = messages(&format!(
+        "{PLAIN}[wug]\nbody = \"#000000\"\ncolours = {{ {} }}\n",
+        many.join(", ")
+    ));
+    assert!(
+        errs.iter().any(|e| e.contains("more than 64 parts")),
+        "{errs:?}"
+    );
+    let many: Vec<String> = (0..65).map(|i| format!("\"a{i}\"")).collect();
+    let errs = messages(&format!(
+        "{PLAIN}[wug]\nbody = \"#000000\"\naccessories = [{}]\n",
+        many.join(", ")
+    ));
+    assert!(errs.iter().any(|e| e.contains("more than 64")), "{errs:?}");
+}
+
+#[test]
+fn colours_are_hash_and_six_hex_digits() {
+    for ok in ["#000000", "#f08060", "#ABCdef"] {
+        assert!(valid_colour(ok), "{ok}");
+    }
+    for bad in [
+        "",
+        "#fff",
+        "f08060",
+        "#f0806",
+        "#f080600",
+        "#g08060",
+        "#f0806\u{e9}",
+        "red",
+        "#f08060\"><x",
+    ] {
+        assert!(!valid_colour(bad), "{bad}");
+    }
+}
+
+#[test]
+fn update_writes_a_wug_in_place_and_keeps_its_comments() {
+    let mut kit = parse(TONGUES).unwrap();
+    let wug = kit.wug.as_mut().unwrap();
+    wug.body = "#336699".into();
+    wug.accessories = vec!["crown".into(), "recorder".into()];
+    wug.colours.insert("crown-shape".into(), "#aa00aa".into());
+    let out = update(TONGUES, &kit).unwrap();
+    assert_eq!(parse(&out).unwrap(), kit);
+    for kept in [
+        "# the kit's mascot",
+        "# coral; colours are",
+        "# one per slot",
+        "[templates.semantic-domains]",
+    ] {
+        assert!(out.contains(kept), "lost {kept:?}:\n{out}");
+    }
+    assert!(out.contains("crown-shape = \"#aa00aa\""), "{out}");
+}
+
+#[test]
+fn update_adds_and_removes_a_wug() {
+    let mut kit = parse(PLAIN).unwrap();
+    kit.wug = Some(Wug {
+        body: "#123456".into(),
+        accessories: vec!["hat".into()],
+        colours: BTreeMap::from([("hat-shape".to_string(), "#654321".to_string())]),
+    });
+    let out = update(PLAIN, &kit).unwrap();
+    assert_eq!(parse(&out).unwrap(), kit);
+    kit.wug.as_mut().unwrap().colours.clear();
+    let cleared = update(&out, &kit).unwrap();
+    assert!(!cleared.contains("colours"), "{cleared}");
+    kit.wug = None;
+    let gone = update(&cleared, &kit).unwrap();
+    assert!(!gone.contains("[wug]"), "{gone}");
+    assert_eq!(parse(&gone).unwrap(), kit);
+}
+
+#[test]
+fn update_refuses_a_wug_colour_that_is_not_hex() {
+    let mut kit = parse(TONGUES).unwrap();
+    kit.wug.as_mut().unwrap().body = "\"><script>".into();
+    assert!(update(TONGUES, &kit).is_err());
+    let mut kit = parse(TONGUES).unwrap();
+    kit.wug
+        .as_mut()
+        .unwrap()
+        .colours
+        .insert("hat-shape".into(), "url(x)".into());
+    assert!(update(TONGUES, &kit).is_err());
 }

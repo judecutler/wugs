@@ -16,7 +16,8 @@
         "width": 1200,
         "height": 800,
         "minWidth": 720,
-        "minHeight": 480
+        "minHeight": 480,
+        "dragDropEnabled": false
       }
     ],
     "security": {
@@ -35,7 +36,17 @@
     "shortDescription": "Local-first fieldwork linguistics",
     "longDescription": "wugs Tongues keeps a recording, its transcription, glosses and the dictionary in one connected, offline-first project with its edit history preserved.",
     "icon": ["icons/icon.png", "icons/icon.ico", "icons/icon.icns"],
-    "createUpdaterArtifacts": false
+    "createUpdaterArtifacts": false,
+    "windows": {
+      "nsis": {
+        "headerImage": "installer/nsis-header.bmp",
+        "sidebarImage": "installer/nsis-sidebar.bmp",
+        "installerIcon": "icons/icon.ico"
+      }
+    },
+    "macOS": {
+      "dmg": { "background": "installer/dmg-background.png" }
+    }
   },
   "plugins": {
     "updater": {

@@ -11,6 +11,7 @@ A kit is one text file, a `kit.toml` manifest in [TOML](https://toml.io) format.
 - who the kit is: an id, a name, a subtitle, a version, and a description
 - which tools, or panels, the kit turns on
 - where each panel starts in the workspace, and which tabs start in front
+- the kit's wug, if it has one: the mascot in the top bar and on empty panels
 
 The built-in Tongues kit is [`kits/tongues/kit.toml`](../kits/tongues/kit.toml). Read it as a second example.
 
@@ -18,7 +19,7 @@ A kit file may not contain a `[scripts]` section. wugs refuses to install a kit 
 
 ## Build a kit in the Kit Builder
 
-The Kit Builder is the **Kits** panel. To open it, click **Show panel…** in the top bar and choose **Kits**.
+The Kit Builder is the **Kits** panel. To open it, open the **Workspace** menu in the top bar and choose **Kits** under **Show a closed panel**.
 
 ### Start from a copy
 
@@ -36,6 +37,11 @@ Select your kit in the list to open its editor.
 
 - Edit **Name**, **Subtitle**, **Version**, and **About**. Each field saves when you press **Tab** or **Enter**.
 - Under **Tools**, clear a tool's check box to take it out of the kit. wugs also removes that panel from the starting layout and closes it. The first panel that was placed beside it takes over its place.
+- Under **Wug**, dress the kit's wug. The preview shows each change as you make it.
+  - **Body** sets the wug's colour.
+  - **Head**, **Face**, **Holding**, **Suit**, and **Badge** each hold one accessory, or **None**. Choosing an accessory replaces the one in that place.
+  - An accessory with a colour of its own, such as the explorer hat or the crown, gets a colour box beside it. Glass lenses, the space helmet's visor, and paper keep their colour.
+  - A colour saves when you close the colour picker. Other choices save at once. If the kit is in use, the top bar shows the new wug when the change is saved.
 - Under **How the workspace starts**, read the layout in words, one line per panel.
 
 Conflicts, Devices, and Kits are always offered. A kit cannot turn them off.
@@ -64,15 +70,15 @@ A code save keeps your text exactly as you typed it. A form edit that changes th
 
 ### Use the kit
 
-Click **Use** beside a kit to switch the workspace to it. The active kit sets the name in the top bar, the panels in the **Show panel…** menu, and where **Reset layout** puts the panels.
+Click **Use** beside a kit to switch the workspace to it. The active kit sets the name and the wug in the top bar, the panels listed under **Show a closed panel** in the **Workspace** menu, and where **Reset to how … starts** in that menu puts the panels.
 
-wugs never rebuilds the workspace while you work in it. After you change how the kit in use starts, click **Reset layout** in the top bar to see the new start.
+wugs never rebuilds the workspace while you work in it. After you change how the kit in use starts, choose **Workspace › Reset to how … starts** in the top bar to see the new start.
 
 ## Write a kit by hand
 
 ### Know the format
 
-A kit file has three tables.
+A kit file has three tables, and an optional fourth for its wug.
 
 #### `[kit]`: the kit's identity
 
@@ -116,7 +122,7 @@ These are the panel ids this version of wugs has:
 
 An id this version does not have is kept, so a kit written for a newer version still loads. The Kit Builder notes such ids under the kit.
 
-A tool you turn on but do not place in the layout starts closed. Open it from **Show panel…**.
+A tool you turn on but do not place in the layout starts closed. Open it from the **Workspace** menu.
 
 #### `[layout]`: where the panels start
 
@@ -143,11 +149,46 @@ A placement of a tool panel that is not in `[tools] enabled` stays closed. The K
 
 You can also write the placements as `[[layout.panels]]` tables. wugs reads both forms the same way.
 
+#### `[wug]`: the kit's mascot
+
+The table is optional. A kit without it shows the blue wugs wug. When the table is there, `body` is required.
+
+| Key | Required | Rules |
+| --- | --- | --- |
+| `body` | yes | The body colour: `#` and six hex digits, such as `"#f08060"`. |
+| `accessories` | no | A list of accessory ids, at most 64, no id twice. Each id is lowercase letters, digits, and `-`. |
+| `colours` | no | A table from a drawing part to a colour, at most 64 parts, such as `{ hat-shape = "#7a4a10" }`. Each colour is `#` and six hex digits. |
+
+These are the accessories this version of wugs has. Each place holds one accessory. If a kit lists two for one place, the later one is drawn.
+
+| Id | Accessory | Place | Parts that take a colour |
+| --- | --- | --- | --- |
+| `hat` | Explorer hat | head | `hat-shape` |
+| `crown` | Crown | head | `crown-shape` |
+| `antennae` | Antennae | head | `antenna-left-shape`, `antenna-right-shape` |
+| `monocle` | Monocle | face | none |
+| `glasses` | Glasses | face | none |
+| `recorder` | Recorder | holding | `recorder-shape` |
+| `scroll` | Notes | holding | none |
+| `tablet` | Glyph tablet | holding | none |
+| `spacesuit` | Space helmet | suit | `spacesuit-base-shape` |
+| `number-one` | Number one | badge | none |
+
+An accessory id or a part that this version does not have is kept, so a kit made with a newer version still loads. wugs leaves that accessory off the drawing. Lines are always drawn in black, so a colour for a part ending in `-line` has no effect. When you change a slot in the Kit Builder, it keeps the colours of the parts still drawn and drops the rest, including colours you typed for accessories no longer worn. A colour change in the Kit Builder writes `colours` as one inline table, so comments inside a hand-written `[wug.colours]` table are lost; comments elsewhere in the file are kept.
+
+The Tongues kit's wug:
+
+```toml
+[wug]
+body = "#f08060"
+accessories = ["hat", "recorder"]
+```
+
 #### Tables wugs keeps but does not apply yet
 
 The Tongues kit also has `[templates]` (the default tier schema, gloss conventions, concept lists, and semantic domains) and `[validators]` (a warn or hold level for each check). wugs keeps these tables in the file, and the Kit Builder never removes them. Nothing in wugs applies them yet, so changing them has no effect today.
 
-Other keys in `[kit]`, `[tools]`, and `[layout]`, and other tables except `[scripts]`, are kept and ignored. A placement is the exception: it may hold only the five keys above.
+Other keys in `[kit]`, `[tools]`, `[layout]`, and `[wug]`, and other tables except `[scripts]`, are kept and ignored. A placement is the exception: it may hold only the five keys above.
 
 ### Check the size limit
 
@@ -179,6 +220,11 @@ panels = [
   { panel = "conflicts", place = "right", of = "lexicon", width = 300 },
 ]
 active = ["elicit"]
+
+[wug]
+body = "#7a6cd8"
+accessories = ["crown", "glasses"]
+colours = { crown-shape = "#ffd135" }
 ```
 
 In this kit:
@@ -186,8 +232,9 @@ In this kit:
 - The Lexicon fills the workspace first.
 - Elicit goes to its left, 420 pixels wide. Search and People join Elicit as tabs.
 - Conflicts goes to the right of the Lexicon. It is not in `enabled`, because it is always offered.
-- `texts` is turned on but not placed, so it starts closed and is in **Show panel…**.
+- `texts` is turned on but not placed, so it starts closed and is listed in the **Workspace** menu.
 - `active` brings Elicit to the front of its tab group.
+- The wug is purple, with a gold crown and glasses.
 
 ## Install and share a kit
 
@@ -218,5 +265,5 @@ To delete a kit, click **Delete** beside it, then click **Delete? Click again**.
 - A kit's id cannot change after the kit is made. To use another id, duplicate the kit.
 - The kit in use is chosen per computer. It is not stored in the project and does not sync.
 - `[templates]` and `[validators]` are kept but not applied.
-- wugs saves each kit's rearranged workspace as soon as you use the kit. When a wugs update changes how Tongues starts, click **Reset layout** to see the new start.
+- wugs saves each kit's rearranged workspace as soon as you use the kit. When a wugs update changes how Tongues starts, choose **Workspace › Reset to how Tongues starts** to see the new start.
 - Kits cannot contain scripts.

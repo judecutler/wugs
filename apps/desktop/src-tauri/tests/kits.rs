@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use wugs_desktop::kits::{self, BUNDLED_ID};
+use wugs_desktop::kits::{self, WugDto, BUNDLED_ID};
 use wugs_desktop::layout;
 
 fn app_data() -> PathBuf {
@@ -246,4 +246,40 @@ fn changing_how_a_kit_starts_drops_its_saved_arrangement() {
     let code = kits::code(&dir, "mine").unwrap();
     kits::save_code(&dir, "mine", &format!("{code}\n# only a comment\n")).unwrap();
     assert!(layout::load_layout(&dir, "mine").unwrap().is_some(), "a comment keeps it");
+}
+
+#[test]
+fn a_kits_wug_is_carried_saved_and_checked() {
+    let dir = app_data();
+    let tongues = &kits::list(&dir).unwrap().kits[0].kit;
+    assert_eq!(tongues.wug.as_ref().unwrap().body, "#f08060");
+    let json = serde_json::to_value(tongues).unwrap();
+    assert_eq!(
+        json["wug"]["accessories"],
+        serde_json::json!(["hat", "recorder"])
+    );
+    assert!(json["wug"].get("colours").is_none(), "{json}");
+
+    let mut mine = kits::duplicate(&dir, BUNDLED_ID, "Mine").unwrap().kit;
+    assert_eq!(mine.wug, tongues.wug, "a copy keeps the wug");
+    mine.wug = Some(WugDto {
+        body: "#336699".into(),
+        accessories: vec!["crown".into()],
+        colours: [("crown-shape".to_string(), "#aa00aa".to_string())].into(),
+    });
+    assert_eq!(kits::save(&dir, "mine", &mine).unwrap().kit, mine);
+    assert!(kits::code(&dir, "mine")
+        .unwrap()
+        .contains("crown-shape = \"#aa00aa\""));
+
+    let mut bad = mine.clone();
+    bad.wug.as_mut().unwrap().body = "red".into();
+    assert!(kits::save(&dir, "mine", &bad)
+        .unwrap_err()
+        .contains("six hex digits"));
+    assert_eq!(
+        kits::list(&dir).unwrap().kits[1].kit,
+        mine,
+        "a refused save writes nothing"
+    );
 }

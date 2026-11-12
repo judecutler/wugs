@@ -3,10 +3,11 @@
 // dockview's toJSON() in app data, one file per kit.
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { loadLayout, saveLayout } from "./api";
-import { createDockview, themeLight, type DockviewApi, type IContentRenderer } from "./dockview";
+import { createDockview, themeLightSpaced, type DockviewApi, type IContentRenderer } from "./dockview";
 import { addsFor, type Kit } from "./kits/logic";
 import { isPanelId, isPlatformPanel, PANELS, type PanelId } from "./panels/registry";
 import { closeBlocker } from "./capture/session.ts";
+import { tabMode, wireReveal, wireSides } from "./dock-reveal";
 import { attempt, showToast, subscribe } from "./store";
 
 const SAVE_DELAY_MS = 400;
@@ -54,12 +55,15 @@ export type Dock = {
 /** Restore the kit's saved arrangement (or its manifest's) and save every change after. */
 export async function mountDock(host: HTMLElement, kit: Kit): Promise<Dock> {
   const api = createDockview(host, {
-    theme: themeLight,
+    theme: { ...themeLightSpaced, gap: 14 },
     createComponent: ({ name }) => {
       if (!isPanelId(name)) throw new Error(`no panel named ${name}`);
       return renderer(name);
     },
   });
+  wireReveal(host);
+  wireSides(host, (run) => api.onDidLayoutChange(run));
+  host.classList.toggle("tabs-always", tabMode(localStorage) === "always");
   let kitId = kit.id;
   const restore = async (k: Kit) => {
     let saved: string | null = null;
@@ -128,5 +132,5 @@ export function closedPanels(api: DockviewApi, kit: Kit): PanelId[] {
 }
 
 export function showPanel(api: DockviewApi, id: PanelId) {
-  api.addPanel({ id, component: id, title: PANELS[id].title });
+  return api.addPanel({ id, component: id, title: PANELS[id].title });
 }

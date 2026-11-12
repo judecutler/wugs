@@ -73,7 +73,7 @@ fn a_decoded_recording_imports_under_its_own_name() {
     session::create_project(&mut s, dir.0.join("p").to_str().unwrap(), "prs_Test").unwrap();
     let wav = dir.0.join("decoded.wav");
     convert::to_wav(&fixture("tone.m4a"), &wav).unwrap();
-    let row = session::import_media_named(&mut s, &wav, "voice memo.m4a").unwrap();
+    let row = session::import_media_named(&mut s, &wav, "voice memo.m4a", None).unwrap();
     assert_eq!(row.label, "voice memo.m4a");
     assert!(row.has_media);
     let listed = session::list_sources(&mut s).unwrap();
@@ -91,5 +91,5 @@ fn a_wav_the_peaks_reader_refuses_is_decoded_instead() {
     assert!(err.contains("unsupported WAV"), "{err}");
     let wav = dir.0.join("decoded.wav");
     convert::to_wav(&mulaw, &wav).unwrap();
-    assert!(session::import_media_named(&mut s, &wav, "tone-mulaw.wav").unwrap().has_media);
+    assert!(session::import_media_named(&mut s, &wav, "tone-mulaw.wav", None).unwrap().has_media);
 }

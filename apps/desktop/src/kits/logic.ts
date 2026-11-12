@@ -2,6 +2,7 @@
 // crates/wugs-kit); these functions turn them into dockview additions and
 // turn a live dockview arrangement back into placements. Pure, so they run
 // under node --test without a DOM.
+import type { WugLook } from "../theme/wug.ts";
 
 export type Place = "left" | "right" | "above" | "below" | "tab";
 
@@ -16,6 +17,8 @@ export type Kit = {
   tools: string[];
   layout: Placement[];
   active: string[];
+  /** The kit's `[wug]`, checked by wugs-kit (colours are `#rrggbb`). */
+  wug?: WugLook;
 };
 
 export type Direction = "left" | "right" | "above" | "below" | "within";
