@@ -2,6 +2,7 @@ pub mod assist;
 pub mod capability;
 pub mod capture;
 pub mod concordance;
+pub mod frequencies;
 pub mod conflicts;
 pub mod convert;
 pub mod corrections;
@@ -126,8 +127,15 @@ fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>,
 
 /// Every occurrence of a word, morph, gloss or translation word, in context (roadmap 71).
 #[tauri::command(async)]
-fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind) -> Result<concordance::Concordance, String> {
-    s.run(move |s| concordance::concordance(s, &query, kind))
+fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>) -> Result<concordance::Concordance, String> {
+    let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
+    s.run(move |s| concordance::concordance_in(s, &query, kind, how, text_id.as_deref()))
+}
+
+/// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
+#[tauri::command(async)]
+fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>) -> Result<frequencies::Frequencies, String> {
+    s.run(move |s| frequencies::frequencies(s, kind, text_id.as_deref()))
 }
 
 /// Remember which recording a text was transcribed from, or forget it (roadmap 72).
@@ -1366,6 +1374,7 @@ pub fn run() {
             concordance,
             list_texts,
             link_recording,
+            frequencies,
             get_text,
             create_text,
             import_file,

@@ -20,6 +20,8 @@
 
 use serde::Serialize;
 
+use wugs_core::Project;
+
 use crate::session::{project, Session};
 
 /// What to look for.
@@ -148,7 +150,7 @@ pub fn words_of(line: &str) -> Vec<String> {
 }
 
 /// A morph's surface without the edge markers some importers keep (FLEx `-ler`).
-fn bare(surface: &str) -> &str {
+pub(crate) fn bare(surface: &str) -> &str {
     surface.trim_matches(|c| MARKERS.contains(&c))
 }
 
@@ -169,20 +171,11 @@ fn joined(parts: &[(String, String)]) -> String {
     out
 }
 
-pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Concordance, String> {
-    let p = project(session)?;
-    let key = |s: &str| wugs_model::fold_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
-    // Morphs and glosses meet without their edge markers, on both sides.
-    let bare_key = |s: &str| wugs_model::lexicon_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
-    let pattern = match kind {
-        Kind::Morph | Kind::Gloss => bare_key(query.trim()),
-        Kind::Word | Kind::Translation => key(query.trim()),
-        Kind::Sense => query.trim().chars().collect(),
-    };
-    if pattern.is_empty() || pattern.iter().all(|c| *c == '*') {
-        return Ok(Concordance { hits: Vec::new(), total: 0 });
-    }
-    // Live tiers only: a segment whose tier was deleted is skipped.
+/// The tiers the corpus tools read: (translation tiers, transcription tiers).
+/// Translation: role `translation`, FLEx's free translation, or an ELAN
+/// association tier with no role. Transcription: no role or `transcription`,
+/// time-aligned or untyped. Live tiers only.
+pub(crate) fn corpus_tiers(p: &Project) -> Result<(Vec<String>, Vec<String>), String> {
     let mut translation_tiers = Vec::new();
     let mut transcription_tiers = Vec::new();
     for t in p.proj.entities_of_kind("tier")? {
@@ -198,18 +191,45 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
             transcription_tiers.push(t);
         }
     }
-    let mut hits = Vec::new();
-    let mut total = 0usize;
+    Ok((translation_tiers, transcription_tiers))
+}
+
+/// One segment as the corpus tools read it.
+pub(crate) struct CorpusSegment {
+    pub text: String,
+    pub title: String,
+    pub id: String,
+    pub tier: String,
+    /// Its tokens (FLEx punctuation left out); empty for translations and
+    /// segments not yet broken into words.
+    pub tokens: Vec<String>,
+    /// Its words: the tokens' forms, else the content split like the Gloss panel does.
+    pub words: Vec<String>,
+}
+
+/// Calls `visit` with every segment on a transcription tier (or, with
+/// `translations`, a translation tier), text by text in order; `only_text`
+/// keeps one text.
+pub(crate) fn each_segment(
+    p: &Project,
+    translations: bool,
+    only_text: Option<&str>,
+    mut visit: impl FnMut(&CorpusSegment) -> Result<(), String>,
+) -> Result<(), String> {
+    let (translation_tiers, transcription_tiers) = corpus_tiers(p)?;
+    let wanted = if translations { &translation_tiers } else { &transcription_tiers };
     for text in p.proj.entities_of_kind("text")? {
+        if only_text.is_some_and(|t| t != text) {
+            continue;
+        }
         let title = p.proj.field_str(&text, "title")?.unwrap_or_default();
         for seg in p.proj.ordered_children("text", &text, "segment")? {
             let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
-            let wanted = if kind == Kind::Translation { &translation_tiers } else { &transcription_tiers };
             if !wanted.contains(&tier) {
                 continue;
             }
             let content = p.proj.field_str(&seg, "content")?.unwrap_or_default();
-            let mut tokens: Vec<String> = if kind == Kind::Translation { Vec::new() } else { p.proj.members(&seg)? };
+            let mut tokens: Vec<String> = if translations { Vec::new() } else { p.proj.members(&seg)? };
             // FLEx keeps punctuation as tokens of their own; they are not words.
             tokens.retain(|t| p.proj.field_str(t, "x.flex.kind").ok().flatten().as_deref() != Some("punct"));
             let words: Vec<String> = if tokens.is_empty() {
@@ -217,58 +237,112 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
             } else {
                 tokens.iter().map(|t| p.proj.field_str(t, "form").map(|f| f.unwrap_or_default())).collect::<Result<_, _>>()?
             };
-            let mut found: Vec<(usize, Option<String>, Option<String>)> = Vec::new();
-            match kind {
-                Kind::Word | Kind::Translation => {
-                    for (i, w) in words.iter().enumerate() {
-                        if glob(&pattern, &key(w)) {
-                            found.push((i, None, None));
-                        }
-                    }
-                }
-                Kind::Morph | Kind::Gloss | Kind::Sense => {
-                    for (i, token) in tokens.iter().enumerate() {
-                        let mut morphs = Vec::new();
-                        let mut glosses = Vec::new();
-                        let mut matched = false;
-                        for m in p.proj.members(token)? {
-                            let surface = p.proj.field_str(&m, "surface")?.unwrap_or_default();
-                            let gloss = p.proj.field_str(&m, "gloss")?.unwrap_or_default();
-                            let kind_of = p.proj.field_str(&m, "type")?.unwrap_or_else(|| "root".to_string());
-                            if kind == Kind::Sense {
-                                matched |= p.proj.field_str(&m, "sense")?.is_some_and(|s| s.chars().eq(pattern.iter().copied()));
-                            } else {
-                                let probe = if kind == Kind::Morph { bare(&surface) } else { gloss.as_str() };
-                                matched |= !probe.is_empty() && glob(&pattern, &bare_key(probe));
-                            }
-                            glosses.push((if gloss.is_empty() { "?".to_string() } else { bare(&gloss).to_string() }, kind_of.clone()));
-                            morphs.push((bare(&surface).to_string(), kind_of));
-                        }
-                        if matched {
-                            found.push((i, Some(joined(&morphs)), Some(joined(&glosses))));
-                        }
+            visit(&CorpusSegment { text: text.clone(), title: title.clone(), id: seg, tier, tokens, words })?;
+        }
+    }
+    Ok(())
+}
+
+/// A morph as the corpus tools read it: surface and gloss without edge
+/// markers' meaning lost (`type` says which marker), and its sense link.
+pub(crate) struct CorpusMorph {
+    pub surface: String,
+    pub gloss: String,
+    pub kind: String,
+    pub sense: Option<String>,
+}
+
+pub(crate) fn morphs_of(p: &Project, token: &str) -> Result<Vec<CorpusMorph>, String> {
+    let mut out = Vec::new();
+    for m in p.proj.members(token)? {
+        out.push(CorpusMorph {
+            surface: p.proj.field_str(&m, "surface")?.unwrap_or_default(),
+            gloss: p.proj.field_str(&m, "gloss")?.unwrap_or_default(),
+            kind: p.proj.field_str(&m, "type")?.unwrap_or_else(|| "root".to_string()),
+            sense: p.proj.field_str(&m, "sense")?,
+        });
+    }
+    Ok(out)
+}
+
+pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Concordance, String> {
+    concordance_in(session, query, kind, Match::Glob, None)
+}
+
+/// How a query meets an item: as a pattern (`*`, `?`), or exactly (a row
+/// clicked in Frequencies, whose spelling may hold a `?` glottal stop).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Match {
+    Glob,
+    Exact,
+}
+
+pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match, only_text: Option<&str>) -> Result<Concordance, String> {
+    let p = project(session)?;
+    let meets = |pattern: &[char], item: &[char]| if how == Match::Exact { pattern == item } else { glob(pattern, item) };
+    let key = |s: &str| wugs_model::fold_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
+    // Morphs and glosses meet without their edge markers, on both sides.
+    let bare_key = |s: &str| wugs_model::lexicon_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
+    let pattern = match kind {
+        Kind::Morph | Kind::Gloss => bare_key(query.trim()),
+        Kind::Word | Kind::Translation => key(query.trim()),
+        Kind::Sense => query.trim().chars().collect(),
+    };
+    if pattern.is_empty() || (how == Match::Glob && pattern.iter().all(|c| *c == '*')) {
+        return Ok(Concordance { hits: Vec::new(), total: 0 });
+    }
+    let mut hits = Vec::new();
+    let mut total = 0usize;
+    each_segment(p, kind == Kind::Translation, only_text, |seg| {
+        let mut found: Vec<(usize, Option<String>, Option<String>)> = Vec::new();
+        match kind {
+            Kind::Word | Kind::Translation => {
+                for (i, w) in seg.words.iter().enumerate() {
+                    if meets(&pattern, &key(w)) {
+                        found.push((i, None, None));
                     }
                 }
             }
-            for (at, breakdown, glosses) in found {
-                total += 1;
-                if hits.len() < LIMIT {
-                    hits.push(Hit {
-                        text_id: text.clone(),
-                        text_title: title.clone(),
-                        segment_id: seg.clone(),
-                        tier_id: tier.clone(),
-                        start_ms: p.proj.field_num(&seg, "start")?,
-                        end_ms: p.proj.field_num(&seg, "end")?,
-                        words: words.clone(),
-                        at,
-                        breakdown,
-                        glosses,
-                    });
+            Kind::Morph | Kind::Gloss | Kind::Sense => {
+                for (i, token) in seg.tokens.iter().enumerate() {
+                    let mut morphs = Vec::new();
+                    let mut glosses = Vec::new();
+                    let mut matched = false;
+                    for m in morphs_of(p, token)? {
+                        if kind == Kind::Sense {
+                            matched |= m.sense.as_ref().is_some_and(|s| s.chars().eq(pattern.iter().copied()));
+                        } else {
+                            let probe = if kind == Kind::Morph { bare(&m.surface) } else { m.gloss.as_str() };
+                            matched |= !probe.is_empty() && meets(&pattern, &bare_key(probe));
+                        }
+                        glosses.push((if m.gloss.is_empty() { "?".to_string() } else { bare(&m.gloss).to_string() }, m.kind.clone()));
+                        morphs.push((bare(&m.surface).to_string(), m.kind));
+                    }
+                    if matched {
+                        found.push((i, Some(joined(&morphs)), Some(joined(&glosses))));
+                    }
                 }
             }
         }
-    }
+        for (at, breakdown, glosses) in found {
+            total += 1;
+            if hits.len() < LIMIT {
+                hits.push(Hit {
+                    text_id: seg.text.clone(),
+                    text_title: seg.title.clone(),
+                    segment_id: seg.id.clone(),
+                    tier_id: seg.tier.clone(),
+                    start_ms: p.proj.field_num(&seg.id, "start")?,
+                    end_ms: p.proj.field_num(&seg.id, "end")?,
+                    words: seg.words.clone(),
+                    at,
+                    breakdown,
+                    glosses,
+                });
+            }
+        }
+        Ok(())
+    })?;
     Ok(Concordance { hits, total })
 }
 

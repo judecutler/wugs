@@ -528,6 +528,21 @@
     }),
     list_texts: () => texts,
     link_recording: () => null,
+    frequencies: ({ kind }) => ({
+      tokens: kind === "gloss" ? 29 : 65,
+      types: kind === "gloss" ? 3 : 6,
+      rows:
+        kind === "gloss"
+          ? [{ item: "1SG", count: 14, texts: 3 }, { item: "count", count: 9, texts: 2 }, { item: "FOC", count: 6, texts: 2 }]
+          : [
+              { item: "nikani", count: 23, texts: 3 },
+              { item: "ŋai", count: 19, texts: 3 },
+              { item: "kesi", count: 11, texts: 2 },
+              { item: "toruma", count: 7, texts: 1 },
+              { item: "tekama", count: 4, texts: 2 },
+              { item: "liwa", count: 1, texts: 1 },
+            ],
+    }),
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),
     conflict_count: () => conflicts.length,
     list_sources: () => SOURCES,

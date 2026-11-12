@@ -8,7 +8,22 @@ import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
 import { getState, selectSegment, selectText, showToast } from "../store";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import type { PanelDef, PanelView } from "./panel";
+import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
+
+/** A query another panel asked for (Frequencies), taken by the panel once it is open. */
+type Asked = { query: string; kind: ConcordanceKind; text: { id: string; title: string } | null };
+let pending: (Asked & { project: string }) | null = null;
+const askers = new Set<() => void>();
+
+/** Show the Concordance for exactly this item (no wildcards), in one text
+ * or the whole project, opening the panel if it is closed. */
+export function askConcordance(query: string, kind: ConcordanceKind, text: { id: string; title: string } | null = null): void {
+  const s = getState();
+  if (s.kind !== "open") return;
+  pending = { query, kind, text, project: s.info.projectId };
+  window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "concordance" }));
+  for (const take of askers) take();
+}
 
 /** Characters of context shown on each side of the keyword. */
 const CONTEXT = 48;
@@ -35,6 +50,8 @@ export const concordancePanel: PanelDef = {
     let asked = "";
     let seq = 0;
     let timer = 0;
+    /** The item Frequencies asked for: met exactly and in its text while the query is unchanged. */
+    let exactFor: Asked | null = null;
     const input = h("input", { type: "search", className: "cc-query", placeholder: KINDS[0]!.hint, spellcheck: false });
     input.setAttribute("aria-label", "Find");
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Look in" });
@@ -67,7 +84,8 @@ export const concordancePanel: PanelDef = {
         return;
       }
       const texts = new Set(hits.map((x) => x.textId)).size;
-      count.textContent = countLine(hits.length, total, texts);
+      const scoped = exactFor !== null && exactFor.query === asked && exactFor.kind === kind ? exactFor.text : null;
+      count.textContent = countLine(hits.length, total, texts) + (scoped !== null ? ` Only in «${scoped.title}».` : "");
       rows.replaceChildren(
         ...sortHits(hits, sortBy).map((hit) => {
           const play = playButton("Open this segment and play it", () => void open(hit, true));
@@ -116,7 +134,9 @@ export const concordancePanel: PanelDef = {
         return;
       }
       timer = window.setTimeout(() => {
-        concordance({ query, kind }).then(
+        // An item asked for from Frequencies is met exactly, in its text, until the query is edited.
+        const exactAsk = exactFor !== null && exactFor.query === query && exactFor.kind === kind ? exactFor : null;
+        concordance({ query, kind, exact: exactAsk !== null, textId: exactAsk?.text?.id ?? null }).then(
           (r) => {
             if (mine !== seq) return;
             asked = query;
@@ -173,6 +193,7 @@ export const concordancePanel: PanelDef = {
       hits = [];
       total = 0;
       asked = "";
+      exactFor = null;
       input.value = "";
       if (now === "closed") {
         el.replaceChildren(emptyState("Concordance", "Open a project to see every place a word, morph or gloss is used.", "The wug is counting words."));
@@ -181,12 +202,31 @@ export const concordancePanel: PanelDef = {
       drawChips();
       drawRows();
       el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, copy), chips, count, rows);
+      take();
     };
+    /** A query asked for from another panel replaces the one typed here. */
+    const take = () => {
+      if (pending === null || shown === null || shown === "closed") return;
+      // Asked in another project (switched since): drop it.
+      if (pending.project !== shown) {
+        pending = null;
+        return;
+      }
+      ({ kind } = pending);
+      exactFor = { query: pending.query, kind: pending.kind, text: pending.text };
+      input.value = pending.query;
+      input.placeholder = KINDS.find((k) => k.id === kind)?.hint ?? "";
+      pending = null;
+      drawChips();
+      run();
+    };
+    askers.add(take);
     return {
       element: el,
       render,
       dispose: () => {
         window.clearTimeout(timer);
+        askers.delete(take);
         unprovide();
       },
     };

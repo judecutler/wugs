@@ -340,7 +340,7 @@ form.inline input { flex: 1; min-width: 0; }
 .hits li.clickable:hover, .hits li.active { background: var(--panel); }
 .hits li.active { outline: 1px solid var(--muted); }
 .hit-group { margin: 6px 0 2px; font-size: 11px; font-weight: 600; color: var(--muted); }
-.scopes { display: flex; gap: 4px; margin: 4px 0; }
+.scopes { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
 .scopes button[aria-pressed="true"], .scopes button[aria-checked="true"] { font-weight: 600; background: var(--panel); }
 .hit-kind { color: var(--muted); font-size: 11px; min-width: 96px; }
 .snippet mark { background: var(--highlight); color: inherit; }
@@ -987,6 +987,18 @@ body::before {
 .cc-rows { display: flex; flex-direction: column; }
 .cc-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "play left key right" ". meta meta meta"; align-items: baseline; column-gap: 6px; padding: 4px; border-radius: var(--radius-sm); cursor: pointer; font-family: var(--font-ipa, inherit); }
 .cc-row:hover, .cc-row:focus-visible { background: var(--accent-soft); outline: none; }
+/* Frequencies (Scrolls). */
+.panel-frequencies { display: flex; flex-direction: column; gap: 6px; }
+.fq-filter { flex: 1; }
+.fq-rows { flex: 1; min-height: 0; overflow: auto; }
+.fq-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.fq-table th { position: sticky; top: 0; background: var(--surface-raised); text-align: left; font-weight: 600; color: var(--muted); font-size: var(--text-xs); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.fq-table td { padding: 3px 6px; border-bottom: 1px solid color-mix(in srgb, var(--line) 50%, transparent); }
+.fq-table tbody tr { cursor: pointer; }
+.fq-table tbody tr:hover, .fq-table tbody tr:focus { background: var(--accent-soft); outline: none; }
+.fq-rank { color: var(--muted); width: 3em; }
+.fq-item { font-family: var(--font-ipa); }
+.fq-num, .fq-table th:nth-child(n+3) { text-align: right; font-variant-numeric: tabular-nums; }
 .cc-play { grid-area: play; }
 .play-seg:disabled { opacity: 0.4; cursor: default; }
 .cc-left { grid-area: left; text-align: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; unicode-bidi: plaintext; }
