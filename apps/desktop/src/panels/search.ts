@@ -13,6 +13,9 @@ function snippet(text: string): HTMLElement {
 }
 
 /** Open the hit's text, then select the exact segment so the timeline and Transcribe follow. */
+/** A segment with times can be heard from Search (roadmap 72). */
+const hearable = (r: SearchRow) => navigable(r) && r.kind === "segment" && r.textId !== null && r.tierId !== null && r.startMs !== null && r.endMs !== null;
+
 async function jump(r: SearchRow) {
   if (r.textId === null) return;
   await selectText(r.textId);
@@ -63,14 +66,12 @@ export const searchPanel: PanelDef = {
     const row = (r: SearchRow) => {
       const where = whereLabel(r);
       const go = navigable(r);
-      // A segment with times can be heard from here (roadmap 72).
-      const hearable = go && r.kind === "segment" && r.textId !== null && r.tierId !== null && r.startMs !== null && r.endMs !== null;
       const li = h(
         "li",
         { className: go ? "clickable" : "", title: r.target, onclick: go ? () => void jump(r) : null },
-        hearable
-          ? playButton("Open this segment and play it", () => void hear({ textId: r.textId!, tierId: r.tierId!, segmentId: r.target, startMs: r.startMs, endMs: r.endMs }))
-          : null,
+        hearable(r)
+          ? playButton("Open this segment and play it (Shift+Enter)", () => void hear({ textId: r.textId!, tierId: r.tierId!, segmentId: r.target, startMs: r.startMs, endMs: r.endMs }))
+          : h("span", { className: "play-spacer", ariaHidden: "true" }),
         h("span", { className: "hit-kind", textContent: where === "" ? `${r.kind}.${r.field}` : where }),
         snippet(r.snippet),
       );
@@ -107,7 +108,9 @@ export const searchPanel: PanelDef = {
         const hit = targets[active];
         if (hit === undefined) return;
         ev.preventDefault();
-        void jump(hit);
+        // Shift+Enter plays the hit when it can be heard; Enter goes to it.
+        if (ev.shiftKey && hearable(hit)) void hear({ textId: hit.textId!, tierId: hit.tierId!, segmentId: hit.target, startMs: hit.startMs, endMs: hit.endMs });
+        else void jump(hit);
       }
     };
     return sliced(el, () => getState().kind, (kind) => {
