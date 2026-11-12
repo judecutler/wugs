@@ -555,7 +555,10 @@
         { item: "tekama", together: 1, left: 1, right: 0, freq: 4, logLikelihood: -0.31, mutualInformation: 0.0, logDice: 9.0, tScore: 1.2 },
       ],
     }),
-    frequencies: ({ kind }) => ({
+    frequencies: ({ kind, size }) =>
+      size > 1
+        ? { tokens: 58, types: 9, words: 65, once: 5, rows: [{ item: "nikani ŋai", count: 12, texts: 3 }, { item: "ŋai kesi", count: 7, texts: 2 }, { item: "kesi toruma", count: 4, texts: 1 }, { item: "toruma liwa", count: 2, texts: 1 }] }
+        : ({
       tokens: kind === "gloss" ? 29 : 65,
       types: kind === "gloss" ? 3 : 6,
       rows:
@@ -569,7 +572,7 @@
               { item: "tekama", count: 4, texts: 2 },
               { item: "liwa", count: 1, texts: 1 },
             ],
-    }),
+        }),
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),
     conflict_count: () => conflicts.length,
     list_sources: () => SOURCES,

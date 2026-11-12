@@ -67,7 +67,7 @@ export const openProject = (args: ProjectArgs) => invoke<ProjectInfo>("open_proj
 export const createProject = (args: ProjectArgs) => invoke<ProjectInfo>("create_project", args);
 export type ConcordanceResult = { hits: import("./concordance/logic").Hit[]; total: number };
 /** Every occurrence of a word, morph, gloss or translation word, with its segment's words (roadmap 71). */
-export const frequencies = (args: { kind: import("./concordance/logic").ConcordanceKind; textId: string | null }) =>
+export const frequencies = (args: { kind: import("./concordance/logic").ConcordanceKind; textId: string | null; size?: number }) =>
   invoke<import("./frequencies/logic").Frequencies>("frequencies", args);
 export const collocates = (args: { node: string; kind: "word" | "translation"; left: number; right: number; minTogether: number; textId: string | null }) =>
   invoke<import("./collocates/logic").Collocates>("collocates", args);

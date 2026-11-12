@@ -138,8 +138,8 @@ fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, 
 
 /// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
 #[tauri::command(async)]
-fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>) -> Result<frequencies::Frequencies, String> {
-    s.run(move |s| frequencies::frequencies(s, kind, text_id.as_deref()))
+fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, size: Option<usize>) -> Result<frequencies::Frequencies, String> {
+    s.run(move |s| frequencies::frequencies_of(s, kind, text_id.as_deref(), size.unwrap_or(1)))
 }
 
 /// Which words one text uses more or less than the rest (Scrolls' keywords).

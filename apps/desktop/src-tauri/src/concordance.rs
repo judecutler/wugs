@@ -207,6 +207,19 @@ pub(crate) struct CorpusSegment {
     pub words: Vec<String>,
 }
 
+/// Words per segment on transcription tiers, for tests that count runs.
+#[cfg(test)]
+pub(crate) fn tests_word_counts(session: &mut Session) -> Vec<usize> {
+    let p = project(session).unwrap();
+    let mut out = Vec::new();
+    each_segment(p, false, None, |seg| {
+        out.push(seg.words.iter().filter(|w| !wugs_model::fold_key(&p.proj.nfc(w)).is_empty()).count());
+        Ok(())
+    })
+    .unwrap();
+    out
+}
+
 /// Calls `visit` with every segment on a transcription tier (or, with
 /// `translations`, a translation tier), text by text in order; `only_text`
 /// keeps one text.
@@ -270,7 +283,9 @@ pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Con
 }
 
 /// How a query meets an item: as a pattern (`*`, `?`), or exactly (a row
-/// clicked in Frequencies, whose spelling may hold a `?` glottal stop).
+/// clicked in Frequencies, whose spelling may hold a `?` glottal stop). An
+/// exact query of several words meets them in a row, as Frequencies counts
+/// n-grams (empty-key words skipped), and the hit is its first word.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Match {
     Glob,
@@ -288,6 +303,11 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
         Kind::Word | Kind::Translation => key(query.trim()),
         Kind::Sense => query.trim().chars().collect(),
     };
+    let phrase: Vec<Vec<char>> = if how == Match::Exact && matches!(kind, Kind::Word | Kind::Translation) && query.split_whitespace().count() > 1 {
+        query.split_whitespace().map(key).filter(|k| !k.is_empty()).collect()
+    } else {
+        Vec::new()
+    };
     if pattern.is_empty() || (how == Match::Glob && pattern.iter().all(|c| *c == '*')) {
         return Ok(Concordance { hits: Vec::new(), total: 0 });
     }
@@ -296,6 +316,14 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
     each_segment(p, kind == Kind::Translation, only_text, |seg| {
         let mut found: Vec<(usize, Option<String>, Option<String>)> = Vec::new();
         match kind {
+            Kind::Word | Kind::Translation if !phrase.is_empty() => {
+                let words: Vec<(usize, Vec<char>)> = seg.words.iter().enumerate().map(|(i, w)| (i, key(w))).filter(|(_, k)| !k.is_empty()).collect();
+                for run in words.windows(phrase.len()) {
+                    if run.iter().zip(&phrase).all(|((_, k), q)| k == q) {
+                        found.push((run[0].0, None, None));
+                    }
+                }
+            }
             Kind::Word | Kind::Translation => {
                 for (i, w) in seg.words.iter().enumerate() {
                     if meets(&pattern, &key(w)) {
