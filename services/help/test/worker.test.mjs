@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, test } from "node:test";
-import { anchor, search, sections, words } from "../src/guide.js";
-import worker, { MAX_QUESTION_CHARS, messages, parseAsk } from "../src/index.js";
+import { anchor, search, sections, stem, words } from "../src/guide.js";
+import worker, { answerText, cutBytes, MAX_HISTORY_CHARS, MAX_QUESTION_CHARS, messages, parseAsk } from "../src/index.js";
 
 const GUIDE = readFileSync(new URL("../../../docs/USER-GUIDE.md", import.meta.url), "utf8");
 const ALL = sections(GUIDE);
@@ -21,6 +21,30 @@ test("anchors follow GitHub's rule", () => {
 
 test("plurals and -ing forms meet", () => {
   assert.deepEqual(words("Segments segmenting segment"), ["segment", "segment", "segment"]);
+  for (const [a, b] of [["files", "file"], ["phones", "phone"], ["glosses", "gloss"], ["boxes", "box"], ["entries", "entry"], ["names", "name"]]) {
+    assert.equal(stem(a), stem(b), `${a} meets ${b}`);
+  }
+  assert.equal(stem("gloss"), "gloss");
+});
+
+test("answers from either response shape, without a reasoning block", () => {
+  assert.equal(answerText({ response: " Hi " }), "Hi");
+  assert.equal(answerText({ choices: [{ message: { content: "<think>hmm</think>\nPress S." } }] }), "Press S.");
+  assert.equal(answerText(null), "");
+});
+
+test("an index is cut by bytes, never inside a character", () => {
+  assert.equal(cutBytes("abc", 96), "abc");
+  const cut = cutBytes("ŋ".repeat(60), 96);
+  assert.equal(new TextEncoder().encode(cut).length, 96);
+  assert.equal(cutBytes("ab›", 3), "ab");
+});
+
+test("the whole history is capped, oldest turns first", () => {
+  const long = "x".repeat(1900);
+  const ok = parseAsk({ question: "q", history: Array.from({ length: 6 }, (_, i) => ({ role: "user", content: `${i}${long}` })) });
+  assert.ok(ok.history.reduce((n, t) => n + t.content.length, 0) <= MAX_HISTORY_CHARS);
+  assert.ok(ok.history.at(-1).content.startsWith("5"), "the newest turn stays");
 });
 
 for (const [question, expected] of [
@@ -29,6 +53,7 @@ for (const [question, expected] of [
   ["How do I pair a second laptop?", "Pair a new device"],
   ["Can I import an ELAN file?", "Import files from other tools"],
   ["How do I type IPA symbols?", "Type IPA symbols"],
+  ["How do I import a file?", "Import files from other tools"],
 ]) {
   test(`"${question}" finds ${expected}`, () => {
     const picked = search(ALL, question);
@@ -76,9 +101,10 @@ let asked;
 let ran;
 let fetched;
 const realFetch = globalThis.fetch;
+let run = 0;
 const env = () => ({
   MODEL: "@cf/test",
-  GUIDE_URL: "https://raw.example/{ref}/guide.md",
+  GUIDE_URL: `https://raw.example/${++run}/{ref}/guide.md`,
   AI: {
     run: async (model, input) => {
       ran.push({ model, input });
@@ -100,8 +126,7 @@ afterEach(() => {
   globalThis.fetch = realFetch;
 });
 
-const ask = (body) =>
-  worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify(body) }), env(), {});
+const ask = (body) => worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify(body) }), env());
 
 test("a question is answered from the guide, with its sources", async () => {
   const r = await ask({ question: "How do I split a segment?", version: "0.1.0" });
@@ -111,13 +136,30 @@ test("a question is answered from the guide, with its sources", async () => {
   assert.ok(out.sources.some((s) => s.anchor === "split-merge-and-nudge"));
   assert.equal(ran[0].model, "@cf/test");
   assert.match(ran[0].input.messages[0].content, /## Segment the recording › Split, merge, and nudge/);
-  assert.deepEqual(fetched, ["https://raw.example/v0.1.0/guide.md"]);
+  assert.equal(fetched.length, 1);
+  assert.match(fetched[0], /\/v0\.1\.0\/guide\.md$/);
   assert.deepEqual(asked, [], "nothing kept without agreement");
 });
 
-test("a version with no guide falls back to main", async () => {
-  await ask({ question: "split", version: "9.9.9" });
-  assert.deepEqual(fetched, ["https://raw.example/v9.9.9/guide.md", "https://raw.example/main/guide.md"]);
+test("a version with no guide falls back to main, and the guide is kept", async () => {
+  const e = env();
+  const go = () => worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify({ question: "split", version: "9.9.9" }) }), e);
+  await go();
+  assert.deepEqual(fetched.map((u) => u.split("/").slice(-2, -1)[0]), ["v9.9.9", "main"]);
+  await go();
+  assert.equal(fetched.length, 2, "the second question reads nothing from GitHub");
+});
+
+test("a lost report row never loses the answer", async () => {
+  const e = { ...env(), ASKED: { writeDataPoint: () => { throw new Error("too big"); } } };
+  const r = await worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify({ question: "split", share: true }) }), e);
+  assert.equal(r.status, 200);
+});
+
+test("everyone together is limited too", async () => {
+  const e = { ...env(), EVERYONE: { limit: async ({ key }) => ({ success: key !== "all" }) } };
+  const r = await worker.fetch(new Request("https://help.example/v1/ask", { method: "POST", body: JSON.stringify({ question: "split" }) }), e);
+  assert.equal(r.status, 429);
 });
 
 test("a shared question is kept for the report", async () => {

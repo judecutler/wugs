@@ -2,9 +2,13 @@
 // with recent questions under each, from questions people agreed to share.
 // Needs CLOUDFLARE_ACCOUNT_ID and an API token with Account Analytics: Read
 // (CLOUDFLARE_API_TOKEN, or CLOUDFLARE_API_KEY as the repository stores it).
-// Usage: node tools/most-asked.mjs [days, default 30]
+// Usage: node tools/most-asked.mjs [days, default 30] [--counts-only]
+// --counts-only leaves the questions out: what CI prints in a public
+// repository's run summary. People agreed to share their questions with
+// the maintainers, not with everyone.
 
-const days = Number(process.argv[2] ?? 30);
+const countsOnly = process.argv.includes("--counts-only");
+const days = Number(process.argv.slice(2).find((a) => !a.startsWith("--")) ?? 30);
 if (!Number.isInteger(days) || days < 1 || days > 90) throw new Error("days must be 1 to 90 (Analytics Engine keeps 3 months)");
 const account = process.env.CLOUDFLARE_ACCOUNT_ID;
 const token = process.env.CLOUDFLARE_API_TOKEN ?? process.env.CLOUDFLARE_API_KEY;
@@ -32,6 +36,7 @@ const lines = [`# Most asked, last ${days} days`, ""];
 if (top.length === 0) lines.push("No shared questions yet.");
 for (const { section, asked } of top) {
   lines.push(`## ${section} (${asked})`, "");
+  if (countsOnly) continue;
   for (const q of recent.filter((r) => r.section === section).slice(0, 5)) {
     lines.push(`- ${q.question.replace(/\s+/gu, " ")}${q.version ? ` (${q.version})` : ""}`);
   }

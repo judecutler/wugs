@@ -47,3 +47,52 @@ export function sourcesLine(sources: readonly string[]): string | null {
 export function shareOn(storage: Pick<Storage, "getItem">): boolean {
   return storage.getItem(SHARE_KEY) === "on";
 }
+
+export interface Box {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** One frame of the wug's jump: where its box's top-left is and how big it is. */
+export interface HopFrame {
+  x: number;
+  y: number;
+  size: number;
+  /** 0 to 1 along the jump. */
+  t: number;
+}
+
+/** The jump from the top bar's wug into the Help panel's: a parabola whose
+ * top is `lift` px above the higher of the two, the size easing from one box
+ * to the other. `steps` frames after the first. */
+export function hopFrames(from: Box, to: Box, steps = 12, lift = 70): HopFrame[] {
+  const top = Math.min(from.y, to.y) - lift;
+  // y(t) = a t² + b t + c through (0, from.y), its peak at `top`, and (1, to.y).
+  const y0 = from.y;
+  const y1 = to.y;
+  // Peak height h above the lower end; solve for b with the vertex at top.
+  const p = y0 - top;
+  const q = y1 - top;
+  const b = -2 * (p + Math.sqrt(p * q));
+  const a = y1 - y0 - b;
+  const frames: HopFrame[] = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    frames.push({
+      t,
+      x: from.x + (to.x - from.x) * t,
+      y: a * t * t + b * t + y0,
+      size: from.width + (to.width - from.width) * t,
+    });
+  }
+  return frames;
+}
+
+/** How much of an answer the wug has "said" after `ms`: whole characters at
+ * `perSecond`, never splitting a surrogate pair. */
+export function spoken(text: string, ms: number, perSecond = 70): string {
+  const chars = [...text];
+  return chars.slice(0, Math.min(chars.length, Math.floor((ms / 1000) * perSecond))).join("");
+}

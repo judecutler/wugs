@@ -5,8 +5,8 @@
 // sections it used.
 //
 // Bindings (wrangler.toml): AI (Workers AI), ASKED (Analytics Engine, the
-// "most asked" report; written only when the person agreed), LIMITER (rate
-// limit, optional). Vars: MODEL, GUIDE_URL. Optional: PROVIDER = "deepseek"
+// "most asked" report; written only when the person agreed), LIMITER (per
+// address) and EVERYONE (all addresses together), both optional. Vars: MODEL, GUIDE_URL. Optional: PROVIDER = "deepseek"
 // with the secret DEEPSEEK_API_KEY answers through DeepSeek instead.
 
 import { search, sections } from "./guide.js";
@@ -14,13 +14,17 @@ import { search, sections } from "./guide.js";
 export const MAX_QUESTION_CHARS = 1000;
 export const MAX_TURNS = 6;
 export const MAX_TURN_CHARS = 2000;
+/** All earlier turns together: the open endpoint must not take whole documents. */
+export const MAX_HISTORY_CHARS = 4000;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/;
-const GUIDE_TTL_SECONDS = 3600;
+const GUIDE_TTL_MS = 3600_000;
+// Analytics Engine allows 96 bytes in an index.
+const MAX_INDEX_BYTES = 96;
 
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     try {
-      return await route(request, env, ctx);
+      return await route(request, env);
     } catch (e) {
       console.error(e);
       return json(502, { error: "The help service had a problem answering. Try again in a moment, or use Feedback." });
@@ -28,13 +32,17 @@ export default {
   },
 };
 
-async function route(request, env, ctx) {
+async function route(request, env) {
   const url = new URL(request.url);
   if (url.pathname !== "/v1/ask") return json(404, { error: "Not found." });
   if (request.method !== "POST") return json(405, { error: "Use POST." });
   if (env.LIMITER) {
     const { success } = await env.LIMITER.limit({ key: request.headers.get("CF-Connecting-IP") ?? "unknown" });
     if (!success) return json(429, { error: "Too many questions from here just now. Try again in a minute." });
+  }
+  if (env.EVERYONE) {
+    const { success } = await env.EVERYONE.limit({ key: "all" });
+    if (!success) return json(429, { error: "Lots of people are asking just now. Try again in a minute." });
   }
   let body;
   try {
@@ -45,14 +53,19 @@ async function route(request, env, ctx) {
   const ask = parseAsk(body);
   if (typeof ask === "string") return json(400, { error: ask });
 
-  const guide = sections(await guideText(env, ask.version, ctx));
+  const guide = await guideSections(env, ask.version);
   const picked = search(guide, [...ask.history.filter((t) => t.role === "user").map((t) => t.content), ask.question].join("\n"));
   const answer = await complete(env, messages(picked, ask));
   if (ask.share && env.ASKED) {
-    env.ASKED.writeDataPoint({
-      indexes: [(picked[0]?.title ?? "(no section)").slice(0, 96)],
-      blobs: [ask.question, picked[0]?.title ?? "", ask.version ?? ""],
-    });
+    try {
+      env.ASKED.writeDataPoint({
+        indexes: [cutBytes(picked[0]?.title ?? "(no section)", MAX_INDEX_BYTES)],
+        blobs: [ask.question, picked[0]?.title ?? "", ask.version ?? ""],
+      });
+    } catch (e) {
+      // The answer still goes back; a lost report row costs nothing.
+      console.error(e);
+    }
   }
   return json(200, { answer, sources: picked.map(({ title, anchor }) => ({ title, anchor })) });
 }
@@ -68,6 +81,8 @@ export function parseAsk(body) {
     .filter((t) => t !== null && typeof t === "object" && (t.role === "user" || t.role === "assistant") && typeof t.content === "string")
     .slice(-MAX_TURNS)
     .map((t) => ({ role: t.role, content: t.content.slice(0, MAX_TURN_CHARS) }));
+  // Oldest turns go first when the whole history is too long.
+  while (history.reduce((n, t) => n + t.content.length, 0) > MAX_HISTORY_CHARS) history.shift();
   const version = typeof body.version === "string" && VERSION.test(body.version) ? body.version : null;
   return { question, history, version, share: body.share === true };
 }
@@ -99,30 +114,54 @@ async function complete(env, msgs) {
     });
     if (!r.ok) throw new Error(`deepseek ${r.status}`);
     const data = await r.json();
-    return String(data.choices?.[0]?.message?.content ?? "").trim();
+    return answerText(data);
   }
   const out = await env.AI.run(env.MODEL, { messages: msgs, max_tokens: 600, temperature: 0.2 });
-  return String(out?.response ?? "").trim();
+  return answerText(out);
 }
 
-/** The guide for the asker's version (the tag `v<version>`), falling back to
- * `main` when that tag has no guide; cached for an hour. A new guide reaches
- * the bot without a redeploy. */
-async function guideText(env, version, ctx) {
+/** The text of a model's answer: Workers AI gives `response` for older
+ * models and OpenAI's `choices` for newer ones; a reasoning model's
+ * `<think>` block is left out. */
+export function answerText(out) {
+  const raw = out?.response ?? out?.choices?.[0]?.message?.content ?? "";
+  return String(typeof raw === "string" ? raw : JSON.stringify(raw))
+    .replace(/<think>[\s\S]*?<\/think>/gu, "")
+    .trim();
+}
+
+/** `s` cut to at most `max` UTF-8 bytes, never inside a character. */
+export function cutBytes(s, max) {
+  const enc = new TextEncoder();
+  let out = "";
+  for (const c of s) {
+    if (enc.encode(out + c).length > max) break;
+    out += c;
+  }
+  return out;
+}
+
+// Sections per guide URL, kept for an hour in this isolate. The Cache API
+// does nothing on workers.dev, and parsing once saves CPU on every question.
+const guides = new Map();
+
+/** The guide's sections for the asker's version (the tag `v<version>`),
+ * falling back to `main` when that tag has no guide. A new guide reaches the
+ * bot within the hour, with no redeploy. */
+async function guideSections(env, version) {
   const refs = version === null ? ["main"] : [`v${version}`, "main"];
   for (const ref of refs) {
     const url = env.GUIDE_URL.replace("{ref}", ref);
-    const cache = globalThis.caches?.default;
-    const hit = cache ? await cache.match(url) : undefined;
-    if (hit) return hit.text();
-    const r = await fetch(url);
-    if (!r.ok) continue;
-    const text = await r.text();
-    if (cache) {
-      const keep = new Response(text, { headers: { "cache-control": `max-age=${GUIDE_TTL_SECONDS}` } });
-      ctx?.waitUntil?.(cache.put(url, keep));
+    const kept = guides.get(url);
+    if (kept && Date.now() - kept.at < GUIDE_TTL_MS) {
+      if (kept.sections === null) continue;
+      return kept.sections;
     }
-    return text;
+    const r = await fetch(url);
+    // A version with no guide is remembered too, so it is not asked for again.
+    const found = r.ok ? sections(await r.text()) : null;
+    if (r.ok || r.status === 404) guides.set(url, { at: Date.now(), sections: found });
+    if (found !== null) return found;
   }
   throw new Error("user guide unreachable");
 }

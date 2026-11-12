@@ -32,7 +32,9 @@ import { isPanelId, PANELS, type PanelId } from "./panels/registry";
 import { SHOW_PANEL } from "./panels/panel";
 import { attachDock, useKit } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
-import { openHelp } from "./help/sheet";
+import { hopInto } from "./help/hop";
+import { helpView } from "./help/view";
+import { helpPanelView, setHelpFeedback } from "./panels/help";
 import { openSettings } from "./settings/panel";
 import { provide } from "./palette/registry";
 import { openPalette, openShortcuts, wirePalette } from "./palette/ui";
@@ -274,9 +276,63 @@ function openSettingsSheet(): void {
   });
 }
 
-/** Help: from the top bar's button and the command palette. */
+/** Help: from the top bar's button and the command palette. The wug jumps
+ * from the top bar into the Help panel; with no project open (the dock is
+ * veiled) the same conversation opens in a card instead. */
 function openHelpSheet(): void {
-  openHelp(openFeedbackForm);
+  const logo = () => top.querySelector(".brand-wug");
+  if (dock === null || getState().kind !== "open") {
+    openHelpCard(logo);
+    return;
+  }
+  // Already on screen: the wug is there, so it does not jump again.
+  const shown = (helpPanelView()?.wug.getBoundingClientRect().width ?? 0) > 0;
+  showOrFocus("help");
+  const view = helpPanelView();
+  if (view === null) return;
+  // After the dock lays the panel out, so the landing spot is where it shows.
+  requestAnimationFrame(() => {
+    if (!shown) hopInto(logo, view.wug);
+    view.focus();
+  });
+}
+
+let helpCard: HTMLElement | null = null;
+function openHelpCard(logo: () => Element | null): void {
+  if (helpCard !== null) {
+    helpCard.querySelector("textarea")?.focus();
+    return;
+  }
+  const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const view = helpView(() => {
+    close();
+    openFeedbackForm();
+  });
+  const closeButton = h("button", { className: "help-close", textContent: "Close" });
+  const card = h("div", { className: "feedback-card help-card", role: "dialog", ariaModal: "true", ariaLabel: "Help" }, h("h2", { textContent: "Help" }), view.element, h("div", { className: "feedback-actions" }, closeButton));
+  const overlay = h("div", { className: "feedback-overlay" }, card);
+  const onKey = (e: KeyboardEvent) => {
+    // Escape while an input method composes cancels the composition, not the card.
+    if (e.key === "Escape" && !e.isComposing && e.keyCode !== 229) {
+      e.stopImmediatePropagation();
+      close();
+    }
+  };
+  function close() {
+    overlay.remove();
+    view.dispose();
+    helpCard = null;
+    window.removeEventListener("keydown", onKey, true);
+    opener?.focus();
+  }
+  closeButton.onclick = close;
+  window.addEventListener("keydown", onKey, true);
+  helpCard = overlay;
+  document.body.append(overlay);
+  requestAnimationFrame(() => {
+    hopInto(logo, view.wug);
+    view.focus();
+  });
 }
 
 /** Feedback: from the top bar's button and the command palette. */
@@ -534,6 +590,7 @@ if (app !== null) {
   // The welcome covers the dock inside one stage, below the update notice and banner.
   app.replaceChildren(top, updateSlot(), bannerSlot, h("div", { className: "stage" }, host, welcomeSlot), toastSlot, dropTarget());
   host.classList.add("dock-veiled");
+  setHelpFeedback(openFeedbackForm);
   subscribe(renderTop);
   subscribe(renderBanner);
   // A panel asking for another (Frequencies opens the Concordance).

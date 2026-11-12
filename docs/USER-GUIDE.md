@@ -579,13 +579,13 @@ To stop the check, open **Settings** in the top bar and, under **Updates**, turn
 
 ## Ask for help
 
-**Help** at the top right answers questions about wugs from this guide. It needs an internet connection.
+The wug answers questions about wugs from this guide. It needs an internet connection.
 
-1. Click **Help**, or press Ctrl+K (⌘K on a Mac) and choose **Ask for help**.
+1. Click **Help** at the top right, or press Ctrl+K (⌘K on a Mac) and choose **Ask for help**. The wug jumps into the **Help** panel. With no project open, Help opens in a card instead.
 2. Type your question, such as "How do I split a segment?", and press Enter or click **Ask**.
-3. The answer appears with the parts of this guide it came from. Ask a follow-up in the same box; Help remembers the last few questions until you close it.
+3. The wug answers, and names the parts of this guide the answer came from. Ask a follow-up in the same box. Help remembers the conversation until wugs closes, even if you close the panel.
 
-Only your question and the wugs version are sent, never anything from your project. Help keeps nothing unless you tick **Share my questions with the people who make wugs**; then the question (and nothing else) is kept so this guide can cover what people ask most. If an answer is wrong or missing, **Ask a person instead (Feedback)** opens the Feedback form. Answers come from a small language model and can be mistaken; the guide sections it names are where to check.
+Your question, your last few questions and answers in Help, and the wugs version are sent, never anything from your project. Help keeps nothing unless you tick **Share my questions with the people who make wugs**; then each question, the part of this guide it matched and the wugs version are kept, so this guide can cover what people ask most. If an answer is wrong or missing, **Ask a person instead (Feedback)** opens the Feedback form. Answers come from a small language model and can be mistaken; the guide sections it names are where to check.
 
 ## Send feedback
 

@@ -42,6 +42,7 @@ PANELS = [
     ("conflicts", "Conflicts"),
     ("devices", "Devices"),
     ("kits", "Kits"),
+    ("help", "Help"),
 ]
 
 
@@ -470,13 +471,17 @@ def main():
             run.page.wait_for_timeout(300)
             run.shot("state-feedback-sent")
 
+            # Help behind another tab, so pressing Help makes the wug jump.
+            run.front("timeline", "Timeline")
             run.page.get_by_role("button", name="Help", exact=True).click()
-            run.page.locator(".help-question").fill("How do I split a segment at the playhead?")
+            run.page.wait_for_timeout(280)
+            run.shot("state-help-jump")
+            run.page.wait_for_timeout(700)
+            run.page.locator(".help-panel .help-question").fill("How do I split a segment at the playhead?")
             run.page.get_by_role("button", name="Ask", exact=True).click()
-            run.page.locator(".help-src").wait_for()
-            run.page.locator(".help-question").fill("And undo it?")
+            run.page.locator(".help-panel .help-src").wait_for(timeout=10_000)
+            run.page.locator(".help-panel .help-question").fill("And undo it?")
             run.shot("state-help")
-            run.page.keyboard.press("Escape")
 
             unknown |= set(run.unknown())
             failures += run.errors

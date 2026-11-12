@@ -36,12 +36,24 @@ const STOP = new Set(
   "a an and are as at be but by can do does for from how i if in into is it its me my of on or so than that the then there this to was what when where which who why will with you your wugs".split(" "),
 );
 
-/** Lower-cased words, a plural or -ing/-ed ending trimmed so "segments",
- * "segmenting" and "segment" meet. */
+/** Lower-cased words, stemmed so "segments", "segmenting" and "segment" meet. */
 export function words(text) {
   return (text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [])
     .filter((w) => !STOP.has(w))
-    .map((w) => w.replace(/(?<=\p{L}{3})(?:ing|ed|es|s)$/u, ""));
+    .map(stem);
+}
+
+/** A light English stemmer, enough to meet plurals and verb forms in the
+ * guide: `files`→`file`, `glosses`→`gloss`, `boxes`→`box`, `segmenting`→`segment`. */
+export function stem(w) {
+  if (w.length <= 3) return w;
+  if (/(?:ss|us|is)$/u.test(w)) return w;
+  if (/(?:ches|shes|sses|xes|zes)$/u.test(w)) return w.slice(0, -2);
+  if (/ies$/u.test(w) && w.length > 4) return `${w.slice(0, -3)}y`;
+  if (/ing$/u.test(w) && w.length > 5) return w.slice(0, -3);
+  if (/ed$/u.test(w) && w.length > 4) return w.slice(0, -2);
+  if (/s$/u.test(w)) return w.slice(0, -1);
+  return w;
 }
 
 /** The sections that best answer `question`, best first, by BM25 over each

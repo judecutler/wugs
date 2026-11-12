@@ -875,15 +875,35 @@ body::before {
 .feedback-why { min-height: 1.2em; color: var(--error); }
 .feedback-why:empty { min-height: 0; }
 .feedback-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.help-card .feedback-actions .link-button { margin-right: auto; }
-.help-log { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; min-height: 120px; overflow: auto; padding: 10px 12px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); }
-.help-empty { margin: auto 0; color: var(--muted); }
-.help-q { margin: 0; align-self: flex-end; max-width: 85%; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--surface-raised); font-weight: 600; overflow-wrap: anywhere; }
-.help-a { margin: 0; max-width: 95%; overflow-wrap: anywhere; }
+/* Help (src/help/): the kit's wug speaks the answers in bubbles. */
+.help-panel { display: flex; flex-direction: column; height: 100%; padding: 12px 14px; box-sizing: border-box; }
+.help-view { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1; }
+.help-card .help-view { min-height: 360px; max-height: 60vh; }
+.help-stage { display: grid; grid-template-columns: 56px 1fr; gap: 10px; flex: 1; min-height: 0; }
+.help-wug { width: 56px; height: 56px; align-self: start; position: sticky; top: 0; }
+.help-wug svg { display: block; width: 100%; height: auto; }
+.help-wug.wug-landing { visibility: hidden; }
+.help-wug.wug-landed svg { animation: wug-land 380ms ease-out; transform-origin: 50% 100%; }
+.help-wug.talking svg { animation: wug-talk 520ms ease-in-out infinite alternate; transform-origin: 50% 100%; }
+@keyframes wug-land { 0% { transform: scale(1.15, 0.8); } 60% { transform: scale(0.95, 1.06); } 100% { transform: none; } }
+@keyframes wug-talk { from { transform: translateY(0) rotate(0); } to { transform: translateY(-3px) rotate(-3deg); } }
+@media (prefers-reduced-motion: reduce) { .help-wug svg { animation: none !important; } }
+.wug-hop { position: fixed; z-index: 950; pointer-events: none; transform-origin: 0 0; }
+.wug-hop svg { display: block; width: 100%; height: auto; }
+.help-log { display: flex; flex-direction: column; gap: 8px; overflow: auto; min-height: 0; padding-right: 4px; }
+.help-say { position: relative; align-self: flex-start; max-width: 95%; padding: 8px 12px; border: 1.5px solid var(--ink); border-radius: var(--radius-md); background: var(--surface-raised); box-shadow: 2px 2px 0 var(--ink); overflow-wrap: anywhere; }
+.help-say:first-child::before { content: ""; position: absolute; left: -8px; top: 16px; width: 12px; height: 12px; background: var(--surface-raised); border-left: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); transform: rotate(45deg); }
+.help-q { margin: 0; align-self: flex-end; max-width: 85%; padding: 6px 10px; border-radius: var(--radius-md); background: color-mix(in srgb, var(--accent-bright) 22%, var(--surface-raised)); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); overflow-wrap: anywhere; }
 .help-text { margin: 0; white-space: pre-wrap; }
 .help-src { margin: 4px 0 0; color: var(--muted); font-size: var(--text-sm); }
-.help-wait { color: var(--muted); }
-.help-problem { color: var(--error); }
+.help-wait .help-text { color: var(--muted); }
+.help-problem { border-color: var(--error); box-shadow: 2px 2px 0 var(--error); }
+.help-ask { display: flex; gap: 8px; align-items: flex-end; }
+.help-question { flex: 1; resize: vertical; min-height: 44px; }
+.help-why { margin: 0; color: var(--error); }
+.help-why:empty { display: none; }
+.help-share { display: flex; gap: 8px; align-items: baseline; font-size: var(--text-sm); }
+.help-foot { margin: 0; color: var(--muted); font-size: var(--text-sm); }
 
 /* Settings (src/settings/panel.ts): a sheet that slides in from the right. */
 .settings-overlay { position: fixed; inset: 0; z-index: 800; display: flex; justify-content: flex-end; }

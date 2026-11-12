@@ -5,8 +5,8 @@ compatibility_date = "2026-11-01"
 workers_dev = true
 
 [vars]
-# Any Workers AI text-generation model. Llama 3.1 8B fits in the free daily allocation.
-MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8"
+# Any Workers AI text-generation model. GLM-4.7-Flash: about 30 neurons a question, ~300 a day free.
+MODEL = "@cf/zai-org/glm-4.7-flash"
 # Where the user guide is read from; {ref} is the asker's version tag, else main.
 GUIDE_URL = "https://raw.githubusercontent.com/judecutler/wugs/{ref}/docs/USER-GUIDE.md"
 
@@ -29,3 +29,12 @@ namespace_id = "4742"
 
 [observability]
 enabled = true
+
+# Everyone together: at most 20 questions a minute, so one abuser cannot drain the day.
+[[ratelimits]]
+name = "EVERYONE"
+namespace_id = "4743"
+
+  [ratelimits.simple]
+  limit = 20
+  period = 60
