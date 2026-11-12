@@ -23,10 +23,18 @@
 //!   cut with no space after them. Closing quotes and brackets stay with
 //!   their sentence; a run of punctuation alone joins the sentence before it.
 //!
+//! A full stop after a single letter (an initial, `n.`, `z. B.`), a short
+//! number (`3. Oktober`) or a common abbreviation (`Dr.`, `ca.`, `cf.`)
+//! never ends a sentence; a piece in single quotes (`'The dog ate.'`, a translation) stays with the
+//! sentence before it, and a line that starts with an example number, a
+//! timestamp or a speaker label (`A: `) is never cut and never joins the
+//! line before.
+//!
 //! Known limits: Thai and Lao have no sentence mark, so their paragraphs
-//! come in whole; a script with no capitals, or an orthography written all
-//! in lower case, is cut only at line ends and paragraph breaks, because a
-//! lower-case word after a full stop never starts a sentence.
+//! come in whole; an orthography written all in lower case is cut only at
+//! line ends and paragraph breaks, because a lower-case word after a full
+//! stop never starts a sentence; a sentence that really ends in a short
+//! number or a listed abbreviation (`I counted to 3. Then`) is not cut.
 
 /// Sentence-final marks that cut only before a space.
 const FINAL: [char; 13] = ['.', '!', '?', '…', '؟', '।', '॥', '۔', '។', '။', '።', '։', '།'];
@@ -100,20 +108,21 @@ pub fn segments(text: &str) -> (Vec<String>, Cut) {
             Some(c) if tight(c) => 1,
             _ => 1 + b.split_whitespace().next().map_or(0, |w| w.chars().count()),
         };
-        !ends_sentence(a) && !aligned(a) && !aligned(b) && len(a) <= width && len(a) + next > width
+        !ends_sentence(a) && !aligned(a) && !aligned(b) && !labelled(b) && !numbered(b) && len(a) <= width && len(a) + next > width
     };
-    let (mut open, mut breaks, mut capitals) = (0, 0, 0);
+    let (mut open, mut breaks, mut capitals, mut commas) = (0, 0, 0, 0);
     for p in &paragraphs {
         for w in p.windows(2) {
             if !ends_sentence(w[0]) {
                 open += 1;
                 breaks += usize::from(wrapped_before(w[0], w[1]));
                 capitals += usize::from(w[1].trim().chars().next().is_some_and(char::is_uppercase));
+                commas += usize::from(w[0].trim_end().ends_with([',', ';', ':']));
             }
         }
     }
-    // Verse starts nearly every line with a capital; wrapped prose does not.
-    let verse = open >= 3 && capitals * 10 >= open * 8;
+    // Verse starts nearly every line with a capital, or ends most with a comma.
+    let verse = open >= 3 && (capitals * 10 >= open * 8 || commas * 10 >= open * 6);
     let wrapped = width >= 20 && breaks >= 2 && breaks * 10 >= open * 6 && !verse;
     let mut units: Vec<String> = Vec::new();
     for p in &paragraphs {
@@ -134,12 +143,14 @@ pub fn segments(text: &str) -> (Vec<String>, Cut) {
         }
     }
     units.retain(|u| !u.is_empty());
-    let several = units.iter().filter(|u| sentences(u).len() > 1).count();
+    // An example with its translation, or a speaker's turn, is one segment.
+    let whole = |u: &str| numbered(u) || labelled(u);
+    let several = units.iter().filter(|u| !whole(u) && sentences(u).len() > 1).count();
     let inner_blank = paragraphs.len() > 1;
     if !wrapped && !inner_blank && several * 2 <= units.len() {
         return (units, Cut::ByLine);
     }
-    (merge_bare_punctuation(units.iter().flat_map(|u| sentences(u)).collect()), Cut::BySentence)
+    (merge_bare_punctuation(units.iter().flat_map(|u| if whole(u) { vec![u.clone()] } else { sentences(u) }).collect()), Cut::BySentence)
 }
 
 /// An example number at the start of a line (`1.`, `12a.`, `(3)`, `b)`):
@@ -156,7 +167,8 @@ fn enumerator(piece: &str) -> bool {
 fn merge_bare_punctuation(pieces: Vec<String>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for p in pieces {
-        let bare = !p.chars().any(char::is_alphanumeric);
+        let quoted = p.len() > 1 && matches!((p.chars().next(), p.chars().last()), (Some('\'' | '‘'), Some('\'' | '’')));
+        let bare = !p.chars().any(char::is_alphanumeric) || quoted;
         match out.last_mut() {
             Some(prev) if bare => {
                 prev.push(' ');
@@ -196,6 +208,11 @@ fn sentences(para: &str) -> Vec<String> {
             while end < chars.len() && (FINAL.contains(&chars[end]) || CLOSERS.contains(&chars[end])) {
                 end += 1;
             }
+            let next_upper = chars[end..].iter().find(|c| !c.is_whitespace()).is_some_and(|c| c.is_uppercase());
+            if c == '.' && abbreviation(&chars[start..i], next_upper) {
+                i = end;
+                continue;
+            }
             if end < chars.len() && chars[end] == ' ' && starts_sentence(chars.get(end + 1).copied()) {
                 push(&mut out, &chars[start..end]);
                 start = end + 1;
@@ -230,6 +247,40 @@ fn push(out: &mut Vec<String>, piece: &[char]) {
     if !s.is_empty() {
         out.push(s);
     }
+}
+
+const ABBREVIATIONS: [&str; 26] = [
+    "dr", "mr", "mrs", "ms", "prof", "st", "nr", "no", "ca", "usw", "bzw", "vgl", "cf", "al", "ex", "pp", "sect", "fig", "vs", "etc", "pos", "adj", "adv", "pron", "jr", "sr",
+];
+
+/// Whether the word just before a full stop marks an abbreviation, not a
+/// sentence end: one letter, a listed abbreviation, or one or two digits
+/// before a capitalised word (an ordinal: `3. Oktober`).
+fn abbreviation(before: &[char], next_upper: bool) -> bool {
+    let word: String = before.iter().rev().take_while(|c| !c.is_whitespace() && !matches!(c, '(' | '[' | '"' | '\'' | '«')).collect::<Vec<_>>().into_iter().rev().collect();
+    let n = word.chars().count();
+    (n == 1 && word.chars().all(char::is_alphabetic))
+        || (next_upper && (1..=2).contains(&n) && word.chars().all(|c| c.is_ascii_digit()))
+        || ABBREVIATIONS.contains(&word.to_lowercase().as_str())
+}
+
+/// A line that opens with a timestamp (`[00:01]`, `0:04`) or a speaker label (`A:`, `MARIA: `).
+fn labelled(line: &str) -> bool {
+    let t = line.trim_start();
+    let t = t.strip_prefix('[').unwrap_or(t);
+    let digits = t.chars().take_while(char::is_ascii_digit).count();
+    if (1..=2).contains(&digits) && t[digits..].starts_with(':') && t[digits + 1..].chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        return true;
+    }
+    match t.split_once(':') {
+        Some((label, rest)) => !label.is_empty() && label.chars().count() <= 12 && !label.contains(char::is_whitespace) && rest.starts_with(' '),
+        None => false,
+    }
+}
+
+/// Whether a line starts with an example number (`1.`, `(3)`, `12a.`).
+fn numbered(line: &str) -> bool {
+    line.split_whitespace().next().is_some_and(enumerator)
 }
 
 /// Whether a sentence may start with this character: not a lower-case letter.
@@ -302,6 +353,18 @@ mod tests {
         // One long line does not hide the wrapping of the others.
         let wrapped = "Source: https://example.org/archive/collection/item/0001/transcript-full.txt\n\nThe fox came to the well one morning and looked\ndown into the water for a long time, and then it\nturned away and went back across the field to\nits den under the old oak tree by the river.\n";
         assert_eq!(cut(wrapped).len(), 2, "{:?}", cut(wrapped));
+    }
+
+    #[test]
+    fn abbreviations_labels_and_quotes() {
+        assert_eq!(cut("Am 3. Oktober 1990 kam er. Im 19. Jahrhundert, z. B. bei Dr. Müller, ca. 300 Leute.\n\nx"), vec!["Am 3. Oktober 1990 kam er.", "Im 19. Jahrhundert, z. B. bei Dr. Müller, ca. 300 Leute.", "x"]);
+        assert_eq!(cut("kesi n. Dog. Also a name.\n\nx"), vec!["kesi n. Dog.", "Also a name.", "x"]);
+        assert_eq!(cut("(1) Kesi mopa-n toru. 'The dog ate the fish.'\n(2) Mopa toru. 'Eat fish.'\n"), vec!["(1) Kesi mopa-n toru. 'The dog ate the fish.'", "(2) Mopa toru. 'Eat fish.'"]);
+        assert_eq!(cut("A: Yes. We went there.\nB: No. Not at all.\n"), vec!["A: Yes. We went there.", "B: No. Not at all."]);
+        let ts = "[00:00:01] so we went down to the river with them all\n[00:00:04] and nobody was there when we got to it.\n[00:00:09] then we went back home again in the dark\n";
+        assert_eq!(cut(ts).len(), 3);
+        let verse = "the wind was cold upon the hill,\nthe river ran beneath the trees,\nand all the birds were singing still,\nupon the long and silver seas.\n";
+        assert_eq!(cut(verse).len(), 4);
     }
 
     #[test]
