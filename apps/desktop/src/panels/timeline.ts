@@ -10,6 +10,9 @@ import { praatControls } from "../praat/control";
 import { attempt, dataGeneration, getSelection, getState, refreshText, takeWantedMedia } from "../store";
 import { parseGranularity } from "../timeline/edit-rules";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
+import { clock } from "../timeline/tracks";
+import { ICONS, type IconName } from "../timeline/icons";
+import * as playback from "../playback";
 import type { PanelDef, PanelView } from "./panel";
 
 const TEMPLATES: TierTemplate[] = ["transcription", "translation", "notes", "custom"];
@@ -92,6 +95,61 @@ export const timelinePanel: PanelDef = {
         updateEditButtons();
       });
     };
+    // Transport (docs/design/EDITOR.md): play, the clock, and zoom, laid
+    // out the way video editors put them along the top of a timeline.
+    const playButton = iconButton("play", "Play (Space)");
+    const startButton = iconButton("start", "Go to start (Home)");
+    const endButton = iconButton("end", "Go to end (End)");
+    const clockNow = h("span", { className: "tl-clock-now", textContent: "0:00.0" });
+    const clockTotal = h("span", { className: "tl-clock-total", textContent: "0:00.0" });
+    const clockBox = h("span", { className: "tl-clock", title: "Playhead and length. J steps back, K stops, L plays." }, clockNow, " / ", clockTotal);
+    const zoomOut = h("button", { className: "tl-zoom-step", textContent: "−", title: "Zoom out (-)", ariaLabel: "Zoom out" });
+    const zoomSlider = h("input", { className: "tl-zoom", type: "range", min: "0", max: "1000", step: "1", value: "0", title: "Zoom" });
+    zoomSlider.setAttribute("aria-label", "Zoom");
+    const zoomIn = h("button", { className: "tl-zoom-step", textContent: "+", title: "Zoom in (+)", ariaLabel: "Zoom in" });
+    const fitButton = h("button", { textContent: "Fit", title: "Show the whole recording (Shift+Z)" });
+    const transport = h(
+      "div",
+      { className: "tl-transport" },
+      h("span", { className: "tl-transport-play" }, startButton, playButton, endButton, clockBox),
+      h("span", { className: "tl-transport-zoom" }, zoomOut, zoomSlider, zoomIn, fitButton),
+    );
+    playButton.onclick = () => view?.playPause();
+    startButton.onclick = () => view?.seekTo(0);
+    endButton.onclick = () => view?.seekTo(view.durationMs());
+    zoomOut.onclick = () => view?.zoomBy(1 / 1.5);
+    zoomIn.onclick = () => view?.zoomBy(1.5);
+    fitButton.onclick = () => view?.fit();
+    zoomSlider.oninput = () => view?.setZoomSlider(Number(zoomSlider.value));
+    // Let go, the slider follows the wheel and keys again.
+    zoomSlider.onchange = () => zoomSlider.blur();
+
+    // The clock, play icon and slider follow the view every frame, so a
+    // wheel zoom or another panel's playback shows here too.
+    let shown = { playing: false, now: "", total: "", zoom: -1, hasRecording: true };
+    let tick = 0;
+    function follow(): void {
+      tick = requestAnimationFrame(follow);
+      if (view === null) return;
+      const hasRecording = view.hasRecording();
+      const playing = hasRecording && playback.isPlaying();
+      const now = clock(hasRecording ? playback.currentMs() : 0);
+      const total = clock(view.durationMs());
+      const zoom = view.zoomSlider();
+      if (playing !== shown.playing) {
+        playButton.innerHTML = ICONS[playing ? "pause" : "play"];
+        playButton.title = playing ? "Pause (Space)" : "Play (Space)";
+        playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
+      }
+      if (hasRecording !== shown.hasRecording) {
+        for (const b of [playButton, startButton, endButton]) b.disabled = !hasRecording;
+      }
+      if (now !== shown.now) clockNow.textContent = now;
+      if (total !== shown.total) clockTotal.textContent = total;
+      if (zoom !== shown.zoom && document.activeElement !== zoomSlider) zoomSlider.value = String(zoom);
+      shown = { playing, now, total, zoom, hasRecording };
+    }
+
     const gutter = h("div", { className: "tl-gutter" });
     const body = h("div", { className: "tl-body" });
     const main = h("div", { className: "tl-main" }, gutter, body);
@@ -196,21 +254,42 @@ export const timelinePanel: PanelDef = {
       return holder;
     }
 
-    function placed(className: string, top: number, height: number | null, ...children: (Node | string)[]): HTMLDivElement {
+    function placed(className: string, top: number, height: number | null, ...children: (Node | string | null)[]): HTMLDivElement {
       const div = h("div", { className }, ...children);
       div.style.top = `${top}px`;
       if (height !== null) div.style.height = `${height}px`;
       return div;
     }
 
+    /** Track headers: a name and its toggles, like a video editor's track header. */
     function drawGutter(): void {
       if (view === null) return;
-      const names = view.laneNames();
+      const v = view;
+      const rows = v.trackRows();
+      // Toggling redraws the headers: keep keyboard focus on the same toggle.
+      const focused = (document.activeElement as HTMLElement | null)?.dataset?.key;
+      const muteButton = toggleButton("mute", v.muted, "muted", "sound", "Mute the recording", () => v.toggleMute());
       gutter.replaceChildren(
-        placed("tl-gutter-wave", RULER_H, WAVE_H, "waveform"),
-        ...names.map((name, i) => placed("tl-gutter-tier", RULER_H + WAVE_H + i * TIER_H, TIER_H, name)),
-        placed("tl-gutter-add", RULER_H + WAVE_H + names.length * TIER_H + 6, null, addTrackControl()),
+        placed("tl-gutter-wave", RULER_H, WAVE_H, h("span", { className: "tl-track-name", textContent: "Recording" }), h("span", { className: "tl-track-toggles" }, muteButton)),
+        ...rows.map((row, i) => {
+          const tierId = row.tierId;
+          const toggles =
+            tierId === null
+              ? null
+              : h(
+                  "span",
+                  { className: "tl-track-toggles" },
+                  toggleButton(`lock:${tierId}`, row.locked, "lock", "unlock", `Lock ${row.name}`, () => v.toggleTrack(tierId, "locked")),
+                  toggleButton(`hide:${tierId}`, row.hidden, "eyeOff", "eye", `Hide ${row.name}`, () => v.toggleTrack(tierId, "hidden")),
+                );
+          const div = placed("tl-gutter-tier", RULER_H + WAVE_H + i * TIER_H, TIER_H, h("span", { className: "tl-track-name", textContent: row.name, title: row.name }), toggles);
+          div.classList.toggle("is-hidden", row.hidden);
+          div.classList.toggle("is-locked", row.locked);
+          return div;
+        }),
+        placed("tl-gutter-add", RULER_H + WAVE_H + rows.length * TIER_H + 6, null, addTrackControl()),
       );
+      if (focused !== undefined) gutter.querySelector<HTMLElement>(`[data-key="${CSS.escape(focused)}"]`)?.focus();
     }
 
     const render = () => {
@@ -220,6 +299,7 @@ export const timelinePanel: PanelDef = {
         if (slice !== lastSlice) {
           view?.dispose();
           view = null;
+          cancelAnimationFrame(tick);
           selectedSource = null;
           el.replaceChildren(
             emptyState(
@@ -236,6 +316,7 @@ export const timelinePanel: PanelDef = {
         if (slice !== lastSlice) {
           view?.dispose();
           view = null;
+          cancelAnimationFrame(tick);
           el.replaceChildren(
             emptyState(
               "Timeline",
@@ -251,8 +332,11 @@ export const timelinePanel: PanelDef = {
         view = new TimelineView();
         view.analysis.onChange = () => praat.refresh();
         view.onEditStateChange = updateEditButtons;
+        view.onTracksChange = drawGutter;
         body.replaceChildren(view.element);
-        el.replaceChildren(toolbar, praat.review, main);
+        el.replaceChildren(toolbar, transport, praat.review, main);
+        cancelAnimationFrame(tick);
+        tick = requestAnimationFrame(follow);
         lastText = "";
         lastProject = "";
       }
@@ -282,9 +366,29 @@ export const timelinePanel: PanelDef = {
       element: el,
       render,
       dispose: () => {
+        cancelAnimationFrame(tick);
         view?.dispose();
         view = null;
       },
     };
   },
 };
+
+function iconButton(icon: IconName, title: string): HTMLButtonElement {
+  const b = h("button", { className: "tl-icon", title });
+  b.innerHTML = ICONS[icon];
+  b.setAttribute("aria-label", title.replace(/ \(.*\)$/, ""));
+  return b;
+}
+
+/** A track toggle: one fixed name, its state in aria-pressed and the icon. */
+function toggleButton(key: string, on: boolean, onIcon: IconName, offIcon: IconName, title: string, act: () => void): HTMLButtonElement {
+  const b = iconButton(on ? onIcon : offIcon, title);
+  b.dataset.key = key;
+  b.classList.add("tl-track-toggle");
+  b.setAttribute("aria-pressed", String(on));
+  // Keep focus on the timeline, so its keys keep working after a click.
+  b.onmousedown = (ev) => ev.preventDefault();
+  b.onclick = act;
+  return b;
+}

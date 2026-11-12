@@ -302,6 +302,23 @@ def main():
                 run.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 200)
                 run.page.wait_for_timeout(800)
 
+            # Track headers: lock the first tier, hide the second, then try to edit the locked one.
+            tiers = run.page.locator(".panel-timeline .tl-gutter-tier")
+            if tiers.count() >= 2:
+                tiers.nth(0).locator(".tl-track-toggle").nth(0).click()
+                tiers.nth(1).locator(".tl-track-toggle").nth(1).click()
+                canvas = run.page.locator(".panel-timeline .tl-canvas").bounding_box()
+                if canvas is not None:
+                    run.page.mouse.dblclick(canvas["x"] + 60, canvas["y"] + 150)
+                run.page.wait_for_timeout(300)
+                run.shot("state-tracks", run.page.locator(".panel-timeline"))
+                locked = [t for t in run.toasts() if "locked" in t]
+                if not locked:
+                    failures.append("editing a locked track gave no message")
+                run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+                tiers.nth(0).locator(".tl-track-toggle").nth(0).click()
+                tiers.nth(1).locator(".tl-track-toggle").nth(1).click()
+
             run.page.click(".settings-button")
             # Pattern tiles are CSS masks that load on first use.
             run.page.wait_for_load_state("networkidle")
