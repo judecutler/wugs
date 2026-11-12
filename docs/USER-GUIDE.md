@@ -26,6 +26,14 @@ To open a project that already exists, click **Open a project folder** and choos
 
 To start a text, open the **Texts** panel, type a title in **New text title**, and click **New text**.
 
+## Try the sample project
+
+On the welcome screen, click **Open the sample project**. It holds a short made-up recording of someone counting to ten in an invented language, already segmented, transcribed, translated, glossed and in the lexicon. The last segment is left empty so you can try transcribing it.
+
+The first time you open it, a short tour shows what each panel is for. Press **Escape** or click **Skip the tour** to leave it at any point. To see it again, press **Ctrl+K** and choose **Take the tour**.
+
+The sample is an ordinary project kept in wugs's own folder on this computer. Change anything you like. It is never mixed into your own projects.
+
 ## Arrange the workspace
 
 The workspace is made of panels: Timeline, Media, Texts, Transcribe, Gloss, Lexicon, Elicit, Search, Speech assist, People, Devices, and Conflicts. Panels that share a space are stacked like pages behind binder dividers. The dividers rest as a thin coloured edge along the top of each panel and rise when you move the pointer to that edge, pushing the panel down a little so nothing is covered. Click a divider to bring its panel to the front. Drag a divider to move its panel, or drop it on another panel to stack them. wugs remembers your arrangement.

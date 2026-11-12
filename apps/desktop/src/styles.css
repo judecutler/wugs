@@ -948,3 +948,18 @@ body::before {
   .palette { animation: palette-in 120ms ease-out; }
   @keyframes palette-in { from { opacity: 0; transform: translateY(-6px); } }
 }
+
+/* The sample project on the welcome card, and the first-run tour (roadmap 68). */
+.welcome-sample { margin: 4px auto 14px; padding: 12px 14px; max-width: 360px; border: 1px dashed var(--line); border-radius: var(--radius-md); }
+.welcome-sample button { padding: 7px 14px; }
+.welcome-sample .note { margin: 6px 0 0; }
+.tour-layer { position: fixed; inset: 0; z-index: 940; pointer-events: none; }
+.tour-ring { position: fixed; border-radius: var(--radius-lg); box-shadow: 0 0 0 3px var(--accent-bright), 0 0 0 9999px color-mix(in srgb, var(--ink) 28%, transparent); transition: left 200ms ease, top 200ms ease, width 200ms ease, height 200ms ease; }
+.tour-ring[hidden] { display: none; }
+.tour-card { position: fixed; pointer-events: auto; padding: 14px 16px 12px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
+.tour-card h2 { margin: 0 0 6px; font-family: var(--font-display); font-weight: 400; font-size: 19px; color: var(--ink); }
+.tour-card p { margin: 0 0 10px; color: var(--chrome-ink); line-height: 1.45; }
+.tour-card .tour-step { margin: 0 0 2px; font-size: var(--text-xs); color: var(--muted); }
+.tour-actions { display: flex; gap: 8px; justify-content: flex-end; align-items: center; }
+.tour-actions .welcome-link { margin-right: auto; }
+@media (prefers-reduced-motion: reduce) { .tour-ring { transition: none; } }

@@ -17,6 +17,7 @@ pub mod people;
 pub mod listen;
 pub mod praat;
 pub mod praat_analysis;
+pub mod sample;
 pub mod segmentation;
 pub mod session;
 pub mod updater;
@@ -104,6 +105,19 @@ fn open_project(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>
 fn create_project(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>, path: String, researcher: String) -> Result<ProjectInfo, String> {
     let p = path.clone();
     let info = s.run(move |s| session::create_project(s, &p, &researcher))?;
+    allow_media(&app, &path);
+    reach.follow(&s)?;
+    Ok(info)
+}
+
+/// The sample project (roadmap 68): built in this computer's app data the
+/// first time, opened as it was left after that.
+#[tauri::command(async)]
+fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>, researcher: String) -> Result<ProjectInfo, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("sample-project");
+    let path = dir.to_string_lossy().to_string();
+    let who = if researcher.trim().is_empty() { "me".to_string() } else { researcher };
+    let info = s.run(move |s| sample::open_sample(s, &dir, &who))?;
     allow_media(&app, &path);
     reach.follow(&s)?;
     Ok(info)
@@ -1335,6 +1349,7 @@ pub fn run() {
             capability_pin,
             open_project,
             create_project,
+            open_sample,
             list_texts,
             get_text,
             create_text,
