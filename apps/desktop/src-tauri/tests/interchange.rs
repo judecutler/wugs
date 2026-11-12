@@ -239,4 +239,10 @@ fn a_translation_column_lands_on_a_translation_track() {
     let sentence = detail.segments.iter().find(|s| s.content == "kesi bara").expect("the sentence came back");
     let translation = detail.segments.iter().find(|s| s.content == "the dog runs").expect("the translation came back");
     assert_eq!(translation.parent.as_deref(), Some(sentence.id.as_str()));
+    // ELAN carries no role, yet the track still reads as a translation track, so a typed one goes on it.
+    let came_back = detail.tiers.iter().find(|t| t.id == translation.tier).unwrap();
+    assert_eq!(came_back.role.as_deref(), Some("translation"));
+    let lo = detail.segments.iter().find(|s| s.content == "lo").unwrap().id.clone();
+    let err = session::add_translation(&mut b, &detail.id, None, &lo, "again").unwrap_err();
+    assert!(err.contains("already has a translation"), "the track that came back is the one used: {err}");
 }

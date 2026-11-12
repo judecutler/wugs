@@ -455,13 +455,18 @@ pub fn add_translation(session: &mut Session, text_id: &str, tier_id: Option<&st
     Ok(p.add_translation(text_id, &tier, segment_id, index, content)?.0)
 }
 
-/// A tier's role as the app reads it: its own, or `translation` for
-/// FlexText's free-translation tier, which carries none.
+/// A tier's role as the app reads it: its own, or `translation` for a
+/// tier that carries none but holds one translation per sentence:
+/// FlexText's free-translation tier and any symbolic association (what an
+/// ELAN file brings back; the corpus tools read them the same way,
+/// `concordance::corpus_tiers`).
 pub(crate) fn tier_role(p: &Project, tier: &str) -> Result<Option<String>, String> {
     if let Some(role) = p.proj.field_str(tier, "role")? {
         return Ok(Some(role));
     }
-    Ok((p.proj.field_str(tier, "origin")?.as_deref() == Some(wugs_flex::flextext::TIER_FREE)).then(|| "translation".to_string()))
+    let free = p.proj.field_str(tier, "origin")?.as_deref() == Some(wugs_flex::flextext::TIER_FREE);
+    let association = p.proj.field_str(tier, "kind")?.as_deref() == Some("symbolic-association");
+    Ok((free || association).then(|| "translation".to_string()))
 }
 
 /// The translation track paired with `sentences` (a symbolic association

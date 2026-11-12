@@ -564,6 +564,10 @@ export const glossPanel: PanelDef = {
     function translationBlock(text: NonNullable<ReturnType<typeof selected>>): HTMLElement {
       const { segment, text: detail } = text;
       const box = h("div", { className: "gl-free" }, h("h3", { textContent: "Free translation" }));
+      if (segment.parent) {
+        box.append(h("p", { className: "note", textContent: "This segment belongs to another one (a translation or a dependent annotation), so it has no translation of its own." }));
+        return box;
+      }
       const lines = translationLines(segment, detail.segments, detail.tiers);
       if (lines.length === 0) {
         const add = h("button", { type: "button", textContent: "Add translation track" });

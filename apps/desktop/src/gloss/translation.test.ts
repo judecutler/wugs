@@ -39,4 +39,5 @@ test("an untimed sentence with no paired track gets one line for a track made on
   const lines = translationLines(seg("u", "tx", null, null), [], tiers);
   assert.deepEqual(lines.map((l) => [l.tier.id, l.tier.parent, l.segment]), [[NEW_TRACK, "tx", null]]);
   assert.deepEqual(translationLines(seg("s", "tx", 0, 1), [], [tiers[0]!]), [], "a timed one gets the offer to add a track instead");
+  assert.deepEqual(translationLines({ ...seg("t", "pf", null, null), parent: "u" }, [], tiers), [], "a translation has no translation of its own");
 });

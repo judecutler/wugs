@@ -26,6 +26,8 @@ const overlap = (a: TimedSegment, b: TimedSegment): number => {
  * (touching edges do not overlap). An untimed utterance with no paired
  * track gets one line for a track made on the first translation typed. */
 export function translationLines(selected: TimedSegment, segments: readonly TimedSegment[], tiers: readonly RoleTier[]): TranslationLine[] {
+  // A segment that belongs to another (a translation, a dependent annotation) has none of its own.
+  if (selected.parent) return [];
   const lines = tiers
     .filter((t) => t.role === "translation" && (isPaired(t) ? t.parent === selected.tier : timed(selected)))
     .map((tier): TranslationLine => {
