@@ -19,7 +19,7 @@ export function dragAction(drag: { files: boolean; dock: boolean; editable: bool
 }
 
 const RECORDINGS = new Set(["wav", "wave", "m4a", "mp4", "aac", "mp3", "flac", "ogg", "oga", "aif", "aiff", "aifc"]);
-const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "txt"]);
+const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "txt", "csv", "tsv", "tab"]);
 
 /** Pieces of this size keep memory flat for a two-hour WAV and the progress moving. */
 export const CHUNK_BYTES = 8 * 1024 * 1024;
@@ -41,7 +41,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 export function overlayWords(projectOpen: boolean, dragged: Dragged): { title: string; detail: string } {
   if (!projectOpen) return { title: "Open a project first", detail: "Dropped files go into the open project. Nothing is imported now." };
-  const detail = "Recordings go to the media bin. ELAN, FLEx, Praat, Toolbox and plain text files become texts or lexicon entries.";
+  const detail = "Recordings go to the media bin. ELAN, FLEx, Praat, Toolbox, CSV/TSV and plain text files become texts or lexicon entries.";
   if (dragged.count === 0) return { title: "Drop to import", detail };
   if (dragged.audio === dragged.count) return { title: `Drop to import ${plural(dragged.count, "recording", "recordings")}`, detail };
   return { title: `Drop to import ${plural(dragged.count, "file", "files")}`, detail };

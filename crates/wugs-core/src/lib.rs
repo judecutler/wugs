@@ -1082,21 +1082,27 @@ impl Project {
     /// A written text in one txn (a corpus document): the text and one
     /// untimed segment per unit on `tier`, in order. Empty units are left out.
     pub fn import_written_text(&mut self, title: &str, tier: &str, units: &[&str]) -> Result<(String, CommitResult), String> {
+        let rows: Vec<(&str, Vec<(String, String)>)> = units.iter().map(|u| (*u, Vec::new())).collect();
+        self.import_written_rows(title, tier, &rows)
+    }
+
+    /// A written text from rows of a table: each row's text is a segment,
+    /// and its other cells are kept on the segment as `x.<name>` fields
+    /// (names as given, e.g. `x.csv.speaker`), so nothing in the file is lost.
+    /// Empty rows are skipped; one txn for the whole text.
+    pub fn import_written_rows(&mut self, title: &str, tier: &str, rows: &[(&str, Vec<(String, String)>)]) -> Result<(String, CommitResult), String> {
         self.require(tier, "tier")?;
         let mut t = self.intent("import-written-text");
         let id = t.create_scope_root("text", "txt", vec![("title", Value::str(title))]);
-        for (i, unit) in units.iter().map(|u| u.trim()).filter(|u| !u.is_empty()).enumerate() {
-            t.create(
-                "segment",
-                "seg",
-                &id,
-                vec![
-                    ("text", Value::str(&id)),
-                    ("tier", Value::str(tier)),
-                    ("pos", Value::str(&wugs_model::pos_seq(i))),
-                    ("content", Value::str(unit)),
-                ],
-            );
+        for (i, (unit, extras)) in rows.iter().map(|(u, x)| (u.trim(), x)).filter(|(u, _)| !u.is_empty()).enumerate() {
+            let pos = wugs_model::pos_seq(i);
+            let mut fields = vec![("text", Value::str(&id)), ("tier", Value::str(tier)), ("pos", Value::str(&pos)), ("content", Value::str(unit))];
+            for (name, value) in extras {
+                if name.starts_with("x.") && !value.is_empty() {
+                    fields.push((name.as_str(), Value::str(value)));
+                }
+            }
+            t.create("segment", "seg", &id, fields);
         }
         let res = t.commit()?;
         Ok((id, res))

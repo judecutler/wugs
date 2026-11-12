@@ -23,6 +23,9 @@ pub enum Format {
     /// A `.txt` that is not Toolbox or Praat: a written text, a segment per
     /// sentence in, a segment per line out (`plaintext`).
     PlainText,
+    /// A `.csv` or `.tsv` with a header row: one text per document column
+    /// value, a segment per row, other columns kept (`table_text`). Import only.
+    Table { tabs: bool },
 }
 
 impl Format {
@@ -45,6 +48,8 @@ impl Format {
             Format::TextGrid => "TextGrid",
             Format::Lift => "lift",
             Format::Toolbox | Format::PlainText => "txt",
+            Format::Table { tabs: true } => "tsv",
+            Format::Table { tabs: false } => "csv",
         }
     }
 
@@ -56,6 +61,7 @@ impl Format {
             Format::Lift => "LIFT lexicon",
             Format::Toolbox => "Toolbox lexicon",
             Format::PlainText => "plain text",
+            Format::Table { .. } => "table of sentences",
         }
     }
 }
@@ -70,6 +76,8 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "textgrid" => return Some(Format::TextGrid),
         "lift" => return Some(Format::Lift),
         "db" | "sfm" | "lex" => return Some(Format::Toolbox),
+        "csv" => return Some(Format::Table { tabs: false }),
+        "tsv" | "tab" => return Some(Format::Table { tabs: true }),
         _ => {}
     }
     let head = sniff(&bytes[..bytes.len().min(4096)]);
@@ -114,6 +122,26 @@ fn sniff(head: &[u8]) -> String {
 
 /// XML formats declare UTF-8 or UTF-16; anything else is a damaged file,
 /// refused rather than read as Latin-1 (which would store garbled text).
+/// A text with this title whose transcription segments are exactly these units, if any.
+fn same_text(p: &wugs_core::Project, title: &str, units: &[String]) -> Result<Option<String>, String> {
+    let (_, transcription) = crate::concordance::corpus_tiers(p)?;
+    for t in p.proj.entities_of_kind("text")? {
+        if p.proj.field_str(&t, "title")?.as_deref() != Some(title) {
+            continue;
+        }
+        let mut held = Vec::new();
+        for seg in p.proj.ordered_children("text", &t, "segment")? {
+            if transcription.contains(&p.proj.field_str(&seg, "tier")?.unwrap_or_default()) {
+                held.push(p.proj.field_str(&seg, "content")?.unwrap_or_default());
+            }
+        }
+        if held == units {
+            return Ok(Some(t));
+        }
+    }
+    Ok(None)
+}
+
 fn decode_xml(bytes: &[u8], name: &str) -> Result<String, String> {
     let utf16 = |rest: &[u8], be: bool| {
         if rest.len() % 2 != 0 {
@@ -168,12 +196,12 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, or a plain .txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, a .csv/.tsv table of sentences, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::Table { .. } => decode_xml(&bytes, file_name)?,
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16.
         Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
     };
@@ -250,24 +278,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             let stem = p.proj.nfc(&stem);
             let units: Vec<String> = units.iter().map(|u| p.proj.nfc(u)).collect();
             // The same file again (same title, same sentences) adds nothing.
-            let (_, transcription) = crate::concordance::corpus_tiers(p)?;
-            let mut same = None;
-            for t in p.proj.entities_of_kind("text")? {
-                if p.proj.field_str(&t, "title")?.as_deref() != Some(stem.as_str()) {
-                    continue;
-                }
-                let mut held = Vec::new();
-                for seg in p.proj.ordered_children("text", &t, "segment")? {
-                    if transcription.contains(&p.proj.field_str(&seg, "tier")?.unwrap_or_default()) {
-                        held.push(p.proj.field_str(&seg, "content")?.unwrap_or_default());
-                    }
-                }
-                if held == units {
-                    same = Some(t);
-                    break;
-                }
-            }
-            if let Some(t) = same {
+            if let Some(t) = same_text(p, &stem, &units)? {
                 lines.push("It matched a text already here; nothing was added.".into());
                 (Some(t), false)
             } else {
@@ -280,6 +291,43 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 });
                 (Some(text), false)
             }
+        }
+        Format::Table { tabs } => {
+            if input.contains('\0') {
+                return Err(format!("{file_name} is not valid UTF-8 or UTF-16 text; it may be damaged, so nothing was imported"));
+            }
+            let table = crate::table_text::parse(input, if tabs { b'\t' } else { b',' }).map_err(|e| format!("{file_name}: {e}"))?;
+            if table.documents.is_empty() {
+                return Err(format!("{file_name} has no text in its «{}» column; nothing was imported", table.text_column));
+            }
+            let tier = session::utterance_tier(p)?;
+            let (mut made, mut matched, mut segments, mut first) = (0usize, 0usize, 0usize, None);
+            for (title, rows) in &table.documents {
+                let title = p.proj.nfc(title.as_deref().unwrap_or(&stem));
+                let rows: Vec<(String, Vec<(String, String)>)> = rows.iter().filter(|r| !r.text.trim().is_empty()).map(|r| (p.proj.nfc(r.text.trim()), r.extras.clone())).collect();
+                let units: Vec<String> = rows.iter().map(|(t, _)| t.clone()).collect();
+                let text = match same_text(p, &title, &units)? {
+                    Some(t) => {
+                        matched += 1;
+                        t
+                    }
+                    None => {
+                        let refs: Vec<(&str, Vec<(String, String)>)> = rows.iter().map(|(t, x)| (t.as_str(), x.clone())).collect();
+                        made += 1;
+                        segments += refs.len();
+                        p.import_written_rows(&title, &tier, &refs)?.0
+                    }
+                };
+                first.get_or_insert(text);
+            }
+            lines.push(format!("{} with {} from the column «{}»{}.", plural(made, "new text", "new texts"), plural(segments, "segment", "segments"), table.text_column, table.group_column.as_ref().map(|g| format!(", one text per «{g}»")).unwrap_or_default()));
+            if matched > 0 {
+                lines.push(format!("{} matched a text already here; nothing was added for them.", plural(matched, "document", "documents")));
+            }
+            if !table.kept.is_empty() {
+                lines.push(format!("Kept with each sentence: {}.", table.kept.iter().map(|k| format!("«{k}»")).collect::<Vec<_>>().join(", ")));
+            }
+            (first, false)
         }
         Format::Toolbox => {
             let r = wugs_legacy::import_toolbox(p, input).map_err(|e| e.to_string())?;
@@ -390,6 +438,7 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
     let title = p.proj.field_str(text_id, "title")?.unwrap_or_default();
     let mut notes = Vec::new();
     let contents = match format {
+        Format::Table { .. } => return Err("export a text as plain text or ELAN; table export is not built yet".into()),
         Format::Elan => wugs_elan::export_eaf(p, text_id)?,
         Format::FlexText => wugs_flex::export_flextext(p, text_id)?,
         Format::TextGrid => {
@@ -446,6 +495,7 @@ pub fn export_lexicon(s: &mut Session, format: Format, folder: &Path) -> Result<
     let p = session::project(s)?;
     let contents = match format {
         Format::PlainText => return Err("plain text holds texts, not a lexicon".into()),
+        Format::Table { .. } => return Err("a table of sentences holds texts, not a lexicon".into()),
         Format::Lift => wugs_flex::export_lift(p)?,
         Format::Toolbox => wugs_legacy::export_toolbox(p)?,
         _ => return Err(format!("{} is a text format", format.name())),

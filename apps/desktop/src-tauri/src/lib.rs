@@ -20,6 +20,7 @@ pub mod lexicon;
 pub mod media_bin;
 pub mod people;
 pub mod plaintext;
+pub mod table_text;
 pub mod listen;
 pub mod praat;
 pub mod praat_analysis;
