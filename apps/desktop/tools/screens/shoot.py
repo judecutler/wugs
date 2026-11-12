@@ -92,11 +92,11 @@ def silent_wav(seconds=20, rate=16000):
     return buf.getvalue()
 
 
-def bundled_kit():
-    """The real kits/tongues/kit.toml as the shell's Kit shape, so the shots
-    always show the layout a fresh install starts with."""
+def bundled_kit(name="tongues"):
+    """A real built-in kits/<name>/kit.toml as the shell's Kit shape, so the
+    shots always show the layout a fresh install starts with."""
     import tomllib
-    k = tomllib.loads((HERE.parents[3] / "kits" / "tongues" / "kit.toml").read_text())
+    k = tomllib.loads((HERE.parents[3] / "kits" / name / "kit.toml").read_text())
     return {
         "id": k["kit"]["id"], "name": k["kit"]["name"], "subtitle": k["kit"].get("subtitle", ""),
         "version": k["kit"]["version"], "description": k["kit"].get("description", ""),
@@ -111,7 +111,7 @@ THEME = None
 def init_script(auto_open):
     flag = "true" if auto_open else "false"
     return (
-        f"window.__WUGS_SCREENS__ = {{ autoOpen: {flag}, theme: {json.dumps(THEME)}, kit: {json.dumps(bundled_kit())} }};\n"
+        f"window.__WUGS_SCREENS__ = {{ autoOpen: {flag}, theme: {json.dumps(THEME)}, kit: {json.dumps(bundled_kit())}, scrolls: {json.dumps(bundled_kit('scrolls'))} }};\n"
         + (HERE / "fixtures.js").read_text()
         + "\n"
         + (HERE / "mock-tauri.js").read_text()
@@ -319,6 +319,22 @@ def main():
                 run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
                 tiers.nth(0).locator(".tl-track-toggle").nth(0).click()
                 tiers.nth(1).locator(".tl-track-toggle").nth(1).click()
+
+            # The kit switcher (roadmap 73): open it, then switch to Scrolls and back.
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.page.click(".kit-switcher")
+            run.page.wait_for_timeout(200)
+            run.shot("state-kit-switcher")
+            run.page.locator(".menu-list [role=menuitemradio]", has_text="Scrolls").click()
+            run.page.wait_for_timeout(900)
+            run.shot("state-scrolls")
+            if "Scrolls" not in run.page.locator(".kit-switcher").inner_text():
+                failures.append("switching to Scrolls did not change the kit")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.page.click(".kit-switcher")
+            run.page.locator(".menu-list [role=menuitemradio]", has_text="Tongues").click()
+            run.page.wait_for_timeout(900)
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
 
             # Concordance with a query (roadmap 71).
             run.front("concordance", "Concordance")
