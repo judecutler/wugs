@@ -363,8 +363,10 @@ export const mediaPanel: PanelDef = {
         wavesFor = project;
         waves.clear();
         queue.length = 0;
+        // The last project's cards would be drawn and asked for against this one.
+        sources = [];
       } else {
-        // New data may have brought audio that was missing: ask again.
+        // Any redraw (new data, another text) asks again for audio that was missing.
         for (const [id, w] of waves) if (w === "missing" || w === "failed") waves.delete(id);
       }
       drawList();
