@@ -34,7 +34,7 @@ AppImage: `chmod +x wugs_*.AppImage && ./wugs_*.AppImage`. Debian or Ubuntu: `su
 
 wugs can update itself from the repository's GitHub Releases. This is an **Online** feature.
 
-- **Checking.** Shortly after wugs starts, it asks GitHub once whether a newer release exists (a few kilobytes). If you are offline, nothing happens. To stop this, open the **Updates…** menu in the header and choose **Stop checking at start**. The setting is per computer. **Check for updates now** works either way.
+- **Checking.** Shortly after wugs starts, it asks GitHub once whether a newer release exists (a few kilobytes). If you are offline, nothing happens. To stop this, open the **Updates** menu in the header and turn off **Check when wugs starts**. The setting is per computer. **Check for updates now** works either way.
 - **Asking.** When a newer version exists, a line under the header says so, for example "wugs 0.2.0 is available (42 MB)". Choose **Install and restart**, **Later** or **What's new**. Nothing downloads until you choose Install and restart, so a slow or paid connection is never used without your say.
 - **Installing.** wugs downloads the update with a progress bar, checks its signature against the key built into the app, installs it and restarts. If a recording is in progress, wugs refuses to restart until you stop it; a finished download waits.
 - On Windows wugs finishes what it was saving, closes the project and hands over to the installer, which opens the new version. On Linux, an AppImage replaces itself; a `.deb` install downloads the new `.deb` and asks for your password (`pkexec dpkg -i`). A `.deb` install is never given the AppImage.

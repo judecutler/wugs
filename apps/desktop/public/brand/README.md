@@ -4,7 +4,7 @@ Drop the wugs logo files here; the app picks them up with no code change.
 
 | File | Used for | Notes |
 | --- | --- | --- |
-| `logo.svg` | the top bar, left of the kit name | the plain wug in brand blue, written by `tools/brand/trace_wugs.py` from the drawings in `design/wugs/`; shown at `--logo-height` (28 px), width follows the drawing. Without this file the top bar shows the kit name alone. |
+| `logo.svg` | the installer artwork (`tools/brand/installer_art.py`) and anywhere the plain wug is wanted as a file | the plain wug in brand blue, written by `tools/brand/trace_wugs.py` from the drawings in `design/wugs/`. The top bar draws the active kit's own wug from the vector parts instead, at `--logo-height` (28 px). |
 
 App icons (the window, taskbar, installer and macOS dock) are generated from
 `design/wugs/icon.png` (1024 × 1024, written by the same script):

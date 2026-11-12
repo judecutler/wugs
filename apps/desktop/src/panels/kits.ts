@@ -74,10 +74,10 @@ export const kitsPanel: PanelDef = {
     const sameStart = (a: Kit, b: Kit) => JSON.stringify([a.layout, a.active]) === JSON.stringify([b.layout, b.active]);
 
     /** The kit in use keeps its live arrangement when its start changes;
-     * Reset layout shows the new one. Said once, where it happened. */
+     * Workspace › Reset shows the new one. Said once, where it happened. */
     function startChanged(id: string, before: Kit, after: Kit, fromWorkspace: boolean) {
       if (fromWorkspace || sameStart(before, after) || getKits()?.active !== id) return;
-      showToast({ tone: "info", lines: ["Saved. Reset layout shows the workspace as this kit now starts."] });
+      showToast({ tone: "info", lines: ["Saved. Workspace › Reset shows the workspace as this kit now starts."] });
     }
 
     /** Save a change to a user kit, applied to its newest saved state, so

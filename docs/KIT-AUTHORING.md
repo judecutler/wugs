@@ -18,7 +18,7 @@ A kit file may not contain a `[scripts]` section. wugs refuses to install a kit 
 
 ## Build a kit in the Kit Builder
 
-The Kit Builder is the **Kits** panel. To open it, click **Show panel…** in the top bar and choose **Kits**.
+The Kit Builder is the **Kits** panel. To open it, open the **Workspace** menu in the top bar and choose **Kits** under **Show a closed panel**.
 
 ### Start from a copy
 
@@ -64,9 +64,9 @@ A code save keeps your text exactly as you typed it. A form edit that changes th
 
 ### Use the kit
 
-Click **Use** beside a kit to switch the workspace to it. The active kit sets the name in the top bar, the panels in the **Show panel…** menu, and where **Reset layout** puts the panels.
+Click **Use** beside a kit to switch the workspace to it. The active kit sets the name in the top bar, the panels listed under **Show a closed panel** in the **Workspace** menu, and where **Reset to how … starts** in that menu puts the panels.
 
-wugs never rebuilds the workspace while you work in it. After you change how the kit in use starts, click **Reset layout** in the top bar to see the new start.
+wugs never rebuilds the workspace while you work in it. After you change how the kit in use starts, choose **Workspace › Reset to how … starts** in the top bar to see the new start.
 
 ## Write a kit by hand
 
@@ -116,7 +116,7 @@ These are the panel ids this version of wugs has:
 
 An id this version does not have is kept, so a kit written for a newer version still loads. The Kit Builder notes such ids under the kit.
 
-A tool you turn on but do not place in the layout starts closed. Open it from **Show panel…**.
+A tool you turn on but do not place in the layout starts closed. Open it from the **Workspace** menu.
 
 #### `[layout]`: where the panels start
 
@@ -186,7 +186,7 @@ In this kit:
 - The Lexicon fills the workspace first.
 - Elicit goes to its left, 420 pixels wide. Search and People join Elicit as tabs.
 - Conflicts goes to the right of the Lexicon. It is not in `enabled`, because it is always offered.
-- `texts` is turned on but not placed, so it starts closed and is in **Show panel…**.
+- `texts` is turned on but not placed, so it starts closed and is listed in the **Workspace** menu.
 - `active` brings Elicit to the front of its tab group.
 
 ## Install and share a kit
@@ -218,5 +218,5 @@ To delete a kit, click **Delete** beside it, then click **Delete? Click again**.
 - A kit's id cannot change after the kit is made. To use another id, duplicate the kit.
 - The kit in use is chosen per computer. It is not stored in the project and does not sync.
 - `[templates]` and `[validators]` are kept but not applied.
-- wugs saves each kit's rearranged workspace as soon as you use the kit. When a wugs update changes how Tongues starts, click **Reset layout** to see the new start.
+- wugs saves each kit's rearranged workspace as soon as you use the kit. When a wugs update changes how Tongues starts, choose **Workspace › Reset to how Tongues starts** to see the new start.
 - Kits cannot contain scripts.
