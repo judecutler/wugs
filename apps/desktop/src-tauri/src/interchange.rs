@@ -99,11 +99,22 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         Some(Format::Toolbox)
     } else if head.starts_with("File type = \"ooTextFile\"") {
         Some(Format::TextGrid)
+    } else if ext == "txt" && tab_table(head) {
+        // Excel's "Unicode text": tab-separated columns saved as .txt.
+        Some(Format::Table { tabs: true })
     } else if ext == "txt" {
         Some(Format::PlainText)
     } else {
         None
     }
+}
+
+/// Whether text looks like a tab-separated table: the first lines all hold
+/// the same number of tabs, at least one.
+fn tab_table(head: &str) -> bool {
+    let lines: Vec<&str> = head.lines().filter(|l| !l.trim().is_empty()).take(5).collect();
+    let tabs = lines.first().map_or(0, |l| l.matches('\t').count());
+    tabs > 0 && lines.len() >= 2 && lines.iter().all(|l| l.matches('\t').count() == tabs)
 }
 
 /// The start of a file as text, for sniffing only: lossy, so a cut through
@@ -120,13 +131,22 @@ fn sniff(head: &[u8]) -> String {
     }
 }
 
-/// XML formats declare UTF-8 or UTF-16; anything else is a damaged file,
-/// refused rather than read as Latin-1 (which would store garbled text).
 /// A text with this title whose transcription segments are exactly these units, if any.
 fn same_text(p: &wugs_core::Project, title: &str, units: &[String]) -> Result<Option<String>, String> {
-    let (_, transcription) = crate::concordance::corpus_tiers(p)?;
+    let mut candidates = Vec::new();
     for t in p.proj.entities_of_kind("text")? {
-        if p.proj.field_str(&t, "title")?.as_deref() != Some(title) {
+        if p.proj.field_str(&t, "title")?.as_deref() == Some(title) {
+            candidates.push(t);
+        }
+    }
+    same_text_among(p, &candidates, units)
+}
+
+/// Which of these texts (already found by title) holds exactly these units.
+fn same_text_among(p: &wugs_core::Project, candidates: &[String], units: &[String]) -> Result<Option<String>, String> {
+    let (_, transcription) = crate::concordance::corpus_tiers(p)?;
+    for t in candidates.iter().cloned() {
+        if p.proj.is_tombstoned(&t)? {
             continue;
         }
         let mut held = Vec::new();
@@ -142,6 +162,8 @@ fn same_text(p: &wugs_core::Project, title: &str, units: &[String]) -> Result<Op
     Ok(None)
 }
 
+/// XML formats declare UTF-8 or UTF-16; anything else is a damaged file,
+/// refused rather than read as Latin-1 (which would store garbled text).
 fn decode_xml(bytes: &[u8], name: &str) -> Result<String, String> {
     let utf16 = |rest: &[u8], be: bool| {
         if rest.len() % 2 != 0 {
@@ -201,9 +223,10 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::Table { .. } => decode_xml(&bytes, file_name)?,
-        // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16.
-        Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText => decode_xml(&bytes, file_name)?,
+        // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
+        // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
+        Format::TextGrid | Format::Toolbox | Format::Table { .. } => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
     };
     let input = input.trim_start_matches('\u{feff}');
     let p = session::project(s)?;
@@ -296,17 +319,23 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             if input.contains('\0') {
                 return Err(format!("{file_name} is not valid UTF-8 or UTF-16 text; it may be damaged, so nothing was imported"));
             }
-            let table = crate::table_text::parse(input, if tabs { b'\t' } else { b',' }).map_err(|e| format!("{file_name}: {e}"))?;
+            let table = crate::table_text::parse(input, tabs).map_err(|e| format!("{file_name}: {e}"))?;
             if table.documents.is_empty() {
                 return Err(format!("{file_name} has no text in its «{}» column; nothing was imported", table.text_column));
             }
             let tier = session::utterance_tier(p)?;
+            // Texts already here by title, looked up once rather than per document.
+            let mut by_title: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+            for t in p.proj.entities_of_kind("text")? {
+                by_title.entry(p.proj.field_str(&t, "title")?.unwrap_or_default()).or_default().push(t);
+            }
             let (mut made, mut matched, mut segments, mut first) = (0usize, 0usize, 0usize, None);
             for (title, rows) in &table.documents {
                 let title = p.proj.nfc(title.as_deref().unwrap_or(&stem));
-                let rows: Vec<(String, Vec<(String, String)>)> = rows.iter().filter(|r| !r.text.trim().is_empty()).map(|r| (p.proj.nfc(r.text.trim()), r.extras.clone())).collect();
+                let rows: Vec<(String, Vec<(String, String)>)> = rows.iter().filter(|r| !r.text.trim().is_empty()).map(|r| (p.proj.nfc(r.text.trim()), r.extras.iter().map(|(n, v)| (n.clone(), p.proj.nfc(v))).collect())).collect();
                 let units: Vec<String> = rows.iter().map(|(t, _)| t.clone()).collect();
-                let text = match same_text(p, &title, &units)? {
+                let candidates = by_title.get(&title).cloned().unwrap_or_default();
+                let text = match same_text_among(p, &candidates, &units)? {
                     Some(t) => {
                         matched += 1;
                         t
@@ -315,17 +344,30 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                         let refs: Vec<(&str, Vec<(String, String)>)> = rows.iter().map(|(t, x)| (t.as_str(), x.clone())).collect();
                         made += 1;
                         segments += refs.len();
-                        p.import_written_rows(&title, &tier, &refs)?.0
+                        let id = p.import_written_rows(&title, &tier, &refs)?.0;
+                        by_title.entry(title.clone()).or_default().push(id.clone());
+                        id
                     }
                 };
                 first.get_or_insert(text);
             }
-            lines.push(format!("{} with {} from the column «{}»{}.", plural(made, "new text", "new texts"), plural(segments, "segment", "segments"), table.text_column, table.group_column.as_ref().map(|g| format!(", one text per «{g}»")).unwrap_or_default()));
+            let sep = match table.delimiter {
+                b'\t' => "tabs".to_string(),
+                b';' => "semicolons".to_string(),
+                b',' => "commas".to_string(),
+                d => format!("«{}»", d as char),
+            };
+            lines.push(format!("{} with {} from the column «{}»{}, cells separated by {sep}.", plural(made, "new text", "new texts"), plural(segments, "segment", "segments"), table.text_column, table.group_column.as_ref().map(|g| format!(", one text per «{g}»")).unwrap_or_default()));
+            if table.ungrouped > 0 {
+                lines.push(format!("{} had no «{}» and went into «{stem}».", plural(table.ungrouped, "row", "rows"), table.group_column.clone().unwrap_or_default()));
+            }
             if matched > 0 {
                 lines.push(format!("{} matched a text already here; nothing was added for them.", plural(matched, "document", "documents")));
             }
             if !table.kept.is_empty() {
-                lines.push(format!("Kept with each sentence: {}.", table.kept.iter().map(|k| format!("«{k}»")).collect::<Vec<_>>().join(", ")));
+                let shown: Vec<String> = table.kept.iter().take(8).map(|k| format!("«{k}»")).collect();
+                let more = if table.kept.len() > 8 { format!(" and {} more", table.kept.len() - 8) } else { String::new() };
+                lines.push(format!("Stored with each sentence, not yet shown in wugs: {}{more}.", shown.join(", ")));
             }
             (first, false)
         }
@@ -574,6 +616,8 @@ mod tests {
         assert_eq!(detect(Path::new("dict.txt"), b"\\_sh v3.0  400  Dictionary\n"), Some(Format::Toolbox));
         assert_eq!(detect(Path::new("x.txt"), b"File type = \"ooTextFile\"\n"), Some(Format::TextGrid));
         assert_eq!(detect(Path::new("notes.txt"), b"hello"), Some(Format::PlainText));
+        assert_eq!(detect(Path::new("sheet.txt"), b"text\tspeaker\nhello\tMaria\n"), Some(Format::Table { tabs: true }), "Excel's Unicode text");
+        assert_eq!(detect(Path::new("corpus.CSV"), b"a,b\n"), Some(Format::Table { tabs: false }));
         assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
         assert_eq!(detect(Path::new("dict.txt"), b"\n\\lx kanu\n\\ps n\n"), Some(Format::Toolbox), "MDF with no header");
         assert_eq!(detect(Path::new("dict.txt"), b"\\lx\n"), Some(Format::Toolbox));
