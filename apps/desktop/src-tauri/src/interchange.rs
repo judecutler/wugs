@@ -74,7 +74,14 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
     }
     let head = sniff(&bytes[..bytes.len().min(4096)]);
     let head = head.trim_start_matches('\u{feff}').trim_start();
-    if head.starts_with("\\_sh") {
+    // A Toolbox database starts `\_sh`; a hand-made MDF file often has no
+    // header and starts straight with a marker such as `\lx`.
+    let first = head.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
+    let marker = first.strip_prefix('\\').is_some_and(|rest| {
+        let name: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+        !name.is_empty() && rest[name.len()..].chars().next().is_none_or(char::is_whitespace)
+    });
+    if head.starts_with("\\_sh") || marker {
         Some(Format::Toolbox)
     } else if head.starts_with("File type = \"ooTextFile\"") {
         Some(Format::TextGrid)
@@ -225,10 +232,17 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             (None, true)
         }
         Format::PlainText => {
-            let units = crate::plaintext::segments(input);
+            // UTF-16 without its mark reads as valid UTF-8 full of NULs: a damaged file.
+            if input.contains('\0') {
+                return Err(format!("{file_name} is not valid UTF-8 or UTF-16 text; it may be damaged, so nothing was imported"));
+            }
+            let (units, cut) = crate::plaintext::segments(input);
             if units.is_empty() {
                 return Err(format!("{file_name} has no text in it; nothing was imported"));
             }
+            // Titles and segments are stored in NFC; compare in NFC too.
+            let stem = p.proj.nfc(&stem);
+            let units: Vec<String> = units.iter().map(|u| p.proj.nfc(u)).collect();
             // The same file again (same title, same sentences) adds nothing.
             let (_, transcription) = crate::concordance::corpus_tiers(p)?;
             let mut same = None;
@@ -254,7 +268,10 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 let tier = session::utterance_tier(p)?;
                 let refs: Vec<&str> = units.iter().map(String::as_str).collect();
                 let (text, _) = p.import_written_text(&stem, &tier, &refs)?;
-                lines.push(format!("A new text with {}.", plural(units.len(), "sentence", "sentences")));
+                lines.push(match cut {
+                    crate::plaintext::Cut::ByLine => format!("A new text with {}, one per line of the file.", plural(units.len(), "segment", "segments")),
+                    crate::plaintext::Cut::BySentence => format!("A new text with {}, the file's paragraphs cut into sentences.", plural(units.len(), "segment", "segments")),
+                });
                 (Some(text), false)
             }
         }
@@ -378,14 +395,38 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             out.textgrid
         }
         Format::PlainText => {
+            // One tier, in time order: the utterance tier when it holds this
+            // text's segments, else the transcription tier with the most.
             let (_, transcription) = crate::concordance::corpus_tiers(p)?;
-            let mut lines = Vec::new();
-            for seg in p.proj.ordered_children("text", text_id, "segment")? {
-                if transcription.contains(&p.proj.field_str(&seg, "tier")?.unwrap_or_default()) {
-                    lines.push(p.proj.field_str(&seg, "content")?.unwrap_or_default());
+            let mut by_tier: Vec<(String, Vec<(Option<f64>, usize, String)>)> = Vec::new();
+            for (i, seg) in p.proj.ordered_children("text", text_id, "segment")?.into_iter().enumerate() {
+                let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
+                if !transcription.contains(&tier) {
+                    continue;
+                }
+                let row = (p.proj.field_num(&seg, "start")?, i, p.proj.field_str(&seg, "content")?.unwrap_or_default());
+                match by_tier.iter_mut().find(|(t, _)| *t == tier) {
+                    Some((_, rows)) => rows.push(row),
+                    None => by_tier.push((tier, vec![row])),
                 }
             }
-            crate::plaintext::export(&lines)
+            let utterance = session::find_utterance_tier(p)?;
+            let pick = by_tier.iter().position(|(t, _)| Some(t) == utterance.as_ref()).or_else(|| (0..by_tier.len()).max_by_key(|&i| by_tier[i].1.len()));
+            let mut rows = pick.map(|i| by_tier[i].1.clone()).unwrap_or_default();
+            // Timed segments by start, untimed after them in their own order.
+            rows.sort_by(|a, b| match (a.0, b.0) {
+                (Some(x), Some(y)) => x.total_cmp(&y).then(a.1.cmp(&b.1)),
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => a.1.cmp(&b.1),
+            });
+            if by_tier.len() > 1 {
+                if let Some(i) = pick {
+                    let name = p.proj.field_str(&by_tier[i].0, "name")?.unwrap_or_default();
+                    notes.push(format!("Plain text holds one track: «{name}» was written; the other transcription tracks were left out."));
+                }
+            }
+            crate::plaintext::export(&rows.into_iter().map(|r| r.2).collect::<Vec<_>>())
         }
         Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
     };
@@ -478,6 +519,9 @@ mod tests {
         assert_eq!(detect(Path::new("x.txt"), b"File type = \"ooTextFile\"\n"), Some(Format::TextGrid));
         assert_eq!(detect(Path::new("notes.txt"), b"hello"), Some(Format::PlainText));
         assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
+        assert_eq!(detect(Path::new("dict.txt"), b"\n\\lx kanu\n\\ps n\n"), Some(Format::Toolbox), "MDF with no header");
+        assert_eq!(detect(Path::new("dict.txt"), b"\\lx\n"), Some(Format::Toolbox));
+        assert_eq!(detect(Path::new("essay.txt"), b"\\ is a backslash"), Some(Format::PlainText));
         let mut utf16: Vec<u8> = vec![0xFF, 0xFE];
         utf16.extend("\\_sh v3.0".encode_utf16().flat_map(|u| u.to_le_bytes()));
         utf16.extend([0x3D, 0xD8]); // half a surrogate pair, cut at the sniffing limit

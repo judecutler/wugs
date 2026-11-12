@@ -568,11 +568,19 @@ pub(crate) fn next_pos_index(p: &Project, text_id: &str) -> Result<usize, String
     Ok(next)
 }
 
-pub(crate) fn utterance_tier(p: &mut Project) -> Result<String, String> {
+/// The project's utterance tier if it exists, writing nothing.
+pub(crate) fn find_utterance_tier(p: &Project) -> Result<Option<String>, String> {
     for id in p.proj.entities_of_kind("tier")? {
         if p.proj.field_str(&id, "origin")?.as_deref() == Some(UTTERANCE_ORIGIN) {
-            return Ok(id);
+            return Ok(Some(id));
         }
+    }
+    Ok(None)
+}
+
+pub(crate) fn utterance_tier(p: &mut Project) -> Result<String, String> {
+    if let Some(id) = find_utterance_tier(p)? {
+        return Ok(id);
     }
     let mut t = p.intent("create-tier");
     let id = t.create(

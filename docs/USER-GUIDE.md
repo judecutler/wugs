@@ -450,7 +450,7 @@ wugs reads these formats:
 - FLEx `.flextext` and LIFT `.lift`
 - Praat `.TextGrid`
 - Toolbox `.db`, `.sfm`, and `.lex`, and `.txt` files in Toolbox format
-- Plain text `.txt`: any other text file becomes a text named after the file. A file with a sentence per line comes in a segment per line. A file with paragraphs (blank lines between them) is cut into sentences after `.`, `!`, `?` and the full stops of other scripts; a lower-case word after a full stop does not start a new sentence, so "e.g. the" stays together, but "Dr. Smith" is cut. The file must be UTF-8 or UTF-16; a damaged one is refused. Importing the same file again adds nothing.
+- Plain text `.txt`: any other text file becomes a text named after the file, and the message says how it was cut. A file whose lines mostly end in a full stop, with no blank lines, comes in a segment per line. Otherwise blank lines separate paragraphs, a line ending in a full stop ends its sentence, and inside a line a sentence ends after `.`, `!`, `?` or the full stop of another script when the next word starts with a capital, a digit or a quote; "e.g. the" stays together, but "Dr. Smith" is cut. Thai and Lao paragraphs come in whole, and an orthography written all in lower case is cut only at line ends and blank lines. The file must be UTF-8 or UTF-16; a damaged one is refused. Importing the same file again adds nothing.
 
 A message reports what wugs imported, and the new text is selected. The import report also counts anything the format holds that wugs does not keep. For FLEx, that includes LIFT examples, notes, pronunciations, relations, and etymologies.
 
@@ -458,7 +458,7 @@ An imported ELAN or Praat text is not linked to its recording. Import the audio 
 
 ### Export a text or the lexicon
 
-To export a text, select it, choose ELAN (.eaf), FLEx (.flextext), Praat (.TextGrid), or plain text, and click **Export…**. Plain text writes a segment per line, which AntConc and most corpus tools read.
+To export a text, select it, choose ELAN (.eaf), FLEx (.flextext), Praat (.TextGrid), or plain text, and click **Export…**. Plain text writes one track a segment per line, in time order, which AntConc and most corpus tools read.
 
 To export the lexicon, choose LIFT or Toolbox beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT.
 

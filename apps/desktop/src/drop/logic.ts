@@ -41,7 +41,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 export function overlayWords(projectOpen: boolean, dragged: Dragged): { title: string; detail: string } {
   if (!projectOpen) return { title: "Open a project first", detail: "Dropped files go into the open project. Nothing is imported now." };
-  const detail = "Recordings go to the media bin. ELAN, FLEx, Praat and Toolbox files become texts or lexicon entries.";
+  const detail = "Recordings go to the media bin. ELAN, FLEx, Praat, Toolbox and plain text files become texts or lexicon entries.";
   if (dragged.count === 0) return { title: "Drop to import", detail };
   if (dragged.audio === dragged.count) return { title: `Drop to import ${plural(dragged.count, "recording", "recordings")}`, detail };
   return { title: `Drop to import ${plural(dragged.count, "file", "files")}`, detail };
@@ -88,4 +88,4 @@ export const projectChangedReason = "another project was opened after it was dro
 export const projectClosedReason = "the project it was dropped into is no longer open.";
 
 export const unsupportedReason =
-  "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF) ELAN, FLEx, Praat and Toolbox files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex) and plain text (.txt).";
+  "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF), ELAN, FLEx, Praat and Toolbox files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex), and plain text (.txt).";
