@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { asTsv, clip, countLine, keyword, left, right, sortHits, type Hit } from "./logic.ts";
+import { asTsv, clip, countLine, isRtl, keyword, left, right, sortHits, type Hit } from "./logic.ts";
 
 const hit = (words: string[], at: number, title = "T"): Hit => ({ textId: title, textTitle: title, segmentId: words.join("_"), tierId: "u", startMs: 0, endMs: 1, words, at, breakdown: null, glosses: null });
 
@@ -17,9 +17,19 @@ test("sorting by the word before compares the nearest word first", () => {
   assert.deepEqual(sortHits(hits, "text"), hits);
 });
 
-test("sorting by the word after ignores case and accents", () => {
-  const hits = [hit(["KEY", "Zeta"], 0), hit(["KEY", "ábc"], 0), hit(["KEY", "abd"], 0)];
-  assert.deepEqual(sortHits(hits, "right").map((h) => right(h)), ["ábc", "abd", "Zeta"]);
+test("sorting by the word after ignores case but not diacritics", () => {
+  const hits = [hit(["KEY", "Zeta"], 0), hit(["KEY", "abd"], 0), hit(["KEY", "Abc"], 0)];
+  assert.deepEqual(sortHits(hits, "right").map((h) => right(h)), ["Abc", "abd", "Zeta"]);
+  // na and ŋa are not ties: their order is stable and not by input order alone.
+  const a = sortHits([hit(["KEY", "ŋa"], 0), hit(["KEY", "na"], 0)], "right").map((h) => right(h));
+  const b = sortHits([hit(["KEY", "na"], 0), hit(["KEY", "ŋa"], 0)], "right").map((h) => right(h));
+  assert.deepEqual(a, b);
+});
+
+test("right-to-left scripts are recognised", () => {
+  assert.ok(isRtl("كتاب"));
+  assert.ok(isRtl("ספר"));
+  assert.ok(!isRtl("ŋai"));
 });
 
 test("long context is cut at a word, with … on the far side", () => {

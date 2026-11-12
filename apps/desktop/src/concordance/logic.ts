@@ -35,7 +35,8 @@ export const left = (h: Hit): string => h.words.slice(0, h.at).join(" ");
 export const right = (h: Hit): string => h.words.slice(h.at + 1).join(" ");
 export const keyword = (h: Hit): string => h.words[h.at] ?? "";
 
-const collator = new Intl.Collator(undefined, { sensitivity: "base", numeric: true });
+// Case is ignored, diacritics are not: ŋa and na are different words.
+const collator = new Intl.Collator(undefined, { sensitivity: "accent", numeric: true });
 
 /** Sorted copy. Left context sorts by the nearest word first, then the next
  * one out, as concordancers (AntConc's 1L, 2L) do; right context likewise. */
@@ -83,3 +84,6 @@ export function asTsv(hits: readonly Hit[]): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
   return ["left\tkeyword\tright\ttext", ...hits.map((h) => [left(h), keyword(h), right(h), h.textTitle].map(clean).join("\t"))].join("\n");
 }
+
+/** Right-to-left scripts (Hebrew, Arabic, Syriac, Thaana, N'Ko …): the row is laid out from the right. */
+export const isRtl = (s: string): boolean => /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u.test(s);

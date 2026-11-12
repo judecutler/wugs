@@ -979,3 +979,7 @@ body::before {
 .cc-right { grid-area: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cc-meta { grid-area: meta; display: flex; gap: 8px; justify-content: space-between; font-family: var(--font-ui, inherit); font-size: var(--text-xs); color: var(--muted); min-width: 0; }
 .cc-meta span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* A right-to-left row: the grid runs from the right, so what came before the
+   keyword sits on its right; that side is cut at its far (right) end. */
+.cc-row[dir="rtl"] .cc-left { direction: ltr; text-align: left; }
+.cc-row[dir="rtl"] .cc-right { direction: rtl; text-align: right; unicode-bidi: plaintext; }
