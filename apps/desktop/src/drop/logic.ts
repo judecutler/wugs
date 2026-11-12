@@ -5,6 +5,18 @@
 
 export type Kind = "recording" | "file" | "unsupported";
 
+/** What the window does with a drag. Files are imported; a dock tab drag
+ * and a drag over a text field go on to them; anything else (a link or
+ * text from another program) is refused, so the webview never opens it as
+ * a page. */
+export type DragAction = "import" | "pass" | "refuse";
+
+export function dragAction(drag: { files: boolean; dock: boolean; editable: boolean }): DragAction {
+  if (drag.files) return "import";
+  if (drag.dock || drag.editable) return "pass";
+  return "refuse";
+}
+
 const RECORDINGS = new Set(["wav", "wave", "m4a", "mp4", "aac", "mp3", "flac", "ogg", "oga", "aif", "aiff", "aifc"]);
 const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "txt"]);
 
@@ -70,6 +82,8 @@ export function outcomeLines(name: string, outcome: Outcome): string[] {
       return [`«${name}» was not imported: ${outcome.reason}`];
   }
 }
+
+export const projectChangedReason = "another project was opened after it was dropped.";
 
 export const unsupportedReason =
   "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF) and ELAN, FLEx, Praat and Toolbox files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex, .txt).";

@@ -657,7 +657,13 @@ pub fn import_media(session: &mut Session, path: &str) -> Result<SourceRow, Stri
 
 /// Import a WAV under another name: a compressed recording decoded by
 /// `convert::to_wav` keeps its own file name as the source's label.
-pub fn import_media_named(session: &mut Session, wav: &Path, label: &str) -> Result<SourceRow, String> {
+/// `expected_root`: the project the recording was meant for (a dropped
+/// file); checked in this same call, so a project opened meanwhile gets
+/// nothing.
+pub fn import_media_named(session: &mut Session, wav: &Path, label: &str, expected_root: Option<&Path>) -> Result<SourceRow, String> {
+    if let Some(root) = expected_root {
+        require_root(session, root)?;
+    }
     let open = session.as_mut().ok_or_else(|| "no project is open".to_string())?;
     import_wav(open, wav, label)
 }
@@ -678,6 +684,16 @@ pub fn import_capture(session: &mut Session, done: Recorded, label: &str) -> Res
 
 pub fn project_root(session: &mut Session) -> Result<PathBuf, String> {
     session.as_ref().map(|p| p.root.clone()).ok_or_else(|| "no project is open".to_string())
+}
+
+/// Refused when another project than `expected` is open now: work begun in
+/// one project, such as a dropped file, must not land in another.
+pub fn require_root(session: &mut Session, expected: &Path) -> Result<(), String> {
+    let root = project_root(session)?;
+    match (root.canonicalize(), expected.canonicalize()) {
+        (Ok(now), Ok(then)) if now == then => Ok(()),
+        _ => Err("another project was opened after the files were dropped; nothing was imported".into()),
+    }
 }
 
 fn import_wav(open: &mut OpenProject, file: &Path, label: &str) -> Result<SourceRow, String> {

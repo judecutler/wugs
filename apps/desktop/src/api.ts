@@ -471,7 +471,8 @@ export type Sealed = { path: string; files: number; bytes: number; texts: number
 export const importFile = (args: { path: string }) => invoke<Imported>("import_file", args);
 // Files dropped onto the window (src-tauri/src/drops.rs): copied in pieces, then imported like a picked file.
 export type Dropped = { kind: "recording"; source: SourceRow } | { kind: "file"; imported: Imported };
-export const dropBegin = (args: { name: string; size: number }) => invoke<string>("drop_begin", args);
+/** `project`: the folder of the project open when the files were dropped; refused if another one is open now. */
+export const dropBegin = (args: { project: string; name: string; size: number }) => invoke<string>("drop_begin", args);
 /** The piece travels as the raw request body; the id rides in a header. */
 export const dropChunk = (dropId: string, bytes: Uint8Array) => invoke<void>("drop_chunk", bytes, { headers: { "x-drop-id": dropId } });
 export const dropFinish = (args: { dropId: string }) => invoke<Dropped>("drop_finish", args);

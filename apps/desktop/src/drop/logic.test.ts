@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chunks, classify, outcomeLines, overlayWords, progressLine } from "./logic.ts";
+import { chunks, classify, dragAction, outcomeLines, overlayWords, progressLine } from "./logic.ts";
 
 test("each file takes the import its type needs", () => {
   assert.equal(classify("Interview 3.WAV"), "recording");
@@ -36,4 +36,12 @@ test("progress and results read in words", () => {
   assert.equal(progressLine("a.wav", 10, 10, 2), "Importing «a.wav»… (2 more files after this)");
   assert.deepEqual(outcomeLines("a.eaf", { kind: "file", format: "ELAN", lines: ["A new text was made."], text: "t1", lexicon: false }), ["Imported «a.eaf» (ELAN).", "A new text was made."]);
   assert.deepEqual(outcomeLines("x.docx", { kind: "refused", reason: "no." }), ["«x.docx» was not imported: no."]);
+});
+
+test("only files are imported; dock tabs and text fields keep their drags; anything else is refused", () => {
+  assert.equal(dragAction({ files: true, dock: false, editable: false }), "import");
+  assert.equal(dragAction({ files: true, dock: false, editable: true }), "import");
+  assert.equal(dragAction({ files: false, dock: true, editable: false }), "pass");
+  assert.equal(dragAction({ files: false, dock: false, editable: true }), "pass");
+  assert.equal(dragAction({ files: false, dock: false, editable: false }), "refuse", "a link from a browser never reaches the webview");
 });

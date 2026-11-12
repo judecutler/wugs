@@ -1,22 +1,50 @@
-// The whole window is one drop target for files. Only drags that carry
-// files are touched (a dockview tab drag carries none), and those are kept
-// from reaching dockview, so neither can take the other's drag. Native
-// drag-and-drop is off in tauri.conf.json (`dragDropEnabled: false`): on
-// Windows it would swallow every HTML5 drag, tabs included.
+// The whole window is one drop target for files. Native drag-and-drop is
+// off in tauri.conf.json (`dragDropEnabled: false`): on Windows it would
+// swallow every HTML5 drag, dock tabs included. With it off, the webview
+// would also open a dropped file or link as a page, so every drag is sorted
+// here first (`dragAction`): files are imported and kept from dockview, a
+// dock tab drag or a drag over a text field goes on untouched, and anything
+// else is refused. The navigation guard in lib.rs is the second layer.
 import { dropBegin, dropCancel, dropChunk, dropFinish, errorText } from "../api";
 import { h } from "../dom";
+import { getPaneData, getPanelData } from "../dockview";
 import { getState, refreshAll, selectText, showToast, touchLexicon, wantMedia } from "../store";
-import { chunks, classify, outcomeLines, overlayWords, progressLine, unsupportedReason, type Dragged, type Outcome } from "./logic";
+import {
+  chunks,
+  classify,
+  dragAction,
+  outcomeLines,
+  overlayWords,
+  progressLine,
+  projectChangedReason,
+  unsupportedReason,
+  type DragAction,
+  type Dragged,
+  type Outcome,
+} from "./logic";
 
 // The spec lets a still drag repeat dragover only every 350 ms ± 200 ms
 // (WebKit keeps to it), so a shorter silence would flicker the overlay.
 const QUIET_MS = 1000;
 
-const carriesFiles = (e: DragEvent) => e.dataTransfer?.types.includes("Files") ?? false;
+function action(e: DragEvent): DragAction {
+  const target = e.target;
+  return dragAction({
+    files: e.dataTransfer?.types.includes("Files") ?? false,
+    dock: getPanelData() !== undefined || getPaneData() !== undefined,
+    editable: target instanceof HTMLElement && (target.isContentEditable || target.closest("input, textarea") !== null),
+  });
+}
 
 function dragged(e: DragEvent): Dragged {
   const items = [...(e.dataTransfer?.items ?? [])].filter((i) => i.kind === "file");
   return { count: items.length, audio: items.filter((i) => i.type.startsWith("audio/")).length };
+}
+
+/** Keep a drag from the webview's default (opening it as a page) and from dockview. */
+function claim(e: DragEvent) {
+  e.preventDefault();
+  e.stopPropagation();
 }
 
 /** Mounts the overlay and the window listeners; returns the overlay to place in the page. */
@@ -44,20 +72,24 @@ export function dropTarget(): HTMLElement {
   window.addEventListener(
     "dragenter",
     (e) => {
-      if (!carriesFiles(e)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      show(e);
+      const act = action(e);
+      if (act === "pass") return;
+      claim(e);
+      if (act === "import") show(e);
+      else if (e.dataTransfer !== null) e.dataTransfer.dropEffect = "none";
     },
     true,
   );
   window.addEventListener(
     "dragover",
     (e) => {
-      if (!carriesFiles(e)) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.dataTransfer !== null) e.dataTransfer.dropEffect = getState().kind === "open" ? "copy" : "none";
+      const act = action(e);
+      if (act === "pass") return;
+      claim(e);
+      // `none` and the drop never arrives: a refused drag, or files with no
+      // project open (the overlay says why).
+      if (e.dataTransfer !== null) e.dataTransfer.dropEffect = act === "import" && getState().kind === "open" ? "copy" : "none";
+      if (act === "refuse") return;
       if (overlay.hidden) show(e);
       window.clearTimeout(quiet);
       quiet = window.setTimeout(hide, QUIET_MS);
@@ -67,7 +99,7 @@ export function dropTarget(): HTMLElement {
   window.addEventListener(
     "dragleave",
     (e) => {
-      if (!carriesFiles(e)) return;
+      if (action(e) !== "import") return;
       e.stopPropagation();
       if (e.relatedTarget === null) hide();
     },
@@ -76,18 +108,15 @@ export function dropTarget(): HTMLElement {
   window.addEventListener(
     "drop",
     (e) => {
-      if (!carriesFiles(e)) return;
-      // Never let the webview open the file as a page.
-      e.preventDefault();
-      e.stopPropagation();
+      const act = action(e);
+      if (act === "pass") return;
+      claim(e);
+      if (act === "refuse") return;
       hide();
+      const state = getState();
       const files = [...(e.dataTransfer?.files ?? [])];
-      if (files.length === 0) return;
-      if (getState().kind !== "open") {
-        showToast({ tone: "warn", lines: ["Open a project first, then drop the files again. Nothing was imported."] });
-        return;
-      }
-      queue.push(...files);
+      if (files.length === 0 || state.kind !== "open") return;
+      queue.push(...files.map((file) => ({ file, project: state.info.path })));
       void drain();
     },
     true,
@@ -95,10 +124,18 @@ export function dropTarget(): HTMLElement {
   return overlay;
 }
 
-const queue: File[] = [];
+/** A dropped file and the project (its folder) that was open when it was dropped. */
+type Queued = { file: File; project: string };
+
+const queue: Queued[] = [];
 let draining = false;
 
-/** One file after another; a drop during a run joins the queue. */
+const openProject = (): string | null => {
+  const state = getState();
+  return state.kind === "open" ? state.info.path : null;
+};
+
+/** One file after another; a drop during a run joins the queue. Never rejects. */
 async function drain() {
   if (draining) return;
   draining = true;
@@ -107,32 +144,39 @@ async function drain() {
   let total = 0;
   let lastText: string | null = null;
   let lexicon = false;
-  while (queue.length > 0) {
-    const file = queue.shift()!;
-    total += 1;
-    const progress = (sent: number) => showToast({ tone: "info", lines: [...report, progressLine(file.name, sent, file.size, queue.length)] });
-    const outcome = await importOne(file, progress);
-    if (outcome.kind === "refused") refused += 1;
-    if (outcome.kind === "file") {
-      lastText = outcome.text ?? lastText;
-      lexicon ||= outcome.lexicon;
+  try {
+    while (queue.length > 0) {
+      const { file, project } = queue.shift()!;
+      total += 1;
+      const progress = (sent: number) => showToast({ tone: "info", lines: [...report, progressLine(file.name, sent, file.size, queue.length)] });
+      const outcome: Outcome = openProject() === project ? await importOne(file, project, progress) : { kind: "refused", reason: projectChangedReason };
+      if (outcome.kind === "refused") refused += 1;
+      if (outcome.kind === "file") {
+        lastText = outcome.text ?? lastText;
+        lexicon ||= outcome.lexicon;
+      }
+      report.push(...outcomeLines(file.name, outcome));
     }
-    report.push(...outcomeLines(file.name, outcome));
+  } finally {
+    draining = false;
   }
-  draining = false;
   // The report first: a failed refresh below must not hide what was imported.
   showToast({ tone: refused === 0 ? "info" : refused === total ? "error" : "warn", lines: report });
-  if (lexicon) touchLexicon();
-  await refreshAll();
-  if (lastText !== null) await selectText(lastText);
+  try {
+    if (lexicon) touchLexicon();
+    await refreshAll();
+    if (lastText !== null) await selectText(lastText);
+  } catch (e) {
+    showToast({ tone: "warn", lines: [...report, `The panels could not be refreshed: ${errorText(e)}`] });
+  }
 }
 
-async function importOne(file: File, progress: (sent: number) => void): Promise<Outcome> {
+async function importOne(file: File, project: string, progress: (sent: number) => void): Promise<Outcome> {
   if (classify(file.name) === "unsupported") return { kind: "refused", reason: unsupportedReason };
   let dropId: string | null = null;
   try {
     progress(0);
-    dropId = await dropBegin({ name: file.name, size: file.size });
+    dropId = await dropBegin({ project, name: file.name, size: file.size });
     for (const [start, end] of chunks(file.size)) {
       await dropChunk(dropId, new Uint8Array(await file.slice(start, end).arrayBuffer()));
       progress(end);
