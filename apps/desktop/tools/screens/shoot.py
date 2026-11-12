@@ -35,6 +35,7 @@ PANELS = [
     ("search", "Search"),
     ("concordance", "Concordance"),
     ("frequencies", "Frequencies"),
+    ("collocates", "Collocates"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),
@@ -355,6 +356,14 @@ def main():
             run.page.wait_for_timeout(600)
             if run.page.locator(".panel-concordance .cc-query").input_value() != "nikani":
                 failures.append("a frequency row did not open the Concordance on its word")
+            # Collocates (Scrolls): a word's company, a row opens its Concordance.
+            run.front("collocates", "Collocates")
+            run.page.locator(".panel-collocates .co-node").fill("nikani")
+            run.page.locator(".panel-collocates .co-node").press("Enter")
+            run.page.wait_for_timeout(400)
+            run.shot("state-collocates", run.page.locator(".panel-collocates"))
+            if run.page.locator(".panel-collocates .co-table tbody tr").count() == 0:
+                failures.append("collocates showed no rows")
             if "Scrolls" not in run.page.locator(".kit-switcher").inner_text():
                 failures.append("switching to Scrolls did not change the kit")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")

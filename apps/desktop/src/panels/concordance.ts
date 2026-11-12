@@ -11,16 +11,17 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
 /** A query another panel asked for (Frequencies), taken by the panel once it is open. */
-type Asked = { query: string; kind: ConcordanceKind; text: { id: string; title: string } | null };
+type Asked = { query: string; kind: ConcordanceKind; text: { id: string; title: string } | null; exact: boolean };
 let pending: (Asked & { project: string }) | null = null;
 const askers = new Set<() => void>();
 
-/** Show the Concordance for exactly this item (no wildcards), in one text
- * or the whole project, opening the panel if it is closed. */
-export function askConcordance(query: string, kind: ConcordanceKind, text: { id: string; title: string } | null = null): void {
+/** Show the Concordance for this item, in one text or the whole project,
+ * opening the panel if it is closed: met exactly (a Frequencies row, whose
+ * spelling may hold a `?` glottal stop) or as a pattern (`walk*` from Collocates). */
+export function askConcordance(query: string, kind: ConcordanceKind, text: { id: string; title: string } | null = null, exact = true): void {
   const s = getState();
   if (s.kind !== "open") return;
-  pending = { query, kind, text, project: s.info.projectId };
+  pending = { query, kind, text, exact, project: s.info.projectId };
   window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "concordance" }));
   for (const take of askers) take();
 }
@@ -136,7 +137,7 @@ export const concordancePanel: PanelDef = {
       timer = window.setTimeout(() => {
         // An item asked for from Frequencies is met exactly, in its text, until the query is edited.
         const exactAsk = exactFor !== null && exactFor.query === query && exactFor.kind === kind ? exactFor : null;
-        concordance({ query, kind, exact: exactAsk !== null, textId: exactAsk?.text?.id ?? null }).then(
+        concordance({ query, kind, exact: exactAsk?.exact ?? false, textId: exactAsk?.text?.id ?? null }).then(
           (r) => {
             if (mine !== seq) return;
             asked = query;
@@ -213,7 +214,7 @@ export const concordancePanel: PanelDef = {
         return;
       }
       ({ kind } = pending);
-      exactFor = { query: pending.query, kind: pending.kind, text: pending.text };
+      exactFor = { query: pending.query, kind: pending.kind, text: pending.text, exact: pending.exact };
       input.value = pending.query;
       input.placeholder = KINDS.find((k) => k.id === kind)?.hint ?? "";
       pending = null;

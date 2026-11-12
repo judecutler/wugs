@@ -26,6 +26,7 @@ enabled = [
   "texts",                         # the documents of the corpus
   "concordance",                   # keyword in context, sortable by either side
   "frequencies",                   # how often each word, morph or gloss occurs
+  "collocates",                    # which words keep company with a word
   "search",
   "gloss",                         # morph analysis of one sentence
   "lexicon",                       # the corpus vocabulary
@@ -38,6 +39,7 @@ panels = [
   { panel = "texts", place = "left", of = "concordance", width = 260 },
   { panel = "search", place = "right", of = "concordance", width = 340 },
   { panel = "frequencies", place = "tab", of = "search" },
+  { panel = "collocates", place = "tab", of = "search" },
   { panel = "lexicon", place = "tab", of = "search" },
   { panel = "transcribe", place = "below", of = "concordance", height = 280 },
   { panel = "gloss", place = "right", of = "transcribe", width = 460 },

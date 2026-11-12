@@ -2,6 +2,7 @@ pub mod assist;
 pub mod capability;
 pub mod capture;
 pub mod concordance;
+pub mod collocates;
 pub mod frequencies;
 pub mod conflicts;
 pub mod convert;
@@ -138,6 +139,12 @@ fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, 
 #[tauri::command(async)]
 fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>) -> Result<frequencies::Frequencies, String> {
     s.run(move |s| frequencies::frequencies(s, kind, text_id.as_deref()))
+}
+
+/// Which words keep company with a word (Scrolls' collocates).
+#[tauri::command(async)]
+fn collocates(s: State<SessionThread>, node: String, kind: concordance::Kind, left: usize, right: usize, min_together: usize, text_id: Option<String>) -> Result<collocates::Collocates, String> {
+    s.run(move |s| collocates::collocates(s, &node, kind, left, right, min_together, text_id.as_deref()))
 }
 
 /// Remember which recording a text was transcribed from, or forget it (roadmap 72).
@@ -1387,6 +1394,7 @@ pub fn run() {
             link_recording,
             media_overview,
             frequencies,
+            collocates,
             get_text,
             create_text,
             import_file,
