@@ -75,12 +75,16 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
     let head = sniff(&bytes[..bytes.len().min(4096)]);
     let head = head.trim_start_matches('\u{feff}').trim_start();
     // A Toolbox database starts `\_sh`; a hand-made MDF file often has no
-    // header and starts straight with a marker such as `\lx`.
-    let first = head.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
-    let marker = first.strip_prefix('\\').is_some_and(|rest| {
-        let name: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
-        !name.is_empty() && rest[name.len()..].chars().next().is_none_or(char::is_whitespace)
-    });
+    // header and starts straight with a marker such as `\lx`, and most of
+    // its lines are marker lines (a text that opens with `\noindent` is not).
+    let is_marker = |l: &str| {
+        l.trim_start().strip_prefix('\\').is_some_and(|rest| {
+            let name: String = rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '_').collect();
+            !name.is_empty() && rest[name.len()..].chars().next().is_none_or(char::is_whitespace)
+        })
+    };
+    let first: Vec<&str> = head.lines().filter(|l| !l.trim().is_empty()).take(10).collect();
+    let marker = first.first().is_some_and(|l| is_marker(l)) && first.iter().filter(|l| is_marker(l)).count() * 2 > first.len();
     if head.starts_with("\\_sh") || marker {
         Some(Format::Toolbox)
     } else if head.starts_with("File type = \"ooTextFile\"") {
@@ -521,6 +525,8 @@ mod tests {
         assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
         assert_eq!(detect(Path::new("dict.txt"), b"\n\\lx kanu\n\\ps n\n"), Some(Format::Toolbox), "MDF with no header");
         assert_eq!(detect(Path::new("dict.txt"), b"\\lx\n"), Some(Format::Toolbox));
+        let essay = b"\\noindent The fox came to the well.\nIt looked down.\nThen it went home.\n";
+        assert_eq!(detect(Path::new("essay.txt"), essay), Some(Format::PlainText), "a text that opens with a command");
         assert_eq!(detect(Path::new("essay.txt"), b"\\ is a backslash"), Some(Format::PlainText));
         let mut utf16: Vec<u8> = vec![0xFF, 0xFE];
         utf16.extend("\\_sh v3.0".encode_utf16().flat_map(|u| u.to_le_bytes()));
