@@ -101,10 +101,56 @@ fn sealing_makes_a_new_package_each_time() {
 }
 
 #[test]
+fn a_plain_text_comes_in_a_sentence_per_segment_and_goes_out_a_line_per_segment() {
+    let dir = TempDir::new();
+    let mut a = project(&dir, "a");
+    let f = dir.0.join("Fox essay.txt");
+    fs::write(&f, "The fox came. It drank from the well!\n\nThen it left.\n").unwrap();
+    let imported = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    let text = imported.text.clone().unwrap();
+    let detail = session::get_text(&mut a, &text).unwrap();
+    assert_eq!(detail.title, "Fox essay");
+    let contents: Vec<String> = detail.segments.iter().map(|s| s.content.clone()).collect();
+    assert_eq!(contents, ["The fox came.", "It drank from the well!", "Then it left."], "{:?}", imported.lines);
+    // The same file again adds nothing.
+    let again = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert_eq!(again.text.as_deref(), Some(text.as_str()));
+    assert_eq!(texts(&mut a).len(), 1);
+    // Out as a line per segment, which reads back as the same text.
+    let out = dir.0.join("out");
+    fs::create_dir_all(&out).unwrap();
+    let file = interchange::export_text(&mut a, &text, Format::PlainText, &out).unwrap();
+    assert_eq!(fs::read_to_string(&file.path).unwrap(), "The fox came.\nIt drank from the well!\nThen it left.\n");
+    let mut b = project(&dir, "b");
+    let back = interchange::import_file(&mut b, &file.path).unwrap();
+    assert_eq!(session::get_text(&mut b, &back.text.unwrap()).unwrap().segments.len(), 3);
+    // Export goes in time order, whatever order the segments were drawn in.
+    let drawn = session::create_text(&mut a, "Drawn").unwrap();
+    session::add_segment(&mut a, &drawn, None, Some(5000.0), Some(6000.0), "second in time").unwrap();
+    session::add_segment(&mut a, &drawn, None, Some(0.0), Some(1000.0), "first in time").unwrap();
+    let file = interchange::export_text(&mut a, &drawn, Format::PlainText, &out).unwrap();
+    assert_eq!(fs::read_to_string(&file.path).unwrap(), "first in time\nsecond in time\n");
+    // An NFD file name and text match their NFC import.
+    let nfd = dir.0.join("Cafe\u{301}.txt");
+    fs::write(&nfd, "Cafe\u{301} au lait.\n").unwrap();
+    let one = interchange::import_file(&mut a, nfd.to_str().unwrap()).unwrap().text;
+    let two = interchange::import_file(&mut a, nfd.to_str().unwrap()).unwrap().text;
+    assert_eq!(one, two, "re-import matched in NFC");
+    // UTF-16 with no byte-order mark is refused, not stored as NULs.
+    let utf16 = dir.0.join("u16.txt");
+    fs::write(&utf16, "Hello there.".encode_utf16().flat_map(|u| u.to_le_bytes()).collect::<Vec<u8>>()).unwrap();
+    assert!(interchange::import_file(&mut a, utf16.to_str().unwrap()).is_err());
+    // A damaged file is refused, not garbled.
+    let bad = dir.0.join("bad.txt");
+    fs::write(&bad, b"caf\xE9").unwrap();
+    assert!(interchange::import_file(&mut a, bad.to_str().unwrap()).is_err());
+}
+
+#[test]
 fn an_unknown_file_is_refused_in_words() {
     let dir = TempDir::new();
     let mut a = project(&dir, "a");
-    let f = dir.0.join("notes.txt");
+    let f = dir.0.join("notes.md");
     fs::write(&f, "just some notes").unwrap();
     let err = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap_err();
     assert!(err.contains("not a file wugs can import"), "{err}");
@@ -123,4 +169,80 @@ fn nothing_is_written_inside_the_project_folder() {
         assert!(interchange::export_text(&mut a, &text, Format::Elan, &folder).is_err());
         assert!(interchange::export_lexicon(&mut a, Format::Lift, &folder).is_err());
     }
+}
+
+#[test]
+fn a_table_of_sentences_comes_in_a_text_per_document() {
+    let dir = TempDir::new();
+    let mut a = project(&dir, "a");
+    let f = dir.0.join("corpus.csv");
+    fs::write(&f, "doc,speaker,sentence\nFox,Maria,\"The fox came, slowly.\"\nFox,Jo,It drank.\nWell,Maria,The well was dry.\n").unwrap();
+    let imported = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert!(imported.lines.iter().any(|l| l.contains("2 new texts") && l.contains("«sentence»") && l.contains("«doc»")), "{:?}", imported.lines);
+    assert!(imported.lines.iter().any(|l| l.contains("«speaker»")), "{:?}", imported.lines);
+    let all = texts(&mut a);
+    assert_eq!(all.len(), 2);
+    let fox = all.iter().find(|t| t.1 == "Fox").expect("a text per document").0.clone();
+    let detail = session::get_text(&mut a, &fox).unwrap();
+    let contents: Vec<String> = detail.segments.iter().map(|s| s.content.clone()).collect();
+    assert_eq!(contents, ["The fox came, slowly.", "It drank."]);
+    let p = a.as_mut().unwrap();
+    assert_eq!(p.proj.field_str(&detail.segments[1].id, "x.csv.speaker").unwrap().as_deref(), Some("Jo"), "other columns are kept");
+    // The same file again adds nothing.
+    let again = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert!(again.lines.iter().any(|l| l.contains("2 documents matched")), "{:?}", again.lines);
+    assert_eq!(texts(&mut a).len(), 2);
+}
+
+#[test]
+fn a_translation_column_lands_on_a_translation_track() {
+    let dir = TempDir::new();
+    let mut a = project(&dir, "a");
+    let f = dir.0.join("phrases.csv");
+    fs::write(&f, "sentence,translation,speaker\nkesi bara,the dog runs,Maria\nlo,,Jo\n").unwrap();
+    let imported = interchange::import_file(&mut a, f.to_str().unwrap()).unwrap();
+    assert!(imported.lines.iter().any(|l| l.contains("1 translation from the column «translation»")), "{:?}", imported.lines);
+    assert!(imported.lines.iter().any(|l| l.contains("«speaker»") && !l.contains("«translation»")), "{:?}", imported.lines);
+    let text = texts(&mut a)[0].0.clone();
+    let detail = session::get_text(&mut a, &text).unwrap();
+    let track = detail.tiers.iter().find(|t| t.role.as_deref() == Some("translation")).expect("a translation track is made");
+    assert_eq!((track.kind.as_deref(), track.parent.as_ref()), (Some("symbolic-association"), detail.segments.iter().find(|s| s.content == "lo").map(|s| &s.tier)), "paired with the sentences' tier");
+    let sentence = detail.segments.iter().find(|s| s.content == "kesi bara").unwrap();
+    let translation = detail.segments.iter().find(|s| s.tier == track.id).unwrap();
+    assert_eq!((translation.content.as_str(), translation.parent.as_deref()), ("the dog runs", Some(sentence.id.as_str())));
+    // A second file reuses the track, and an untimed sentence takes a typed translation.
+    let g = dir.0.join("more.csv");
+    fs::write(&g, "text,free\nbara,runs\n").unwrap();
+    interchange::import_file(&mut a, g.to_str().unwrap()).unwrap();
+    let lo = detail.segments.iter().find(|s| s.content == "lo").unwrap().id.clone();
+    let added = session::add_translation(&mut a, &text, Some(&track.id), &lo, "small").unwrap();
+    let p = a.as_mut().unwrap();
+    let tracks: Vec<String> = p.proj.entities_of_kind("tier").unwrap().into_iter().filter(|t| p.proj.field_str(t, "role").unwrap().as_deref() == Some("translation")).collect();
+    assert_eq!(tracks, [track.id.clone()]);
+    assert_eq!(p.proj.field_str(&added, "parent").unwrap().as_deref(), Some(lo.as_str()));
+    assert!(session::add_translation(&mut a, &text, None, &lo, "again").is_err(), "one translation per sentence per track");
+    assert_eq!(texts(&mut a).iter().find(|t| t.0 == text).unwrap().2, 2, "translations are not counted as segments");
+    // A specific header gets its own track; generic ones share the first.
+    let h = dir.0.join("spanish.csv");
+    fs::write(&h, "text,Translation (Spanish)\nmopa,perro\n").unwrap();
+    interchange::import_file(&mut a, h.to_str().unwrap()).unwrap();
+    let p = a.as_mut().unwrap();
+    let names: Vec<String> = p.proj.entities_of_kind("tier").unwrap().into_iter().filter(|t| p.proj.field_str(t, "role").unwrap().as_deref() == Some("translation")).map(|t| p.proj.field_str(&t, "name").unwrap().unwrap()).collect();
+    assert_eq!(names, ["translation", "Translation (Spanish)"]);
+    // The text goes out to ELAN and comes back with its translations paired.
+    let out = dir.0.join("out");
+    fs::create_dir_all(&out).unwrap();
+    let file = interchange::export_text(&mut a, &text, Format::Elan, &out).unwrap();
+    let mut b = project(&dir, "b");
+    let back = interchange::import_file(&mut b, &file.path).unwrap();
+    let detail = session::get_text(&mut b, back.text.as_ref().unwrap()).unwrap();
+    let sentence = detail.segments.iter().find(|s| s.content == "kesi bara").expect("the sentence came back");
+    let translation = detail.segments.iter().find(|s| s.content == "the dog runs").expect("the translation came back");
+    assert_eq!(translation.parent.as_deref(), Some(sentence.id.as_str()));
+    // ELAN carries no role, yet the track still reads as a translation track, so a typed one goes on it.
+    let came_back = detail.tiers.iter().find(|t| t.id == translation.tier).unwrap();
+    assert_eq!(came_back.role.as_deref(), Some("translation"));
+    let lo = detail.segments.iter().find(|s| s.content == "lo").unwrap().id.clone();
+    let err = session::add_translation(&mut b, &detail.id, None, &lo, "again").unwrap_err();
+    assert!(err.contains("already has a translation"), "the track that came back is the one used: {err}");
 }

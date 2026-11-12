@@ -115,7 +115,8 @@ pub fn access(project: &Project, log_scopes: &BTreeSet<String>) -> Result<(Strin
     }
     let mut texts = Vec::new();
     for (txt, deleted) in all_of_kind(project, "text")? {
-        let source = p.field_str(&txt, "source")?;
+        // A cleared link is JSON null, which is no source.
+        let source = p.field(&txt, "source")?.and_then(|(v, _)| v.as_str().map(str::to_string));
         // DATA-MODEL §3: a text inherits its source's access unless it sets its own.
         let access = match p.field_str(&txt, "access")? {
             Some(a) => a,

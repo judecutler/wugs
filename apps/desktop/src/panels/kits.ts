@@ -7,7 +7,7 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { errorText, kitCode, kitDelete, kitDuplicate, kitInstall, kitSave, kitSaveCode, type KitEntry, type KitsView } from "../api";
 import { emptyState, h } from "../dom";
-import { describeLayout, kitNotes, withoutPanel, type Kit } from "../kits/logic";
+import { bundleLines, describeLayout, kitNotes, withoutPanel, type Kit } from "../kits/logic";
 import { accessoryColour, paint, SLOTS, wear, wornIn } from "../kits/wug-picker";
 import { currentArrangement, reloadKits, useKit } from "../kits/workspace";
 import { getKits, setKits, showToast } from "../store";
@@ -250,6 +250,9 @@ export const kitsPanel: PanelDef = {
         textField(kit, "subtitle", "Subtitle", ro, 40),
         textField(kit, "version", "Version", ro, 40),
         textField(kit, "description", "About", ro, 500),
+        kit.bundle === undefined
+          ? null
+          : h("section", { className: "kit-bundle" }, h("h4", { textContent: "As a package" }), h("ul", {}, ...bundleLines(kit.bundle).map((line) => h("li", { textContent: line })))),
         h("h4", { textContent: "Wug" }),
         wugPicker(kit, ro),
         h("h4", { textContent: "Tools" }),

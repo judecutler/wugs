@@ -13,7 +13,10 @@ App icons (the window, taskbar, installer and macOS dock) are generated from
     npx tauri icon ../../design/wugs/icon.png -o src-tauri/icons
 
 Keep `icon.ico`, `icon.icns` and `icon.png` (the files `tauri.conf.json` names)
-and delete the other sizes it writes; commit the result.
+and delete the other sizes it writes. Then run `python3 tools/brand/windows_icon.py`
+from the repository root: it replaces `icon.ico` with the Windows icon drawn for
+the taskbar (the wug alone, thicker lines), which `npx tauri icon` would otherwise
+overwrite. Commit the result.
 
 Colours, fonts and corner radii live in `src/theme/tokens.css`. Change a value
 there and every panel, the timeline canvas and the recording meter follow.

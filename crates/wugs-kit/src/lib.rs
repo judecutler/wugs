@@ -35,7 +35,44 @@ pub struct Kit {
     pub active: Vec<String>,
     /// The kit's mascot; `None` shows the brand wug.
     pub wug: Option<Wug>,
+    /// What the kit is as a shareable package (`docs/design/BUNDLES.md`):
+    /// `[package]`, `[bundle]`, `[[requires]]` and `[examples]`. `None` for
+    /// a plain kit file. Read only: `update` never rewrites these tables.
+    pub bundle: Option<Bundle>,
 }
+
+/// A kit as a bundle: who made it, under what licence, and every package
+/// it relies on, each pinned by version and file-list hash.
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct Bundle {
+    /// `[package]` licence (SPDX), of the kit's own files.
+    pub license: String,
+    /// `[package]` source: where the kit's files are published.
+    pub source: String,
+    pub authors: Vec<String>,
+    pub summary: String,
+    pub requires: Vec<Requirement>,
+    /// `[examples]` project: a folder inside the bundle (relative, `/`-separated).
+    pub examples: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Requirement {
+    /// `model`, `dataset`, `integration` or `plugin`.
+    pub kind: String,
+    pub id: String,
+    pub version: String,
+    /// SHA-256 of the package's canonical file list (`wugs_package::file_list_sha256`), 64 lowercase hex.
+    pub files_sha256: String,
+    /// For a model: the capability it serves here (features, not models).
+    pub capability: Option<String>,
+    /// Offered and ticked at install; the person may choose another provider.
+    pub recommended: bool,
+    pub why: String,
+}
+
+/// The kinds of package a bundle may require (`plugin` waits for item 36's sandbox).
+pub const REQUIREMENT_KINDS: [&str; 4] = ["model", "dataset", "integration", "plugin"];
 
 /// A wug look: the shell draws it (`apps/desktop/src/theme/wug.ts`).
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -193,6 +230,7 @@ pub fn parse(text: &str) -> Result<Kit, Vec<Problem>> {
     let layout = r.placements(layout_table);
     let active = r.names(layout_table, "layout", "active");
     let wug = r.table(root, "wug").map(|t| r.wug(t));
+    let bundle = r.bundle(root, &id, &version);
     for name in &active {
         if !layout.iter().any(|p| &p.panel == name) {
             r.fail(
@@ -214,6 +252,7 @@ pub fn parse(text: &str) -> Result<Kit, Vec<Problem>> {
             layout,
             active,
             wug,
+            bundle,
         })
     } else {
         Err(r.problems)
@@ -237,6 +276,14 @@ pub fn update(text: &str, kit: &Kit) -> Result<String, Vec<Problem>> {
         set_str(t, "subtitle", &kit.subtitle, false);
         set_str(t, "version", &kit.version, false);
         set_str(t, "description", &kit.description, false);
+    }
+    // A bundle's `[package]` that repeats the id or version follows `[kit]`.
+    if let Some(p) = doc.get_mut("package").and_then(Item::as_table_mut) {
+        for (key, value) in [("id", &kit.id), ("version", &kit.version)] {
+            if p.contains_key(key) {
+                set_str(p, key, value, true);
+            }
+        }
     }
     if changed(&|b| b.tools == kit.tools) {
         set_value(
@@ -287,6 +334,24 @@ pub fn update(text: &str, kit: &Kit) -> Result<String, Vec<Problem>> {
                 }
             }
         }
+    }
+    let out = doc.to_string();
+    parse(&out)?;
+    Ok(out)
+}
+
+/// A kit file made ready to be someone else's copy: the original's
+/// `package.source` and `bundle.authors` are taken out, so a duplicate is
+/// never shared under the original's name and address. Its licence stays.
+pub fn as_copy(text: &str) -> Result<String, Vec<Problem>> {
+    let mut doc: DocumentMut = text.parse().map_err(|e: toml_edit::TomlError| {
+        vec![problem(text, e.span(), e.message().trim().to_string())]
+    })?;
+    if let Some(p) = doc.get_mut("package").and_then(Item::as_table_mut) {
+        p.remove("source");
+    }
+    if let Some(b) = doc.get_mut("bundle").and_then(Item::as_table_mut) {
+        b.remove("authors");
     }
     let out = doc.to_string();
     parse(&out)?;
@@ -638,6 +703,194 @@ impl Reader<'_> {
         }
         out
     }
+}
+
+const AUTHORS_MAX: usize = 16;
+const REQUIREMENT_KEYS: [&str; 7] = ["type", "id", "version", "files_sha256", "capability", "recommended", "why"];
+const REQUIRES_MAX: usize = 32;
+
+/// Whether `p` is a safe relative folder path inside a bundle: `/`-separated
+/// parts of letters, digits, `.`, `-` and `_`, none empty, `.` or `..`,
+/// none ending in `.` (Windows drops it), no Windows device names, at most
+/// 200 bytes.
+pub fn valid_bundle_path(p: &str) -> bool {
+    let p = p.strip_suffix('/').unwrap_or(p);
+    !p.is_empty()
+        && p.len() <= 200
+        && p.split('/').all(|part| {
+            !part.is_empty()
+                && part != "."
+                && part != ".."
+                && !part.ends_with('.')
+                && part.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_'))
+                && !windows_device(&part.split('.').next().unwrap_or("").to_ascii_lowercase())
+        })
+}
+
+impl Reader<'_> {
+    /// `[package]`, `[bundle]`, `[[requires]]`, `[examples]`: present only in
+    /// a kit shared as a bundle. `[package]` may repeat `[kit]`'s id and
+    /// version; when it does they must agree.
+    fn bundle(&mut self, root: &Table, kit_id: &str, kit_version: &str) -> Option<Bundle> {
+        let package = self.table(root, "package");
+        let bundle = self.table(root, "bundle");
+        let examples = self.table(root, "examples");
+        let requires = root.get("requires");
+        if package.is_none() && bundle.is_none() && examples.is_none() && requires.is_none() {
+            return None;
+        }
+        let mut out = Bundle::default();
+        // A shared kit's version names its install folder, so it is checked even when `[package]` does not repeat it.
+        if !kit_version.is_empty() && !valid_version(kit_version) {
+            self.fail(root.get("kit").and_then(Item::as_table).and_then(|k| k.get("version")).and_then(Item::span), "kit.version of a shared kit is letters, digits, '.', '-', '+' and '_', like \"1.2.0\"");
+        }
+        if let Some(p) = package {
+            let kind = self.string(Some(p), "package", "type", NAME_MAX, true);
+            if !kind.is_empty() && kind != "kit" {
+                self.fail(p.get("type").and_then(Item::span), "package.type of a kit file is \"kit\"");
+            }
+            for (key, kit_value) in [("id", kit_id), ("version", kit_version)] {
+                let v = self.string(Some(p), "package", key, if key == "id" { ID_MAX } else { NAME_MAX }, false);
+                if !v.is_empty() && kit_value.is_empty() {
+                    self.fail(p.get(key).and_then(Item::span), &format!("package.{key} is {v:?}: set kit.{key} to the same"));
+                } else if !v.is_empty() && v != kit_value {
+                    self.fail(p.get(key).and_then(Item::span), &format!("package.{key} {v:?} differs from kit.{key} {kit_value:?}"));
+                } else if key == "version" && !v.is_empty() && !valid_version(&v) {
+                    self.fail(p.get(key).and_then(Item::span), "package.version is letters, digits, '.', '-', '+' and '_', like \"1.2.0\"");
+                }
+            }
+            out.license = self.string(Some(p), "package", "license", NAME_MAX, false);
+            out.source = self.string(Some(p), "package", "source", TEXT_MAX, false);
+            let host_ok = |host: &str| host.contains('.') && !host.starts_with('.') && !host.ends_with('.') && !host.contains('@') && !host.contains("..");
+            if !out.source.is_empty() && out.source.strip_prefix("https://").is_none_or(|rest| rest.split(['/', '?', '#']).next().is_none_or(|host| !host_ok(host))) {
+                self.fail(p.get("source").and_then(Item::span), "package.source is an https:// address, like \"https://github.com/you/your-kit\"");
+            }
+        }
+        if let Some(b) = bundle {
+            out.summary = self.string(Some(b), "bundle", "summary", TEXT_MAX, false);
+            if let Some(item) = b.get("authors") {
+                match item.as_array() {
+                    Some(a) if a.len() <= AUTHORS_MAX => {
+                        for v in a.iter() {
+                            match v.as_str() {
+                                Some(s) if !s.trim().is_empty() && s.chars().count() <= NAME_MAX * 2 => out.authors.push(s.to_string()),
+                                _ => self.fail(v.span(), "bundle.authors holds names, each at most 80 characters"),
+                            }
+                        }
+                    }
+                    _ => self.fail(item.span(), &format!("bundle.authors is a list of at most {AUTHORS_MAX} names")),
+                }
+            }
+        }
+        if let Some(e) = examples {
+            let project = self.string(Some(e), "examples", "project", 200, true);
+            if !project.is_empty() {
+                if valid_bundle_path(&project) {
+                    out.examples = Some(project);
+                } else {
+                    self.fail(e.get("project").and_then(Item::span), "examples.project is a folder inside the bundle: relative, '/'-separated, letters, digits, '.', '-' and '_'");
+                }
+            }
+        }
+        if let Some(item) = requires {
+            match item.as_array_of_tables() {
+                Some(list) if list.len() <= REQUIRES_MAX => {
+                    for t in list.iter() {
+                        if let Some(req) = self.requirement(t) {
+                            if out.requires.iter().any(|r| r.kind == req.kind && r.id == req.id) {
+                                self.fail(t.span(), &format!("requires names {} {:?} twice", req.kind, req.id));
+                            } else {
+                                out.requires.push(req);
+                            }
+                        }
+                    }
+                }
+                _ => self.fail(item.span(), &format!("requires is written as [[requires]] tables, at most {REQUIRES_MAX}")),
+            }
+        }
+        Some(out)
+    }
+
+    fn requirement(&mut self, t: &Table) -> Option<Requirement> {
+        let before = self.problems.len();
+        // A misspelt key here would change what gets installed, so it is named.
+        for (key, item) in t.iter() {
+            if !REQUIREMENT_KEYS.contains(&key) {
+                self.fail(item.span(), &format!("requires has no key {key:?}; the keys are {}", REQUIREMENT_KEYS.join(", ")));
+            }
+        }
+        let kind = self.string(Some(t), "requires", "type", NAME_MAX, true);
+        if !kind.is_empty() && !REQUIREMENT_KINDS.contains(&kind.as_str()) {
+            self.fail(t.get("type").and_then(Item::span), "requires.type is model, dataset, integration or plugin");
+        }
+        let id = self.string(Some(t), "requires", "id", ID_MAX, true);
+        if !id.is_empty() && !valid_package_id(&id) {
+            self.fail(t.get("id").and_then(Item::span), "requires.id is lowercase letters, digits, '.', '-' and '_', starting with a letter or digit");
+        }
+        let version = self.string(Some(t), "requires", "version", NAME_MAX, true);
+        if !version.is_empty() && !valid_version(&version) {
+            self.fail(t.get("version").and_then(Item::span), "requires.version is letters, digits, '.', '-', '+' and '_', like \"1.2.0\"");
+        }
+        let files_sha256 = self.string(Some(t), "requires", "files_sha256", 64, true);
+        if !files_sha256.is_empty() && !(files_sha256.len() == 64 && files_sha256.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))) {
+            self.fail(t.get("files_sha256").and_then(Item::span), "requires.files_sha256 is 64 lowercase hex digits");
+        }
+        let capability = self.string(Some(t), "requires", "capability", ID_MAX, false);
+        if kind == "model" && capability.is_empty() {
+            self.fail(t.span(), "a model requirement names its capability (features, not models)");
+        }
+        if !capability.is_empty() && !valid_name(&capability) {
+            self.fail(t.get("capability").and_then(Item::span), "requires.capability is lowercase letters, digits and '-'");
+        }
+        let recommended = match t.get("recommended") {
+            None => false,
+            Some(item) => match item.as_bool() {
+                Some(b) => b,
+                None => {
+                    self.fail(item.span(), "requires.recommended is true or false");
+                    false
+                }
+            },
+        };
+        let why = self.string(Some(t), "requires", "why", TEXT_MAX, false);
+        (self.problems.len() == before).then(|| Requirement {
+            kind,
+            id,
+            version,
+            files_sha256,
+            capability: (!capability.is_empty()).then_some(capability),
+            recommended,
+            why,
+        })
+    }
+}
+
+/// A package id as the index lists it: lowercase letters, digits, `.`, `-`,
+/// `_`, starting with a letter or digit, no `..`, not ending in `.`, at most
+/// 64 bytes, no device name. Lowercase only, because ids name folders and
+/// Windows and macOS fold case.
+pub fn valid_package_id(id: &str) -> bool {
+    let b = id.as_bytes();
+    !b.is_empty()
+        && b.len() <= ID_MAX
+        && b[0].is_ascii_alphanumeric()
+        && !id.contains("..")
+        && !id.ends_with('.')
+        && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'.' | b'-' | b'_'))
+        && !windows_device(&id.split('.').next().unwrap_or("").to_ascii_lowercase())
+}
+
+/// A package version, which names a folder (`packages/<type>/<id>/<version>/`):
+/// ASCII letters, digits, `.`, `-`, `+`, `_`, starting with a letter or
+/// digit, no `..`, not ending in `.`, at most 40 bytes.
+pub fn valid_version(v: &str) -> bool {
+    let b = v.as_bytes();
+    !b.is_empty()
+        && b.len() <= 40
+        && b[0].is_ascii_alphanumeric()
+        && !v.contains("..")
+        && !v.ends_with('.')
+        && b.iter().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'+' | b'_'))
 }
 
 const COLOUR: &str = "a wug colour is '#' and six hex digits, like \"#f08060\"";

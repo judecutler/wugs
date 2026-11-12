@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { sideIndexes, REACH_ABOVE, REACH_BELOW, RISEN_BELOW, revealIndex, setTabMode, tabMode } from "./dock-reveal.ts";
+import { sideIndexes, REACH_ABOVE, REACH_BELOW, revealIndex, setTabMode, tabMode } from "./dock-reveal.ts";
 
-const left = { left: 0, right: 500, top: 100 };
-const right = { left: 510, right: 1000, top: 100 };
-const lower = { left: 0, right: 500, top: 400 };
+const left = { left: 0, right: 500, top: 100, bottom: 390 };
+const right = { left: 510, right: 1000, top: 100, bottom: 390 };
+const lower = { left: 0, right: 500, top: 400, bottom: 700 };
 
 test("the pointer near a group's top edge reveals that group", () => {
   assert.equal(revealIndex(50, 105, [left, right, lower]), 0);
@@ -19,16 +19,25 @@ test("deep inside a panel nothing is revealed", () => {
 });
 
 test("between a group's bottom and the next group's top, the nearer top edge wins", () => {
-  const upper = { left: 0, right: 500, top: 100 };
-  const below = { left: 0, right: 500, top: 112 };
+  const upper = { left: 0, right: 500, top: 100, bottom: 110 };
+  const below = { left: 0, right: 500, top: 112, bottom: 400 };
   assert.equal(revealIndex(50, 111, [upper, below]), 1);
   assert.equal(revealIndex(50, 104, [upper, below]), 0);
 });
 
-test("a panel's first row never reveals tabs, but risen tabs stay up while the pointer is on them", () => {
+test("a panel's first row never reveals tabs, but risen tabs stay up anywhere in their group", () => {
   assert.equal(revealIndex(50, 100 + REACH_BELOW + 3, [left]), null);
   assert.equal(revealIndex(50, 100 + REACH_BELOW + 3, [left], 0), 0);
-  assert.equal(revealIndex(50, 100 + RISEN_BELOW + 1, [left], 0), null);
+  assert.equal(revealIndex(50, 380, [left], 0), 0);
+  assert.equal(revealIndex(50, 391, [left], 0), null);
+  assert.equal(revealIndex(600, 200, [left, right], 0), null);
+});
+
+test("from a risen group, the next group's top edge still takes over", () => {
+  const top = { left: 0, right: 500, top: 100, bottom: 398 };
+  const bottom = { left: 0, right: 500, top: 400, bottom: 700 };
+  assert.equal(revealIndex(50, 396, [top, bottom], 0), 1);
+  assert.equal(revealIndex(50, 300, [top, bottom], 0), 0);
 });
 
 test("outside a group's width it is not revealed", () => {

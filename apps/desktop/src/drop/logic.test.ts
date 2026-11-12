@@ -6,6 +6,7 @@ test("each file takes the import its type needs", () => {
   assert.equal(classify("Interview 3.WAV"), "recording");
   assert.equal(classify("voice memo.m4a"), "recording");
   assert.equal(classify("song.flac"), "recording");
+  assert.equal(classify("corpus.CSV"), "file");
   assert.equal(classify("Frog story.eaf"), "file");
   assert.equal(classify("words.TextGrid"), "file");
   assert.equal(classify("dictionary.lift"), "file");
@@ -44,4 +45,5 @@ test("only files are imported; dock tabs and text fields keep their drags; anyth
   assert.equal(dragAction({ files: false, dock: true, editable: false }), "pass");
   assert.equal(dragAction({ files: false, dock: false, editable: true }), "pass");
   assert.equal(dragAction({ files: false, dock: false, editable: false }), "refuse", "a link from a browser never reaches the webview");
+  assert.equal(dragAction({ files: false, dock: false, editable: false, card: true }), "pass", "a media bin card goes to the Timeline");
 });

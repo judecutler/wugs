@@ -2,6 +2,18 @@
 # A kit is a recipe, not a container: it presets which tools open, how the
 # workspace is laid out, and project template defaults. Tools live in the platform.
 
+[package]                          # the kit as a shareable package (docs/design/BUNDLES.md)
+type = "kit"
+license = "MPL-2.0"
+source = "https://github.com/judecutler/wugs"
+
+[bundle]
+authors = ["The wugs project"]
+summary = "Record, segment, transcribe and gloss fieldwork, with the lexicon and consent records beside them."
+# [[requires]] lists the packages a kit relies on, each pinned by version
+# and files_sha256. The built-in kits need none yet: their word lists and
+# domains ship inside the app.
+
 [kit]
 id = "org.wugs.tongues"
 name = "Tongues"
@@ -20,6 +32,10 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "lexicon",
   "elicit",
   "search",
+  "concordance",                   # every occurrence in context (keyword in the middle)
+  "frequencies",                   # how often each word occurs; not placed, opened from Settings or Ctrl+K
+  "collocates",                    # which words keep company with a word; not placed either
+  "keywords",                      # which words set a text apart; not placed either
   "assist",                        # speech assist: machine phone transcription
   "people",                        # speakers and what each agreed to (optional)
 ]
@@ -34,6 +50,7 @@ panels = [
   { panel = "lexicon", place = "right", of = "timeline", width = 320 },
   { panel = "elicit", place = "tab", of = "lexicon" },
   { panel = "search", place = "tab", of = "lexicon" },
+  { panel = "concordance", place = "tab", of = "lexicon" },
   { panel = "assist", place = "tab", of = "lexicon" },
   { panel = "people", place = "tab", of = "lexicon" },
   { panel = "devices", place = "tab", of = "lexicon" },

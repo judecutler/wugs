@@ -1,15 +1,24 @@
 import { dropTarget } from "./drop/target";
 import { kitWug, setCurrentWug } from "./theme/wug";
-import { applyEmphasisPattern, applyPattern, applyTheme, chooseEmphasisPattern, choosePattern, chooseTheme, emphasisPatternOn, PATTERNS, savedPattern, savedTheme, THEMES } from "./theme/theme";
+import { getVersion } from "@tauri-apps/api/app";
+import { applyEmphasisPattern, applyPattern, applyTheme, choosePattern, chooseTheme, emphasisPatternOn, PATTERNS, savedPattern, savedTheme, THEMES } from "./theme/theme";
 
 applyTheme(savedTheme(localStorage));
 applyPattern(savedPattern(localStorage));
 applyEmphasisPattern(emphasisPatternOn(localStorage));
+// Shown in Settings; read once, never awaited by anything.
+let appVersion = "";
+/** The wug was just let back in from Settings: it visits when the sheet closes. */
+let visitAfterSettings = false;
+void getVersion()
+  .then((v) => (appVersion = v))
+  .catch(() => {});
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
-import { captureReset, createProject, errorText, feedbackRetry, kitsList, onAssistDownload, openProject } from "./api";
+import { captureReset, createProject, errorText, feedbackRetry, kitsList, onAssistDownload, openProject, openSample } from "./api";
+import { startTour, tourDone } from "./tour/tour";
 import { reloadModels } from "./panels/assist";
 import { closeBlocker, refuseProjectChange } from "./capture/session.ts";
-import { closedPanels, layoutKit, mountDock, showPanel } from "./dock";
+import { closedPanels, layoutKit, mountDock, offers, showPanel } from "./dock";
 import { setTabMode, tabMode } from "./dock-reveal";
 import type { DockviewApi } from "./dockview";
 import { h, wugArt } from "./dom";
@@ -19,22 +28,27 @@ import { setVisitsOn, visitsOn } from "./wug-visit";
 import { autoOpen, lastProject } from "./last-project";
 import { folderName, welcomeView } from "./welcome";
 import { onDevicesChange, relocationBanner, wireDeviceEvents } from "./panels/devices";
-import { PANELS, type PanelId } from "./panels/registry";
-import { attachDock } from "./kits/workspace";
+import { isPanelId, PANELS, type PanelId } from "./panels/registry";
+import { SHOW_PANEL } from "./panels/panel";
+import { attachDock, useKit } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
+import { openSettings } from "./settings/panel";
+import { provide } from "./palette/registry";
+import { openPalette, openShortcuts, wirePalette } from "./palette/ui";
+import type { Command } from "./palette/logic";
 import { autoChecks, checkForUpdates, setAutoChecks, setBeforeInstall, updateSlot } from "./updates/notice";
-import { activeKit, assistModelList, attempt, enterProject, getState, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
+import { activeKit, assistModelList, attempt, dropWantedMedia, enterProject, getKits, getState, selectSegment, selectText, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
 const top = h("header", { className: "top" });
 /** A redraw held back while a menu was open (renderTop never rebuilds under one). */
 let topPending = false;
 top.addEventListener("menu-closed", (e) => {
   if (!topPending) return;
-  const { label, focus } = (e as CustomEvent<{ label: string; focus: boolean }>).detail;
+  const { key, focus } = (e as CustomEvent<{ key: string; focus: boolean }>).detail;
   queueMicrotask(() => {
     renderTop();
     // The rebuilt bar has new buttons: give focus back to the menu it came from.
-    if (focus) [...top.querySelectorAll<HTMLButtonElement>(".menu-button")].find((b) => b.textContent === label)?.focus();
+    if (focus) menuNamed(key)?.focus();
   });
 });
 const bannerSlot = h("div", { className: "relocation-slot" });
@@ -53,6 +67,9 @@ let signedFor = "";
 /** The chip's id is being changed. */
 let editingId = false;
 
+/** The top bar's menu button with this key (`menuButton`'s `key`). */
+const menuNamed = (key: string): HTMLButtonElement | undefined => [...top.querySelectorAll<HTMLButtonElement>(".menu-button")].find((b) => b.dataset.menu === key);
+
 function renderTop() {
   // Never rebuild the bar under an open menu; it redraws when the menu closes.
   if (top.querySelector(".menu-list") !== null) {
@@ -63,9 +80,10 @@ function renderTop() {
   // Typing in the bar's id field must not be redrawn under the person.
   if (top.contains(document.activeElement) && document.activeElement instanceof HTMLInputElement) return;
   // A redraw replaces every button: keyboard focus goes back to the same menu.
-  const focusedMenu = top.contains(document.activeElement) && document.activeElement?.classList.contains("menu-button") ? document.activeElement.textContent : null;
+  const active = document.activeElement;
+  const focusedMenu = top.contains(active) && active instanceof HTMLElement && active.classList.contains("menu-button") ? (active.dataset.menu ?? null) : null;
   queueMicrotask(() => {
-    if (focusedMenu !== null && !top.contains(document.activeElement)) [...top.querySelectorAll<HTMLButtonElement>(".menu-button")].find((b) => b.textContent === focusedMenu)?.focus();
+    if (focusedMenu !== null && !top.contains(document.activeElement)) menuNamed(focusedMenu)?.focus();
   });
   const s = getState();
   const kit = activeKit();
@@ -124,96 +142,19 @@ function renderTop() {
           renderTop();
         },
       });
-  const tabsAlways = tabMode(localStorage) === "always";
-  const showOrFocus = (id: PanelId) => {
-    if (dock !== null) (dock.getPanel(id) ?? showPanel(dock, id))?.api.setActive();
-  };
   const project = menuButton("Project", () => [
     { label: "Open another project…", run: () => void pickProject("open") },
     { label: "Create a project…", run: () => void pickProject("create") },
+    { label: "Open the sample project", run: () => void enterSample() },
   ]);
-  // One menu for the workspace: bring back a closed panel, how tabs show, reset.
-  const workspace = menuButton(
-    "Workspace",
-    () => {
-      const closed = dock === null || kit === null ? [] : closedPanels(dock, kit);
-      return [
-        ...(closed.length === 0 ? [] : [{ heading: "Show a closed panel" }, ...closed.map((id) => ({ label: PANELS[id].title, run: () => showOrFocus(id) }))]),
-        ...(closed.length === 0 ? [] : ["separator" as const]),
-        { heading: "Theme" },
-        ...THEMES.map((t) => ({
-          label: t.label,
-          note: t.note,
-          radio: true,
-          checked: savedTheme(localStorage) === t.id,
-          run: () => chooseTheme(localStorage, t.id),
-        })),
-        "separator" as const,
-        { heading: "Patterns" },
-        ...PATTERNS.map((p) => ({
-          label: p.label,
-          note: p.note,
-          radio: true,
-          checked: savedPattern(localStorage) === p.id,
-          run: () => choosePattern(localStorage, p.id),
-        })),
-        {
-          label: "Pattern on emphasised sections",
-          note: "Adds the family's third pattern to the tier gutter, the IPA palette and Import and export",
-          checked: emphasisPatternOn(localStorage),
-          disabled: savedPattern(localStorage) === "none",
-          run: () => {
-            chooseEmphasisPattern(localStorage, !emphasisPatternOn(localStorage));
-            renderTop();
-          },
-        },
-        "separator" as const,
-        {
-          label: "Let the wug visit",
-          checked: visitsOn(localStorage),
-          note: "Now and then it peeks over the panel you are in. Touch it and it hides.",
-          run: () => {
-            const on = !visitsOn(localStorage);
-            setVisitsOn(localStorage, on);
-            if (on) window.setTimeout(() => visits?.visitNow(), 400);
-            else visits?.stop();
-            renderTop();
-          },
-        },
-        {
-          label: "Always show panel tabs",
-          checked: tabsAlways,
-          note: "Otherwise they rise when you reach for a panel's top edge",
-          run: () => {
-            setTabMode(localStorage, tabsAlways ? "reach" : "always");
-            host.classList.toggle("tabs-always", !tabsAlways);
-            renderTop();
-          },
-        },
-        {
-          label: `Reset to how ${kit?.name ?? "the kit"} starts`,
-          run: () => {
-            if (dock !== null && kit !== null) layoutKit(dock, kit);
-            renderTop();
-          },
-        },
-      ];
-    },
-    { className: "panel-menu", title: "Arrange the workspace" },
-  );
-  // Online. Per machine; checking never downloads anything.
-  const updates = menuButton("Updates", () => [
-    { label: "Check for updates now", note: "Online: asks GitHub Releases", run: () => void checkForUpdates(true) },
-    {
-      label: "Check when wugs starts",
-      checked: autoChecks(),
-      note: "Online, a few kB; nothing downloads until you say so",
-      run: () => {
-        setAutoChecks(!autoChecks());
-        renderTop();
-      },
-    },
-  ]);
+  // Settings (owner, 2026-11-12): one panel for how the workspace looks and
+  // behaves and for updates, with themes and patterns shown, not named.
+  const settings = h("button", {
+    className: "menu-button settings-button",
+    textContent: "Settings",
+    title: "Colours, patterns, the workspace and updates",
+    onclick: openSettingsSheet,
+  });
   project.classList.add("project-menu");
   setCurrentWug(kitWug(kit));
   const conflicts = s.kind === "open" ? s.info.conflicts : 0;
@@ -225,8 +166,7 @@ function renderTop() {
       if (visits?.away()) art.classList.add("wug-away");
       return art;
     })()),
-    h("strong", { className: "brand", textContent: kit?.name ?? "wugs", title: kit === null ? "wugs" : `wugs: ${kit.name}${kit.subtitle === "" ? "" : `, ${kit.subtitle.toLowerCase()}`}` }),
-    h("span", { className: "subtitle", textContent: kit?.subtitle ?? "" }),
+    kitSwitcher(),
     s.kind === "open"
       ? h(
           "span",
@@ -268,26 +208,155 @@ function renderTop() {
     h(
       "span",
       { className: "project" },
+      h(
+        "button",
+        { className: "menu-button palette-button", title: "Find any action or panel by name", onclick: openPalette },
+        "Find an action",
+        h("kbd", { textContent: /Mac|iPhone|iPad/u.test(navigator.platform || navigator.userAgent) ? "⌘K" : "Ctrl+K" }),
+      ),
       project,
-      workspace,
-      updates,
+      settings,
       h("button", {
         className: "menu-button feedback-button",
         textContent: "Feedback",
         title: "Tell the people who make wugs what went wrong or what would help (Online)",
-        onclick: () =>
-          openFeedback({
-            kit: kit === null ? null : `${kit.id} ${kit.version}`,
-            theme: savedTheme(localStorage),
-            pattern: savedPattern(localStorage),
-            projectOpen: s.kind === "open",
-            window: `${window.innerWidth}×${window.innerHeight} at ${window.devicePixelRatio}x`,
-            webview: navigator.userAgent,
-          }),
+        onclick: openFeedbackForm,
       }),
     ),
     ].filter((c) => c !== null),
   );
+}
+
+/** Bring a panel to the front, opening it if it is closed. */
+function showOrFocus(id: PanelId): void {
+  if (dock !== null) (dock.getPanel(id) ?? showPanel(dock, id))?.api.setActive();
+}
+
+/** Settings: from the top bar's button and the command palette. */
+function openSettingsSheet(): void {
+  const kit = activeKit();
+  openSettings({
+    projectOpen: () => getState().kind === "open" && dock !== null && kit !== null,
+    closedPanels: () => (dock === null || kit === null ? [] : closedPanels(dock, kit).map((id) => ({ id, title: PANELS[id].title }))),
+    showPanel: (id) => showOrFocus(id as PanelId),
+    kitName: kit?.name ?? "the kit",
+    resetLayout: () => {
+      if (dock !== null && kit !== null) layoutKit(dock, kit);
+    },
+    tabsAlways: () => tabMode(localStorage) === "always",
+    setTabsAlways: (on) => {
+      setTabMode(localStorage, on ? "always" : "reach");
+      host.classList.toggle("tabs-always", on);
+    },
+    visitsOn: () => visitsOn(localStorage),
+    setVisitsOn: (on) => {
+      setVisitsOn(localStorage, on);
+      // Turned on, the wug comes to say hello once the sheet is closed.
+      visitAfterSettings = on;
+      if (!on) visits?.stop();
+    },
+    checkForUpdates: () => checkForUpdates(true),
+    autoChecks,
+    setAutoChecks,
+    version: () => appVersion,
+    changed: () => renderTop(),
+    closed: () => {
+      if (visitAfterSettings) window.setTimeout(() => visits?.visitNow(), 400);
+      visitAfterSettings = false;
+    },
+  });
+}
+
+/** Feedback: from the top bar's button and the command palette. */
+function openFeedbackForm(): void {
+  const s = getState();
+  const kit = activeKit();
+  openFeedback({
+    kit: kit === null ? null : `${kit.id} ${kit.version}`,
+    theme: savedTheme(localStorage),
+    pattern: savedPattern(localStorage),
+    projectOpen: s.kind === "open",
+    window: `${window.innerWidth}×${window.innerHeight} at ${window.devicePixelRatio}x`,
+    webview: navigator.userAgent,
+  });
+}
+
+/** The kit's name in the top bar is the kit switcher (roadmap 73): one click
+ * between Tongues, Scrolls and any installed kit, over the same project. */
+function kitSwitcher(): HTMLElement {
+  const kit = activeKit();
+  const all = getKits()?.kits ?? [];
+  const label = kit?.name ?? "wugs";
+  const menu = menuButton(
+    label,
+    () => [
+      { heading: "Switch kit" },
+      ...all.map((k) => ({
+        label: k.kit.subtitle === "" ? k.kit.name : `${k.kit.name} · ${k.kit.subtitle}`,
+        radio: true,
+        checked: k.kit.id === kit?.id,
+        run: () => {
+          if (k.kit.id !== kit?.id) void switchKit(k.kit.id);
+        },
+      })),
+      "separator",
+      { label: "Manage kits…", run: () => showOrFocus("kits") },
+    ],
+    { className: "kit-switcher", key: "kit", title: `${label}: switch kit (same project, other tools)` },
+  );
+  return h("span", { className: "brand-kit" }, menu, h("span", { className: "subtitle", textContent: kit?.subtitle ?? "" }));
+}
+
+async function switchKit(id: string) {
+  // Another kit may not offer the Media panel, which holds a take's Stop and Save.
+  if (closeBlocker() !== null) {
+    showToast({ tone: "error", lines: ["A recording is in progress. Stop and save it before switching kits."] });
+    return;
+  }
+  await attempt(async () => {
+    await useKit(id, false);
+    const now = activeKit();
+    if (now === null) return;
+    const same = getState().kind === "open" ? " Your project and its data are the same; only the tools changed." : "";
+    showToast({ tone: "info", lines: [`Now in ${now.name}.${same}`] });
+  });
+}
+
+/** The shell's own commands for the palette: panels, look, project, help. */
+function shellCommands(): Command[] {
+  const kit = activeKit();
+  const opened = getState().kind === "open";
+  const noProject = () => (opened ? null : "Open a project first");
+  const panels: Command[] =
+    kit === null
+      ? []
+      : (Object.keys(PANELS) as PanelId[])
+          .filter((id) => offers(kit, id))
+          .map((id) => ({ id: `panel:${id}`, title: `Show ${PANELS[id].title}`, group: "Panels", words: ["open", "go to", "panel", "tab"], disabled: noProject, run: () => showOrFocus(id) }));
+  return [
+    ...panels,
+    ...(getKits()?.kits ?? [])
+      .filter((k) => k.kit.id !== kit?.id)
+      .map((k) => ({ id: `kit:${k.kit.id}`, title: `Switch to ${k.kit.name}`, group: "Kits", words: ["kit", k.kit.subtitle, "workspace"], run: () => void switchKit(k.kit.id) })),
+    { id: "app:settings", title: "Open Settings", group: "wugs", words: ["preferences", "options", "theme", "pattern"], run: openSettingsSheet },
+    { id: "app:shortcuts", title: "Show keyboard shortcuts", group: "Help", keys: "?", words: ["keys", "hotkeys"], run: openShortcuts },
+    { id: "app:feedback", title: "Send feedback", group: "Help", words: ["bug", "problem", "report", "contact"], run: openFeedbackForm },
+    { id: "app:reset-layout", title: "Reset layout", group: "Workspace", words: ["arrange", "panels", "default"], disabled: noProject, run: () => {
+      if (dock !== null && kit !== null) layoutKit(dock, kit);
+    } },
+    { id: "app:tabs-always", title: tabMode(localStorage) === "always" ? "Hide panel tabs until reached for" : "Always show panel tabs", group: "Workspace", run: () => {
+      const on = tabMode(localStorage) !== "always";
+      setTabMode(localStorage, on ? "always" : "reach");
+      host.classList.toggle("tabs-always", on);
+    } },
+    ...THEMES.map((t) => ({ id: `theme:${t.id}`, title: `Colours: ${t.label}`, group: "Look", words: ["theme", t.note], run: () => chooseTheme(localStorage, t.id) })),
+    ...PATTERNS.map((p) => ({ id: `pattern:${p.id}`, title: `Pattern: ${p.label}`, group: "Look", words: ["background", p.note], run: () => choosePattern(localStorage, p.id) })),
+    { id: "project:open", title: "Open another project…", group: "Project", words: ["folder"], run: () => void pickProject("open") },
+    { id: "project:create", title: "Create a project…", group: "Project", words: ["new"], run: () => void pickProject("create") },
+    { id: "project:sample", title: "Open the sample project", group: "Project", words: ["example", "demo", "try", "practice"], run: () => void enterSample() },
+    { id: "app:tour", title: "Take the tour", group: "Help", words: ["introduction", "guide", "start", "learn"], disabled: () => noProject() ?? (kit !== null && !kit.tools.includes("timeline") ? `The tour shows Tongues; ${kit.name} has no Timeline` : null), run: () => startTour((id) => showOrFocus(id as PanelId)) },
+    { id: "app:updates", title: "Check for updates", group: "wugs", words: ["version", "upgrade"], run: () => void checkForUpdates(true) },
+  ];
 }
 
 function renderWelcome() {
@@ -316,6 +385,7 @@ function renderWelcome() {
       setResearcher,
       create: () => void pickProject("create"),
       open: () => void pickProject("open"),
+      sample: () => void enterSample(),
       reopen:
         last === ""
           ? null
@@ -404,6 +474,25 @@ async function pickProject(mode: "open" | "create") {
   });
 }
 
+/** Open the sample project, show its text, and give the tour the first time. */
+async function enterSample() {
+  if (refuseProjectChange()) return;
+  await attempt(async () => {
+    await enterProject(await openSample({ researcher: researcher() }), false);
+    const s = getState();
+    const first = s.kind === "open" ? s.texts[0] : undefined;
+    if (first !== undefined) await selectText(first.id);
+    // The first utterance selected, so Transcribe and Gloss show it at once.
+    const now = getState();
+    if (now.kind === "open" && now.text !== null) {
+      const text = now.text;
+      const seg = text.segments.find((x) => text.tiers.some((t) => t.id === x.tier && t.utterance === true) && x.content !== "");
+      if (seg !== undefined) selectSegment({ textId: text.id, tierId: seg.tier, segmentId: seg.id });
+    }
+    if (!tourDone(localStorage)) window.setTimeout(() => startTour((id) => showOrFocus(id as PanelId)), 600);
+  });
+}
+
 async function reopenAs(path: string) {
   if (refuseProjectChange()) return;
   // The same project reopens with the same id: read who it signs as afresh,
@@ -434,6 +523,23 @@ if (app !== null) {
   host.classList.add("dock-veiled");
   subscribe(renderTop);
   subscribe(renderBanner);
+  // A panel asking for another (Frequencies opens the Concordance).
+  window.addEventListener(SHOW_PANEL, (e) => {
+    const id = (e as CustomEvent<string>).detail;
+    const kit = activeKit();
+    if (!isPanelId(id)) return;
+    const title = PANELS[id].title;
+    if (kit !== null && !offers(kit, id)) {
+      // A recording asked for on a Timeline this kit lacks must not wait for a later one.
+      if (id === "timeline") dropWantedMedia();
+      showToast({ tone: "info", lines: [`${kit.name} has no ${title} panel. Add it in the Kits panel, or switch kits.`] });
+      return;
+    }
+    showOrFocus(id);
+  });
+  // Ctrl+K finds any action; ? lists the keys (roadmap 70).
+  provide("shell", shellCommands);
+  wirePalette();
   subscribe(renderWelcome);
   renderWelcome();
   onDevicesChange(renderBanner);
@@ -453,7 +559,7 @@ if (app !== null) {
         logo: () => top.querySelector(".brand-wug"),
         avoid: () => [...top.querySelectorAll(".menu-wrap, .project-chip, .brand-mark, .brand")],
         onLayout: (run) => mounted.api.onDidLayoutChange(run),
-        busy: () => closeBlocker() !== null || top.querySelector(".menu-list") !== null || getState().kind !== "open",
+        busy: () => closeBlocker() !== null || top.querySelector(".menu-list") !== null || document.querySelector(".settings-overlay") !== null || getState().kind !== "open",
       });
       renderTop();
       await wireDeviceEvents();

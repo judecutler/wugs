@@ -19,7 +19,48 @@ export type Kit = {
   active: string[];
   /** The kit's `[wug]`, checked by wugs-kit (colours are `#rrggbb`). */
   wug?: WugLook;
+  /** The kit as a shareable bundle (docs/design/BUNDLES.md); read only. */
+  bundle?: BundleInfo;
 };
+
+export type Requirement = {
+  kind: string;
+  id: string;
+  version: string;
+  filesSha256: string;
+  capability?: string;
+  recommended: boolean;
+  why: string;
+};
+
+export type BundleInfo = {
+  license: string;
+  source: string;
+  authors: string[];
+  summary: string;
+  requires: Requirement[];
+  examples?: string;
+};
+
+const KIND_WORDS: Record<string, string> = { model: "Model", dataset: "Dataset", integration: "Integration", plugin: "Plugin" };
+
+/** A bundle in words, a line each, for the Kits panel. */
+export function bundleLines(b: BundleInfo): string[] {
+  const lines: string[] = [];
+  if (b.summary !== "") lines.push(b.summary);
+  const who = b.authors.length > 0 ? `By ${b.authors.join(", ")}` : "";
+  const licence = b.license !== "" ? `licence ${b.license}` : "";
+  if (who !== "" || licence !== "") lines.push([who, licence].filter((x) => x !== "").join("; ") + ".");
+  if (b.source !== "") lines.push(`Published at ${b.source}.`);
+  if (b.requires.length === 0) lines.push("Relies on no other packages.");
+  for (const r of b.requires) {
+    const role = r.capability !== undefined ? ` for ${r.capability.replace(/-/g, " ")}` : "";
+    const rec = r.recommended ? " (recommended; another provider can be chosen)" : "";
+    lines.push(`${KIND_WORDS[r.kind] ?? r.kind} ${r.id} ${r.version}${role}${rec}${r.why !== "" ? `: ${r.why}` : ""}`);
+  }
+  if (b.examples !== undefined) lines.push(`Comes with an example project (${b.examples}).`);
+  return lines;
+}
 
 export type Direction = "left" | "right" | "above" | "below" | "within";
 

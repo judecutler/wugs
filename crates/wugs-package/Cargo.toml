@@ -8,3 +8,4 @@ description = "Package manifests (models first): parse and check what a package 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 toml = "1"
+sha2 = "0.10"

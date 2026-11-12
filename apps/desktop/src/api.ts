@@ -23,6 +23,8 @@ export type TextRow = {
   title: string;
   kind: string | null;
   segments: number;
+  /** The recording the text was transcribed from, when it has audio (roadmap 72). */
+  recording: string | null;
 };
 
 export type TierRow = {
@@ -32,6 +34,10 @@ export type TierRow = {
   /** What the track is for: transcription, translation, note, or a kit's own. */
   role: string | null;
   language: string | null;
+  /** The tier a symbolic tier depends on (a paired translation track's sentences). */
+  parent?: string | null;
+  /** Where segments go when no tier is named (Auto-segment with nothing selected). */
+  utterance?: boolean;
 };
 
 export type SegmentRow = {
@@ -41,6 +47,8 @@ export type SegmentRow = {
   endMs: number | null;
   content: string;
   pos: string;
+  /** The segment this one belongs to (a translation's sentence), when it has one. */
+  parent?: string | null;
   /** Set while the transcription is still the one a phone model wrote. */
   machine: Machine | null;
 };
@@ -61,6 +69,16 @@ type ProjectArgs = { path: string; researcher: string };
 
 export const openProject = (args: ProjectArgs) => invoke<ProjectInfo>("open_project", args);
 export const createProject = (args: ProjectArgs) => invoke<ProjectInfo>("create_project", args);
+export type ConcordanceResult = { hits: import("./concordance/logic").Hit[]; total: number };
+/** Every occurrence of a word, morph, gloss or translation word, with its segment's words (roadmap 71). */
+export const frequencies = (args: { kind: import("./concordance/logic").ConcordanceKind; textId: string | null; size?: number }) =>
+  invoke<import("./frequencies/logic").Frequencies>("frequencies", args);
+export const collocates = (args: { node: string; kind: "word" | "translation"; left: number; right: number; minTogether: number; textId: string | null }) =>
+  invoke<import("./collocates/logic").Collocates>("collocates", args);
+export const keywords = (args: { kind: "word" | "translation"; textId: string; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
+export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null }) => invoke<ConcordanceResult>("concordance", args);
+/** The sample project (roadmap 68), built the first time in this computer's app data. */
+export const openSample = (args: { researcher: string }) => invoke<ProjectInfo>("open_sample", args);
 export const listTexts = () => invoke<TextRow[]>("list_texts");
 export const getText = (args: { textId: string }) => invoke<TextDetail>("get_text", args);
 export const createText = (args: { title: string }) => invoke<string>("create_text", args);
@@ -80,6 +98,8 @@ export const addSegment = (args: {
   endMs: number | null;
   content: string;
 }) => invoke<AddedSegment>("add_segment", args);
+/** A translation paired with `segmentId` on the paired track `tierId` (null: the segment's tier's track, made when missing). */
+export const addTranslation = (args: { textId: string; tierId: string | null; segmentId: string; content: string }) => invoke<string>("add_translation", args);
 
 /** With `expect` (a timeline undo or redo), refused when it no longer holds: the segment was edited since. */
 export const editSegmentContent = (args: { textId: string; segmentId: string; content: string; expect?: SegmentCheck[] }) =>
@@ -196,6 +216,7 @@ export type SearchRow = {
   tierId: string | null;
   tierName: string | null;
   startMs: number | null;
+  endMs: number | null;
 };
 
 export const listSources = () => invoke<SourceRow[]>("list_sources");
@@ -220,6 +241,11 @@ export type PeaksSlice = {
 /** WAV only for now; anything else rejects with an error naming WAV. */
 export const importMedia = (args: { path: string }) => invoke<SourceRow>("import_media", args);
 export const peaksInfo = (args: { sourceId: string }) => invoke<PeaksInfo>("peaks_info", args);
+/** Remember which recording a text was transcribed from (null forgets it). */
+export const linkRecording = (args: { textId: string; sourceId: string | null }) => invoke<void>("link_recording", args);
+/** A media bin card's waveform: 120 points of 16-bit peaks, or the audio is not here. */
+export type MediaOverview = { state: "ready"; durationMs: number; mins: number[]; maxs: number[] } | { state: "missing" };
+export const mediaOverview = (args: { sourceId: string }) => invoke<MediaOverview>("media_overview", args);
 export const peaksQuery = (args: {
   sourceId: string;
   channel: number;
@@ -232,7 +258,7 @@ export const peaksQuery = (args: {
 export const saveLayout = (args: { kit: string; layout: string }) => invoke<void>("save_layout", args);
 export const loadLayout = (args: { kit: string }) => invoke<string | null>("load_layout", args);
 
-// Kits: src-tauri/src/kits.rs. The bundled kit is read-only; user kits are
+// Kits: src-tauri/src/kits.rs. The built-in kits are read-only; user kits are
 // files in app data. Problems in a kit come back as one error, a line each.
 export type KitEntry = { kit: Kit; bundled: boolean };
 export type KitsView = { active: string; kits: KitEntry[]; broken: { file: string; problems: string[] }[] };
@@ -473,7 +499,7 @@ export const assistDelete = (args: { id: string }) => invoke<void>("assist_delet
 /** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
 // Import and export in other tools' formats: src-tauri/src/interchange.rs.
-export type TextFormat = "elan" | "flextext" | "textgrid";
+export type TextFormat = "elan" | "flextext" | "textgrid" | "plaintext";
 export type LexiconFormat = "lift" | "toolbox";
 /** `text`: the text to show afterwards; `lexicon`: the lexicon changed; `lines`: what happened, in words. */
 export type Imported = { format: string; text: string | null; lexicon: boolean; lines: string[] };

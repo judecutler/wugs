@@ -4,15 +4,18 @@
 // height and the tabs are still there the moment someone reaches for them.
 // The rule for "near" is pure (`revealIndex`); `wireReveal` applies it.
 
-export type Box = { left: number; right: number; top: number };
+export type Box = { left: number; right: number; top: number; bottom: number };
 
 /** How far above a group's top edge, and how far into it, the pointer reveals
  * its tabs: the gap above and the 9 px lip, never the card's content, so a
  * click aimed at a panel's first row is never taken by a tab. */
 export const REACH_ABOVE = 10;
 export const REACH_BELOW = 9;
-/** Once risen, the strip (30 px) stays up while the pointer is on it. */
-export const RISEN_BELOW = 30;
+/** Risen tabs push the group's content down (owner, 2026-11-12), so once up
+ * they stay up while the pointer is anywhere in that group: lowering them
+ * there would slide the content under the pointer, and a click aimed at the
+ * first row would land on the row below. They lower once the pointer leaves
+ * the group, where nothing under it moves. */
 /** How long tabs stay up after the pointer leaves, so a slow hand never chases them. */
 export const LINGER_MS = 350;
 /** How long the pointer must rest in reach before tabs rise, so a hand passing
@@ -27,9 +30,11 @@ export function revealIndex(x: number, y: number, boxes: readonly Box[], shown: 
   boxes.forEach((b, i) => {
     if (x < b.left || x > b.right) return;
     const d = y - b.top;
-    if (d < -REACH_ABOVE || d > (i === shown ? RISEN_BELOW : REACH_BELOW)) return;
-    if (Math.abs(d) < bestDist) {
-      bestDist = Math.abs(d);
+    if (d < -REACH_ABOVE || (i === shown ? y > b.bottom : d > REACH_BELOW)) return;
+    // The shown group's whole height counts, but a nearer top edge still wins.
+    const dist = i === shown && d > REACH_BELOW ? REACH_BELOW + 1 : Math.abs(d);
+    if (dist < bestDist) {
+      bestDist = dist;
       best = i;
     }
   });
@@ -99,7 +104,7 @@ export function wireReveal(host: HTMLElement): () => void {
       e.clientY,
       groups.map((g) => {
         const r = g.getBoundingClientRect();
-        return { left: r.left, right: r.right, top: r.top };
+        return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
       }),
       now < 0 ? null : now,
     );
@@ -108,7 +113,15 @@ export function wireReveal(host: HTMLElement): () => void {
   const onLeave = () => show(null);
   // A tab drag (dockview's own HTML5 drag) shows every strip, so any group can take the drop.
   const onDragStart = (e: DragEvent) => {
-    if ((e.target as Element | null)?.closest?.(".dv-tab, .dv-tabs-and-actions-container") != null) host.classList.add("dv-dragging-tab");
+    const from = e.target as Element | null;
+    // Only a tab drags (owner, 2026-11-12): the strip's empty stretch is not a
+    // handle for the whole group. It stays hit-testable, because it is also
+    // where a tab dropped "at the end of this group" lands.
+    if (from?.closest?.(".dv-void-container") != null) {
+      e.preventDefault();
+      return;
+    }
+    if (from?.closest?.(".dv-tab, .dv-tabs-and-actions-container") != null) host.classList.add("dv-dragging-tab");
   };
   const onDragEnd = () => host.classList.remove("dv-dragging-tab");
   host.addEventListener("pointermove", onMove);

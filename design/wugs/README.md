@@ -16,7 +16,9 @@ traces them into:
 - `apps/desktop/public/brand/logo.svg`: the plain wug in brand blue `#00C1E3`;
 - `icon.svg` and `icon.png` here: the app icon source. Make the platform
   icons from it with `cd apps/desktop && npx tauri icon ../../design/wugs/icon.png -o src-tauri/icons`,
-  then keep only `icon.png`, `icon.ico` and `icon.icns`.
+  then keep only `icon.png`, `icon.ico` and `icon.icns`, and run
+  `python3 tools/brand/windows_icon.py` last: it replaces `icon.ico` with the
+  taskbar-sized Windows icon (the wug alone, lines thickened for 16–48 px).
 
 To add an accessory: draw its line and fill as separate layers on the same
 512×512 canvas, hide the background layer, export, add the files here with a

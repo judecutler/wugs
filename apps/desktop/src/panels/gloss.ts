@@ -3,7 +3,7 @@
 // translation line up under the transcription. The project's earlier analyses
 // are one keypress away: Enter on an empty word accepts the ghost suggestion.
 import {
-  addSegment, addTier, editSegmentContent, errorText, glossAddLexeme, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossTokenize,
+  addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossTokenize,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
@@ -16,10 +16,14 @@ import { breakdownChanged, formatBreakdown, marked, parseBreakdown, type MorphTy
 import { tokenState } from "../gloss/state";
 import { applyNeedsConfirm, applyOthersLabel, describe, matchCase } from "../gloss/suggest";
 import { forms } from "../gloss/tokenizer";
-import { needsTranslationTrack, translationLines } from "../gloss/translation";
+import { isPaired, NEW_TRACK, translationLines } from "../gloss/translation";
+import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
+import { provide } from "../palette/registry";
+import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { emptyState, h } from "../dom";
 import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, showToast, subscribeSelection, touchLexicon } from "../store";
 import { createComposition, formatRange, imeBusy } from "../transcribe/logic";
+import { hear, playButton } from "../hear/hear";
 import type { PanelDef, PanelView } from "./panel";
 
 const LANG_KEY = "wugs.gloss-lang";
@@ -560,7 +564,12 @@ export const glossPanel: PanelDef = {
     function translationBlock(text: NonNullable<ReturnType<typeof selected>>): HTMLElement {
       const { segment, text: detail } = text;
       const box = h("div", { className: "gl-free" }, h("h3", { textContent: "Free translation" }));
-      if (needsTranslationTrack(detail.tiers)) {
+      if (segment.parent) {
+        box.append(h("p", { className: "note", textContent: "This segment belongs to another one (a translation or a dependent annotation), so it has no translation of its own." }));
+        return box;
+      }
+      const lines = translationLines(segment, detail.segments, detail.tiers);
+      if (lines.length === 0) {
         const add = h("button", { type: "button", textContent: "Add translation track" });
         add.onclick = () => {
           void addTier({ template: "translation", name: null }).then(() => refreshText(), (e) => showToast({ tone: "error", lines: [errorText(e)] }));
@@ -568,14 +577,10 @@ export const glossPanel: PanelDef = {
         box.append(h("p", { className: "note", textContent: "No translation track yet. A translation lives on its own track, lined up in time with the utterance." }), add);
         return box;
       }
-      if (segment.startMs === null || segment.endMs === null) {
-        box.append(h("p", { className: "note", textContent: "This segment has no times, so no translation can line up with it. Give it times on the Timeline." }));
-        return box;
-      }
-      for (const line of translationLines(segment, detail.segments, detail.tiers)) {
+      for (const line of lines) {
         const cell = `t:${line.tier.id}`;
         const stored = line.segment?.content ?? "";
-        const input = h("input", { className: "gl-free-input", value: drafts.get(cell) ?? stored, spellcheck: false, placeholder: line.segment === null ? "Type a translation. It becomes a segment over this one." : "" });
+        const input = h("input", { className: "gl-free-input", value: drafts.get(cell) ?? stored, spellcheck: false, placeholder: line.segment === null ? (isPaired(line.tier) ? "Type a translation of this sentence." : "Type a translation. It becomes a segment over this one.") : "" });
         input.dataset.cell = cell;
         const commit = () => {
           const draft = drafts.get(cell);
@@ -588,7 +593,9 @@ export const glossPanel: PanelDef = {
                 })
               : draft.trim() === ""
                 ? Promise.resolve()
-                : addSegment({ textId: detail.id, tierId: line.tier.id, startMs: segment.startMs, endMs: segment.endMs, content: draft }).then(() => undefined);
+                : isPaired(line.tier)
+                  ? addTranslation({ textId: detail.id, tierId: line.tier.id === NEW_TRACK ? null : line.tier.id, segmentId: segment.id, content: draft }).then(() => undefined)
+                  : addSegment({ textId: detail.id, tierId: line.tier.id, startMs: segment.startMs, endMs: segment.endMs, content: draft }).then(() => undefined);
           void job.then(() => refreshConflicts()).then(() => refreshText(), (e) => {
             drafts.set(cell, draft);
             showToast({ tone: "error", lines: [errorText(e)] });
@@ -609,6 +616,41 @@ export const glossPanel: PanelDef = {
         box.append(h("label", { className: "gl-free-row" }, h("span", { className: "gl-free-tier", textContent: line.tier.name }), input));
       }
       return box;
+    }
+
+    /** Copy the segment as a numbered example for a paper (roadmap 69), in
+     * the format the person writes in, remembered on this computer. */
+    function copyControl(sel: NonNullable<ReturnType<typeof selected>>, v: GlossView): HTMLElement {
+      let format = parseFormat(readStored(FORMAT_KEY));
+      const picker = h(
+        "select",
+        { className: "gl-copy-format", title: "Where the example will go" },
+        ...EXAMPLE_FORMATS.map((f) => h("option", { value: f.id, textContent: f.label, title: f.note, selected: f.id === format })),
+      );
+      picker.setAttribute("aria-label", "Copy as");
+      picker.onchange = () => {
+        format = parseFormat(picker.value);
+        writeStored(FORMAT_KEY, format);
+      };
+      const button = h("button", { type: "button", className: "gl-copy", textContent: "Copy example", title: "Copy this segment as a numbered, glossed example for a paper" });
+      button.onclick = () => {
+        const segs = sel.text.segments
+          .filter((x) => x.tier === sel.segment.tier)
+          .slice()
+          // Untimed segments after the timed ones, as the Timeline lists them.
+          .sort((a, b) => (a.startMs ?? Number.MAX_SAFE_INTEGER) - (b.startMs ?? Number.MAX_SAFE_INTEGER));
+        const number = Math.max(1, segs.findIndex((x) => x.id === sel.segment.id) + 1);
+        const translation = translationLines(sel.segment, sel.text.segments, sel.text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
+        const ex: Example = { number, translation, words: v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) })) };
+        const out = clipboardFor(ex, format);
+        const label = EXAMPLE_FORMATS.find((f) => f.id === format)?.label ?? "";
+        void copyToClipboard(out.text, out.html).then(
+          // gb4e and ExPex number examples themselves.
+          () => showToast({ tone: "info", lines: [`Copied ${format === "gb4e" || format === "expex" ? "the example" : `example (${number})`} for ${label}. Paste it into your paper.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      };
+      return h("span", { className: "gl-copy-group" }, button, picker);
     }
 
     // ---------------------------------------------------------------- draw
@@ -644,7 +686,15 @@ export const glossPanel: PanelDef = {
       closeMenu();
 
       const state = tokenState(sel.segment.content, v.words.map((w) => w.form));
-      const head = h("div", { className: "gl-head" }, h("span", { className: "gl-time", textContent: formatRange(sel.segment.startMs, sel.segment.endMs) }), h("span", { className: "gl-spacer" }), langControl());
+      const head = h(
+        "div",
+        { className: "gl-head" },
+        playButton("Play this segment", () => void hear({ textId: sel.text.id, tierId: sel.segment.tier, segmentId: sel.segment.id, startMs: sel.segment.startMs, endMs: sel.segment.endMs }, false)),
+        h("span", { className: "gl-time", textContent: formatRange(sel.segment.startMs, sel.segment.endMs) }),
+        h("span", { className: "gl-spacer" }),
+        v.words.length > 0 ? copyControl(sel, v) : null,
+        langControl(),
+      );
       const transcription = h("div", { className: "gl-transcription", textContent: sel.segment.content === "" ? "No transcription yet." : sel.segment.content, title: "Read-only here. Edit it in Transcribe." });
       const body: HTMLElement[] = [];
       const at = { textId: sel.text.id, segmentId: sel.segment.id };
@@ -679,6 +729,47 @@ export const glossPanel: PanelDef = {
     }
 
     const unsubscribe = subscribeSelection(() => draw());
-    return { element: el, render: () => draw(), dispose: unsubscribe };
+    const unprovide = provide("gloss", () => [
+      {
+        id: "gloss:copy-example",
+        title: "Copy the example for a paper",
+        group: "Gloss",
+        words: ["interlinear", "leipzig", "latex", "word", "igt", "export"],
+        disabled: () => (el.querySelector(".gl-copy") === null ? "Select a segment broken into words first" : null),
+        run: () => el.querySelector<HTMLButtonElement>(".gl-copy")?.click(),
+      },
+    ]);
+    return {
+      element: el,
+      render: () => draw(),
+      dispose: () => {
+        unsubscribe();
+        unprovide();
+      },
+    };
   },
 };
+
+/** Through the clipboard plugin, not the webview's clipboard API: the same on
+ * WebView2, WKWebView and WebKitGTK, with no user-gesture or secure-context
+ * rules. HTML goes with plain text beside it, for word processors. */
+async function copyToClipboard(text: string, html: string | null): Promise<void> {
+  if (html !== null) await writeHtml(html, text);
+  else await writeText(text);
+}
+
+function readStored(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStored(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // The choice still holds for this session.
+  }
+}

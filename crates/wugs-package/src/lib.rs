@@ -364,3 +364,48 @@ fn source_ok(s: &str) -> bool {
     };
     matches!(host, "hf" | "github") && part(owner) && part(repo)
 }
+
+/// One file of a package, as its file list records it: path inside the
+/// package (`/`-separated), size in bytes, SHA-256 in lowercase hex.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ListedFile {
+    pub path: String,
+    pub size: u64,
+    pub sha256: String,
+}
+
+/// The package's file list in canonical form (`docs/design/BUNDLES.md` §2):
+/// one line per file, `<sha256> <size> <path>`, sorted by path bytes, each
+/// ending in LF, UTF-8. This is what the index records per version.
+pub fn canonical_file_list(files: &[ListedFile]) -> String {
+    let mut sorted: Vec<&ListedFile> = files.iter().collect();
+    sorted.sort_by(|a, b| a.path.as_bytes().cmp(b.path.as_bytes()));
+    sorted.iter().map(|f| format!("{} {} {}\n", f.sha256, f.size, f.path)).collect()
+}
+
+/// `files_sha256`: the SHA-256 of the canonical file list, lowercase hex.
+/// A bundle's `[[requires]]` pins a package by it.
+pub fn file_list_sha256(files: &[ListedFile]) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(canonical_file_list(files).as_bytes());
+    digest.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[cfg(test)]
+mod file_list_tests {
+    use super::*;
+
+    #[test]
+    fn the_file_list_hash_matches_an_independent_computation() {
+        // Worked out with Python's hashlib, so the format is pinned outside this code.
+        let files = vec![
+            ListedFile { path: "models/a.onnx".into(), size: 3, sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad".into() },
+            ListedFile { path: "README.md".into(), size: 6, sha256: "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03".into() },
+        ];
+        assert_eq!(
+            canonical_file_list(&files),
+            "5891b5b522d5df086d0ff0b110fbd9d21bb4fc7163af34d08286a2e846f6be03 6 README.md\nba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad 3 models/a.onnx\n"
+        );
+        assert_eq!(file_list_sha256(&files), "f2d5325d9fbcfa9dab85345f37a40621d5e9b503bec640264f594295a3c96e58");
+    }
+}

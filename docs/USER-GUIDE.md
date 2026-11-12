@@ -26,18 +26,36 @@ To open a project that already exists, click **Open a project folder** and choos
 
 To start a text, open the **Texts** panel, type a title in **New text title**, and click **New text**.
 
+## Try the sample project
+
+On the welcome screen, click **Open the sample project**. It holds a short made-up recording of someone counting to ten in an invented language, already segmented, transcribed, translated, glossed and in the lexicon. The last segment is left empty so you can try transcribing it.
+
+The first time you open it, a short tour shows what each panel is for. Press **Escape** or click **Skip the tour** to leave it at any point. To see it again, press **Ctrl+K** and choose **Take the tour**.
+
+The sample is an ordinary project kept in wugs's own folder on this computer. Change anything you like. It is never mixed into your own projects.
+
+## Switch between Tongues and Scrolls
+
+wugs comes with two kits: **Tongues** for fieldwork (recordings, transcription, glossing, the dictionary) and **Scrolls** for corpus work (every occurrence in context, searching, glossing sentences). Click the kit's name at the top left, such as **Tongues**, and choose the other kit.
+
+Your project stays open and nothing in it changes. Only the panels and their arrangement change, and each kit remembers its own arrangement. You can also press **Ctrl+K** and type "switch". **Manage kits…** in the same menu opens the Kits panel, where you can make your own kit.
+
 ## Arrange the workspace
 
-The workspace is made of panels: Timeline, Media, Texts, Transcribe, Gloss, Lexicon, Elicit, Search, Speech assist, People, Devices, and Conflicts. Panels that share a space are stacked like pages behind binder dividers. The dividers rest as a thin coloured edge along the top of each panel and rise when you move the pointer to that edge, so the panels keep the room. Click a divider to bring its panel to the front. Drag a divider to move its panel, or drop it on another panel to stack them. wugs remembers your arrangement.
+The workspace is made of panels: Timeline, Media, Texts, Transcribe, Gloss, Lexicon, Elicit, Search, Speech assist, People, Devices, and Conflicts. Panels that share a space are stacked like pages behind binder dividers. The dividers rest as a thin coloured edge along the top of each panel and rise when you move the pointer to that edge, pushing the panel down a little so nothing is covered. Click a divider to bring its panel to the front. Drag a divider to move its panel, or drop it on another panel to stack them. wugs remembers your arrangement.
 
-The **Workspace** menu in the top bar holds the rest:
+Click **Settings** in the top bar for the rest. A panel slides in from the right; Escape or **Close** puts it away.
 
-- To open a panel you closed, choose it under **Show a closed panel**.
-- To keep the dividers up all the time, choose **Always show panel tabs**.
-- To change the colours, choose a theme: **Cream** (the default), **Seafoam**, **Clay** or **Night**. The choice is kept on this computer.
-- To change the faint patterns, choose a family under **Patterns**: **Persian**, **Persian garden**, **Japanese**, **Japanese sea**, **Rock art** or **No pattern**. Each family has three related patterns: one behind the panels, one across the leftmost and rightmost panels, and one for the shaded tool areas (the tier gutter, the IPA palette, Import and export), which is off until you turn on **Pattern on emphasised sections**.
-- Now and then the kit's wug peeks over the top of the panel you are working in. It never comes while you type, hold the mouse button, drag, play audio or record. Touch it and it hides. To stop its visits, turn off **Let the wug visit**.
-- To put every panel back where Tongues starts, choose **Reset to how Tongues starts**.
+- **Colours:** each choice shows a small picture of the workspace in its colours. Click one to use it: **Cream** (the default), **Seafoam**, **Clay** or **Night**. The choice is kept on this computer.
+- **Patterns:** each family shows its three patterns: the one for the page behind the panels, the one across the side panels, and the one for emphasised strips (the tier names beside the timeline, the IPA palette, Import and export). Click a family to use it, or **No pattern**. The strip pattern stays off until you turn on **Pattern on emphasised strips**.
+- **Workspace:** **Always show panel tabs** keeps the dividers up. Now and then the kit's wug peeks over the top of the panel you are working in; it never comes while you type, hold the mouse button, drag, play audio or record, and it hides when you touch it. To stop its visits, turn off **Let the wug visit**. A panel you closed is listed under **Closed panels**; click it to bring it back. **Reset layout** puts every panel back where Tongues starts.
+- **Updates:** see [Keep wugs up to date](#keep-wugs-up-to-date).
+
+### Find any action
+
+Press **Ctrl+K** (**⌘K** on a Mac), or click **Find an action** in the top bar. Type a few letters of what you want, such as "split", "night" or "lexicon", then press **Enter**. The list covers opening panels, colours and patterns, timeline actions, copying an example, and the Project menu. Each row shows its key, if it has one. An action that cannot run yet stays in the list, greyed, and says why.
+
+Press **?** anywhere outside a text field to see every keyboard shortcut.
 
 ## Bring in a recording
 
@@ -73,6 +91,10 @@ wugs saves the recording to disk every few seconds while you record. If the comp
 
 Recording is meant to work on Windows and macOS. On Linux, the system's web view may not allow recording. In that case the Media panel says "This system's web view cannot record audio", and you import a file instead.
 
+### The media bin
+
+Below the Record button, the **Media** panel shows each recording as a card: its waveform, name, length, sharing level and the texts that use it. The card of the text on screen has a blue outline and says **In this text**. To use a recording for the text on screen, drag its card onto the Timeline, double-click it, or click **Use for this text**. The text remembers it, so every panel can play its segments.
+
 ## Segment the recording
 
 A segment marks where one utterance, or one word, starts and ends. The Transcribe and Gloss panels work segment by segment.
@@ -96,6 +118,32 @@ Auto-segment measures loudness only. Wind, a generator, or other people talking 
 - To type in a segment directly on the timeline, double-click it.
 - To delete a segment, select it and press **Delete**, then click **Delete** in the box that opens. Click **Keep** to cancel.
 - To add a track, choose a kind from the **Add track…** list: transcription, translation, notes, or custom. A custom track asks for a name.
+
+### Play, zoom, and move around
+
+The row under the Timeline toolbar works like the transport in a video editor. It has buttons to go to the start, play or pause, and go to the end. Beside them is the playhead time and the recording's length. At the right are the zoom controls: **−**, a slider, **+**, and **Fit**, which shows the whole recording.
+
+Click the ruler or the waveform to move the playhead there. While the timeline has focus, these keys also work:
+
+| Key | Action |
+| --- | --- |
+| **Space** | Play or pause. |
+| **J** | Jump back two seconds. |
+| **K** | Stop. |
+| **L** | Play. |
+| **Home** and **End** | Go to the start or the end. |
+| **+** and **-** | Zoom in or out. |
+| **Shift+Z** | Fit the whole recording on screen. |
+
+### Lock, hide, and mute tracks
+
+Each track has a header at the left of the timeline, as in a video editor:
+
+- The lock button stops a track's segments from changing. You can still select them and play them, but drawing, dragging, typing, splitting, merging, nudging, deleting and Auto-segment are refused with a message. Click the lock again to unlock the track. Changes brought back from Praat are not stopped by a lock.
+- The eye button hides a track's segments, so you can work on another track without them in the way. A hidden track cannot be edited either. Hiding the track of the selected segment clears the selection.
+- The speaker button beside **Recording** mutes the Timeline's playing. The playhead still moves, so you can follow along silently. Replaying a segment from Transcribe still plays aloud.
+
+These settings belong to one text on this computer. They are not shared with other devices and they do not change the project.
 
 ### Split, merge, and nudge
 
@@ -263,6 +311,18 @@ A free translation lives on its own track, lined up in time with the utterance.
 
 The segment needs start and end times for this. If it has none, give it times on the Timeline first.
 
+### Copy an example into a paper
+
+Click **Copy example** at the top of the Gloss panel. The segment is copied as a numbered example: the words split into morphs, the glosses under them with grammatical glosses in small capitals, and the free translation in quotes. Then paste it into your paper.
+
+Choose where it will go in the list beside the button:
+
+- **Word / Google Docs** pastes as a table that lines the morphs up with their glosses. It also works in LibreOffice and email.
+- **LaTeX (gb4e)** and **LaTeX (ExPex)** paste the lines those packages expect. They number the example themselves. With pdflatex, add `\usepackage[T1]{fontenc}` so IPA tildes print as tildes; XeLaTeX and LuaLaTeX need nothing extra.
+- **Plain text** lines the columns up with spaces.
+
+wugs remembers the choice on this computer. The number is the segment's place in its text. A morph with no gloss yet shows **?**, so you can see the gap before you send the paper. Grammatical glosses paste as slightly smaller capitals, which read as small capitals in every word processor.
+
 ## Build the lexicon
 
 The **Lexicon** panel has a list of entries beside an editor for the selected entry.
@@ -390,6 +450,7 @@ wugs reads these formats:
 - FLEx `.flextext` and LIFT `.lift`
 - Praat `.TextGrid`
 - Toolbox `.db`, `.sfm`, and `.lex`, and `.txt` files in Toolbox format
+- Plain text `.txt`: any other text file becomes a text named after the file, and the message says how it was cut. A file whose lines mostly end in a full stop, with no blank lines, comes in a segment per line. Otherwise blank lines separate paragraphs, a line ending in a full stop ends its sentence, and inside a line a sentence ends after `.`, `!`, `?` or the full stop of another script when the next word starts with a capital, a digit or a quote; "e.g. the" stays together, but "Dr. Smith" is cut. Thai and Lao paragraphs come in whole, and an orthography written all in lower case is cut only at line ends and blank lines. The file must be UTF-8 or UTF-16; a damaged one is refused. Importing the same file again adds nothing.
 
 A message reports what wugs imported, and the new text is selected. The import report also counts anything the format holds that wugs does not keep. For FLEx, that includes LIFT examples, notes, pronunciations, relations, and etymologies.
 
@@ -397,7 +458,7 @@ An imported ELAN or Praat text is not linked to its recording. Import the audio 
 
 ### Export a text or the lexicon
 
-To export a text, select it, choose ELAN (.eaf), FLEx (.flextext), or Praat (.TextGrid), and click **Export…**.
+To export a text, select it, choose ELAN (.eaf), FLEx (.flextext), Praat (.TextGrid), or plain text, and click **Export…**. Plain text writes one track a segment per line, in time order, which AntConc and most corpus tools read.
 
 To export the lexicon, choose LIFT or Toolbox beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT.
 
@@ -419,6 +480,35 @@ Sealing copies every recording. Other actions wait until it finishes.
 Type in the **Search** panel. Choose **All**, **Texts**, or **Lexicon** to narrow the results. Results are grouped by text. Click a result, or select it and press **Enter**, to jump to that segment.
 
 Search ignores accents in both directions, so `e` finds `é`.
+
+
+## See every occurrence in context
+
+The **Concordance** panel lists every place a word is used, one line per occurrence, with the word in the middle and what was said before and after it. It is a tab beside Lexicon. If your layout predates it, press **Ctrl+K** and choose **Show Concordance**.
+
+1. Choose what to look for: **Words** as transcribed, **Morphs**, **Glosses** (such as PL or 1SG), or words of **Translations**.
+2. Type it. Capital letters do not matter, but diacritics do: ŋa never finds na. Morph markers do not matter either: `-ra` and `ra` find the same morph. Use `*` for any letters (`ni*` finds every word starting with ni) and `?` for one letter.
+3. Sort the lines **By the word before** or **By the word after** to see patterns, as in a concordancer such as AntConc.
+
+Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
+
+## Count words, morphs and glosses
+
+The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.
+
+1. Choose what to count: **Words**, **Morphs**, **Glosses** or words of **Translations**.
+2. Count in the **Whole project** or pick one text.
+3. Sort by count, alphabetically, or by how many texts a word is in, and type in **Filter the list** to find one.
+
+**Per 1000** is how often it occurs in every thousand. Capital letters count together (Kesi and kesi are one word, shown as the spelling used most); diacritics do not (ŋa and na are two). A morph or gloss counts once per word that has it, so a word with PL twice counts once. Click a row to see its occurrences in the Concordance, looked up exactly (a `?` in a word is a letter there, not a wildcard) and in the chosen text: the number of lines matches the count. The list counts again when the project syncs or texts change; after glossing or typing, click **Recount**. Up to 5,000 items are listed and the first 500 drawn; filter to find the rest. The **#** column is each item's frequency rank, whatever the order shown. **Copy table** copies the list to paste into a spreadsheet.
+
+## Hear any segment from anywhere
+
+Every segment has a ▶ beside it: the lines in Transcribe, the top of the Gloss panel, each line of the Concordance, each segment found by Search, and the words a lexicon entry is used in. In the Lexicon, click **used in 3 words** (or however many) under a sense to list those words, then ▶ to hear each one.
+
+▶ plays from the text's own recording. A text learns its recording the first time you pick a recording for it in the Timeline's list (or import or drop one while the text is open), and from then on the Timeline opens the text with it and ▶ works from every panel, even while another text is on the Timeline. A text whose recording was never picked plays only while it is the text on screen and the recording loaded is not another text's; elsewhere ▶ says to pick its recording first. The sample project comes with its recording picked.
+
+A text with no sharing level of its own shares like its recording, so picking a restricted recording makes the text restricted too; wugs says so when a pick changes this.
 
 ## Work with other devices
 
@@ -470,13 +560,13 @@ In the Gloss panel, a word that another device analysed differently shows the ot
 
 wugs checks GitHub once at start for a newer release. This is **Online**. When one exists, a line under the top bar offers **Install and restart**, **Later**, and **What's new**. Nothing downloads until you click **Install and restart**.
 
-To stop the check, open the **Updates** menu in the top bar and turn off **Check when wugs starts**. For details, read the updates section of [Install a build](INSTALL.md#updates).
+To stop the check, open **Settings** in the top bar and, under **Updates**, turn off **Check when wugs starts**. For details, read the updates section of [Install a build](INSTALL.md#updates).
 
 ## Fix problems
 
 | Problem | What to do |
 | --- | --- |
-| A panel is missing. | Open the **Workspace** menu in the top bar and choose the panel under **Show a closed panel**, or choose **Reset to how Tongues starts**. |
+| A panel is missing. | Open **Settings** in the top bar and click the panel under **Closed panels**, or click **Reset layout**. |
 | An error message appears. | Read it. It says what failed. Edits already saved are kept, because wugs writes each edit to the project when you make it. Click **Dismiss** to close the message. |
 | **Recovered recordings** appears in the Media panel. | wugs found recordings that were still on disk when the app last closed. Type a name and click **Import** to keep one. Click **Discard**, then **Really discard?**, to throw it away. Nothing happens until you choose. |
 | wugs says the project folder was moved or copied. | If you moved the folder, click **I moved it**. If it is a copy and the original is still in use, click **Create fresh device identity**, so the two folders sync as two devices. |

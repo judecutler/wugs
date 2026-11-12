@@ -1,0 +1,53 @@
+# Scrolls: the corpus kit. Design: docs/design/SCROLLS.md. Same project, same
+# data as Tongues; switching kits changes which tools open and how they sit.
+
+[package]                          # the kit as a shareable package (docs/design/BUNDLES.md)
+type = "kit"
+license = "MPL-2.0"
+source = "https://github.com/judecutler/wugs"
+
+[bundle]
+authors = ["The wugs project"]
+summary = "Every occurrence in context, frequency lists and glossing for a corpus of texts."
+# [[requires]] lists the packages a kit relies on, each pinned by version
+# and files_sha256. The built-in kits need none yet: their word lists and
+# domains ship inside the app.
+
+[kit]
+id = "org.wugs.scrolls"
+name = "Scrolls"
+subtitle = "Corpus"
+version = "0.0.1"
+description = "Corpus work: every occurrence in context, searches, glossing and the vocabulary of your texts."
+offline_core = true
+
+[tools]                            # panels this kit offers; Conflicts, Devices and Kits are always offered.
+enabled = [
+  "texts",                         # the documents of the corpus
+  "concordance",                   # keyword in context, sortable by either side
+  "frequencies",                   # how often each word, morph or gloss occurs
+  "collocates",                    # which words keep company with a word
+  "keywords",                      # which words set a text apart from the others
+  "search",
+  "gloss",                         # morph analysis of one sentence
+  "lexicon",                       # the corpus vocabulary
+  "transcribe",                    # read and correct the text sentence by sentence
+]
+
+[layout]
+panels = [
+  { panel = "concordance" },
+  { panel = "texts", place = "left", of = "concordance", width = 260 },
+  { panel = "search", place = "right", of = "concordance", width = 340 },
+  { panel = "frequencies", place = "tab", of = "search" },
+  { panel = "collocates", place = "tab", of = "search" },
+  { panel = "keywords", place = "tab", of = "search" },
+  { panel = "lexicon", place = "tab", of = "search" },
+  { panel = "transcribe", place = "below", of = "concordance", height = 280 },
+  { panel = "gloss", place = "right", of = "transcribe", width = 460 },
+]
+active = ["texts", "concordance", "frequencies"]
+
+[wug]
+body = "#7aa6d8"                   # ink blue, after old manuscripts
+accessories = ["glasses", "scroll"]

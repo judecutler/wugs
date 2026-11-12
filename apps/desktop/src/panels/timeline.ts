@@ -4,13 +4,19 @@
 // tier gutter, the editing buttons (Auto-segment, Split, Merge, Undo, Redo)
 // and the perf toggle.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { addTier, importMedia, listSources, peaksInfo, type SourceRow, type TierTemplate } from "../api";
+import { addTier, importMedia, linkRecording, listSources, peaksInfo, type SourceRow, type TierTemplate } from "../api";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
-import { attempt, dataGeneration, getSelection, getState, refreshText, takeWantedMedia } from "../store";
+import { attempt, dataGeneration, getSelection, getState, mediaSource, refreshText, reloadTexts, showToast, takeWantedMedia } from "../store";
 import { parseGranularity } from "../timeline/edit-rules";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
+import { clock } from "../timeline/tracks";
+import { CARD_TYPE, cardDrag, isCardDrag } from "../media/logic";
+import { ICONS, type IconName } from "../timeline/icons";
+import * as playback from "../playback";
 import type { PanelDef, PanelView } from "./panel";
+import { provide } from "../palette/registry";
+import type { Command } from "../palette/logic";
 
 const TEMPLATES: TierTemplate[] = ["transcription", "translation", "notes", "custom"];
 /** Auto-segment's last granularity on this machine. */
@@ -20,16 +26,38 @@ export const timelinePanel: PanelDef = {
   title: "Timeline",
   create(): PanelView {
     const el = h("div", { className: "panel panel-timeline" });
+    // A media bin card dropped here is picked for the text on screen (docs/design/EDITOR.md).
+    const carries = (e: DragEvent) => isCardDrag(cardDrag.active(), [...(e.dataTransfer?.types ?? [])]);
+    el.addEventListener("dragover", (e) => {
+      if (!carries(e) || getState().kind !== "open" || view === null) return;
+      e.preventDefault();
+      if (e.dataTransfer !== null) e.dataTransfer.dropEffect = "link";
+      el.classList.add("is-drop-target");
+    });
+    el.addEventListener("dragleave", (e) => {
+      if (e.relatedTarget === null || !el.contains(e.relatedTarget as Node)) el.classList.remove("is-drop-target");
+    });
+    el.addEventListener("drop", (e) => {
+      el.classList.remove("is-drop-target");
+      // The window's guard ran first (capture) and let this through only for a
+      // live card drag, then ended the drag: here the type is enough.
+      if (!(e.dataTransfer?.types.includes(CARD_TYPE) ?? false) || view === null) return;
+      e.preventDefault();
+      const id = e.dataTransfer?.getData(CARD_TYPE) ?? "";
+      if (sources.some((x) => x.id === id)) void pickSource(id);
+    });
     let view: TimelineView | null = null;
     let sources: SourceRow[] = [];
     let selectedSource: string | null = null;
     let lastSlice = "";
     let lastText = "";
+    let lastTextId = "";
+    let seenMedia: string | null = null;
     let lastGeneration = -1;
     let lastProject = "";
 
     const sourcePicker = h("select", { className: "tl-sources", title: "The recording behind this timeline" });
-    sourcePicker.onchange = () => void loadSource(sourcePicker.value || null);
+    sourcePicker.onchange = () => void pickSource(sourcePicker.value || null);
     const importButton = h("button", { textContent: "Import audio…", title: "Add a recording to this project (WAV, M4A, MP3, FLAC, Ogg, AIFF; compressed files are decoded to WAV)" });
     const perfButton = h("button", { textContent: "Perf", title: "Show frame times and strip-cache hits on the canvas" });
     const praat = praatControls(() => {
@@ -92,6 +120,82 @@ export const timelinePanel: PanelDef = {
         updateEditButtons();
       });
     };
+    // Transport (docs/design/EDITOR.md): play, the clock, and zoom, laid
+    // out the way video editors put them along the top of a timeline.
+    const playButton = iconButton("play", "Play (Space)");
+    const startButton = iconButton("start", "Go to start (Home)");
+    const endButton = iconButton("end", "Go to end (End)");
+    const clockNow = h("span", { className: "tl-clock-now", textContent: "0:00.0" });
+    const clockTotal = h("span", { className: "tl-clock-total", textContent: "0:00.0" });
+    const clockBox = h("span", { className: "tl-clock", title: "Playhead and length. J steps back, K stops, L plays." }, clockNow, " / ", clockTotal);
+    const zoomOut = h("button", { className: "tl-zoom-step", textContent: "−", title: "Zoom out (-)", ariaLabel: "Zoom out" });
+    const zoomSlider = h("input", { className: "tl-zoom", type: "range", min: "0", max: "1000", step: "1", value: "0", title: "Zoom" });
+    zoomSlider.setAttribute("aria-label", "Zoom");
+    const zoomIn = h("button", { className: "tl-zoom-step", textContent: "+", title: "Zoom in (+)", ariaLabel: "Zoom in" });
+    const fitButton = h("button", { textContent: "Fit", title: "Show the whole recording (Shift+Z)" });
+    const transport = h(
+      "div",
+      { className: "tl-transport" },
+      h("span", { className: "tl-transport-play" }, startButton, playButton, endButton, clockBox),
+      h("span", { className: "tl-transport-zoom" }, zoomOut, zoomSlider, zoomIn, fitButton),
+    );
+    playButton.onclick = () => view?.playPause();
+    startButton.onclick = () => view?.seekTo(0);
+    endButton.onclick = () => view?.seekTo(view.durationMs());
+    zoomOut.onclick = () => view?.zoomBy(1 / 1.5);
+    zoomIn.onclick = () => view?.zoomBy(1.5);
+    fitButton.onclick = () => view?.fit();
+    zoomSlider.oninput = () => view?.setZoomSlider(Number(zoomSlider.value));
+    // Let go, the slider follows the wheel and keys again.
+    zoomSlider.onchange = () => zoomSlider.blur();
+
+    // The clock, play icon and slider follow the view every frame, so a
+    // wheel zoom or another panel's playback shows here too.
+    let shown = { playing: false, now: "", total: "", zoom: -1, hasRecording: true };
+    let tick = 0;
+    function follow(): void {
+      tick = requestAnimationFrame(follow);
+      if (view === null) return;
+      const hasRecording = view.hasRecording();
+      const playing = hasRecording && playback.isPlaying();
+      const now = clock(hasRecording ? playback.currentMs() : 0);
+      const total = clock(view.durationMs());
+      const zoom = view.zoomSlider();
+      if (playing !== shown.playing) {
+        playButton.innerHTML = ICONS[playing ? "pause" : "play"];
+        playButton.title = playing ? "Pause (Space)" : "Play (Space)";
+        playButton.setAttribute("aria-label", playing ? "Pause" : "Play");
+      }
+      if (hasRecording !== shown.hasRecording) {
+        for (const b of [playButton, startButton, endButton]) b.disabled = !hasRecording;
+      }
+      if (now !== shown.now) clockNow.textContent = now;
+      if (total !== shown.total) clockTotal.textContent = total;
+      if (zoom !== shown.zoom && document.activeElement !== zoomSlider) zoomSlider.value = String(zoom);
+      shown = { playing, now, total, zoom, hasRecording };
+    }
+
+    // The Timeline's actions in the command palette, while the panel is open.
+    const needsProject = () => (getState().kind === "open" ? null : "Open a project first");
+    const needsView = () => needsProject() ?? (view === null ? "Open a text on the Timeline first" : null);
+    /** A toolbar button's own state: the palette never offers what the button would not do. */
+    const asButton = (b: HTMLButtonElement) => () => needsView() ?? (b.disabled ? b.title || "Not available right now" : null);
+    const needsRecording = () => needsView() ?? (view?.hasRecording() === true ? null : "Load a recording first");
+    const timelineCommands = (): Command[] => [
+      { id: "timeline:play", title: "Play or pause", group: "Timeline", keys: "Space", words: ["listen", "audio"], disabled: needsRecording, run: () => view?.playPause() },
+      { id: "timeline:fit", title: "Fit the whole recording", group: "Timeline", keys: "Shift+Z", words: ["zoom", "overview"], disabled: needsView, run: () => view?.fit() },
+      { id: "timeline:zoom-in", title: "Zoom in", group: "Timeline", keys: "+", disabled: needsView, run: () => view?.zoomBy(1.5) },
+      { id: "timeline:zoom-out", title: "Zoom out", group: "Timeline", keys: "-", disabled: needsView, run: () => view?.zoomBy(1 / 1.5) },
+      { id: "timeline:start", title: "Go to the start", group: "Timeline", keys: "Home", disabled: needsRecording, run: () => view?.seekTo(0) },
+      { id: "timeline:split", title: "Split at the playhead", group: "Timeline", keys: "S", words: ["cut"], disabled: () => needsView() ?? view?.editRules().split ?? null, run: () => void view?.splitAtPlayhead() },
+      { id: "timeline:merge", title: "Merge with the next segment", group: "Timeline", keys: "M", words: ["join", "combine"], disabled: () => needsView() ?? view?.editRules().merge ?? null, run: () => void view?.mergeWithNext() },
+      { id: "timeline:auto", title: "Auto-segment the recording", group: "Timeline", words: ["detect", "speech", "segments", "automatic"], disabled: () => needsRecording() ?? asButton(autoButton)(), run: () => autoButton.click() },
+      { id: "timeline:undo", title: "Undo a timeline edit", group: "Timeline", keys: "Ctrl+Z", disabled: () => needsView() ?? (undoButton.disabled ? "Nothing to undo" : null), run: () => void view?.undo() },
+      { id: "timeline:redo", title: "Redo a timeline edit", group: "Timeline", keys: "Ctrl+Shift+Z", disabled: () => needsView() ?? (redoButton.disabled ? "Nothing to redo" : null), run: () => void view?.redo() },
+      { id: "timeline:import", title: "Import audio…", group: "Timeline", words: ["recording", "wav", "mp3", "m4a"], disabled: () => needsView() ?? (importButton.disabled ? "An import is running" : null), run: () => importButton.click() },
+    ];
+    const unprovide = provide("timeline", timelineCommands);
+
     const gutter = h("div", { className: "tl-gutter" });
     const body = h("div", { className: "tl-body" });
     const main = h("div", { className: "tl-main" }, gutter, body);
@@ -117,7 +221,7 @@ export const timelinePanel: PanelDef = {
         try {
           const row = await importMedia({ path });
           await refreshSources();
-          await loadSource(row.id);
+          await pickSource(row.id);
         } finally {
           importButton.disabled = false;
         }
@@ -138,27 +242,66 @@ export const timelinePanel: PanelDef = {
       }
       const wanted = takeWantedMedia(sources.map((s) => s.id));
       if (wanted !== null) {
-        await loadSource(wanted);
+        // A recording dropped while a text is open is picked for it, like Import.
+        await pickSource(wanted);
         return;
       }
-      // One recording and nothing picked: load it without a click.
+      // One recording, nothing picked, and no other text's: load it without a click.
       const only = sources.length === 1 ? sources[0] : undefined;
-      if (selectedSource === null && only !== undefined) await loadSource(only.id);
+      const st = getState();
+      const elsewhere = st.kind === "open" && st.texts.some((t) => t.recording === only?.id && t.id !== st.text?.id);
+      if (selectedSource === null && only !== undefined && !elsewhere) await loadSource(only.id);
     }
 
-    async function loadSource(sourceId: string | null): Promise<void> {
+    /** The person chose this recording for the text on screen: the text
+     * remembers it, so every panel can play its segments (roadmap 72). The
+     * text is the one on screen when they chose, even if the load is slow. */
+    async function pickSource(sourceId: string | null): Promise<void> {
+      const before = getState();
+      const textId = before.kind === "open" ? (before.text?.id ?? null) : null;
+      const previous = before.kind === "open" ? (before.texts.find((t) => t.id === textId)?.recording ?? null) : null;
+      // The recording already loaded is not loaded again (a reload would re-fit the view).
+      const loaded = sourceId === selectedSource && sourceId !== null && mediaSource() === sourceId ? true : await loadSource(sourceId);
+      const s = getState();
+      // Linked only once it really loaded here: audio that is not on this computer is not linked.
+      if (!loaded || s.kind !== "open" || textId === null || s.text?.id !== textId || sourceId === null || previous === sourceId) return;
+      await attempt(async () => {
+        await linkRecording({ textId, sourceId });
+        await reloadTexts();
+      });
+      // A text with no access level of its own shares like its recording
+      // (DATA-MODEL §4): say so when the pick changes that.
+      const level = (id: string | null) => (id === null ? null : (sources.find((x) => x.id === id)?.access ?? null)) ?? "open";
+      if (level(previous) !== level(sourceId)) {
+        showToast({ tone: "warn", lines: [`This text now shares like its recording: ${level(sourceId)}. A level set on the text itself still wins.`] });
+      }
+    }
+
+    /** Only the newest load lands: a slow one overtaken by another is dropped. */
+    let loadSeq = 0;
+
+    /** Load a recording (or none); true when it is the one now loaded. */
+    async function loadSource(sourceId: string | null): Promise<boolean> {
+      const mine = ++loadSeq;
       selectedSource = sourceId;
-      if (view === null) return;
+      if (view === null) return false;
       if (sourceId === null) {
         view.setMedia(null, null);
-        return;
+        return false;
       }
+      let ok = false;
       await attempt(async () => {
-        view?.setMedia(await peaksInfo({ sourceId }), sourceId);
+        const info = await peaksInfo({ sourceId });
+        if (mine === loadSeq) {
+          view?.setMedia(info, sourceId);
+          ok = true;
+        }
       });
+      if (mine !== loadSeq) return false;
       sourcePicker.value = sourceId;
       praat.refresh();
       updateEditButtons();
+      return ok;
     }
 
     function addTrackControl(): HTMLElement {
@@ -196,21 +339,42 @@ export const timelinePanel: PanelDef = {
       return holder;
     }
 
-    function placed(className: string, top: number, height: number | null, ...children: (Node | string)[]): HTMLDivElement {
+    function placed(className: string, top: number, height: number | null, ...children: (Node | string | null)[]): HTMLDivElement {
       const div = h("div", { className }, ...children);
       div.style.top = `${top}px`;
       if (height !== null) div.style.height = `${height}px`;
       return div;
     }
 
+    /** Track headers: a name and its toggles, like a video editor's track header. */
     function drawGutter(): void {
       if (view === null) return;
-      const names = view.laneNames();
+      const v = view;
+      const rows = v.trackRows();
+      // Toggling redraws the headers: keep keyboard focus on the same toggle.
+      const focused = (document.activeElement as HTMLElement | null)?.dataset?.key;
+      const muteButton = toggleButton("mute", v.muted, "muted", "sound", "Mute the recording", () => v.toggleMute());
       gutter.replaceChildren(
-        placed("tl-gutter-wave", RULER_H, WAVE_H, "waveform"),
-        ...names.map((name, i) => placed("tl-gutter-tier", RULER_H + WAVE_H + i * TIER_H, TIER_H, name)),
-        placed("tl-gutter-add", RULER_H + WAVE_H + names.length * TIER_H + 6, null, addTrackControl()),
+        placed("tl-gutter-wave", RULER_H, WAVE_H, h("span", { className: "tl-track-name", textContent: "Recording" }), h("span", { className: "tl-track-toggles" }, muteButton)),
+        ...rows.map((row, i) => {
+          const tierId = row.tierId;
+          const toggles =
+            tierId === null
+              ? null
+              : h(
+                  "span",
+                  { className: "tl-track-toggles" },
+                  toggleButton(`lock:${tierId}`, row.locked, "lock", "unlock", `Lock ${row.name}`, () => v.toggleTrack(tierId, "locked")),
+                  toggleButton(`hide:${tierId}`, row.hidden, "eyeOff", "eye", `Hide ${row.name}`, () => v.toggleTrack(tierId, "hidden")),
+                );
+          const div = placed("tl-gutter-tier", RULER_H + WAVE_H + i * TIER_H, TIER_H, h("span", { className: "tl-track-name", textContent: row.name, title: row.name }), toggles);
+          div.classList.toggle("is-hidden", row.hidden);
+          div.classList.toggle("is-locked", row.locked);
+          return div;
+        }),
+        placed("tl-gutter-add", RULER_H + WAVE_H + rows.length * TIER_H + 6, null, addTrackControl()),
       );
+      if (focused !== undefined) gutter.querySelector<HTMLElement>(`[data-key="${CSS.escape(focused)}"]`)?.focus();
     }
 
     const render = () => {
@@ -220,6 +384,7 @@ export const timelinePanel: PanelDef = {
         if (slice !== lastSlice) {
           view?.dispose();
           view = null;
+          cancelAnimationFrame(tick);
           selectedSource = null;
           el.replaceChildren(
             emptyState(
@@ -236,6 +401,7 @@ export const timelinePanel: PanelDef = {
         if (slice !== lastSlice) {
           view?.dispose();
           view = null;
+          cancelAnimationFrame(tick);
           el.replaceChildren(
             emptyState(
               "Timeline",
@@ -251,8 +417,11 @@ export const timelinePanel: PanelDef = {
         view = new TimelineView();
         view.analysis.onChange = () => praat.refresh();
         view.onEditStateChange = updateEditButtons;
+        view.onTracksChange = drawGutter;
         body.replaceChildren(view.element);
-        el.replaceChildren(toolbar, praat.review, main);
+        el.replaceChildren(toolbar, transport, praat.review, main);
+        cancelAnimationFrame(tick);
+        tick = requestAnimationFrame(follow);
         lastText = "";
         lastProject = "";
       }
@@ -266,6 +435,29 @@ export const timelinePanel: PanelDef = {
       } else if (lastGeneration !== dataGeneration()) {
         lastGeneration = dataGeneration();
         void refreshSources();
+      }
+      // A recording asked for from the media bin (a card's Use, a double-click).
+      if (sources.length > 0) {
+        const asked = takeWantedMedia(sources.map((x) => x.id));
+        if (asked !== null) void pickSource(asked);
+      }
+      // A text opens with the recording it was transcribed from; a text
+      // with none drops a recording that belongs to another text (the wrong
+      // audio is worse than none). The Timeline also follows a recording
+      // another panel loaded to play a segment, only when that changed since
+      // the last look, so its own slow loads never chase each other.
+      const linked = s.texts.find((t) => t.id === s.text?.id)?.recording ?? null;
+      const media = mediaSource();
+      const mediaMoved = media !== seenMedia;
+      seenMedia = media;
+      if (s.text.id !== lastTextId) {
+        lastTextId = s.text.id;
+        const textId = s.text.id;
+        const othersOwn = selectedSource !== null && s.texts.some((t) => t.recording === selectedSource && t.id !== textId);
+        if (linked !== null && linked !== selectedSource) void loadSource(linked);
+        else if (linked === null && othersOwn) void loadSource(null);
+      } else if (mediaMoved && media !== null && media !== selectedSource) {
+        void loadSource(media);
       }
       const textStamp = `${s.text.id}|${JSON.stringify(s.text.tiers)}|${JSON.stringify(s.text.segments)}`;
       if (textStamp !== lastText) {
@@ -282,9 +474,30 @@ export const timelinePanel: PanelDef = {
       element: el,
       render,
       dispose: () => {
+        unprovide();
+        cancelAnimationFrame(tick);
         view?.dispose();
         view = null;
       },
     };
   },
 };
+
+function iconButton(icon: IconName, title: string): HTMLButtonElement {
+  const b = h("button", { className: "tl-icon", title });
+  b.innerHTML = ICONS[icon];
+  b.setAttribute("aria-label", title.replace(/ \(.*\)$/, ""));
+  return b;
+}
+
+/** A track toggle: one fixed name, its state in aria-pressed and the icon. */
+function toggleButton(key: string, on: boolean, onIcon: IconName, offIcon: IconName, title: string, act: () => void): HTMLButtonElement {
+  const b = iconButton(on ? onIcon : offIcon, title);
+  b.dataset.key = key;
+  b.classList.add("tl-track-toggle");
+  b.setAttribute("aria-pressed", String(on));
+  // Keep focus on the timeline, so its keys keep working after a click.
+  b.onmousedown = (ev) => ev.preventDefault();
+  b.onclick = act;
+  return b;
+}

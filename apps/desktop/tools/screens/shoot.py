@@ -33,6 +33,10 @@ PANELS = [
     ("lexicon", "Lexicon"),
     ("elicit", "Elicit"),
     ("search", "Search"),
+    ("concordance", "Concordance"),
+    ("frequencies", "Frequencies"),
+    ("collocates", "Collocates"),
+    ("keywords", "Keywords"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),
@@ -91,16 +95,21 @@ def silent_wav(seconds=20, rate=16000):
     return buf.getvalue()
 
 
-def bundled_kit():
-    """The real kits/tongues/kit.toml as the shell's Kit shape, so the shots
-    always show the layout a fresh install starts with."""
+def bundled_kit(name="tongues"):
+    """A real built-in kits/<name>/kit.toml as the shell's Kit shape, so the
+    shots always show the layout a fresh install starts with."""
     import tomllib
-    k = tomllib.loads((HERE.parents[3] / "kits" / "tongues" / "kit.toml").read_text())
+    k = tomllib.loads((HERE.parents[3] / "kits" / name / "kit.toml").read_text())
     return {
         "id": k["kit"]["id"], "name": k["kit"]["name"], "subtitle": k["kit"].get("subtitle", ""),
         "version": k["kit"]["version"], "description": k["kit"].get("description", ""),
         "tools": k["tools"]["enabled"], "layout": k["layout"]["panels"], "active": k["layout"].get("active", []),
         **({"wug": k["wug"]} if "wug" in k else {}),
+        **({"bundle": {
+            "license": k.get("package", {}).get("license", ""), "source": k.get("package", {}).get("source", ""),
+            "authors": k.get("bundle", {}).get("authors", []), "summary": k.get("bundle", {}).get("summary", ""),
+            "requires": [], **({"examples": k["examples"]["project"]} if "examples" in k else {}),
+        }} if "package" in k or "bundle" in k else {}),
     }
 
 
@@ -110,7 +119,7 @@ THEME = None
 def init_script(auto_open):
     flag = "true" if auto_open else "false"
     return (
-        f"window.__WUGS_SCREENS__ = {{ autoOpen: {flag}, theme: {json.dumps(THEME)}, kit: {json.dumps(bundled_kit())} }};\n"
+        f"window.__WUGS_SCREENS__ = {{ autoOpen: {flag}, theme: {json.dumps(THEME)}, kit: {json.dumps(bundled_kit())}, scrolls: {json.dumps(bundled_kit('scrolls'))} }};\n"
         + (HERE / "fixtures.js").read_text()
         + "\n"
         + (HERE / "mock-tauri.js").read_text()
@@ -192,10 +201,12 @@ class Run:
     def front(self, panel_id, title):
         tab = self.page.locator(f".dv-tab[data-tab-panel-id='{panel_id}']")
         if tab.count() == 0:
-            # A closed panel comes back through the Workspace menu (src/menu.ts).
-            self.page.click(".panel-menu")
-            self.page.click(f".menu-list .menu-item:has-text('{title}')")
+            # A closed panel comes back through Settings (src/settings/panel.ts).
+            self.page.click(".settings-button")
+            self.page.click(f".settings-chips button:has-text('Show {title}')")
+            self.page.keyboard.press("Escape")
             tab.first.wait_for(state="attached")
+            self.page.locator(".settings-overlay").wait_for(state="detached")
         # Dockview activates a tab on pointerdown. Dispatched rather than
         # clicked, so it works however the theme hides or overlaps the strip.
         tab.first.evaluate(
@@ -230,7 +241,11 @@ def open_workspace(run):
     # chrome, so the harness keeps working while the chrome is restyled.
     page.wait_for_function("window.__WUGS_CALLS__.includes('list_texts')", timeout=15000)
     page.evaluate("async () => (await import('/src/store.ts')).selectText('t-count')")
-    page.wait_for_selector(".tl-sources option[value='src-count']", state="attached")
+    try:
+        page.wait_for_selector(".tl-sources option[value='src-count']", state="attached")
+    except Exception:
+        print("\n".join(run.errors), file=sys.stderr)
+        raise
     page.select_option(".tl-sources", "src-count")
     page.evaluate(
         "async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u01' })"
@@ -290,6 +305,161 @@ def main():
             )
             run.shot("state-toast")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+
+            # Reach for the Timeline group's tabs: they rise and push its content down.
+            box = run.page.locator(".panel-timeline").bounding_box()
+            if box is not None:
+                run.page.mouse.move(box["x"] + 40, box["y"] - 6)
+                run.page.wait_for_timeout(600)
+                run.shot("state-tabs-risen")
+                run.page.mouse.move(box["x"] + box["width"] / 2, box["y"] + 200)
+                run.page.wait_for_timeout(800)
+
+            # Track headers: lock the first tier, hide the second, then try to edit the locked one.
+            tiers = run.page.locator(".panel-timeline .tl-gutter-tier")
+            if tiers.count() >= 2:
+                tiers.nth(0).locator(".tl-track-toggle").nth(0).click()
+                tiers.nth(1).locator(".tl-track-toggle").nth(1).click()
+                canvas = run.page.locator(".panel-timeline .tl-canvas").bounding_box()
+                if canvas is not None:
+                    run.page.mouse.dblclick(canvas["x"] + 60, canvas["y"] + 150)
+                run.page.wait_for_timeout(300)
+                run.shot("state-tracks", run.page.locator(".panel-timeline"))
+                locked = [t for t in run.toasts() if "locked" in t]
+                if not locked:
+                    failures.append("editing a locked track gave no message")
+                run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+                tiers.nth(0).locator(".tl-track-toggle").nth(0).click()
+                tiers.nth(1).locator(".tl-track-toggle").nth(1).click()
+
+            # The kit switcher (roadmap 73): open it, then switch to Scrolls and back.
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.page.click(".kit-switcher")
+            run.page.wait_for_timeout(200)
+            run.shot("state-kit-switcher")
+            run.page.locator(".menu-list [role=menuitemradio]", has_text="Scrolls").click()
+            run.page.wait_for_timeout(900)
+            run.shot("state-scrolls")
+            # A built-in kit shown as a package (roadmap 74).
+            run.front("kits", "Kits")
+            run.page.locator(".panel-kits .kit-name", has_text="Scrolls").first.click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-kit-bundle", run.page.locator(".panel-kits"))
+            if run.page.locator(".panel-kits .kit-bundle li").count() == 0:
+                failures.append("a built-in kit did not show itself as a package")
+            # Frequencies (Scrolls): a row opens the Concordance on that word.
+            run.front("frequencies", "Frequencies")
+            run.page.wait_for_timeout(400)
+            run.shot("state-frequencies", run.page.locator(".panel-frequencies"))
+            if run.page.locator(".panel-frequencies .fq-table tbody tr").count() == 0:
+                failures.append("the frequency list showed no rows")
+            run.page.locator(".panel-frequencies .fq-table tbody tr").first.click()
+            run.page.wait_for_timeout(600)
+            if run.page.locator(".panel-concordance .cc-query").input_value() != "nikani":
+                failures.append("a frequency row did not open the Concordance on its word")
+            run.front("frequencies", "Frequencies")
+            run.page.locator(".panel-frequencies .fq-size").select_option("2")
+            run.page.wait_for_timeout(400)
+            run.shot("state-frequencies-ngrams", run.page.locator(".panel-frequencies"))
+            if "nikani ŋai" not in run.page.locator(".panel-frequencies .fq-table").inner_text():
+                failures.append("two-word sequences did not show")
+            # Collocates (Scrolls): a word's company, a row opens its Concordance.
+            run.front("collocates", "Collocates")
+            run.page.locator(".panel-collocates .co-node").fill("nikani")
+            run.page.locator(".panel-collocates .co-node").press("Enter")
+            run.page.wait_for_timeout(400)
+            run.shot("state-collocates", run.page.locator(".panel-collocates"))
+            if run.page.locator(".panel-collocates .co-table tbody tr").count() == 0:
+                failures.append("collocates showed no rows")
+            # Keywords (Scrolls): a text's words against the rest.
+            run.front("keywords", "Keywords")
+            run.page.wait_for_timeout(400)
+            run.shot("state-keywords", run.page.locator(".panel-keywords"))
+            if run.page.locator(".panel-keywords .kw-table tbody tr").count() == 0:
+                failures.append("keywords showed no rows")
+            if "Scrolls" not in run.page.locator(".kit-switcher").inner_text():
+                failures.append("switching to Scrolls did not change the kit")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.page.click(".kit-switcher")
+            run.page.locator(".menu-list [role=menuitemradio]", has_text="Tongues").click()
+            run.page.wait_for_timeout(900)
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+
+            # Concordance with a query (roadmap 71).
+            run.front("concordance", "Concordance")
+            run.page.fill(".panel-concordance .cc-query", "kani")
+            run.page.locator(".panel-concordance .scopes button", has_text="Morphs").click()
+            run.page.wait_for_timeout(500)
+            run.shot("state-concordance", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance .cc-row").count() == 0:
+                failures.append("the concordance showed no rows")
+
+            # Media bin (roadmap 66): a card dragged onto the Timeline is used for the text on screen.
+            run.front("media", "Media")
+            fox = run.page.locator(".panel-media .bin-card", has_text="Fox story")
+            fox.wait_for()
+            fox.drag_to(run.page.locator(".panel-timeline .tl-body"))
+            run.page.wait_for_timeout(600)
+            if run.page.locator(".tl-sources").input_value() != "src-fox":
+                failures.append("dragging a media card onto the Timeline did not load it")
+            run.page.locator(".tl-sources").select_option("src-count")
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+
+            # Hear it everywhere (roadmap 72): a lexicon sense lists where it is used, each with ▶.
+            run.front("lexicon", "Lexicon")
+            run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()
+            run.page.locator(".panel-lexicon").get_by_text("reckon", exact=False).first.wait_for()
+            uses = run.page.locator(".panel-lexicon .lx-sense-foot .link-button").first
+            if uses.count() == 0:
+                failures.append("no 'used in N words' button in the lexicon")
+            else:
+                uses.click()
+                run.page.wait_for_timeout(400)
+                run.shot("state-lexicon-uses", run.page.locator(".panel-lexicon"))
+                if run.page.locator(".panel-lexicon .lx-uses .play-seg").count() == 0:
+                    failures.append("the lexicon's uses list has no play buttons")
+            if run.page.locator(".panel-transcribe .play-seg").count() == 0:
+                failures.append("Transcribe rows have no play buttons")
+
+            # Command palette (Ctrl+K) and the shortcuts sheet (?).
+            run.page.locator(".panel-timeline .tl-wrap").focus()
+            run.page.keyboard.press("Control+k")
+            run.page.wait_for_timeout(200)
+            run.page.keyboard.type("split")
+            run.page.wait_for_timeout(150)
+            run.shot("state-palette")
+            if run.page.locator(".palette-row").count() == 0:
+                failures.append("the palette found nothing for 'split'")
+            run.page.keyboard.press("Escape")
+            run.page.keyboard.press("?")
+            run.page.wait_for_timeout(200)
+            run.shot("state-shortcuts")
+            if run.page.locator(".palette-shortcuts").count() == 0:
+                failures.append("? did not open the shortcuts sheet")
+            run.page.keyboard.press("Escape")
+
+            # The first-run tour over the workspace (roadmap 68): two of its stops.
+            run.page.evaluate("async () => (await import('/src/tour/tour.ts')).startTour(() => {})")
+            run.page.wait_for_timeout(400)
+            run.shot("state-tour")
+            run.page.keyboard.press("ArrowRight")
+            run.page.keyboard.press("ArrowRight")
+            run.page.wait_for_timeout(400)
+            run.shot("state-tour-gloss")
+            run.page.keyboard.press("Escape")
+            if run.page.locator(".tour-layer").count() != 0:
+                failures.append("Escape did not end the tour")
+
+            run.page.click(".settings-button")
+            # Pattern tiles are CSS masks that load on first use.
+            run.page.wait_for_load_state("networkidle")
+            run.page.wait_for_timeout(800)
+            run.shot("state-settings")
+            run.page.locator(".settings-sheet .settings-section").nth(1).scroll_into_view_if_needed()
+            run.shot("state-settings-patterns")
+            run.page.keyboard.press("Escape")
+            run.page.locator(".settings-overlay").wait_for(state="detached")
 
             run.page.get_by_role("button", name="Feedback").click()
             run.page.locator(".feedback-message").fill("The timeline froze after I imported a long recording.")

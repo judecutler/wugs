@@ -1,6 +1,10 @@
 pub mod assist;
 pub mod capability;
 pub mod capture;
+pub mod concordance;
+pub mod collocates;
+pub mod frequencies;
+pub mod keywords;
 pub mod conflicts;
 pub mod convert;
 pub mod corrections;
@@ -13,10 +17,14 @@ pub mod interchange;
 pub mod kits;
 pub mod layout;
 pub mod lexicon;
+pub mod media_bin;
 pub mod people;
+pub mod plaintext;
+pub mod table_text;
 pub mod listen;
 pub mod praat;
 pub mod praat_analysis;
+pub mod sample;
 pub mod segmentation;
 pub mod session;
 pub mod updater;
@@ -109,6 +117,50 @@ fn create_project(app: AppHandle, s: State<SessionThread>, reach: State<Reachabl
     Ok(info)
 }
 
+/// The sample project (roadmap 68): built in this computer's app data the
+/// first time, opened as it was left after that.
+#[tauri::command(async)]
+fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>, researcher: String) -> Result<ProjectInfo, String> {
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("sample-project");
+    let path = dir.to_string_lossy().to_string();
+    let who = if researcher.trim().is_empty() { "me".to_string() } else { researcher };
+    let info = s.run(move |s| sample::open_sample(s, &dir, &who))?;
+    allow_media(&app, &path);
+    reach.follow(&s)?;
+    Ok(info)
+}
+
+/// Every occurrence of a word, morph, gloss or translation word, in context (roadmap 71).
+#[tauri::command(async)]
+fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>) -> Result<concordance::Concordance, String> {
+    let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
+    s.run(move |s| concordance::concordance_in(s, &query, kind, how, text_id.as_deref()))
+}
+
+/// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
+#[tauri::command(async)]
+fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, size: Option<usize>) -> Result<frequencies::Frequencies, String> {
+    s.run(move |s| frequencies::frequencies_of(s, kind, text_id.as_deref(), size.unwrap_or(1)))
+}
+
+/// Which words one text uses more or less than the rest (Scrolls' keywords).
+#[tauri::command(async)]
+fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: String, min_count: usize) -> Result<keywords::Keywords, String> {
+    s.run(move |s| keywords::keywords(s, kind, &text_id, min_count))
+}
+
+/// Which words keep company with a word (Scrolls' collocates).
+#[tauri::command(async)]
+fn collocates(s: State<SessionThread>, node: String, kind: concordance::Kind, left: usize, right: usize, min_together: usize, text_id: Option<String>) -> Result<collocates::Collocates, String> {
+    s.run(move |s| collocates::collocates(s, &node, kind, left, right, min_together, text_id.as_deref()))
+}
+
+/// Remember which recording a text was transcribed from, or forget it (roadmap 72).
+#[tauri::command(async)]
+fn link_recording(s: State<SessionThread>, text_id: String, source_id: Option<String>) -> Result<(), String> {
+    s.run(move |s| session::link_recording(s, &text_id, source_id.as_deref()))
+}
+
 #[tauri::command(async)]
 fn list_texts(s: State<SessionThread>) -> Result<Vec<TextRow>, String> {
     s.run(session::list_texts)
@@ -160,6 +212,11 @@ fn add_segment(
     content: String,
 ) -> Result<AddedSegment, String> {
     s.run(move |s| session::add_segment(s, &text_id, tier_id.as_deref(), start_ms, end_ms, &content))
+}
+
+#[tauri::command(async)]
+fn add_translation(s: State<SessionThread>, text_id: String, tier_id: Option<String>, segment_id: String, content: String) -> Result<String, String> {
+    s.run(move |s| session::add_translation(s, &text_id, tier_id.as_deref(), &segment_id, &content))
 }
 
 #[tauri::command(async)]
@@ -353,6 +410,15 @@ fn capture_recovered_import(s: State<SessionThread>, captures: State<Captures>, 
 fn capture_recovered_discard(s: State<SessionThread>, captures: State<Captures>, id: String) -> Result<(), String> {
     let root = s.run(session::project_root)?;
     captures.discard_pending(&root, &id)
+}
+
+/// A recording's waveform overview for its media bin card, made off the session thread.
+#[tauri::command]
+async fn media_overview(s: State<'_, SessionThread>, source_id: String) -> Result<media_bin::Overview, String> {
+    let Some(at) = s.run(move |s| media_bin::locate(s, &source_id))? else {
+        return Ok(media_bin::Overview::Missing);
+    };
+    tauri::async_runtime::spawn_blocking(move || media_bin::overview(&at)).await.map_err(|e| e.to_string())?
 }
 
 #[tauri::command(async)]
@@ -1268,6 +1334,8 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_dialog::init())
+        // Copy example (roadmap 69) puts an HTML table and plain text on the clipboard.
+        .plugin(tauri_plugin_clipboard_manager::init())
         // Size, position and maximized state come back on the next launch; a
         // machine with no saved state keeps the size from tauri.conf.json.
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -1333,7 +1401,14 @@ pub fn run() {
             capability_pin,
             open_project,
             create_project,
+            open_sample,
+            concordance,
             list_texts,
+            link_recording,
+            media_overview,
+            frequencies,
+            collocates,
+            keywords,
             get_text,
             create_text,
             import_file,
@@ -1341,6 +1416,7 @@ pub fn run() {
             export_lexicon,
             seal_project,
             add_segment,
+            add_translation,
             edit_segment_content,
             set_segment_times,
             delete_segment,

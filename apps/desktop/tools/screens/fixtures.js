@@ -9,13 +9,13 @@
   const projectInfo = { projectId: PROJECT, path: PROJECT_PATH, texts: 3, conflicts: 2, relocation: null };
 
   const texts = [
-    { id: "t-count", title: "Counting to ten", kind: "elicitation", segments: 10 },
-    { id: "t-fox", title: "The fox and the well", kind: "narrative", segments: 24 },
-    { id: "t-market", title: "Greetings at the market", kind: "conversation", segments: 7 },
+    { id: "t-count", title: "Counting to ten", kind: "elicitation", segments: 10, recording: "src-count" },
+    { id: "t-fox", title: "The fox and the well", kind: "narrative", segments: 24, recording: "src-fox" },
+    { id: "t-market", title: "Greetings at the market", kind: "conversation", segments: 7, recording: null },
   ];
 
   const tiers = [
-    { id: "tier-utt", name: "utterance", kind: "time-aligned", role: "transcription", language: "x-tok" },
+    { id: "tier-utt", name: "utterance", kind: "time-aligned", role: "transcription", language: "x-tok", utterance: true },
     { id: "tier-tr", name: "translation", kind: "time-aligned", role: "translation", language: "en" },
   ];
 
@@ -337,6 +337,7 @@
     active: tongues.id,
     kits: [
       { kit: tongues, bundled: true },
+      ...(window.__WUGS_SCREENS__.scrolls ? [{ kit: window.__WUGS_SCREENS__.scrolls, bundled: true }] : []),
       { kit: sprint, bundled: false },
     ],
     broken: [{ file: "old-transcription.toml", problems: ["line 14, column 1: unknown section [scripts]; kits cannot carry scripts", "line 3, column 6: id must be letters, digits, dots and dashes"] }],
@@ -502,10 +503,10 @@
     const mark = (s) => s.split(q).join(`[${q}]`);
     const hits = utterances
       .filter((u) => u.content.includes(q))
-      .map((u) => ({ target: u.id, kind: "segment", field: "content", snippet: mark(u.content), textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", tierName: "utterance", startMs: u.startMs }));
-    hits.push({ target: "t-fox-s3", kind: "segment", field: "content", snippet: `wiripa [${q}] tela`, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", tierName: "utterance", startMs: 8200 });
-    hits.push({ target: "lx-kesi", kind: "lexeme", field: "lemma", snippet: `[${q}]`, textId: null, textTitle: null, tierId: null, tierName: null, startMs: null });
-    hits.push({ target: "sense-lx-kesi-0", kind: "sense", field: "gloss", snippet: "three (from [kesi])", textId: null, textTitle: null, tierId: null, tierName: null, startMs: null });
+      .map((u) => ({ target: u.id, kind: "segment", field: "content", snippet: mark(u.content), textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", tierName: "utterance", startMs: u.startMs, endMs: u.endMs }));
+    hits.push({ target: "t-fox-s3", kind: "segment", field: "content", snippet: `wiripa [${q}] tela`, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", tierName: "utterance", startMs: 8200, endMs: 9400 });
+    hits.push({ target: "lx-kesi", kind: "lexeme", field: "lemma", snippet: `[${q}]`, textId: null, textTitle: null, tierId: null, tierName: null, startMs: null, endMs: null });
+    hits.push({ target: "sense-lx-kesi-0", kind: "sense", field: "gloss", snippet: "three (from [kesi])", textId: null, textTitle: null, tierId: null, tierName: null, startMs: null, endMs: null });
     return hits;
   }
 
@@ -516,12 +517,71 @@
   window.__WUGS_FIXTURES__ = {
     open_project: () => projectInfo,
     create_project: () => projectInfo,
+    open_sample: () => projectInfo,
+    concordance: ({ query }) => ({
+      total: 3,
+      hits: [
+        { textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, breakdown: "ni-kani", glosses: "1SG-count" },
+        { textId: "t-fox", textTitle: "The fox and the well", segmentId: "f03", tierId: "tier-utt", startMs: 5100, endMs: 7900, words: ["wuno", "tekal", "nikani", "ra", "ŋai", "liwa"], at: 2, breakdown: "ni-kani", glosses: "1SG-count" },
+        { textId: "t-greet", textTitle: "Greetings at the market", segmentId: "g07", tierId: "tier-utt", startMs: 12000, endMs: 13600, words: ["senu", "paki", "nikani"], at: 2, breakdown: "ni-kani", glosses: "1SG-count" },
+      ],
+    }),
     list_texts: () => texts,
+    link_recording: () => null,
+    keywords: ({ minCount }) => {
+      // Computed by the same formulas as src-tauri/src/keywords.rs.
+      const c = 23, d = 42, n = c + d;
+      const t = (o, e) => (o > 0 && e > 0 ? o * Math.log(o / e) : 0);
+      const row = (item, a, b) => {
+        const k = a + b, other = n - k;
+        let ll = 2 * (t(a, (c * k) / n) + t(b, (d * k) / n) + t(c - a, (c * other) / n) + t(d - b, (d * other) / n));
+        if (a / c < b / d) ll = -ll;
+        const fa = Math.max(a, 0.5) / c, fb = Math.max(b, 0.5) / d;
+        return { item, focus: a, reference: b, logLikelihood: ll, logRatio: Math.log2(fa / fb), percentDiff: ((fa - fb) * 100) / fb, simpleMaths: ((a * 1e6) / c + 1) / ((b * 1e6) / d + 1) };
+      };
+      const all = [row("nikani", 9, 2), row("toruma", 4, 0), row("liwa", 1, 0), row("ŋai", 3, 16), row("kesi", 0, 11)];
+      const rows = all.filter((r) => (r.logLikelihood >= 0 ? r.focus : r.reference) >= (minCount ?? 1));
+      return { focusTokens: c, referenceTokens: d, types: 6, omitted: 0, critical: 9.14, rows };
+    },
+    collocates: ({ node }) => ({
+      node: node === "" ? 0 : 23,
+      tokens: 65,
+      types: 5,
+      rows: [
+        { item: "ŋai", together: 14, left: 2, right: 12, freq: 19, logLikelihood: 31.42, mutualInformation: 2.11, logDice: 11.11, tScore: 1.2 },
+        { item: "kesi", together: 6, left: 6, right: 0, freq: 11, logLikelihood: 9.87, mutualInformation: 1.53, logDice: 10.53, tScore: 1.2 },
+        { item: "toruma", together: 4, left: 1, right: 3, freq: 7, logLikelihood: 5.02, mutualInformation: 1.48, logDice: 10.48, tScore: 1.2 },
+        { item: "liwa", together: 1, left: 0, right: 1, freq: 1, logLikelihood: 2.6, mutualInformation: 2.9, logDice: 11.9, tScore: 1.2 },
+        { item: "tekama", together: 1, left: 1, right: 0, freq: 4, logLikelihood: -0.31, mutualInformation: 0.0, logDice: 9.0, tScore: 1.2 },
+      ],
+    }),
+    frequencies: ({ kind, size }) =>
+      size > 1
+        ? { tokens: 58, types: 9, words: 65, once: 5, rows: [{ item: "nikani ŋai", count: 12, texts: 3 }, { item: "ŋai kesi", count: 7, texts: 2 }, { item: "kesi toruma", count: 4, texts: 1 }, { item: "toruma liwa", count: 2, texts: 1 }] }
+        : ({
+      tokens: kind === "gloss" ? 29 : 65,
+      types: kind === "gloss" ? 3 : 6,
+      rows:
+        kind === "gloss"
+          ? [{ item: "1SG", count: 14, texts: 3 }, { item: "count", count: 9, texts: 2 }, { item: "FOC", count: 6, texts: 2 }]
+          : [
+              { item: "nikani", count: 23, texts: 3 },
+              { item: "ŋai", count: 19, texts: 3 },
+              { item: "kesi", count: 11, texts: 2 },
+              { item: "toruma", count: 7, texts: 1 },
+              { item: "tekama", count: 4, texts: 2 },
+              { item: "liwa", count: 1, texts: 1 },
+            ],
+        }),
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),
     conflict_count: () => conflicts.length,
     list_sources: () => SOURCES,
     peaks_info: ({ sourceId }) => ({ frames: FRAMES, sampleRate: SAMPLE_RATE, channels: 1, durationMs: DURATION_MS, mediaPath: `${PROJECT_PATH}/blobs/${sourceId}.wav` }),
     peaks_query: peaksQuery,
+    media_overview: () => {
+      const slice = peaksQuery({ startFrame: 0, endFrame: FRAMES, pixels: 120 });
+      return { state: "ready", durationMs: DURATION_MS, mins: slice.mins, maxs: slice.maxs };
+    },
     speech_spans: () => utterances.map((u) => [u.startMs + 30, u.endMs - 40]),
     acoustic_analysis: acousticAnalysis,
     load_layout: () => null,
@@ -532,7 +592,7 @@
     feedback_keep: () => "01JC0000000000000000000000",
     feedback_deliver: () => ({ sent: true, waiting: 0, problem: null, configured: true }),
     kit_code: kitCode,
-    kit_set_active: () => null,
+    kit_set_active: ({ id }) => ((kitsView.active = id), null),
     capture_reset: () => 0,
     capture_recovered_list: () => [{ id: "take-20261108-1742", bytes: 5_760_044, durationMs: 60_000, modifiedMs: DAY - 20 * 3600_000 }],
     device_identity: () => ({ publicKey: "ed25519:7f3a9c51d0e8b2a4c6f19e3d7b5a0c2e4f6a8b1d3c5e7f9a0b2c4d6e8f1a3b5c", fingerprint: "K7QF 2M9X 4TRA", store: "keychain", fallbackReason: null }),

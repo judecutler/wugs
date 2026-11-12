@@ -11,14 +11,15 @@ export type Kind = "recording" | "file" | "unsupported";
  * a page. */
 export type DragAction = "import" | "pass" | "refuse";
 
-export function dragAction(drag: { files: boolean; dock: boolean; editable: boolean }): DragAction {
+export function dragAction(drag: { files: boolean; dock: boolean; editable: boolean; card?: boolean }): DragAction {
   if (drag.files) return "import";
-  if (drag.dock || drag.editable) return "pass";
+  // A media bin card is the Timeline's to take (it carries no link, so nothing to navigate to).
+  if (drag.dock || drag.editable || drag.card === true) return "pass";
   return "refuse";
 }
 
 const RECORDINGS = new Set(["wav", "wave", "m4a", "mp4", "aac", "mp3", "flac", "ogg", "oga", "aif", "aiff", "aifc"]);
-const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "txt"]);
+const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "txt", "csv", "tsv", "tab"]);
 
 /** Pieces of this size keep memory flat for a two-hour WAV and the progress moving. */
 export const CHUNK_BYTES = 8 * 1024 * 1024;
@@ -40,7 +41,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 export function overlayWords(projectOpen: boolean, dragged: Dragged): { title: string; detail: string } {
   if (!projectOpen) return { title: "Open a project first", detail: "Dropped files go into the open project. Nothing is imported now." };
-  const detail = "Recordings go to the media bin. ELAN, FLEx, Praat and Toolbox files become texts or lexicon entries.";
+  const detail = "Recordings go to the media bin. ELAN, FLEx, Praat, Toolbox, CSV/TSV and plain text files become texts or lexicon entries.";
   if (dragged.count === 0) return { title: "Drop to import", detail };
   if (dragged.audio === dragged.count) return { title: `Drop to import ${plural(dragged.count, "recording", "recordings")}`, detail };
   return { title: `Drop to import ${plural(dragged.count, "file", "files")}`, detail };
@@ -87,4 +88,4 @@ export const projectChangedReason = "another project was opened after it was dro
 export const projectClosedReason = "the project it was dropped into is no longer open.";
 
 export const unsupportedReason =
-  "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF) and ELAN, FLEx, Praat and Toolbox files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex, .txt).";
+  "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF), ELAN, FLEx, Praat and Toolbox files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex), and plain text (.txt).";
