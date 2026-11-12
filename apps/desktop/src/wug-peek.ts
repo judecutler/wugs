@@ -140,7 +140,7 @@ export function wireVisits(opts: { logo: () => Element | null; avoid: () => Elem
   }, CHECK_EVERY_MS);
 
   return {
-    /** For the Workspace menu: a visit now, to show what the setting does, unless the person is busy. */
+    /** For Settings: a visit now, to show what the setting does, unless the person is busy. */
     visitNow: () => {
       if (!reduced.matches && !isBusy()) visit();
     },

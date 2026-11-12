@@ -55,6 +55,7 @@
     // A dialog cancelled: the shell treats null as "nothing picked".
     "plugin:dialog|open": () => null,
     "plugin:dialog|save": () => null,
+    "plugin:app|version": () => "0.1.0",
   };
 
   async function invoke(cmd, args = {}, _options) {

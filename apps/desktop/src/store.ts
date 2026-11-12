@@ -203,7 +203,7 @@ let kits: KitsView | null = null;
 /** Installed kits, or null until the first load. */
 export const getKits = (): KitsView | null => kits;
 
-/** The kit in use: what the brand, the Workspace menu and its reset follow. */
+/** The kit in use: what the brand, Settings' closed panels and its reset follow. */
 export function activeKit(): Kit | null {
   return kits?.kits.find((k) => k.kit.id === kits?.active)?.kit ?? null;
 }

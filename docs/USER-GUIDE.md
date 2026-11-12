@@ -28,16 +28,14 @@ To start a text, open the **Texts** panel, type a title in **New text title**, a
 
 ## Arrange the workspace
 
-The workspace is made of panels: Timeline, Media, Texts, Transcribe, Gloss, Lexicon, Elicit, Search, Speech assist, People, Devices, and Conflicts. Panels that share a space are stacked like pages behind binder dividers. The dividers rest as a thin coloured edge along the top of each panel and rise when you move the pointer to that edge, so the panels keep the room. Click a divider to bring its panel to the front. Drag a divider to move its panel, or drop it on another panel to stack them. wugs remembers your arrangement.
+The workspace is made of panels: Timeline, Media, Texts, Transcribe, Gloss, Lexicon, Elicit, Search, Speech assist, People, Devices, and Conflicts. Panels that share a space are stacked like pages behind binder dividers. The dividers rest as a thin coloured edge along the top of each panel and rise when you move the pointer to that edge, pushing the panel down a little so nothing is covered. Click a divider to bring its panel to the front. Drag a divider to move its panel, or drop it on another panel to stack them. wugs remembers your arrangement.
 
-The **Workspace** menu in the top bar holds the rest:
+Click **Settings** in the top bar for the rest. A panel slides in from the right; Escape or **Close** puts it away.
 
-- To open a panel you closed, choose it under **Show a closed panel**.
-- To keep the dividers up all the time, choose **Always show panel tabs**.
-- To change the colours, choose a theme: **Cream** (the default), **Seafoam**, **Clay** or **Night**. The choice is kept on this computer.
-- To change the faint patterns, choose a family under **Patterns**: **Persian**, **Persian garden**, **Japanese**, **Japanese sea**, **Rock art** or **No pattern**. Each family has three related patterns: one behind the panels, one across the leftmost and rightmost panels, and one for the shaded tool areas (the tier gutter, the IPA palette, Import and export), which is off until you turn on **Pattern on emphasised sections**.
-- Now and then the kit's wug peeks over the top of the panel you are working in. It never comes while you type, hold the mouse button, drag, play audio or record. Touch it and it hides. To stop its visits, turn off **Let the wug visit**.
-- To put every panel back where Tongues starts, choose **Reset to how Tongues starts**.
+- **Colours:** each choice shows a small picture of the workspace in its colours. Click one to use it: **Cream** (the default), **Seafoam**, **Clay** or **Night**. The choice is kept on this computer.
+- **Patterns:** each family shows its three patterns: the one for the page behind the panels, the one across the side panels, and the one for emphasised strips (the tier names beside the timeline, the IPA palette, Import and export). Click a family to use it, or **No pattern**. The strip pattern stays off until you turn on **Pattern on emphasised strips**.
+- **Workspace:** **Always show panel tabs** keeps the dividers up. Now and then the kit's wug peeks over the top of the panel you are working in; it never comes while you type, hold the mouse button, drag, play audio or record, and it hides when you touch it. To stop its visits, turn off **Let the wug visit**. A panel you closed is listed under **Closed panels**; click it to bring it back. **Reset layout** puts every panel back where Tongues starts.
+- **Updates:** see [Keep wugs up to date](#keep-wugs-up-to-date).
 
 ## Bring in a recording
 
@@ -470,13 +468,13 @@ In the Gloss panel, a word that another device analysed differently shows the ot
 
 wugs checks GitHub once at start for a newer release. This is **Online**. When one exists, a line under the top bar offers **Install and restart**, **Later**, and **What's new**. Nothing downloads until you click **Install and restart**.
 
-To stop the check, open the **Updates** menu in the top bar and turn off **Check when wugs starts**. For details, read the updates section of [Install a build](INSTALL.md#updates).
+To stop the check, open **Settings** in the top bar and, under **Updates**, turn off **Check when wugs starts**. For details, read the updates section of [Install a build](INSTALL.md#updates).
 
 ## Fix problems
 
 | Problem | What to do |
 | --- | --- |
-| A panel is missing. | Open the **Workspace** menu in the top bar and choose the panel under **Show a closed panel**, or choose **Reset to how Tongues starts**. |
+| A panel is missing. | Open **Settings** in the top bar and click the panel under **Closed panels**, or click **Reset layout**. |
 | An error message appears. | Read it. It says what failed. Edits already saved are kept, because wugs writes each edit to the project when you make it. Click **Dismiss** to close the message. |
 | **Recovered recordings** appears in the Media panel. | wugs found recordings that were still on disk when the app last closed. Type a name and click **Import** to keep one. Click **Discard**, then **Really discard?**, to throw it away. Nothing happens until you choose. |
 | wugs says the project folder was moved or copied. | If you moved the folder, click **I moved it**. If it is a copy and the original is still in use, click **Create fresh device identity**, so the two folders sync as two devices. |
