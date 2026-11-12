@@ -335,7 +335,7 @@ form.inline input { flex: 1; min-width: 0; }
 
 .panel-search input[type="search"] { width: 100%; margin-bottom: 6px; }
 .hits { list-style: none; margin: 0; padding: 0; font-size: var(--text-sm); }
-.hits li { padding: 3px 4px; border-bottom: 1px solid var(--line); display: flex; gap: 8px; }
+.hits li { padding: 3px 4px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px; }
 .hits li.clickable { cursor: pointer; }
 .hits li.clickable:hover, .hits li.active { background: var(--panel); }
 .hits li.active { outline: 1px solid var(--muted); }

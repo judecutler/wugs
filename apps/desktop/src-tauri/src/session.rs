@@ -889,6 +889,7 @@ pub struct SearchRow {
     pub tier_id: Option<String>,
     pub tier_name: Option<String>,
     pub start_ms: Option<f64>,
+    pub end_ms: Option<f64>,
 }
 
 pub const SEARCH_LIMIT: usize = 50;
@@ -933,6 +934,7 @@ pub fn search(session: &mut Session, query: &str, scope: SearchScope) -> Result<
             None => Ok(None),
         };
         let start_ms = if hit.kind == "segment" { p.proj.field_num(&hit.target, "start")? } else { None };
+        let end_ms = if hit.kind == "segment" { p.proj.field_num(&hit.target, "end")? } else { None };
         rows.push(SearchRow {
             text_title: name(&text_id, "title")?,
             tier_name: name(&tier_id, "name")?,
@@ -943,6 +945,7 @@ pub fn search(session: &mut Session, query: &str, scope: SearchScope) -> Result<
             text_id,
             tier_id,
             start_ms,
+            end_ms,
         });
     }
     Ok(rows)

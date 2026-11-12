@@ -1,5 +1,6 @@
 import { search, type SearchRow } from "../api";
 import { emptyState, h } from "../dom";
+import { hear, playButton } from "../hear/hear";
 import { groupRows, moveActive, navigable, navTargets, SCOPES, whereLabel, type Scope } from "../search/logic";
 import { attempt, getState, selectSegment, selectText } from "../store";
 import { sliced, type PanelDef } from "./panel";
@@ -62,9 +63,14 @@ export const searchPanel: PanelDef = {
     const row = (r: SearchRow) => {
       const where = whereLabel(r);
       const go = navigable(r);
+      // A segment with times can be heard from here (roadmap 72).
+      const hearable = go && r.kind === "segment" && r.textId !== null && r.tierId !== null && r.startMs !== null && r.endMs !== null;
       const li = h(
         "li",
         { className: go ? "clickable" : "", title: r.target, onclick: go ? () => void jump(r) : null },
+        hearable
+          ? playButton("Open this segment and play it", () => void hear({ textId: r.textId!, tierId: r.tierId!, segmentId: r.target, startMs: r.startMs, endMs: r.endMs }))
+          : null,
         h("span", { className: "hit-kind", textContent: where === "" ? `${r.kind}.${r.field}` : where }),
         snippet(r.snippet),
       );
