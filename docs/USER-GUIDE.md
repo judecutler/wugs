@@ -17,21 +17,27 @@ To install wugs, follow [Install a build](INSTALL.md). The installers are not co
 
 To create your first project:
 
-1. Start wugs.
-2. In the top bar, type your name or initials in the **researcher id** field. wugs records this id on every edit you make.
-3. Click **Create project**.
+1. Start wugs. With no project open, it shows the welcome screen.
+2. Under **Your researcher id**, type your name or initials. wugs records this id on every edit you make.
+3. Click **Create a project**.
 4. Choose an empty folder. The project lives in that folder.
 
-To open a project that already exists, click **Open project** and choose its folder. wugs opens the last project again the next time it starts.
+To open a project that already exists, click **Open a project folder** and choose its folder. wugs opens the last project again the next time it starts; if it cannot, the welcome screen offers **Reopen** with the folder's name. With a project open, the **Project** menu in the top bar opens or creates another one, and the top bar shows the project's folder and your researcher id.
 
 To start a text, open the **Texts** panel, type a title in **New text title**, and click **New text**.
 
 ## Arrange the workspace
 
-The workspace is made of panels: Timeline, Media, Texts, Transcribe, Gloss, Lexicon, Elicit, Search, Speech assist, People, Devices, and Conflicts. Drag a panel's tab to move it, or drop it on another panel to stack them as tabs. wugs remembers your arrangement.
+The workspace is made of panels: Timeline, Media, Texts, Transcribe, Gloss, Lexicon, Elicit, Search, Speech assist, People, Devices, and Conflicts. Panels that share a space are stacked like pages behind binder dividers. The dividers rest as a thin coloured edge along the top of each panel and rise when you move the pointer to that edge, so the panels keep the room. Click a divider to bring its panel to the front. Drag a divider to move its panel, or drop it on another panel to stack them. wugs remembers your arrangement.
 
-- To open a panel you closed, click **Show panel…** in the top bar.
-- To put every panel back where Tongues starts, click **Reset layout** in the top bar.
+The **Workspace** menu in the top bar holds the rest:
+
+- To open a panel you closed, choose it under **Show a closed panel**.
+- To keep the dividers up all the time, choose **Always show panel tabs**.
+- To change the colours, choose a theme: **Cream** (the default), **Seafoam**, **Clay** or **Night**. The choice is kept on this computer.
+- To change the faint patterns, choose a family under **Patterns**: **Persian**, **Persian garden**, **Japanese**, **Japanese sea**, **Rock art** or **No pattern**. Each family has three related patterns: one behind the panels, one across the leftmost and rightmost panels, and one for the shaded tool areas (the tier gutter, the IPA palette, Import and export), which is off until you turn on **Pattern on emphasised sections**.
+- Now and then the kit's wug peeks over the top of the panel you are working in. It never comes while you type, hold the mouse button, drag, play audio or record. Touch it and it hides. To stop its visits, turn off **Let the wug visit**.
+- To put every panel back where Tongues starts, choose **Reset to how Tongues starts**.
 
 ## Bring in a recording
 
@@ -428,8 +434,8 @@ On a computer that already has the project:
 
 On the new computer:
 
-1. Type your **researcher id** in the top bar.
-2. Open the **Devices** panel and go to **Join a project**.
+1. On the welcome screen, type your **researcher id** and click **Join a project from another device**. wugs shows the **Devices** panel.
+2. In the **Devices** panel, go to **Join a project**.
 3. Under **Address**, type the first computer's network address and the port it shows, as `host:port`, for example `192.168.1.20:41234`.
 4. Under **Code**, type the eight-digit code.
 5. Click **Choose a folder and join**, and choose an empty folder.
@@ -448,7 +454,7 @@ If a computer is lost or stolen, click **Mark lost…** beside it on another com
 
 ### Settle conflicts
 
-When two people change the same thing before they sync, wugs keeps both versions and shows one. The top bar shows how many conflicts are open, and the **Conflicts** panel lists them.
+When two people change the same thing before they sync, wugs keeps both versions and shows one. The top bar shows how many conflicts are open; click that count to open the **Conflicts** panel, which lists them.
 
 Each card says what changed, where it is, and every version with its device and time. "shown now" marks the version the project shows.
 
@@ -464,13 +470,13 @@ In the Gloss panel, a word that another device analysed differently shows the ot
 
 wugs checks GitHub once at start for a newer release. This is **Online**. When one exists, a line under the top bar offers **Install and restart**, **Later**, and **What's new**. Nothing downloads until you click **Install and restart**.
 
-To stop the check, open **Updates…** in the top bar and choose **Stop checking at start (Online)**. For details, read the updates section of [Install a build](INSTALL.md#updates).
+To stop the check, open the **Updates** menu in the top bar and turn off **Check when wugs starts**. For details, read the updates section of [Install a build](INSTALL.md#updates).
 
 ## Fix problems
 
 | Problem | What to do |
 | --- | --- |
-| A panel is missing. | Click **Show panel…** in the top bar, or **Reset layout**. |
+| A panel is missing. | Open the **Workspace** menu in the top bar and choose the panel under **Show a closed panel**, or choose **Reset to how Tongues starts**. |
 | An error message appears. | Read it. It says what failed. Edits already saved are kept, because wugs writes each edit to the project when you make it. Click **Dismiss** to close the message. |
 | **Recovered recordings** appears in the Media panel. | wugs found recordings that were still on disk when the app last closed. Type a name and click **Import** to keep one. Click **Discard**, then **Really discard?**, to throw it away. Nothing happens until you choose. |
 | wugs says the project folder was moved or copied. | If you moved the folder, click **I moved it**. If it is a copy and the original is still in use, click **Create fresh device identity**, so the two folders sync as two devices. |

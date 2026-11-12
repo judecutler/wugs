@@ -37,9 +37,9 @@ panels = [
   { panel = "assist", place = "tab", of = "lexicon" },
   { panel = "people", place = "tab", of = "lexicon" },
   { panel = "devices", place = "tab", of = "lexicon" },
-  { panel = "transcribe", place = "below", of = "timeline", height = 260 },
-  { panel = "gloss", place = "right", of = "transcribe" },
-  { panel = "conflicts", place = "right", of = "gloss", width = 320 },
+  { panel = "conflicts", place = "tab", of = "lexicon" },
+  { panel = "transcribe", place = "below", of = "timeline", height = 300 },
+  { panel = "gloss", place = "right", of = "transcribe", width = 460 },
 ]
 active = ["texts", "timeline"]     # tabs brought to the front, in order
 

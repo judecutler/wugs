@@ -3,6 +3,7 @@
 // once each, and draws what has arrived; nothing is fetched while every kind
 // is off. Display rules are in ../praat/analysis.ts.
 import { token } from "../theme/tokens";
+import { THEME_EVENT } from "../theme/theme";
 import { errorText, acousticAnalysis } from "../api";
 import { chunksFor, frameMs, RANGES, yFor, type Chunk, type Kind } from "../praat/analysis";
 import type { Viewport } from "./viewport";
@@ -14,6 +15,8 @@ const FALLBACK: Record<Kind, string> = { pitch: "#1f5fbf", intensity: "#c9a400",
 /** Colours from the design tokens (--pitch, --intensity, --formants, --muted),
  * read once: the draw loop runs every frame and must not query styles. */
 let palette: (Record<Kind, string> & { muted: string }) | null = null;
+// Read again after a theme change (src/theme/theme.ts).
+window.addEventListener(THEME_EVENT, () => (palette = null));
 const colors = () =>
   (palette ??= {
     pitch: token("--pitch", FALLBACK.pitch),

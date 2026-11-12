@@ -47,6 +47,13 @@ export const KIT_WUGS: Readonly<Record<string, WugLook>> = {
 export const kitWug = (kitId: string | undefined): WugLook =>
   kitId !== undefined && Object.hasOwn(KIT_WUGS, kitId) ? KIT_WUGS[kitId]! : KIT_WUGS.wugs!;
 
+let current: WugLook = KIT_WUGS.wugs!;
+/** The wug the shell shows (the active kit's), for empty states and the top bar. */
+export const currentWug = () => current;
+export function setCurrentWug(look: WugLook) {
+  current = look;
+}
+
 export type Layer = { id: string; d: string; fill: string; opacity: number };
 
 /** The layers to draw, bottom to top. */
@@ -69,7 +76,7 @@ const attr = (s: string) => s.replace(/[&"<]/g, (c) => ({ "&": "&amp;", '"': "&q
 /** The wug as SVG markup, square, scaled by its container. */
 export function wugSvg(look: WugLook, label = "wug"): string {
   const paths = wugLayers(look)
-    .map((l) => `<path fill="${attr(l.fill)}"${l.opacity === 1 ? "" : ` fill-opacity="${l.opacity}"`} d="${l.d}"/>`)
+    .map((l) => `<path data-part="${l.id}" fill="${attr(l.fill)}"${l.opacity === 1 ? "" : ` fill-opacity="${l.opacity}"`} d="${l.d}"/>`)
     .join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${drawing.size} ${drawing.size}" role="img" aria-label="${attr(label)}">${paths}</svg>`;
 }

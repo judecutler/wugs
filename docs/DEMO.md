@@ -9,9 +9,9 @@ Do these the day before. Two of them download large files.
 1. **Install the newest build** (`docs/INSTALL.md`). Open it once, so Windows SmartScreen has been dealt with already.
 2. **Download a phone model.** Open Speech assist and click Download beside the wav2vec2 model (about 640 MB). Optionally download ZIPA small too, to show that the model is a choice.
 3. **Have Praat installed** if you want to show the pitch and formant overlays and the Praat round trip. The Timeline toolbar shows "Praat…" until wugs finds it.
-4. **Make a demo project** in a new folder (Create project). Do one full rehearsal in it, then make a second, empty project for the meeting itself.
+4. **Make a demo project** in a new folder (**Create a project** on the welcome screen). Do one full rehearsal in it, then make a second, empty project for the meeting itself.
 5. **Pick one short recording**, 20 to 60 seconds, ideally with clear pauses: counting, a word list, or a few sentences. A phone voice memo (`.m4a`) works. Use only a recording you may show: your own voice or a consented one. Keep a second copy on the desktop as a backup.
-6. **Reset layout** (top bar) so every panel is where this script expects it. The People panel is a tab beside Lexicon.
+6. **Workspace › Reset to how Tongues starts** (top bar) so every panel is where this script expects it. The People and Conflicts panels are tabs beside Lexicon.
 
 ## The walk
 
@@ -59,7 +59,7 @@ Do these the day before. Two of them download large files.
 
 ## If something goes wrong
 
-- **A panel is missing:** use Show panel… in the top bar, or Reset layout.
+- **A panel is missing:** open the **Workspace** menu in the top bar and choose it under **Show a closed panel**, or **Reset to how Tongues starts**.
 - **The model is not downloaded:** skip step 4 and type the transcription. Everything else works without it.
 - **Auto-segment makes one long segment:** the recording has little silence. Switch to **by word**, or draw segments by dragging on a tier lane.
 - **Import audio refuses the file:** use the WAV backup.
