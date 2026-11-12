@@ -80,10 +80,11 @@ export async function attempt(action: () => Promise<void>) {
   }
 }
 
-export async function enterProject(info: ProjectInfo) {
+export async function enterProject(info: ProjectInfo, remember = true) {
   showToast(null);
   selectSegment(null);
-  rememberProject(localStorage, info.path);
+  // The sample is not "the last project": the next start shows the welcome card.
+  if (remember) rememberProject(localStorage, info.path);
   // The backend already has the project open, so a failed first read must
   // not leave the closed screen claiming the open failed; the list comes
   // back with the next reloadTexts (an import, a sync, a refresh).
