@@ -31,9 +31,19 @@ const MISSING = "?";
 export function wordLines(w: ExampleWord): { morphs: string; glosses: string } {
   if (w.morphs.length === 0) return { morphs: w.form, glosses: "" };
   const type = (t: string) => t as MorphType;
+  const glossOf = (m: { gloss: string | null }) => (m.gloss === null || m.gloss.trim() === "" ? MISSING : m.gloss.trim());
+  // An infix inside a root is stored as the root's two halves around it
+  // (`s<um>ulat`). The root is glossed once, before the infix (Leipzig rule 9:
+  // `write<AV>`), unless its second half carries a gloss of its own.
+  const glossed = w.morphs.filter((m, i) => {
+    const before = w.morphs[i - 1];
+    const root = w.morphs[i - 2];
+    const secondHalf = m.type === "root" && before?.type === "infix" && root?.type === "root";
+    return !(secondHalf && (glossOf(m) === MISSING || glossOf(m) === glossOf(root)));
+  });
   return {
     morphs: joinedBreakdown(w.morphs.map((m) => ({ surface: m.surface, type: type(m.type) }))),
-    glosses: joinedBreakdown(w.morphs.map((m) => ({ surface: m.gloss === null || m.gloss.trim() === "" ? MISSING : m.gloss.trim(), type: type(m.type) }))),
+    glosses: joinedBreakdown(glossed.map((m) => ({ surface: glossOf(m), type: type(m.type) }))),
   };
 }
 
@@ -90,15 +100,20 @@ const LATEX_SPECIAL: Record<string, string> = {
   _: "\\_",
   "~": "\\textasciitilde{}",
   "^": "\\textasciicircum{}",
+  // Under pdflatex's default encoding a bare < or > prints as ¡ or ¿.
+  "<": "\\textless{}",
+  ">": "\\textgreater{}",
 };
-export const latexEscape = (s: string): string => s.replace(/[\\{}&%$#_~^]/gu, (c) => LATEX_SPECIAL[c] ?? c);
+export const latexEscape = (s: string): string => s.replace(/[\\{}&%$#_~^<>]/gu, (c) => LATEX_SPECIAL[c] ?? c);
 
 /** A gloss for LaTeX: grammatical runs as \textsc{lowercase}, the rest escaped. */
 function latexGloss(gloss: string): string {
   if (gloss === "") return "{}";
-  return glossRuns(gloss)
+  const set = glossRuns(gloss)
     .map((r) => (r.caps ? `\\textsc{${latexEscape(r.text.toLowerCase())}}` : latexEscape(r.text)))
     .join("");
+  // gb4e and ExPex split glosses on spaces too: `go out` stays one column.
+  return /\s/u.test(gloss) ? `{${set}}` : set;
 }
 
 /** gb4e and ExPex split words on spaces, so a word containing one is braced. */
@@ -112,7 +127,8 @@ export function asGb4e(ex: Example): string {
     `     ${lines.map((l) => latexGloss(l.glosses)).join(" ")}\\\\`,
   ];
   const t = (ex.translation ?? "").trim();
-  out.push(`\\glt \`${latexEscape(t)}'`, "\\end{exe}");
+  if (t !== "") out.push(`\\glt \`${latexEscape(t)}'`);
+  out.push("\\end{exe}");
   return out.join("\n");
 }
 
@@ -124,7 +140,7 @@ export function asExpex(ex: Example): string {
     "\\begingl",
     `\\gla ${lines.map((l) => latexWord(l.morphs)).join(" ")}//`,
     `\\glb ${lines.map((l) => latexGloss(l.glosses)).join(" ")}//`,
-    `\\glft \`${latexEscape(t)}'//`,
+    ...(t === "" ? [] : [`\\glft \`${latexEscape(t)}'//`]),
     "\\endgl",
     "\\xe",
   ].join("\n");
@@ -134,7 +150,9 @@ const htmlEscape = (s: string): string => s.replace(/[&<>"]/gu, (c) => ({ "&": "
 
 function htmlGloss(gloss: string): string {
   return glossRuns(gloss)
-    .map((r) => (r.caps ? `<span style="font-variant: small-caps">${htmlEscape(r.text.toLowerCase())}</span>` : htmlEscape(r.text)))
+    // Capitals at 80%: reads as small capitals in Word, Google Docs (which has
+    // no small-caps setting) and LibreOffice alike, and stays a capital gloss.
+    .map((r) => (r.caps ? `<span style="font-size: 80%">${htmlEscape(r.text)}</span>` : htmlEscape(r.text)))
     .join("");
 }
 

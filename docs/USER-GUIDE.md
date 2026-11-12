@@ -294,10 +294,10 @@ Click **Copy example** at the top of the Gloss panel. The segment is copied as a
 Choose where it will go in the list beside the button:
 
 - **Word / Google Docs** pastes as a table that lines the morphs up with their glosses. It also works in LibreOffice and email.
-- **LaTeX (gb4e)** and **LaTeX (ExPex)** paste the lines those packages expect.
+- **LaTeX (gb4e)** and **LaTeX (ExPex)** paste the lines those packages expect. They number the example themselves. With pdflatex, add `\usepackage[T1]{fontenc}` so IPA tildes print as tildes; XeLaTeX and LuaLaTeX need nothing extra.
 - **Plain text** lines the columns up with spaces.
 
-wugs remembers the choice on this computer. The number is the segment's place in its text. A morph with no gloss yet shows **?**, so you can see the gap before you send the paper.
+wugs remembers the choice on this computer. The number is the segment's place in its text. A morph with no gloss yet shows **?**, so you can see the gap before you send the paper. Grammatical glosses paste as slightly smaller capitals, which read as small capitals in every word processor.
 
 ## Build the lexicon
 

@@ -56,6 +56,9 @@
     "plugin:dialog|open": () => null,
     "plugin:dialog|save": () => null,
     "plugin:app|version": () => "0.1.0",
+    // Copy example: what the app put on the clipboard, for probes to read.
+    "plugin:clipboard-manager|write_html": ({ html, altText }) => ((window.__WUGS_CLIPBOARD__ = { html, text: altText }), null),
+    "plugin:clipboard-manager|write_text": ({ text }) => ((window.__WUGS_CLIPBOARD__ = { html: null, text }), null),
   };
 
   async function invoke(cmd, args = {}, _options) {

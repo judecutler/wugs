@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window: core APIs, closing after the layout is saved, the directory picker, and window-state.",
+  "description": "The main window: core APIs, closing after the layout is saved, the directory picker, window-state, and writing (never reading) the clipboard.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-destroy", "dialog:allow-open", "window-state:default"]
+  "permissions": ["core:default", "core:window:allow-destroy", "dialog:allow-open", "window-state:default", "clipboard-manager:allow-write-text", "clipboard-manager:allow-write-html"]
 }
