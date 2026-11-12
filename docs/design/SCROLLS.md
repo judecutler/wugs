@@ -95,3 +95,45 @@ Panels that both kits use (Search, Concordance, Texts, Conflicts, Devices, Kits)
 4. **`morphosyntax` capability:** the built-in tokenizer, then UDPipe 1 (offline), then the opt-in UDPipe 2 REST provider; a sentence's analysis in one field; machine marks; Mark checked; the tree validator.
 5. **CQP-subset queries** in the concordance; export to CWB for real `cqp`.
 6. **Collocations and keywords;** *(collocations and keywords started early, 2026-11-12. Keywords compare one text with the project's other texts until reference corpora come as dataset packages, with 4-term log-likelihood, log ratio and simple maths. Collocations: over words and translation words on the EAV readers like the frequency list: log-likelihood, MI, logDice and t-score, windows within a segment, overlapping windows counted once; lemma and tag collocations wait for step 4)* the Sentence (CoNLL-U) editor; exports to CoNLL-U, TEI, CWB vertical and AntConc text.
+
+## 6. Gathering a corpus from the web (row 75)
+
+Owner, 2026-11-12: people building corpora of low-resource languages (Yakut, say) spend much of their time collecting text from the web. In wugs they should set it up once and leave it to run.
+
+**Who it is for.** A linguist with a language code, a few sites they know publish in the language (a newspaper, a ministry, a blog platform, Wikipedia) and no time to write a crawler. What they get back is ordinary texts in the project, each with where it came from, ready for the Concordance, Frequencies and the taggers.
+
+**Start from what already exists.** For many languages a cleaned web corpus has already been built, and importing it takes minutes instead of weeks. The first screen asks for the language and lists what is ready for it, each with size, source and licence:
+- the language's Wikipedia (a dump, CC BY-SA);
+- the Leipzig Corpora Collection (news, web and Wikipedia sentences; Yakut is there);
+- the Common Crawl corpora filtered by language ID: GlotCC (built for minority languages), MADLAD-400 (ODC-By, 419 languages) and OSCAR;
+- Common Voice's sentence collection (CC0).
+
+These come in as dataset packages (`docs/design/PACKAGES.md`), so the list is an index entry per source, not code.
+
+**Then crawl what is not there.** A crawl job has:
+- *seeds*: site addresses, sitemaps or RSS feeds, and optionally seed words (BootCaT's method: combinations of typical words sent to a search engine; a search API is a provider the person connects, never built in);
+- *rules*: stay on the seed sites or go one link out, at most N pages, at most one request per site every few seconds;
+- *a target*: the language (ISO 639-3 plus script) and how sure the language ID must be.
+
+The job runs in the background and survives a restart. It resumes from its frontier, and the status card shows pages fetched, pages kept, words kept, and how much was dropped and why (wrong language, duplicate, too short, robots.txt).
+
+**Each step is a capability with providers**, so nothing hard-codes one tool:
+- `web-text-extraction`: the page's main text without menus and boilerplate. A built-in Rust readability-style extractor ships; trafilatura (Apache-2.0, the best-scoring open extractor in published benchmarks) is the provider when Python is installed.
+- `language-id`: per page and per paragraph, so a Russian paragraph inside a Yakut page is dropped. The provider is GlotLID (fastText, Apache-2.0, over 2000 labels with script, low-resource languages its focus), checked against the expected script; another model can replace it.
+- Deduplication is built in: exact by hash, near-duplicates by MinHash across the whole corpus, and repeated boilerplate lines across a site.
+
+**Each kept page becomes a text**, written by `import_written_text` in one txn: segments are its paragraphs, then sentences as plain text import cuts them. The document metadata is the URL, site, title, date published if found, date fetched, the language-ID score, the extractor and the licence if the page declares one (a Creative Commons link or meta tag), else "unknown". The HTML is not kept; the URL and date are enough to fetch it again.
+
+**Being a good citizen and honest about rights:**
+- robots.txt is always obeyed.
+- The crawler sends a User-Agent that names wugs and links to a page explaining it.
+- It keeps per-site delays.
+- Texts gathered from the web get the project's restricted sharing level by default when their licence is unknown, so a seal or export says so (sharing levels inform, never block; DECISIONS).
+- The corpus stays on the person's computer unless they share the project.
+
+**Order:**
+1. Ready-made sources as dataset packages, with Wikipedia and Leipzig first.
+2. A site crawl from seeds, with the built-in extractor, GlotLID and deduplication.
+3. Seed words through a connected search provider.
+4. A scheduled refresh that fetches only new pages from feeds and sitemaps.
+
