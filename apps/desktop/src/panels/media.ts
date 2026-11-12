@@ -1,7 +1,7 @@
 import { token } from "../theme/tokens";
 import { THEME_EVENT } from "../theme/theme";
-import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, peaksInfo, peaksQuery, type Recovered, type SourceRow } from "../api";
-import { CARD_TYPE, cards, duration, normalized, wavePath, type Card } from "../media/logic";
+import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, mediaOverview, type Recovered, type SourceRow } from "../api";
+import { CARD_TYPE, cardDrag, cards, duration, normalized, wavePath, type Card } from "../media/logic";
 import { canRecord } from "../capture/recorder.ts";
 import { defaultLabel, formatElapsed, meterFill } from "../capture/pcm.ts";
 import {
@@ -22,7 +22,7 @@ import {
 } from "../capture/session.ts";
 import { isLive } from "../capture/take.ts";
 import { emptyState, h } from "../dom";
-import { attempt, dataGeneration, getState, refreshAll, showToast, useRecording } from "../store";
+import { activeKit, attempt, dataGeneration, getState, refreshAll, showToast, useRecording } from "../store";
 import { SHOW_PANEL, sliced, type PanelDef } from "./panel";
 
 /** A card's waveform box, in SVG units. */
@@ -258,43 +258,62 @@ export const mediaPanel: PanelDef = {
         bin.length === 0 ? emptyState("No recordings yet", "Record above, import one on the Timeline, or drop a recording here.", "Nothing for the wug to listen to yet.") : h("div", { className: "bin-grid", role: "list" }, ...bin.map((c) => card(c, shown))),
         others.length === 0
           ? ""
-          : h("p", { className: "note bin-others", textContent: `Also in the project, without audio here: ${others.map((x) => x.label || x.id).join(", ")}.` }),
+          : h("p", { className: "note bin-others", textContent: `Also in the project, without audio here: ${others.map((x) => `${x.label || x.id} (${x.access ?? "open"})`).join(", ")}.` }),
       );
     };
 
-    /** Waveforms by recording, for this project: drawn once, from the coarsest peaks. */
-    const waves = new Map<string, { path: string; durationMs: number } | "loading" | "failed">();
+    /** Waveforms by recording, for this project, asked for one at a time
+     * (each is read, or first computed, off the session thread). */
+    let fetchedFor = "";
+    const waves = new Map<string, { path: string; durationMs: number } | "waiting" | "missing" | "failed">();
+    const queue: string[] = [];
+    let fetching = false;
     let wavesFor = "";
-    function wave(id: string, into: HTMLElement, time: HTMLElement) {
-      const done = waves.get(id);
-      const paint = (w: { path: string; durationMs: number }) => {
-        into.innerHTML = `<svg viewBox="0 0 ${WAVE_W} ${WAVE_H}" preserveAspectRatio="none" aria-hidden="true"><path d="${w.path}"/></svg>`;
-        time.textContent = duration(w.durationMs);
-      };
-      if (typeof done === "object") return paint(done);
-      if (done !== undefined) return;
-      waves.set(id, "loading");
+    async function fetchWaves() {
+      if (fetching) return;
+      fetching = true;
       const project = wavesFor;
-      void (async () => {
-        try {
-          const info = await peaksInfo({ sourceId: id });
-          const slice = await peaksQuery({ sourceId: id, channel: 0, startFrame: 0, endFrame: info.frames, pixels: WAVE_W });
-          if (project !== wavesFor) return;
-          const n = normalized(slice.mins, slice.maxs);
-          waves.set(id, { path: wavePath(n.mins, n.maxs, WAVE_W, WAVE_H), durationMs: info.durationMs });
-        } catch {
-          if (project !== wavesFor) return;
-          waves.set(id, "failed");
+      try {
+        for (let id = queue.shift(); id !== undefined && project === wavesFor; id = queue.shift()) {
+          try {
+            const o = await mediaOverview({ sourceId: id });
+            if (project !== wavesFor) break;
+            if (o.state === "missing") waves.set(id, "missing");
+            else {
+              const n = normalized(o.mins, o.maxs);
+              waves.set(id, { path: wavePath(n.mins, n.maxs, WAVE_W, WAVE_H), durationMs: o.durationMs });
+            }
+          } catch {
+            if (project !== wavesFor) break;
+            waves.set(id, "failed");
+          }
+          drawList();
         }
-        drawList();
-      })();
+      } finally {
+        fetching = false;
+      }
+      if (project !== wavesFor && queue.length > 0) void fetchWaves();
+    }
+    function wave(id: string) {
+      if (!waves.has(id)) {
+        waves.set(id, "waiting");
+        queue.push(id);
+        void fetchWaves();
+      }
+      return waves.get(id)!;
     }
 
     function card(c: Card, shown: string | null): HTMLElement {
+      const w = wave(c.id);
+      const here = w !== "missing" && w !== "failed";
       const art = h("div", { className: "bin-wave" });
-      const time = h("span", { className: "bin-time" });
-      wave(c.id, art, time);
+      if (typeof w === "object") art.innerHTML = `<svg viewBox="0 0 ${WAVE_W} ${WAVE_H}" preserveAspectRatio="none" aria-hidden="true"><path d="${w.path}"/></svg>`;
+      else if (!here) art.append(h("span", { className: "bin-wave-note", textContent: w === "missing" ? "Audio not on this computer" : "Could not read the audio" }));
+      const kit = activeKit();
+      const timeline = kit === null || kit.tools.includes("timeline");
+      const blocker = !here ? "Its audio is not on this computer" : !timeline ? `${kit?.name ?? "This kit"} has no Timeline` : shown === null ? "Select a text first" : null;
       const use = () => {
+        if (blocker !== null || c.inThisText) return;
         useRecording(c.id);
         window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "timeline" }));
       };
@@ -302,26 +321,34 @@ export const mediaPanel: PanelDef = {
       const button = h("button", {
         type: "button",
         textContent: c.inThisText ? "In use" : "Use for this text",
-        disabled: c.inThisText || shown === null,
-        title: shown === null ? "Select a text first" : "Load it on the Timeline for the text on screen; the text remembers it",
+        disabled: c.inThisText || blocker !== null,
+        title: blocker ?? "Load it on the Timeline for the text on screen; the text remembers it",
       });
+      button.setAttribute("aria-label", c.inThisText ? `${c.label}: in use for this text` : `Use ${c.label} for this text`);
       button.onclick = use;
+      // A double-click on the button is two clicks, not also the card's double-click.
+      button.ondblclick = (e) => e.stopPropagation();
       const el = h(
         "div",
-        { className: c.inThisText ? "bin-card is-current" : "bin-card", role: "listitem", draggable: true, title: `${c.label}: drag onto the Timeline, or double-click, to use it for the text on screen` },
+        {
+          className: (c.inThisText ? "bin-card is-current" : "bin-card") + (here ? "" : " is-missing"),
+          role: "listitem",
+          draggable: blocker === null,
+          title: blocker === null ? `${c.label}: drag onto the Timeline, or double-click, to use it for the text on screen` : `${c.label}: ${blocker}`,
+        },
         art,
         h("div", { className: "bin-name", textContent: c.label }),
-        h("div", { className: "bin-meta" }, time, h("span", { className: `access access-${c.access}`, textContent: c.access })),
+        h("div", { className: "bin-meta" }, h("span", { className: "bin-time", textContent: typeof w === "object" ? duration(w.durationMs) : "" }), h("span", { className: `access access-${c.access}`, textContent: c.access })),
         h("div", { className: "note bin-where", textContent: where }),
         button,
       );
       el.ondragstart = (e) => {
+        cardDrag.start();
         e.dataTransfer?.setData(CARD_TYPE, c.id);
         if (e.dataTransfer !== null) e.dataTransfer.effectAllowed = "link";
       };
-      el.ondblclick = () => {
-        if (shown !== null && !c.inThisText) use();
-      };
+      el.ondragend = () => cardDrag.end();
+      el.ondblclick = use;
       return el;
     }
 
@@ -335,9 +362,18 @@ export const mediaPanel: PanelDef = {
       if (project !== wavesFor) {
         wavesFor = project;
         waves.clear();
+        queue.length = 0;
+      } else {
+        // New data may have brought audio that was missing: ask again.
+        for (const [id, w] of waves) if (w === "missing" || w === "failed") waves.delete(id);
       }
       drawList();
       drawBar();
+      // A text switch only moves the "In this text" mark: the list is fetched
+      // again only when the project or its data changed.
+      const fetchKey = s.kind === "open" ? `${s.info.projectId}|${dataGeneration()}` : "closed";
+      if (fetchKey === fetchedFor) return;
+      fetchedFor = fetchKey;
       if (s.kind === "open") {
         void attempt(async () => {
           sources = await listSources();

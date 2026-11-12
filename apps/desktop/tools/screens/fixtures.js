@@ -548,6 +548,10 @@
     list_sources: () => SOURCES,
     peaks_info: ({ sourceId }) => ({ frames: FRAMES, sampleRate: SAMPLE_RATE, channels: 1, durationMs: DURATION_MS, mediaPath: `${PROJECT_PATH}/blobs/${sourceId}.wav` }),
     peaks_query: peaksQuery,
+    media_overview: () => {
+      const slice = peaksQuery({ startFrame: 0, endFrame: FRAMES, pixels: 120 });
+      return { state: "ready", durationMs: DURATION_MS, mins: slice.mins, maxs: slice.maxs };
+    },
     speech_spans: () => utterances.map((u) => [u.startMs + 30, u.endMs - 40]),
     acoustic_analysis: acousticAnalysis,
     load_layout: () => null,

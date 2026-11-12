@@ -37,7 +37,7 @@ import { provide } from "./palette/registry";
 import { openPalette, openShortcuts, wirePalette } from "./palette/ui";
 import type { Command } from "./palette/logic";
 import { autoChecks, checkForUpdates, setAutoChecks, setBeforeInstall, updateSlot } from "./updates/notice";
-import { activeKit, assistModelList, attempt, enterProject, getKits, getState, selectSegment, selectText, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
+import { activeKit, assistModelList, attempt, dropWantedMedia, enterProject, getKits, getState, selectSegment, selectText, getToast, researcher, setAssistModels, setKits, setResearcher, showToast, subscribe, subscribeToast } from "./store";
 
 const top = h("header", { className: "top" });
 /** A redraw held back while a menu was open (renderTop never rebuilds under one). */
@@ -530,6 +530,8 @@ if (app !== null) {
     if (!isPanelId(id)) return;
     const title = PANELS[id].title;
     if (kit !== null && !offers(kit, id)) {
+      // A recording asked for on a Timeline this kit lacks must not wait for a later one.
+      if (id === "timeline") dropWantedMedia();
       showToast({ tone: "info", lines: [`${kit.name} has no ${title} panel. Add it in the Kits panel, or switch kits.`] });
       return;
     }

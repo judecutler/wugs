@@ -11,7 +11,7 @@ import { attempt, dataGeneration, getSelection, getState, mediaSource, refreshTe
 import { parseGranularity } from "../timeline/edit-rules";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
 import { clock } from "../timeline/tracks";
-import { CARD_TYPE } from "../media/logic";
+import { CARD_TYPE, cardDrag } from "../media/logic";
 import { ICONS, type IconName } from "../timeline/icons";
 import * as playback from "../playback";
 import type { PanelDef, PanelView } from "./panel";
@@ -27,7 +27,7 @@ export const timelinePanel: PanelDef = {
   create(): PanelView {
     const el = h("div", { className: "panel panel-timeline" });
     // A media bin card dropped here is picked for the text on screen (docs/design/EDITOR.md).
-    const carries = (e: DragEvent) => e.dataTransfer?.types.includes(CARD_TYPE) ?? false;
+    const carries = (e: DragEvent) => cardDrag.active() && (e.dataTransfer?.types.includes(CARD_TYPE) ?? false);
     el.addEventListener("dragover", (e) => {
       if (!carries(e) || getState().kind !== "open" || view === null) return;
       e.preventDefault();
@@ -258,9 +258,11 @@ export const timelinePanel: PanelDef = {
       const before = getState();
       const textId = before.kind === "open" ? (before.text?.id ?? null) : null;
       const previous = before.kind === "open" ? (before.texts.find((t) => t.id === textId)?.recording ?? null) : null;
-      await loadSource(sourceId);
+      // The recording already loaded is not loaded again (a reload would re-fit the view).
+      const loaded = sourceId === selectedSource && sourceId !== null && mediaSource() === sourceId ? true : await loadSource(sourceId);
       const s = getState();
-      if (s.kind !== "open" || textId === null || s.text?.id !== textId || sourceId === null || previous === sourceId) return;
+      // Linked only once it really loaded here: audio that is not on this computer is not linked.
+      if (!loaded || s.kind !== "open" || textId === null || s.text?.id !== textId || sourceId === null || previous === sourceId) return;
       await attempt(async () => {
         await linkRecording({ textId, sourceId });
         await reloadTexts();
@@ -276,22 +278,28 @@ export const timelinePanel: PanelDef = {
     /** Only the newest load lands: a slow one overtaken by another is dropped. */
     let loadSeq = 0;
 
-    async function loadSource(sourceId: string | null): Promise<void> {
+    /** Load a recording (or none); true when it is the one now loaded. */
+    async function loadSource(sourceId: string | null): Promise<boolean> {
       const mine = ++loadSeq;
       selectedSource = sourceId;
-      if (view === null) return;
+      if (view === null) return false;
       if (sourceId === null) {
         view.setMedia(null, null);
-        return;
+        return false;
       }
+      let ok = false;
       await attempt(async () => {
         const info = await peaksInfo({ sourceId });
-        if (mine === loadSeq) view?.setMedia(info, sourceId);
+        if (mine === loadSeq) {
+          view?.setMedia(info, sourceId);
+          ok = true;
+        }
       });
-      if (mine !== loadSeq) return;
+      if (mine !== loadSeq) return false;
       sourcePicker.value = sourceId;
       praat.refresh();
       updateEditButtons();
+      return ok;
     }
 
     function addTrackControl(): HTMLElement {

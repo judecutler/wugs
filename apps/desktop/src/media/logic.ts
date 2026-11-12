@@ -60,3 +60,17 @@ export function normalized(mins: readonly number[], maxs: readonly number[]): { 
 
 /** The drag type a card carries onto the Timeline. */
 export const CARD_TYPE = "application/x-wugs-recording";
+
+/** Whether a media bin card is being dragged right now. Only a drag that
+ * starts inside the app sets this, so a web page that puts `CARD_TYPE` on a
+ * link it drags in is still refused as a link. */
+let dragging = false;
+export const cardDrag = {
+  start: () => {
+    dragging = true;
+  },
+  end: () => {
+    dragging = false;
+  },
+  active: () => dragging,
+};
