@@ -1,0 +1,10 @@
+{
+  "name": "wugs-help",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "deploy": "npx wrangler@4 deploy",
+    "most-asked": "node tools/most-asked.mjs"
+  }
+}

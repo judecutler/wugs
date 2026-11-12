@@ -11,6 +11,7 @@ pub mod corrections;
 pub mod drops;
 pub mod elicit;
 pub mod feedback;
+pub mod help;
 pub mod gloss;
 pub mod identity;
 pub mod interchange;
@@ -959,6 +960,18 @@ async fn feedback_keep(
     .map_err(|e| e.to_string())?
 }
 
+/// Ask the help service a question about wugs (Online). `None` when this
+/// build has no service to ask, so the sheet can say so.
+#[tauri::command]
+async fn help_ask(question: String, history: Vec<help::Turn>, share: bool) -> Result<Option<help::Answer>, String> {
+    if help::ENDPOINT.is_empty() {
+        return Ok(None);
+    }
+    tauri::async_runtime::spawn_blocking(move || help::ask(help::ENDPOINT, &question, &history, share).map(Some))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Send everything waiting and say what became of report `id`. Online;
 /// offline, it waits and goes with the next send.
 #[tauri::command]
@@ -1390,6 +1403,7 @@ pub fn run() {
             feedback_keep,
             feedback_deliver,
             feedback_retry,
+            help_ask,
             assist_download,
             assist_cancel,
             assist_delete,

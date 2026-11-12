@@ -32,6 +32,7 @@ import { isPanelId, PANELS, type PanelId } from "./panels/registry";
 import { SHOW_PANEL } from "./panels/panel";
 import { attachDock, useKit } from "./kits/workspace";
 import { openFeedback } from "./feedback/form";
+import { openHelp } from "./help/sheet";
 import { openSettings } from "./settings/panel";
 import { provide } from "./palette/registry";
 import { openPalette, openShortcuts, wirePalette } from "./palette/ui";
@@ -217,6 +218,12 @@ function renderTop() {
       project,
       settings,
       h("button", {
+        className: "menu-button help-button",
+        textContent: "Help",
+        title: "Ask how to do something in wugs; answers come from the user guide (Online)",
+        onclick: openHelpSheet,
+      }),
+      h("button", {
         className: "menu-button feedback-button",
         textContent: "Feedback",
         title: "Tell the people who make wugs what went wrong or what would help (Online)",
@@ -265,6 +272,11 @@ function openSettingsSheet(): void {
       visitAfterSettings = false;
     },
   });
+}
+
+/** Help: from the top bar's button and the command palette. */
+function openHelpSheet(): void {
+  openHelp(openFeedbackForm);
 }
 
 /** Feedback: from the top bar's button and the command palette. */
@@ -340,6 +352,7 @@ function shellCommands(): Command[] {
       .map((k) => ({ id: `kit:${k.kit.id}`, title: `Switch to ${k.kit.name}`, group: "Kits", words: ["kit", k.kit.subtitle, "workspace"], run: () => void switchKit(k.kit.id) })),
     { id: "app:settings", title: "Open Settings", group: "wugs", words: ["preferences", "options", "theme", "pattern"], run: openSettingsSheet },
     { id: "app:shortcuts", title: "Show keyboard shortcuts", group: "Help", keys: "?", words: ["keys", "hotkeys"], run: openShortcuts },
+    { id: "app:help", title: "Ask for help", group: "Help", words: ["question", "how", "guide", "assistant", "chat"], run: openHelpSheet },
     { id: "app:feedback", title: "Send feedback", group: "Help", words: ["bug", "problem", "report", "contact"], run: openFeedbackForm },
     { id: "app:reset-layout", title: "Reset layout", group: "Workspace", words: ["arrange", "panels", "default"], disabled: noProject, run: () => {
       if (dock !== null && kit !== null) layoutKit(dock, kit);

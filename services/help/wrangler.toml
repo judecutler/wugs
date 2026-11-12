@@ -1,0 +1,31 @@
+# The wugs help bot. Setup, deploy and the "most asked" report: README.md beside this file.
+name = "wugs-help"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = true
+
+[vars]
+# Any Workers AI text-generation model. Llama 3.1 8B fits in the free daily allocation.
+MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8"
+# Where the user guide is read from; {ref} is the asker's version tag, else main.
+GUIDE_URL = "https://raw.githubusercontent.com/judecutler/wugs/{ref}/docs/USER-GUIDE.md"
+
+[ai]
+binding = "AI"
+
+# Questions people agreed to share, for the "most asked" report.
+[[analytics_engine_datasets]]
+binding = "ASKED"
+dataset = "wugs_help_asked"
+
+# Per address: at most 10 questions a minute.
+[[ratelimits]]
+name = "LIMITER"
+namespace_id = "4742"
+
+  [ratelimits.simple]
+  limit = 10
+  period = 60
+
+[observability]
+enabled = true

@@ -590,3 +590,7 @@ export const feedbackKeep = (args: { message: string; contact: string; details: 
   invoke<string>("feedback_keep", args);
 export const feedbackDeliver = (args: { id: string }) => invoke<FeedbackOutcome>("feedback_deliver", args);
 export const feedbackRetry = () => invoke<FeedbackOutcome>("feedback_retry");
+
+/** One question to the help service (roadmap 67). `null`: this build has no service to ask. */
+export const helpAsk = (args: { question: string; history: { role: "user" | "assistant"; content: string }[]; share: boolean }) =>
+  invoke<{ answer: string; sources: string[] } | null>("help_ask", args);

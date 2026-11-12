@@ -591,6 +591,10 @@
     feedback_retry: () => ({ sent: false, waiting: 0, problem: null, configured: true }),
     feedback_keep: () => "01JC0000000000000000000000",
     feedback_deliver: () => ({ sent: true, waiting: 0, problem: null, configured: true }),
+    help_ask: () => ({
+      answer: "Select the segment, move the playhead to where it should be cut, and press S (or click Split at the playhead in the Timeline toolbar). The transcription stays on the first part.",
+      sources: ["Segment the recording › Split, merge, and nudge"],
+    }),
     kit_code: kitCode,
     kit_set_active: ({ id }) => ((kitsView.active = id), null),
     capture_reset: () => 0,

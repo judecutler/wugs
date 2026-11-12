@@ -470,6 +470,14 @@ def main():
             run.page.wait_for_timeout(300)
             run.shot("state-feedback-sent")
 
+            run.page.get_by_role("button", name="Help", exact=True).click()
+            run.page.locator(".help-question").fill("How do I split a segment at the playhead?")
+            run.page.get_by_role("button", name="Ask", exact=True).click()
+            run.page.locator(".help-src").wait_for()
+            run.page.locator(".help-question").fill("And undo it?")
+            run.shot("state-help")
+            run.page.keyboard.press("Escape")
+
             unknown |= set(run.unknown())
             failures += run.errors
             browser.close()
