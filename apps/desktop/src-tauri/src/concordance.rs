@@ -207,6 +207,19 @@ pub(crate) struct CorpusSegment {
     pub words: Vec<String>,
 }
 
+/// Words per segment on transcription tiers, for tests that count runs.
+#[cfg(test)]
+pub(crate) fn tests_word_counts(session: &mut Session) -> Vec<usize> {
+    let p = project(session).unwrap();
+    let mut out = Vec::new();
+    each_segment(p, false, None, |seg| {
+        out.push(seg.words.iter().filter(|w| !wugs_model::fold_key(&p.proj.nfc(w)).is_empty()).count());
+        Ok(())
+    })
+    .unwrap();
+    out
+}
+
 /// Calls `visit` with every segment on a transcription tier (or, with
 /// `translations`, a translation tier), text by text in order; `only_text`
 /// keeps one text.

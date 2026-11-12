@@ -357,6 +357,12 @@ def main():
             run.page.wait_for_timeout(600)
             if run.page.locator(".panel-concordance .cc-query").input_value() != "nikani":
                 failures.append("a frequency row did not open the Concordance on its word")
+            run.front("frequencies", "Frequencies")
+            run.page.locator(".panel-frequencies .fq-size").select_option("2")
+            run.page.wait_for_timeout(400)
+            run.shot("state-frequencies-ngrams", run.page.locator(".panel-frequencies"))
+            if "nikani ŋai" not in run.page.locator(".panel-frequencies .fq-table").inner_text():
+                failures.append("two-word sequences did not show")
             # Collocates (Scrolls): a word's company, a row opens its Concordance.
             run.front("collocates", "Collocates")
             run.page.locator(".panel-collocates .co-node").fill("nikani")

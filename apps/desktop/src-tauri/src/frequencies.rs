@@ -54,8 +54,24 @@ struct Tally {
 }
 
 pub fn frequencies(session: &mut Session, kind: Kind, text: Option<&str>) -> Result<Frequencies, String> {
+    frequencies_of(session, kind, text, 1)
+}
+
+/// The longest word sequence an n-gram list counts (AntConc offers the same range by default).
+pub const MAX_N: usize = 5;
+
+/// A frequency list of single items (`size` 1) or of word n-grams: runs of
+/// `size` words in a row inside one segment (AntConc's N-Grams), counted
+/// under their words' keys joined by a space, words and translation words only.
+pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, size: usize) -> Result<Frequencies, String> {
     if kind == Kind::Sense {
         return Err("a frequency list counts words, morphs, glosses or translation words".into());
+    }
+    if !(1..=MAX_N).contains(&size) {
+        return Err(format!("n-grams are 1 to {MAX_N} words long"));
+    }
+    if size > 1 && !matches!(kind, Kind::Word | Kind::Translation) {
+        return Err("n-grams are counted over words or translation words".into());
     }
     let p = project(session)?;
     let mut tallies: HashMap<String, Tally> = HashMap::new();
@@ -79,9 +95,19 @@ pub fn frequencies(session: &mut Session, kind: Kind, text: Option<&str>) -> Res
     each_segment(p, kind == Kind::Translation, text, |seg| {
         match kind {
             Kind::Word | Kind::Translation => {
-                for w in &seg.words {
-                    let spelling = p.proj.nfc(w);
-                    count(wugs_model::fold_key(&spelling), &spelling, &seg.text, &mut tokens);
+                let words: Vec<(String, String)> = seg
+                    .words
+                    .iter()
+                    .map(|w| {
+                        let spelling = p.proj.nfc(w);
+                        (wugs_model::fold_key(&spelling), spelling)
+                    })
+                    .filter(|(k, _)| !k.is_empty())
+                    .collect();
+                for run in words.windows(size) {
+                    let key = run.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>().join(" ");
+                    let spelling = run.iter().map(|(_, s)| s.as_str()).collect::<Vec<_>>().join(" ");
+                    count(key, &spelling, &seg.text, &mut tokens);
                 }
             }
             Kind::Morph | Kind::Gloss => {
@@ -162,6 +188,13 @@ mod tests {
         assert_eq!(frequencies(&mut session, Kind::Word, Some(&text)).unwrap().tokens, words.tokens);
         assert_eq!(frequencies(&mut session, Kind::Word, Some("txt_none")).unwrap().tokens, 0);
         assert!(frequencies(&mut session, Kind::Sense, None).is_err());
+        // Bigrams: one per pair of words in a row, never across segments.
+        let bi = frequencies_of(&mut session, Kind::Word, None, 2).unwrap();
+        let segments: usize = crate::concordance::tests_word_counts(&mut session).iter().map(|n| n.saturating_sub(1)).sum();
+        assert_eq!(bi.tokens, segments);
+        assert!(bi.rows.iter().all(|r| r.item.split(' ').count() == 2));
+        assert!(frequencies_of(&mut session, Kind::Morph, None, 2).is_err());
+        assert!(frequencies_of(&mut session, Kind::Word, None, 6).is_err());
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

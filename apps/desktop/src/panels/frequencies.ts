@@ -35,6 +35,15 @@ export const frequenciesPanel: PanelDef = {
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Count" });
     const scopePicker = h("select", { className: "fq-scope", title: "Count in the whole project or one text" });
     scopePicker.setAttribute("aria-label", "Where to count");
+    let size = 1;
+    const sizer = h(
+      "select",
+      { className: "fq-size", title: "Count single items, or runs of words in a row inside a segment (n-grams, as AntConc's N-Grams tool)" },
+      ...[1, 2, 3, 4, 5].map((n) => h("option", { value: String(n), textContent: n === 1 ? "Single items" : `${n} words in a row` })),
+    );
+    sizer.setAttribute("aria-label", "Words in a row");
+    const ngrams = () => size > 1 && (kind === "word" || kind === "translation");
+    const noun = () => (ngrams() ? { one: `${size}-word sequence`, many: `${size}-word sequences` } : NOUNS[kind]);
     const sorter = h("select", { className: "fq-sort", title: "Order of the rows" }, ...FREQ_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
     sorter.setAttribute("aria-label", "Sort");
     const filter = h("input", { type: "search", className: "fq-filter", placeholder: "Filter the list", spellcheck: false });
@@ -53,6 +62,8 @@ export const frequenciesPanel: PanelDef = {
           b.onclick = () => {
             kind = k.id;
             drawChips();
+            sizer.disabled = !(kind === "word" || kind === "translation");
+            sizer.value = String(ngrams() ? size : 1);
             void load();
           };
           return b;
@@ -78,8 +89,8 @@ export const frequenciesPanel: PanelDef = {
       const tokens = data.tokens;
       const perWord = kind === "morph" || kind === "gloss" ? ` Each counts once per word, as the Concordance shows one line per word.` : "";
       const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn; filter to find the others (Copy table has them all).` : "";
-      count.textContent = summary(data, NOUNS[kind]) + perWord + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
-      const head = h("tr", {}, ...["#", NOUNS[kind].one[0]!.toUpperCase() + NOUNS[kind].one.slice(1), "Count", "Per 1000", "Texts"].map((t) => h("th", { textContent: t, scope: "col" })));
+      count.textContent = summary(data, noun()) + perWord + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
+      const head = h("tr", {}, ...["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000", "Texts"].map((t) => h("th", { textContent: t, scope: "col" })));
       table.replaceChildren(
         h("thead", {}, head),
         h(
@@ -96,7 +107,10 @@ export const frequenciesPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: String(r.texts) }),
             );
             const text = scope === "" ? null : { id: scope, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
-            const open = () => askConcordance(r.item, kind, text);
+            // A sequence opens on its first word; sorting by the word after brings the sequence together.
+            const first = ngrams() ? r.item.split(" ")[0]! : r.item;
+            if (ngrams()) tr.title = `Show every «${first}» in the Concordance; sort by the word after to bring «${r.item}» together`;
+            const open = () => askConcordance(first, kind, text);
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
@@ -120,7 +134,7 @@ export const frequenciesPanel: PanelDef = {
       rankedRows = [];
       table.replaceChildren();
       try {
-        const r = await frequencies({ kind, textId: scope === "" ? null : scope });
+        const r = await frequencies({ kind, textId: scope === "" ? null : scope, size: ngrams() ? size : 1 });
         if (mine !== seq) return;
         data = r;
         rankedRows = ranked(r.rows);
@@ -134,6 +148,10 @@ export const frequenciesPanel: PanelDef = {
       }
     }
 
+    sizer.onchange = () => {
+      size = Number(sizer.value);
+      void load();
+    };
     scopePicker.onchange = () => {
       scope = scopePicker.value;
       void load();
@@ -178,7 +196,9 @@ export const frequenciesPanel: PanelDef = {
       }
       drawChips();
       drawScopes();
-      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter), count, h("div", { className: "fq-rows" }, table));
+      sizer.disabled = !(kind === "word" || kind === "translation");
+      sizer.value = String(ngrams() ? size : 1);
+      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter), count, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };
