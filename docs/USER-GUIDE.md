@@ -585,7 +585,7 @@ The wug answers questions about wugs from this guide. It needs an internet conne
 2. Type your question, such as "How do I split a segment?", and press Enter or click **Ask**.
 3. The wug answers, and names the parts of this guide the answer came from. Ask a follow-up in the same box. Help remembers the conversation until wugs closes, even if you close the panel.
 
-Your question, your last few questions and answers in Help, and the wugs version are sent, never anything from your project. Help keeps nothing unless you tick **Share my questions with the people who make wugs**; then each question, the part of this guide it matched and the wugs version are kept, so this guide can cover what people ask most. If an answer is wrong or missing, **Ask a person instead (Feedback)** opens the Feedback form. Answers come from a small language model and can be mistaken; the guide sections it names are where to check.
+Your question, your last few questions and answers in Help, and the wugs version are sent, never anything from your project. Help keeps nothing unless you tick **Share my questions with the people who make wugs**; then each question, the part of this guide it matched and the wugs version are kept, so this guide can cover what people ask most. Still having trouble? **Give wugs feedback** under the conversation opens the Feedback form, and the people who make wugs fix it as soon as they can. Each answer names the parts of this guide it came from.
 
 ## Send feedback
 

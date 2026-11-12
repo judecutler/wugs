@@ -20,7 +20,7 @@ const views = new Set<(e: Exchange) => void>();
 const changed = (e: Exchange) => views.forEach((tell) => tell(e));
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const GREETING = "Hi! Ask me how to do something in wugs. I answer from the user guide, so check the parts I name.";
+const GREETING = "Hi! Ask me how to do something in wugs. I answer from the user guide.";
 
 export type HelpView = {
   element: HTMLElement;
@@ -49,7 +49,7 @@ export function helpView(feedback: () => void): HelpView {
   const share = h("input", { type: "checkbox", checked: shareOn(localStorage) });
   const why = h("p", { className: "help-why", role: "status" });
   const ask = h("button", { className: "primary", textContent: "Ask" });
-  const toFeedback = h("button", { className: "link-button", textContent: "Ask a person instead (Feedback)" });
+  const toFeedback = h("button", { className: "link-button", textContent: "Give wugs feedback" });
   /** Each exchange's answer row, so a change touches only that row. */
   const rows = new Map<Exchange, HTMLElement>();
   let typing: { exchange: Exchange; started: number; frame: number } | null = null;
@@ -173,7 +173,8 @@ export function helpView(feedback: () => void): HelpView {
     h("div", { className: "help-ask" }, question, ask),
     why,
     h("label", { className: "help-share" }, share, " Share my questions with the people who make wugs, so the guide covers what people ask most (each question, the part of the guide it matched and the wugs version)"),
-    h("p", { className: "help-foot" }, "Online: your question, your last few questions and answers here, and the wugs version go to the help service, never anything from your project. ", toFeedback),
+    h("p", { className: "help-foot" }, "Still having trouble? ", toFeedback, " and we'll fix it as soon as possible."),
+    h("p", { className: "help-foot" }, "Online: your question, your last few questions and answers here, and the wugs version go to the help service, never anything from your project."),
   );
   // Announced once per finished answer (the views share one conversation, so each says it).
   const announceDone = (e: Exchange) => {
