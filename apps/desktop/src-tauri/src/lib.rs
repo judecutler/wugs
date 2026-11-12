@@ -4,6 +4,7 @@ pub mod capture;
 pub mod conflicts;
 pub mod convert;
 pub mod corrections;
+pub mod drops;
 pub mod elicit;
 pub mod gloss;
 pub mod identity;
@@ -187,12 +188,18 @@ fn add_tier(s: State<SessionThread>, template: String, name: Option<String>) -> 
 
 #[tauri::command(async)]
 fn import_media(s: State<SessionThread>, path: String) -> Result<SourceRow, String> {
+    import_recording(&s, std::path::Path::new(&path))
+}
+
+/// A recording picked or dropped: a WAV goes in as it is, anything else is
+/// decoded to a WAV first and imported under its own file name.
+fn import_recording(s: &SessionThread, file: &std::path::Path) -> Result<SourceRow, String> {
     // The open project's blobs/ is already in the asset scope: every way a
     // project opens (open, create, join) passes through allow_media.
-    let file = std::path::PathBuf::from(&path);
-    if convert::is_wav(&file) {
-        let wav = path.clone();
-        match s.run(move |s| session::import_media(s, &wav)) {
+    let label = file.file_name().and_then(|n| n.to_str()).unwrap_or("Recording").to_string();
+    if convert::is_wav(file) {
+        let (wav, label) = (file.to_path_buf(), label.clone());
+        match s.run(move |s| session::import_media_named(s, &wav, &label)) {
             // 8-bit, A-law, μ-law and ADPCM WAVs are decoded like compressed audio.
             Err(e) if e.contains("unsupported WAV") => {}
             done => return done,
@@ -205,12 +212,68 @@ fn import_media(s: State<SessionThread>, path: String) -> Result<SourceRow, Stri
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     convert::sweep(&dir);
     let wav = dir.join(format!("{}.wav", wugs_model::ulid()));
-    convert::to_wav(&file, &wav)?;
-    let label = file.file_name().and_then(|n| n.to_str()).unwrap_or("Recording").to_string();
+    convert::to_wav(file, &wav)?;
     let converted = wav.clone();
     let row = s.run(move |s| session::import_media_named(s, &converted, &label));
     std::fs::remove_file(&wav).ok();
     row
+}
+
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+enum Dropped {
+    Recording { source: SourceRow },
+    File { imported: interchange::Imported },
+}
+
+/// Start copying a dropped file into the open project; returns the drop's id.
+#[tauri::command(async)]
+fn drop_begin(s: State<SessionThread>, drops: State<drops::Drops>, name: String, size: u64) -> Result<String, String> {
+    let root = s.run(session::project_root)?;
+    drops.begin(&root, &name, size)
+}
+
+/// The body is the next piece of the file, raw; the drop id rides in a header.
+#[tauri::command(async)]
+fn drop_chunk(drops: State<drops::Drops>, request: tauri::ipc::Request<'_>) -> Result<(), String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("drop_chunk expects a binary body".into());
+    };
+    let id = request
+        .headers()
+        .get("x-drop-id")
+        .and_then(|v| v.to_str().ok())
+        .ok_or("drop_chunk is missing the x-drop-id header")?;
+    drops.chunk(id, bytes)
+}
+
+/// Import the whole dropped file the way a picked one is imported, then
+/// remove the staged copy whatever happened.
+#[tauri::command(async)]
+fn drop_finish(s: State<SessionThread>, drops: State<drops::Drops>, drop_id: String) -> Result<Dropped, String> {
+    let staged = drops.finish(&drop_id)?;
+    let result = import_dropped(&s, &staged);
+    std::fs::remove_dir_all(&staged.dir).ok();
+    result
+}
+
+fn import_dropped(s: &SessionThread, staged: &drops::Staged) -> Result<Dropped, String> {
+    let root = s.run(session::project_root)?;
+    if root.canonicalize().ok().as_deref() != Some(staged.root.as_path()) {
+        return Err("another project was opened while the file was copied in; nothing was imported".into());
+    }
+    match drops::route(&staged.path) {
+        drops::Route::Recording => import_recording(s, &staged.path).map(|source| Dropped::Recording { source }),
+        drops::Route::File => {
+            let path = staged.path.to_str().ok_or_else(|| format!("{} is not a path wugs can read", staged.path.display()))?.to_string();
+            s.run(move |s| interchange::import_file(s, &path)).map(|imported| Dropped::File { imported })
+        }
+    }
+}
+
+#[tauri::command]
+fn drop_cancel(drops: State<drops::Drops>, drop_id: String) {
+    drops.cancel(&drop_id);
 }
 
 #[tauri::command(async)]
@@ -1138,6 +1201,7 @@ pub fn run() {
         .manage(SessionThread::spawn())
         .manage(Reachable::default())
         .manage(Captures::default())
+        .manage(drops::Drops::default())
         .manage(updater::Staged::default())
         .manage(assist::Downloads::default())
         .manage(assist::Worker::spawn())
@@ -1243,6 +1307,10 @@ pub fn run() {
             import_media,
             capture_begin,
             capture_chunk,
+            drop_begin,
+            drop_chunk,
+            drop_finish,
+            drop_cancel,
             capture_finish,
             capture_discard,
             capture_keep,

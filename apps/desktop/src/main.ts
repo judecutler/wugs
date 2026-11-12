@@ -1,4 +1,5 @@
 import { brandLogo } from "./theme/brand";
+import { dropTarget } from "./drop/target";
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import { captureReset, createProject, errorText, kitsList, onAssistDownload, openProject } from "./api";
 import { reloadModels } from "./panels/assist";
@@ -164,7 +165,7 @@ async function reopenLast() {
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (app !== null) {
-  app.replaceChildren(top, updateSlot(), bannerSlot, host, toastSlot);
+  app.replaceChildren(top, updateSlot(), bannerSlot, host, toastSlot, dropTarget());
   subscribe(renderTop);
   subscribe(renderBanner);
   onDevicesChange(renderBanner);

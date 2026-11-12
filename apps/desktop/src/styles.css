@@ -177,6 +177,30 @@ button:disabled { opacity: 0.55; cursor: default; }
 .snippet mark { background: var(--highlight); color: inherit; }
 .toast-info { border-left: 4px solid var(--accent); }
 .toast-slot { z-index: 1000; }
+
+/* Files dragged over the window: one target for the whole window. */
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--overlay-bg);
+}
+.drop-overlay[hidden] { display: none; }
+.drop-box {
+  pointer-events: none;
+  max-width: 520px;
+  padding: 32px 40px;
+  border: 2px dashed var(--on-accent);
+  border-radius: var(--radius-md);
+  color: var(--on-accent);
+  text-align: center;
+}
+.drop-title { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+.drop-detail { font-size: var(--text-sm); }
 .banner-warn button.primary { font-weight: 600; border-color: var(--warn); }
 
 /* Timeline (canvas): toolbar on top, fixed tier gutter on the left, one
