@@ -27,19 +27,22 @@ function dispatch(e: UpdateEvent) {
 }
 
 /** One check. Automatic checks stay silent on failure (field links drop). */
-export async function checkForUpdates(manual: boolean) {
-  if (!manual && !autoChecks()) return;
+/** Ask for a newer version; true when one was found (its offer is showing). */
+export async function checkForUpdates(manual: boolean): Promise<boolean> {
+  if (!manual && !autoChecks()) return false;
   dispatch({ type: "check", manual });
-  if (state.kind !== "checking") return;
+  if (state.kind !== "checking") return false;
   try {
     const result = await updateCheck();
     dispatch({ type: "checked", update: result.available });
     const message = manualResult(manual, result.available === null ? { kind: "newest", version: result.currentVersion } : { kind: "found" });
     if (message !== null) showToast({ tone: "info", lines: [message] });
+    return result.available !== null;
   } catch (e) {
     dispatch({ type: "check-failed" });
     const message = manualResult(manual, { kind: "failed", error: errorText(e) });
     if (message !== null) showToast({ tone: "error", lines: [message] });
+    return false;
   }
 }
 

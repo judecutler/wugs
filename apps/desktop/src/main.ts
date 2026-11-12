@@ -8,6 +8,8 @@ applyPattern(savedPattern(localStorage));
 applyEmphasisPattern(emphasisPatternOn(localStorage));
 // Shown in Settings; read once, never awaited by anything.
 let appVersion = "";
+/** The wug was just let back in from Settings: it visits when the sheet closes. */
+let visitAfterSettings = false;
 void getVersion()
   .then((v) => (appVersion = v))
   .catch(() => {});
@@ -146,6 +148,7 @@ function renderTop() {
     title: "Colours, patterns, the workspace and updates",
     onclick: () =>
       openSettings({
+        projectOpen: () => getState().kind === "open" && dock !== null && kit !== null,
         closedPanels: () => (dock === null || kit === null ? [] : closedPanels(dock, kit).map((id) => ({ id, title: PANELS[id].title }))),
         showPanel: (id) => showOrFocus(id as PanelId),
         kitName: kit?.name ?? "the kit",
@@ -160,14 +163,19 @@ function renderTop() {
         visitsOn: () => visitsOn(localStorage),
         setVisitsOn: (on) => {
           setVisitsOn(localStorage, on);
-          if (on) window.setTimeout(() => visits?.visitNow(), 400);
-          else visits?.stop();
+          // Turned on, the wug comes to say hello once the sheet is closed.
+          visitAfterSettings = on;
+          if (!on) visits?.stop();
         },
-        checkForUpdates: () => void checkForUpdates(true),
+        checkForUpdates: () => checkForUpdates(true),
         autoChecks,
         setAutoChecks,
-        version: appVersion,
+        version: () => appVersion,
         changed: () => renderTop(),
+        closed: () => {
+          if (visitAfterSettings) window.setTimeout(() => visits?.visitNow(), 400);
+          visitAfterSettings = false;
+        },
       }),
   });
   project.classList.add("project-menu");
@@ -408,7 +416,7 @@ if (app !== null) {
         logo: () => top.querySelector(".brand-wug"),
         avoid: () => [...top.querySelectorAll(".menu-wrap, .project-chip, .brand-mark, .brand")],
         onLayout: (run) => mounted.api.onDidLayoutChange(run),
-        busy: () => closeBlocker() !== null || top.querySelector(".menu-list") !== null || getState().kind !== "open",
+        busy: () => closeBlocker() !== null || top.querySelector(".menu-list") !== null || document.querySelector(".settings-overlay") !== null || getState().kind !== "open",
       });
       renderTop();
       await wireDeviceEvents();
