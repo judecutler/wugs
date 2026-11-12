@@ -51,7 +51,7 @@ export function bundleLines(b: BundleInfo): string[] {
   const who = b.authors.length > 0 ? `By ${b.authors.join(", ")}` : "";
   const licence = b.license !== "" ? `licence ${b.license}` : "";
   if (who !== "" || licence !== "") lines.push([who, licence].filter((x) => x !== "").join("; ") + ".");
-  if (b.source !== "") lines.push(`Published at ${b.source}`);
+  if (b.source !== "") lines.push(`Published at ${b.source}.`);
   if (b.requires.length === 0) lines.push("Relies on no other packages.");
   for (const r of b.requires) {
     const role = r.capability !== undefined ? ` for ${r.capability.replace(/-/g, " ")}` : "";

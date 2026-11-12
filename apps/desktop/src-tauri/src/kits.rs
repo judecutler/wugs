@@ -444,7 +444,8 @@ pub fn duplicate(app_data: &Path, source: &str, name: &str) -> Result<KitEntry, 
     if name.is_empty() {
         return Err("Name the new kit.".into());
     }
-    let text = code(app_data, source)?;
+    // A copy is the person's own: it does not carry the original's authors or address.
+    let text = wugs_kit::as_copy(&code(app_data, source)?).map_err(|p| problems_text(&p))?;
     let mut kit = wugs_kit::parse(&text).map_err(|p| problems_text(&p))?;
     kit.id = fresh_id(app_data, name)?;
     kit.name = name.to_string();

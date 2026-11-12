@@ -46,6 +46,12 @@ fn duplicate_edit_and_activate() {
         code.contains("[templates.semantic-domains]") && code.contains("# A kit is a recipe"),
         "{code}"
     );
+    // The built-in kit is a package; the copy keeps its licence but not its authors or address.
+    let built_in = kits::list(&dir).unwrap().kits.into_iter().find(|k| k.kit.id == BUNDLED_ID).unwrap();
+    let b = built_in.kit.bundle.as_ref().expect("the built-in kit carries [package] and [bundle]");
+    assert!(b.source.starts_with("https://") && !b.authors.is_empty(), "{b:?}");
+    let copied = mine.kit.bundle.as_ref().expect("the copy is still a package");
+    assert!(copied.source.is_empty() && copied.authors.is_empty() && copied.license == b.license, "{copied:?}");
 
     let mut edited = mine.kit.clone();
     edited.subtitle = "Corpus-ish".into();

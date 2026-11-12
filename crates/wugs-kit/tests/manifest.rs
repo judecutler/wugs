@@ -410,6 +410,7 @@ fn a_bundle_names_what_it_needs() {
     ));
     let kit = parse(&text).unwrap();
     let b = kit.bundle.expect("a bundle");
+    assert_eq!(b.requires[0].id, "udpipe1-ud-2.5_english");
     assert_eq!((b.license.as_str(), b.authors.len(), b.summary.as_str()), ("MPL-2.0", 1, "Corpus tools"));
     assert_eq!(b.requires.len(), 2);
     assert_eq!(b.requires[0].capability.as_deref(), Some("morphosyntax"));
@@ -420,6 +421,15 @@ fn a_bundle_names_what_it_needs() {
     edited.name = "Renamed".into();
     let out = update(&text, &edited).unwrap();
     assert_eq!(parse(&out).unwrap().bundle, parse(&text).unwrap().bundle);
+    // A new id or version in the form reaches a `[package]` that repeats them.
+    let with_version = text.replace("license", "version = \"1.0.0\"\nlicense");
+    let mut moved = parse(&with_version).unwrap();
+    moved.id = "again".into();
+    moved.version = "2.0.0".into();
+    let out = update(&with_version, &moved).unwrap();
+    let back = parse(&out).unwrap();
+    assert_eq!((back.id.as_str(), back.version.as_str()), ("again", "2.0.0"));
+    assert!(out.contains("[package]\ntype = \"kit\"\nid = \"again\"\nversion = \"2.0.0\""), "{out}");
 }
 
 #[test]
@@ -428,11 +438,23 @@ fn a_bundle_is_checked_like_any_kit_input() {
         "[[requires]]\ntype = \"script\"\nid = \"../x\"\nversion = \"1\"\nfiles_sha256 = \"ABC\"\n\n[[requires]]\ntype = \"model\"\nid = \"m\"\nversion = \"1\"\nfiles_sha256 = \"{SHA}\"\n\n[examples]\nproject = \"../../etc\"\n"
     )))
     .join("\n");
-    for needle in ["model, dataset, integration or plugin", "requires.id is letters", "64 lowercase hex", "names its capability", "examples.project is a folder inside"] {
+    for needle in ["model, dataset, integration or plugin", "requires.id is lowercase letters", "64 lowercase hex", "names its capability", "examples.project is a folder inside"] {
         assert!(m.contains(needle), "{needle}: {m}");
     }
     let wrong = bundled("").replace("type = \"kit\"", "type = \"model\"").replace("id = \"my.kit\"\nlicense", "id = \"other\"\nlicense");
     let m = messages(&wrong).join("\n");
     assert!(m.contains("package.type of a kit file") && m.contains("differs from kit.id"), "{m}");
     assert!(messages(&bundled("").replace("https://github.com", "http://github.com")).join("\n").contains("https://"));
+    assert!(messages(&bundled("").replace("https://github.com/someone/kit", "https://")).join("\n").contains("https://"));
+    // Versions and ids name folders; a misspelt key is named.
+    let m = messages(&bundled(&format!(
+        "[[requires]]\ntype = \"dataset\"\nid = \"Upper\"\nversion = \"../../x\"\nfiles_sha256 = \"{SHA}\"\nrecomended = true\n\n[examples]\nproject = \"a./b\"\n"
+    )))
+    .join("\n");
+    for needle in ["requires.id is lowercase", "requires.version is letters", "no key \"recomended\"", "examples.project is a folder inside"] {
+        assert!(m.contains(needle), "{needle}: {m}");
+    }
+    assert!(messages(&format!("requires = [1]\n{}", bundled(""))).join("\n").contains("[[requires]] tables"));
+    let m = messages(&bundled("").replace("version = \"1.0.0\"\n\n[bundle]", "\n[bundle]").replace("license", "version = \"1.0.0\"\nlicense")).join("\n");
+    assert!(m.contains("set kit.version to the same"), "{m}");
 }

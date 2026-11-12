@@ -184,7 +184,7 @@ test("a bundle reads in words", () => {
   assert.deepEqual(lines, [
     "Corpus tools.",
     "By A. Linguist; licence MPL-2.0.",
-    "Published at https://github.com/x/kit",
+    "Published at https://github.com/x/kit.",
     "Model udpipe1-en 1.0 for morphosyntax (recommended; another provider can be chosen): Tags English",
     "Comes with an example project (examples/sample/).",
   ]);

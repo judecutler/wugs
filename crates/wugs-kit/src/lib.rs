@@ -277,6 +277,14 @@ pub fn update(text: &str, kit: &Kit) -> Result<String, Vec<Problem>> {
         set_str(t, "version", &kit.version, false);
         set_str(t, "description", &kit.description, false);
     }
+    // A bundle's `[package]` that repeats the id or version follows `[kit]`.
+    if let Some(p) = doc.get_mut("package").and_then(Item::as_table_mut) {
+        for (key, value) in [("id", &kit.id), ("version", &kit.version)] {
+            if p.contains_key(key) {
+                set_str(p, key, value, true);
+            }
+        }
+    }
     if changed(&|b| b.tools == kit.tools) {
         set_value(
             table_mut(&mut doc, "tools"),
@@ -326,6 +334,24 @@ pub fn update(text: &str, kit: &Kit) -> Result<String, Vec<Problem>> {
                 }
             }
         }
+    }
+    let out = doc.to_string();
+    parse(&out)?;
+    Ok(out)
+}
+
+/// A kit file made ready to be someone else's copy: the original's
+/// `package.source` and `bundle.authors` are taken out, so a duplicate is
+/// never shared under the original's name and address. Its licence stays.
+pub fn as_copy(text: &str) -> Result<String, Vec<Problem>> {
+    let mut doc: DocumentMut = text.parse().map_err(|e: toml_edit::TomlError| {
+        vec![problem(text, e.span(), e.message().trim().to_string())]
+    })?;
+    if let Some(p) = doc.get_mut("package").and_then(Item::as_table_mut) {
+        p.remove("source");
+    }
+    if let Some(b) = doc.get_mut("bundle").and_then(Item::as_table_mut) {
+        b.remove("authors");
     }
     let out = doc.to_string();
     parse(&out)?;
@@ -680,11 +706,13 @@ impl Reader<'_> {
 }
 
 const AUTHORS_MAX: usize = 16;
+const REQUIREMENT_KEYS: [&str; 7] = ["type", "id", "version", "files_sha256", "capability", "recommended", "why"];
 const REQUIRES_MAX: usize = 32;
 
 /// Whether `p` is a safe relative folder path inside a bundle: `/`-separated
 /// parts of letters, digits, `.`, `-` and `_`, none empty, `.` or `..`,
-/// no Windows device names, at most 200 bytes.
+/// none ending in `.` (Windows drops it), no Windows device names, at most
+/// 200 bytes.
 pub fn valid_bundle_path(p: &str) -> bool {
     let p = p.strip_suffix('/').unwrap_or(p);
     !p.is_empty()
@@ -693,6 +721,7 @@ pub fn valid_bundle_path(p: &str) -> bool {
             !part.is_empty()
                 && part != "."
                 && part != ".."
+                && !part.ends_with('.')
                 && part.bytes().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_'))
                 && !windows_device(&part.split('.').next().unwrap_or("").to_ascii_lowercase())
         })
@@ -718,14 +747,18 @@ impl Reader<'_> {
             }
             for (key, kit_value) in [("id", kit_id), ("version", kit_version)] {
                 let v = self.string(Some(p), "package", key, if key == "id" { ID_MAX } else { NAME_MAX }, false);
-                if !v.is_empty() && v != kit_value {
+                if !v.is_empty() && kit_value.is_empty() {
+                    self.fail(p.get(key).and_then(Item::span), &format!("package.{key} is {v:?}: set kit.{key} to the same"));
+                } else if !v.is_empty() && v != kit_value {
                     self.fail(p.get(key).and_then(Item::span), &format!("package.{key} {v:?} differs from kit.{key} {kit_value:?}"));
+                } else if key == "version" && !v.is_empty() && !valid_version(&v) {
+                    self.fail(p.get(key).and_then(Item::span), "package.version is letters, digits, '.', '-', '+' and '_', like \"1.2.0\"");
                 }
             }
             out.license = self.string(Some(p), "package", "license", NAME_MAX, false);
             out.source = self.string(Some(p), "package", "source", TEXT_MAX, false);
-            if !out.source.is_empty() && !out.source.starts_with("https://") {
-                self.fail(p.get("source").and_then(Item::span), "package.source is an https:// address");
+            if !out.source.is_empty() && out.source.strip_prefix("https://").is_none_or(|rest| rest.split('/').next().is_none_or(|host| !host.contains('.'))) {
+                self.fail(p.get("source").and_then(Item::span), "package.source is an https:// address, like \"https://github.com/you/your-kit\"");
             }
         }
         if let Some(b) = bundle {
@@ -767,7 +800,7 @@ impl Reader<'_> {
                         }
                     }
                 }
-                _ => self.fail(item.span(), &format!("[[requires]] is a list of at most {REQUIRES_MAX} tables")),
+                _ => self.fail(item.span(), &format!("requires is written as [[requires]] tables, at most {REQUIRES_MAX}")),
             }
         }
         Some(out)
@@ -775,15 +808,24 @@ impl Reader<'_> {
 
     fn requirement(&mut self, t: &Table) -> Option<Requirement> {
         let before = self.problems.len();
+        // A misspelt key here would change what gets installed, so it is named.
+        for (key, item) in t.iter() {
+            if !REQUIREMENT_KEYS.contains(&key) {
+                self.fail(item.span(), &format!("requires has no key {key:?}; the keys are {}", REQUIREMENT_KEYS.join(", ")));
+            }
+        }
         let kind = self.string(Some(t), "requires", "type", NAME_MAX, true);
         if !kind.is_empty() && !REQUIREMENT_KINDS.contains(&kind.as_str()) {
             self.fail(t.get("type").and_then(Item::span), "requires.type is model, dataset, integration or plugin");
         }
         let id = self.string(Some(t), "requires", "id", ID_MAX, true);
         if !id.is_empty() && !valid_package_id(&id) {
-            self.fail(t.get("id").and_then(Item::span), "requires.id is letters, digits, '.', '-' and '_', starting with a letter or digit");
+            self.fail(t.get("id").and_then(Item::span), "requires.id is lowercase letters, digits, '.', '-' and '_', starting with a letter or digit");
         }
         let version = self.string(Some(t), "requires", "version", NAME_MAX, true);
+        if !version.is_empty() && !valid_version(&version) {
+            self.fail(t.get("version").and_then(Item::span), "requires.version is letters, digits, '.', '-', '+' and '_', like \"1.2.0\"");
+        }
         let files_sha256 = self.string(Some(t), "requires", "files_sha256", 64, true);
         if !files_sha256.is_empty() && !(files_sha256.len() == 64 && files_sha256.bytes().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))) {
             self.fail(t.get("files_sha256").and_then(Item::span), "requires.files_sha256 is 64 lowercase hex digits");
@@ -818,16 +860,32 @@ impl Reader<'_> {
     }
 }
 
-/// A package id as the index lists it: letters, digits, `.`, `-`, `_`,
-/// starting with a letter or digit, no `..`, at most 64 bytes, no device name.
+/// A package id as the index lists it: lowercase letters, digits, `.`, `-`,
+/// `_`, starting with a letter or digit, no `..`, not ending in `.`, at most
+/// 64 bytes, no device name. Lowercase only, because ids name folders and
+/// Windows and macOS fold case.
 pub fn valid_package_id(id: &str) -> bool {
     let b = id.as_bytes();
     !b.is_empty()
         && b.len() <= ID_MAX
         && b[0].is_ascii_alphanumeric()
         && !id.contains("..")
-        && b.iter().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_'))
+        && !id.ends_with('.')
+        && b.iter().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, b'.' | b'-' | b'_'))
         && !windows_device(&id.split('.').next().unwrap_or("").to_ascii_lowercase())
+}
+
+/// A package version, which names a folder (`packages/<type>/<id>/<version>/`):
+/// ASCII letters, digits, `.`, `-`, `+`, `_`, starting with a letter or
+/// digit, no `..`, not ending in `.`, at most 40 bytes.
+pub fn valid_version(v: &str) -> bool {
+    let b = v.as_bytes();
+    !b.is_empty()
+        && b.len() <= 40
+        && b[0].is_ascii_alphanumeric()
+        && !v.contains("..")
+        && !v.ends_with('.')
+        && b.iter().all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'+' | b'_'))
 }
 
 const COLOUR: &str = "a wug colour is '#' and six hex digits, like \"#f08060\"";
