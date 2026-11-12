@@ -1,9 +1,11 @@
 //! Tables of text (Scrolls, SCROLLS.md §1: "Plain text, CSV/TSV, …"): a
 //! `.csv` or `.tsv` with a header row, one sentence or utterance per row.
 //!
-//! - **The text column** is the first header named text, sentence, content,
-//!   utterance, transcription, line or form (any case); else the column whose
-//!   cells are longest on average.
+//! - **The text column** is the first header named, in this order, sentence,
+//!   utterance, transcription, text, content, form, word, lexeme, headword,
+//!   vernacular, orthography or ipa (any case) that is not all numbers or
+//!   times; else the column whose cells are longest on average, a gloss or
+//!   translation column last.
 //! - **Documents:** when a header is named document, doc, text_id, file, title
 //!   or source, rows are grouped into one text per value, in the order the
 //!   values first appear, titled by the value; else the file is one text.
@@ -14,8 +16,11 @@
 //! Parsing is the `csv` crate's (quoted cells, embedded newlines, a BOM);
 //! rows shorter than the header are padded, longer ones refused.
 
-/// Names of the text column, most preferred first.
-const TEXT_NAMES: [&str; 6] = ["sentence", "utterance", "transcription", "text", "content", "form"];
+/// Names of the text column, most preferred first: sentences, then the
+/// vernacular word of a word list.
+const TEXT_NAMES: [&str; 12] = ["sentence", "utterance", "transcription", "text", "content", "form", "word", "lexeme", "headword", "vernacular", "orthography", "ipa"];
+/// Columns that hold a translation of the text, never the text itself when guessing.
+const TRANSLATION_NAMES: [&str; 6] = ["gloss", "translation", "free", "english", "meaning", "translit"];
 const GROUP_NAMES: [&str; 6] = ["document", "doc", "text_id", "file", "title", "source"];
 
 #[derive(Debug, PartialEq)]
@@ -82,8 +87,17 @@ fn delimiter(input: &str, tabs: bool) -> (u8, &str) {
             }
         }
     }
-    let best = counts.iter().max_by_key(|(_, n)| *n).filter(|(_, n)| *n > 0).map(|(d, _)| *d);
+    // The first of equal counts wins, so a tie goes to the comma.
+    let top = counts.iter().map(|(_, n)| *n).max().unwrap_or(0);
+    let best = counts.iter().find(|(_, n)| *n == top && top > 0).map(|(d, _)| *d);
     (best.unwrap_or(if tabs { b'\t' } else { b',' }), input)
+}
+
+/// Whether a tab file quotes its cells: some cell opens with `"`, and every
+/// such cell on its line also closes with one.
+fn tab_quoted(body: &str) -> bool {
+    let opening: Vec<&str> = body.lines().flat_map(|l| l.split('\t')).filter(|c| c.starts_with('"')).collect();
+    !opening.is_empty() && opening.iter().all(|c| c.len() > 1 && c.ends_with('"'))
 }
 
 /// Whether every non-empty cell is a number or a time (`12`, `0:04.5`, `3.2`).
@@ -98,8 +112,9 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
     let mut reader = csv::ReaderBuilder::new()
         .delimiter(delim)
         .flexible(true)
-        // A tab file is cells as typed: a quotation mark is text, not quoting.
-        .quoting(delim != b'\t')
+        // A tab file is cells as typed unless every cell that opens with a
+        // quotation mark is fully quoted (Excel's and pandas' tab export).
+        .quoting(delim != b'\t' || tab_quoted(body))
         .from_reader(body.as_bytes());
     let raw: Vec<String> = reader.headers().map_err(|e| format!("the header row cannot be read: {e}"))?.iter().map(|h| h.trim().to_string()).collect();
     if raw.iter().all(String::is_empty) {
@@ -142,12 +157,15 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
         .or_else(|| {
             (0..raw.len()).filter(|&c| !numeric(&column(c))).max_by_key(|&c| {
                 let total: usize = records.iter().map(|r| r[c].chars().count()).sum();
-                (total * 1000) / records.len().max(1)
+                // A gloss or translation column is the text's companion, ranked last.
+                let companion = TRANSLATION_NAMES.contains(&raw[c].to_lowercase().as_str());
+                (!companion, (total * 1000) / records.len().max(1))
             })
         })
         .ok_or_else(|| "no column holds text: every column is numbers or times".to_string())?;
     let group_at = GROUP_NAMES.iter().filter_map(|n| named(n)).find(|&g| g != text_at);
-    let kept: Vec<usize> = (0..raw.len()).filter(|&c| c != text_at && Some(c) != group_at).collect();
+    // Excel's trailing columns with no header and nothing in them are dropped.
+    let kept: Vec<usize> = (0..raw.len()).filter(|&c| c != text_at && Some(c) != group_at && !(raw[c].is_empty() && records.iter().all(|r| r[c].is_empty()))).collect();
     let mut documents: Vec<(Option<String>, Vec<Row>)> = Vec::new();
     let mut at: std::collections::HashMap<Option<String>, usize> = std::collections::HashMap::new();
     let mut ungrouped = 0;
@@ -212,6 +230,14 @@ mod tests {
         assert_eq!(names, ["x.csv.note", "x.csv.note-2", "x.csv.col4"]);
         // A trailing empty cell is fine; a tab file keeps its quotation marks.
         assert!(parse("text,speaker\nhello,Maria,\n", false).is_ok());
+        // Word lists take the vernacular word, never the gloss; ties go to the comma.
+        assert_eq!(parse("id,word,gloss\n1,kesi,the dog that barks\n", false).unwrap().text_column, "word");
+        assert_eq!(parse("lexeme,gloss,notes\nkesi,dog,a long note about it\n", false).unwrap().text_column, "lexeme");
+        assert_eq!(parse("text,note; comment\nhello there,x\n", false).unwrap().delimiter, b',');
+        // Excel's quoted tab export.
+        let t = parse("text\tnote\n\"She said \"\"hi\"\"\"\t1\n", true).unwrap();
+        assert_eq!(t.documents[0].1[0].text, "She said \"hi\"");
+        assert!(parse("text,speaker,,\nhello,Maria,,\n", false).unwrap().kept == ["speaker"]);
         assert_eq!(parse("text\tn\n\"Hi,\" she said\t1\n", true).unwrap().documents[0].1[0].text, "\"Hi,\" she said");
         // Rows with no document.
         assert_eq!(parse("doc,text\nA,x\n,y\n", false).unwrap().ungrouped, 1);

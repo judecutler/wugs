@@ -109,12 +109,31 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
     }
 }
 
+/// Excel's ordinary CSV is Windows-1252, which differs from Latin-1 only in
+/// 0x80–0x9F (curly quotes, dashes, …, €): when the bytes were not UTF-8 or
+/// UTF-16, those characters are mapped to what Excel meant.
+fn windows_1252(text: String, bytes: &[u8]) -> String {
+    if std::str::from_utf8(bytes).is_ok() || bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
+        return text;
+    }
+    const HIGH: [char; 32] = [
+        '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}', '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
+    ];
+    text.chars().map(|c| if ('\u{80}'..='\u{9f}').contains(&c) { HIGH[c as usize - 0x80] } else { c }).collect()
+}
+
 /// Whether text looks like a tab-separated table: the first lines all hold
 /// the same number of tabs, at least one.
 fn tab_table(head: &str) -> bool {
     let lines: Vec<&str> = head.lines().filter(|l| !l.trim().is_empty()).take(5).collect();
     let tabs = lines.first().map_or(0, |l| l.matches('\t').count());
-    tabs > 0 && lines.len() >= 2 && lines.iter().all(|l| l.matches('\t').count() == tabs)
+    // The first line must read as a header: short names, none a sentence
+    // (a story of sentence-tab-translation lines stays plain text).
+    let header = lines.first().is_some_and(|l| l.split('\t').all(|c| {
+        let c = c.trim();
+        c.chars().count() <= 30 && !c.ends_with(['.', '!', '?', '…', '。'])
+    }));
+    tabs > 0 && header && lines.len() >= 2 && lines.iter().all(|l| l.matches('\t').count() == tabs)
 }
 
 /// The start of a file as text, for sniffing only: lossy, so a cut through
@@ -226,7 +245,8 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
         Format::Elan | Format::FlexText | Format::Lift | Format::PlainText => decode_xml(&bytes, file_name)?,
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
-        Format::TextGrid | Format::Toolbox | Format::Table { .. } => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
+        Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
+        Format::Table { .. } => windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes),
     };
     let input = input.trim_start_matches('\u{feff}');
     let p = session::project(s)?;
@@ -618,6 +638,8 @@ mod tests {
         assert_eq!(detect(Path::new("notes.txt"), b"hello"), Some(Format::PlainText));
         assert_eq!(detect(Path::new("sheet.txt"), b"text\tspeaker\nhello\tMaria\n"), Some(Format::Table { tabs: true }), "Excel's Unicode text");
         assert_eq!(detect(Path::new("corpus.CSV"), b"a,b\n"), Some(Format::Table { tabs: false }));
+        assert_eq!(detect(Path::new("story.txt"), b"Kesi mopa toru.\tThe dog came home.\nToru mopa.\tIt ran.\n"), Some(Format::PlainText), "sentence-tab-translation lines are a story");
+        assert_eq!(windows_1252("\u{93}Caf\u{e9}\u{94} \u{85} \u{80}".into(), b"\x93Caf\xe9\x94 \x85 \x80"), "\u{201c}Café\u{201d} … €");
         assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
         assert_eq!(detect(Path::new("dict.txt"), b"\n\\lx kanu\n\\ps n\n"), Some(Format::Toolbox), "MDF with no header");
         assert_eq!(detect(Path::new("dict.txt"), b"\\lx\n"), Some(Format::Toolbox));
