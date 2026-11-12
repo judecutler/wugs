@@ -528,6 +528,18 @@
     }),
     list_texts: () => texts,
     link_recording: () => null,
+    collocates: ({ node }) => ({
+      node: node === "" ? 0 : 23,
+      tokens: 65,
+      types: 5,
+      rows: [
+        { item: "ŋai", together: 14, left: 2, right: 12, freq: 19, logLikelihood: 31.42, mutualInformation: 2.11 },
+        { item: "kesi", together: 6, left: 6, right: 0, freq: 11, logLikelihood: 9.87, mutualInformation: 1.53 },
+        { item: "toruma", together: 4, left: 1, right: 3, freq: 7, logLikelihood: 5.02, mutualInformation: 1.48 },
+        { item: "liwa", together: 1, left: 0, right: 1, freq: 1, logLikelihood: 2.6, mutualInformation: 2.9 },
+        { item: "tekama", together: 1, left: 1, right: 0, freq: 4, logLikelihood: -0.31, mutualInformation: 0.0 },
+      ],
+    }),
     frequencies: ({ kind }) => ({
       tokens: kind === "gloss" ? 29 : 65,
       types: kind === "gloss" ? 3 : 6,

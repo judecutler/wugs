@@ -1016,6 +1016,9 @@ body::before {
 .fq-rank { color: var(--muted); width: 3em; }
 .fq-item { font-family: var(--font-ipa); }
 .fq-num, .fq-table th:nth-child(n+3) { text-align: right; font-variant-numeric: tabular-nums; }
+.co-table th:nth-child(n+2) { text-align: right; }
+.co-node { flex: 1; font-family: var(--font-ipa); }
+.co-neg { color: var(--muted); }
 .cc-play { grid-area: play; }
 .play-seg:disabled { opacity: 0.4; cursor: default; }
 .cc-left { grid-area: left; text-align: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; unicode-bidi: plaintext; }
