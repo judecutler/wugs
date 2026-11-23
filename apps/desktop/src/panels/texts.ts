@@ -1,5 +1,5 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportText, glossGet, glottologFind, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
@@ -10,6 +10,7 @@ import { megabytes } from "../assist/logic";
 import { localDay } from "../dates";
 import { emptyState, h } from "../dom";
 import { attempt, getState, reloadTexts, selectText, showToast, touchLexicon } from "../store";
+import { tableImportLines } from "../lexicon/logic";
 import { sliced, type PanelDef } from "./panel";
 
 async function newText(title: string) {
@@ -32,14 +33,15 @@ const TEXT_FORMATS: [TextFormat, string][] = [
   ["toolboxtext", "Toolbox interlinear text (.txt)"],
   ["plaintext", "Plain text, a line per segment (.txt)"],
 ];
-const LEXICON_FORMATS: [LexiconFormat, string][] = [
+const LEXICON_FORMATS: [LexiconFormat | "table", string][] = [
   ["lift", "LIFT (FLEx, WeSay)"],
   ["toolbox", "Toolbox (.txt)"],
+  ["table", "Spreadsheet, a row per sense (.csv)"],
 ];
 
 // Kept across redraws, so a choice survives a text being added elsewhere.
 let textFormat: TextFormat = "elan";
-let lexiconFormat: LexiconFormat = "lift";
+let lexiconFormat: LexiconFormat | "table" = "lift";
 let busy: string | null = null;
 // The project's language, fetched once per project; the CLDF choice resets with it.
 let language: { project: string; value: Language } | null = null;
@@ -116,6 +118,22 @@ async function importDetails() {
   await work("details", () => importMetadataTable(path));
 }
 
+async function importLexTable() {
+  const path = await pickFile({
+    title: "Import a lexicon table: a row per sense, with a word (lemma or headword) column and a gloss column; category, definition and glosses in other languages are read too",
+    filters: [
+      { name: "Tables", extensions: ["csv", "tsv", "txt"] },
+      { name: "All files", extensions: ["*"] },
+    ],
+  });
+  if (typeof path !== "string") return;
+  await work("lexicon-table", async () => {
+    const r = await importLexiconTable({ path });
+    touchLexicon();
+    showToast({ tone: r.ambiguous.length > 0 ? "warn" : "info", lines: tableImportLines(r) });
+  });
+}
+
 async function exportOne(textId: string) {
   const folder = await chooseFolder("Choose where the exported text goes");
   if (folder === null) return;
@@ -129,6 +147,11 @@ async function exportLex() {
   const folder = await chooseFolder("Choose where the exported lexicon goes");
   if (folder === null) return;
   await work("lexicon", async () => {
+    if (lexiconFormat === "table") {
+      const path = await exportLexiconTable({ folder });
+      showToast({ tone: "info", lines: [`Saved ${path}.`, "A row per sense; Excel, LibreOffice and Google Sheets open it, and Import a lexicon table reads it back."] });
+      return;
+    }
     const r = await exportLexicon({ format: lexiconFormat, folder });
     showToast({ tone: "info", lines: [`Saved ${r.path}.`, ...r.notes] });
   });
@@ -409,6 +432,13 @@ export const textsPanel: PanelDef = {
             title: "ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu (tags and trees kept), TEI .xml, a .csv/.tsv table of sentences, or plain text .txt (a segment per sentence)",
             disabled: busy !== null,
             onclick: () => void importOne(),
+          }),
+          h("button", {
+            type: "button",
+            textContent: busy === "lexicon-table" ? "Importing…" : "Import a lexicon table…",
+            title: "A dictionary kept in Excel or Google Sheets (.csv or .tsv): a row per sense, with a word column and a gloss column. Rows already in the lexicon are skipped, so the same table twice adds nothing",
+            disabled: busy !== null,
+            onclick: () => void importLexTable(),
           }),
           h("button", {
             type: "button",

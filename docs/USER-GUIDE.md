@@ -680,7 +680,16 @@ To export every glossed sentence of a text as numbered examples for a grammar, a
 
 Sentences not glossed yet are left out, and the message says how many. After the examples comes the list of abbreviations their glosses use, with the meanings from the Interlinear panel's **Abbreviations**. An abbreviation with no meaning yet shows "?".
 
-To export the lexicon, choose LIFT or Toolbox beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT.
+To export the lexicon, choose LIFT, Toolbox or **Spreadsheet** beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT. A spreadsheet is a `.csv` file with a row per sense: lemma, homograph, category, citation, sense number, gloss, a column for each other gloss language, definition, usage and semantic domains. Excel, LibreOffice and Google Sheets open it.
+
+To bring in a dictionary you keep in a spreadsheet, save it as `.csv` or `.tsv` and click **Import a lexicon table…**. Each row is a sense. wugs finds the columns by their names:
+
+- the word: **lemma**, **headword**, **word**, **lexeme** or **form** (else the first column);
+- its gloss: **gloss**, **english** or **meaning**;
+- glosses in other languages: **gloss (fr)**, **gloss_es** and the like;
+- **category** or **part of speech**, **citation**, **homograph**, **definition**, **usage** or **notes**.
+
+Rows with the same word become one entry with a sense per row. A word already in the lexicon gets the new senses, and a sense whose gloss it already has is skipped, so importing the same table twice adds nothing. The message after the import names the columns it read and the ones it left out. When several entries share a word, add a **homograph** column so wugs knows which one a row belongs to.
 
 wugs names the file after the text's title and never replaces a file that exists. It adds " (2)" to the name instead. You cannot export into the project folder itself.
 

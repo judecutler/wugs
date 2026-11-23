@@ -610,6 +610,9 @@ export const dropFinish = (args: { dropId: string }) => invoke<Dropped>("drop_fi
 export const dropCancel = (args: { dropId: string }) => invoke<void>("drop_cancel", args);
 export const exportText = (args: { textId: string; format: TextFormat; folder: string }) => invoke<Exported>("export_text", args);
 export const exportLexicon = (args: { format: LexiconFormat; folder: string }) => invoke<Exported>("export_lexicon", args);
+/** A spreadsheet of the lexicon in (a row per sense) and out (`src-tauri/src/lexicon_table.rs`). */
+export const importLexiconTable = (args: { path: string }) => invoke<import("./lexicon/logic").TableImport>("import_lexicon_table", args);
+export const exportLexiconTable = (args: { folder: string }) => invoke<string>("export_lexicon_table", args);
 /** `date`: today on this computer's calendar (YYYY-MM-DD), which names the package folder. */
 export const sealProject = (args: { folder: string; date: string }) => invoke<Sealed>("seal_project", args);
 /** A text's document metadata and every key the project uses (src-tauri/src/metadata.rs). */

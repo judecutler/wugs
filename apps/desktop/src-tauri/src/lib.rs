@@ -26,6 +26,7 @@ pub mod interchange;
 pub mod kits;
 pub mod layout;
 pub mod lexicon;
+pub mod lexicon_table;
 pub mod measure;
 pub mod media_bin;
 pub mod metadata;
@@ -302,6 +303,18 @@ fn export_text(s: State<SessionThread>, text_id: String, format: String, folder:
 fn export_lexicon(s: State<SessionThread>, format: String, folder: String) -> Result<interchange::Exported, String> {
     let format = interchange::Format::parse(&format)?;
     s.run(move |s| interchange::export_lexicon(s, format, std::path::Path::new(&folder)))
+}
+
+/// Read a lexicon table (CSV or tab-separated, a row per sense) into the lexicon.
+#[tauri::command(async)]
+fn import_lexicon_table(s: State<SessionThread>, path: String) -> Result<lexicon_table::TableImport, String> {
+    s.run(move |s| lexicon_table::import(s, std::path::Path::new(&path)))
+}
+
+/// Write the lexicon as a CSV table into `folder`; the file's path back.
+#[tauri::command(async)]
+fn export_lexicon_table(s: State<SessionThread>, folder: String) -> Result<String, String> {
+    s.run(move |s| lexicon_table::export(s, std::path::Path::new(&folder)))
 }
 
 /// The language the project documents (name, Glottocode, ISO 639-3).
@@ -1932,6 +1945,8 @@ pub fn run() {
             import_file,
             export_text,
             export_lexicon,
+            import_lexicon_table,
+            export_lexicon_table,
             seal_project,
             project_language,
             set_project_language,
