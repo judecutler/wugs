@@ -110,6 +110,10 @@ Owner, 2026-11-12: people building corpora of low-resource languages (Yakut, say
 
 These come in as dataset packages (`docs/design/PACKAGES.md`), so the list is an index entry per source, not code.
 
+Rights differ by source, and the list says so in words: OSCAR is gated (its Hugging Face terms must be accepted with the person's own account, so wugs links to it rather than fetching it) and its pages keep their original copyright, so its texts come in restricted like a crawl's; Wikipedia's CC BY-SA asks for attribution and share-alike in what is published from it, which the seal's metadata carries.
+
+**Size.** A language's Wikipedia or a Common Crawl slice can be tens of millions of words, past where replay meets its 60-second gate today (CLAUDE.md, "Replay of a large plain-text corpus"). Until the projector batches its writes, the import screen shows the size in words before anything is fetched, offers a sample (the first N documents, or N random ones) and imports in chunks of documents, one txn each, so a stopped import keeps what it finished.
+
 **Then crawl what is not there.** A crawl job has:
 - *seeds*: site addresses, sitemaps or RSS feeds, and optionally seed words (BootCaT's method: combinations of typical words sent to a search engine; a search API is a provider the person connects, never built in);
 - *rules*: stay on the seed sites or go one link out, at most N pages, at most one request per site every few seconds;
