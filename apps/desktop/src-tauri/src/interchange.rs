@@ -814,13 +814,15 @@ pub struct Published {
     pub entries: usize,
     pub senses: usize,
     pub examples: usize,
+    /// Sound clips cut for the examples (`audio`).
+    pub clips: usize,
     pub restricted_left_out: usize,
     pub notes: Vec<String>,
 }
 
 /// Write the lexicon and every glossed sentence as a CLDF Dictionary dataset
 /// in a new folder `wugs-cldf-<date>` (then `-2` …) inside `folder`.
-pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricted: bool, generator: &str) -> Result<Published, String> {
+pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricted: bool, audio: bool, generator: &str) -> Result<Published, String> {
     if !folder.is_dir() {
         return Err(format!("{} is not a folder", folder.display()));
     }
@@ -829,7 +831,12 @@ pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricte
     let (translation_tiers, transcription_tiers) = crate::concordance::corpus_tiers(p)?;
     let lang = p.project_language()?;
     let title = if lang.name.is_empty() { "Dictionary".to_string() } else { format!("{} dictionary", lang.name) };
-    let ds = wugs_cldf::export(p, &wugs_cldf::Options { title: &title, generator, transcription_tiers: &transcription_tiers, translation_tiers: &translation_tiers, include_restricted })?;
+    let blob_path = |blob: &str| wugs_blob::parse_ref(blob).map(|hex| p.root.join("blobs").join(hex.to_string()));
+    let has = |blob: &str| blob_path(blob).is_some_and(|f| f.is_file());
+    let ds = wugs_cldf::export(
+        p,
+        &wugs_cldf::Options { title: &title, generator, transcription_tiers: &transcription_tiers, translation_tiers: &translation_tiers, include_restricted, audio: if audio { Some(&has) } else { None } },
+    )?;
     let date = crate::corrections::date_or_today(date);
     let mut out = folder.join(format!("wugs-cldf-{date}"));
     let mut n = 2;
@@ -844,13 +851,78 @@ pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricte
         for (name, contents) in &ds.files {
             fs::write(scratch.join(name), contents).map_err(|e| format!("{name}: {e}"))?;
         }
+        if !ds.clips.is_empty() {
+            fs::create_dir(scratch.join("audio")).map_err(|e| format!("audio: {e}"))?;
+        }
+        for c in &ds.clips {
+            let from = blob_path(&c.blob).ok_or_else(|| format!("malformed blob ref {:?}", c.blob))?;
+            cut_clip(&from, c.start_ms, c.end_ms, &scratch.join(&c.file)).map_err(|e| format!("{}: {e}", c.file))?;
+        }
         fs::rename(&scratch, &out).map_err(|e| format!("{}: {e}", out.display()))
     })();
     if let Err(e) = written {
         fs::remove_dir_all(&scratch).ok();
         return Err(e);
     }
-    Ok(Published { path: out.display().to_string(), entries: ds.entries, senses: ds.senses, examples: ds.examples, restricted_left_out: ds.restricted_left_out, notes: ds.notes })
+    Ok(Published { path: out.display().to_string(), entries: ds.entries, senses: ds.senses, examples: ds.examples, clips: ds.clips.len(), restricted_left_out: ds.restricted_left_out, notes: ds.notes })
+}
+
+/// The longest clip cut for an example; a sentence is far shorter.
+const MAX_CLIP_MS: f64 = 10.0 * 60.0 * 1000.0;
+
+/// Cut `start_ms..end_ms` of a WAV recording into a new 16-bit WAV at the
+/// recording's own rate and channels (so nothing a phonetician needs is
+/// lost), reading only that span.
+pub fn cut_clip(wav: &Path, start_ms: f64, end_ms: f64, out: &Path) -> Result<(), String> {
+    use std::io::{Seek, SeekFrom, Write};
+    let mut f = fs::File::open(wav).map_err(|e| e.to_string())?;
+    let (fmt, frames) = {
+        let r = wugs_peaks::WavReader::new(&mut f).map_err(|e| e.to_string())?;
+        (r.format(), r.declared_frames())
+    };
+    let data = f.stream_position().map_err(|e| e.to_string())?;
+    let rate = f64::from(fmt.sample_rate);
+    let end_ms = end_ms.min(start_ms + MAX_CLIP_MS);
+    let mut first = (start_ms.max(0.0) / 1000.0 * rate).floor() as u64;
+    let mut last = (end_ms.max(0.0) / 1000.0 * rate).ceil() as u64;
+    if let Some(n) = frames {
+        first = first.min(n);
+        last = last.min(n);
+    }
+    let align = fmt.block_align() as u64;
+    f.seek(SeekFrom::Start(data + first * align)).map_err(|e| e.to_string())?;
+    let mut reader = wugs_peaks::WavReader::resume(&mut f, fmt, Some(last.saturating_sub(first) * align));
+    let channels = usize::from(fmt.channels);
+    let mut samples: Vec<i16> = Vec::with_capacity((last.saturating_sub(first) as usize) * channels);
+    let mut buf = vec![0i16; 4096 * channels];
+    loop {
+        let n = reader.read_frames(&mut buf).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        samples.extend_from_slice(&buf[..n * channels]);
+    }
+    let bytes = (samples.len() * 2) as u32;
+    let mut w = std::io::BufWriter::new(fs::File::create_new(out).map_err(|e| e.to_string())?);
+    let block = fmt.channels * 2;
+    let mut head = Vec::with_capacity(44);
+    head.extend_from_slice(b"RIFF");
+    head.extend_from_slice(&(36 + bytes).to_le_bytes());
+    head.extend_from_slice(b"WAVEfmt ");
+    head.extend_from_slice(&16u32.to_le_bytes());
+    head.extend_from_slice(&1u16.to_le_bytes());
+    head.extend_from_slice(&fmt.channels.to_le_bytes());
+    head.extend_from_slice(&fmt.sample_rate.to_le_bytes());
+    head.extend_from_slice(&(fmt.sample_rate * u32::from(block)).to_le_bytes());
+    head.extend_from_slice(&block.to_le_bytes());
+    head.extend_from_slice(&16u16.to_le_bytes());
+    head.extend_from_slice(b"data");
+    head.extend_from_slice(&bytes.to_le_bytes());
+    w.write_all(&head).map_err(|e| e.to_string())?;
+    for v in samples {
+        w.write_all(&v.to_le_bytes()).map_err(|e| e.to_string())?;
+    }
+    w.flush().map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -867,14 +939,26 @@ mod tests {
         assert!(set_project_language(&mut s, &LanguageDto { name: "Kanu".into(), glottocode: "nope".into(), iso: String::new() }).is_err());
         let out = dir.join("out");
         fs::create_dir_all(&out).unwrap();
-        let r = export_cldf(&mut s, &out, "2026-11-23", false, "wugs test").unwrap();
+        let r = export_cldf(&mut s, &out, "2026-11-23", false, false, "wugs test").unwrap();
         assert!(r.path.ends_with("wugs-cldf-2026-11-23"));
         assert!(r.examples > 0 && r.entries > 0, "{r:?}");
         let examples = fs::read_to_string(Path::new(&r.path).join("examples.csv")).unwrap();
         assert!(examples.lines().count() > 1);
-        let again = export_cldf(&mut s, &out, "2026-11-23", false, "wugs test").unwrap();
+        let again = export_cldf(&mut s, &out, "2026-11-23", false, false, "wugs test").unwrap();
         assert!(again.path.ends_with("wugs-cldf-2026-11-23-2"), "never replaces a dataset");
-        assert!(export_cldf(&mut s, &dir.join("sample"), "2026-11-23", false, "x").is_err(), "not inside the project");
+        assert!(export_cldf(&mut s, &dir.join("sample"), "2026-11-23", false, false, "x").is_err(), "not inside the project");
+        // With sound clips: each timed example of the tutorial gets its span of the recording.
+        let with = export_cldf(&mut s, &out, "2026-11-23", false, true, "wugs test").unwrap();
+        assert!(with.clips > 0 && with.clips <= with.examples, "{with:?}");
+        let media = fs::read_to_string(Path::new(&with.path).join("media.csv")).unwrap();
+        let first = media.lines().nth(1).unwrap().rsplit(',').next().unwrap().to_string();
+        let clip = fs::read(Path::new(&with.path).join(&first)).unwrap();
+        assert_eq!(&clip[..4], b"RIFF");
+        let rate = u32::from_le_bytes(clip[24..28].try_into().unwrap());
+        let data = u32::from_le_bytes(clip[40..44].try_into().unwrap()) as usize;
+        assert_eq!(data + 44, clip.len());
+        assert!(rate >= 16_000, "the recording's own rate: {rate}");
+        assert!(data > 0 && data < 30 * rate as usize * 4, "a sentence, not the whole recording: {data} bytes");
         // TEI names the same language: a Glottocode alone is a private-use tag.
         let text = session::list_texts(&mut s).unwrap().into_iter().next().unwrap().id;
         let tei = export_text(&mut s, &text, Format::Tei, &out).unwrap();

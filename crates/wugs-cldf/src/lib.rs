@@ -35,9 +35,23 @@ pub struct Options<'a> {
     pub transcription_tiers: &'a [String],
     pub translation_tiers: &'a [String],
     pub include_restricted: bool,
+    /// Cut a sound clip of each timed example from its text's recording:
+    /// `Some(has)` where `has(blob)` says the recording's audio is on this
+    /// computer. The caller cuts each `Dataset::clips` entry into the folder.
+    pub audio: Option<&'a dyn Fn(&str) -> bool>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
+/// One example's sound clip for the caller to cut: the span of `blob`'s
+/// recording, written as `file` inside the dataset.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Clip {
+    pub file: String,
+    pub blob: String,
+    pub start_ms: f64,
+    pub end_ms: f64,
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
 pub struct Dataset {
     /// (file name, contents), metadata first.
     pub files: Vec<(String, String)>,
@@ -46,6 +60,11 @@ pub struct Dataset {
     pub examples: usize,
     /// Sentences left out because their text is not open (`include_restricted` off).
     pub restricted_left_out: usize,
+    /// The examples' sound clips, when asked for (`Options::audio`).
+    pub clips: Vec<Clip>,
+    /// Timed examples left without a clip: no recording linked, or its
+    /// audio is not on this computer, or the recording is not open.
+    pub clips_missing: usize,
     /// What the person should know, one sentence each.
     pub notes: Vec<String>,
 }
@@ -201,6 +220,18 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
         rows: Vec::new(),
         foreign: vec![("Language_ID", "languages.csv"), ("Meta_Language_ID", "languages.csv")],
     };
+    let mut media = Table {
+        url: "media.csv",
+        component: "MediaTable",
+        columns: vec![col("ID", Some("id")), col("Name", Some("name")), col("Description", Some("description")), col("Media_Type", Some("mediaType")), col("Download_URL", Some("downloadUrl"))],
+        rows: Vec::new(),
+        foreign: Vec::new(),
+    };
+    media.columns[3].required = true;
+    if o.audio.is_some() {
+        examples.columns.push(col("Media_ID", Some("mediaReference")));
+        examples.foreign.push(("Media_ID", "media.csv"));
+    }
     let mut uses: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut texts = p.proj.entities_of_kind("text")?;
     texts.sort();
@@ -210,6 +241,15 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
         }
         let title = text_of(p, &text, "title")?;
         let open = p.text_access(&text)? == "open";
+        // The recording the clips come from: linked, on this computer, and
+        // open unless restricted material was asked for.
+        let recording = match o.audio {
+            Some(has) => match p.text_recording(&text)? {
+                Some((src, blob)) if has(&blob) && (o.include_restricted || p.proj.field_str(&src, "access")?.map_or(true, |a| a == "open")) => Some(blob),
+                _ => None,
+            },
+            None => None,
+        };
         let segs = p.proj.ordered_children("text", &text, "segment")?;
         let mut translations: Vec<(String, Option<f64>, Option<f64>, String, String)> = Vec::new();
         for s in &segs {
@@ -259,7 +299,27 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
                 uses.entry(sense.clone()).or_default().insert(id.clone());
             }
             let ms = |v: Option<f64>| v.map(|x| format!("{}", x.round() as i64)).unwrap_or_default();
-            examples.rows.push(vec![
+            let mut media_id = String::new();
+            if o.audio.is_some() {
+                match (&recording, start, end) {
+                    (Some(blob), Some(a), Some(b)) if b > a => {
+                        media_id = format!("audio-{id}");
+                        let file = format!("audio/{media_id}.wav");
+                        let seconds = |x: f64| format!("{:.2}", x / 1000.0);
+                        media.rows.push(vec![
+                            media_id.clone(),
+                            format!("{media_id}.wav"),
+                            format!("{} {}–{} s", if title.is_empty() { "(untitled)" } else { title.as_str() }, seconds(a), seconds(b)),
+                            "audio/wav".into(),
+                            file.clone(),
+                        ]);
+                        ds.clips.push(Clip { file, blob: blob.clone(), start_ms: a, end_ms: b });
+                    }
+                    (_, Some(_), Some(_)) => ds.clips_missing += 1,
+                    _ => {}
+                }
+            }
+            let mut row = vec![
                 id,
                 lang_id.clone(),
                 text_of(p, seg, "content")?,
@@ -270,7 +330,11 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
                 title.clone(),
                 ms(start),
                 ms(end),
-            ]);
+            ];
+            if o.audio.is_some() {
+                row.push(media_id);
+            }
+            examples.rows.push(row);
         }
     }
     for (id, code) in &meta_langs {
@@ -391,7 +455,18 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
             if ds.restricted_left_out == 1 { "was" } else { "were" }
         ));
     }
-    let tables = [&languages, &entries, &senses, &examples];
+    if ds.clips_missing > 0 {
+        ds.notes.push(format!(
+            "{} {} no sound clip: {} text has no recording linked, its audio is not on this computer, or the recording is not open.",
+            plural(ds.clips_missing, "timed example", "timed examples"),
+            if ds.clips_missing == 1 { "has" } else { "have" },
+            if ds.clips_missing == 1 { "its" } else { "their" }
+        ));
+    }
+    let mut tables = vec![&languages, &entries, &senses, &examples];
+    if o.audio.is_some() {
+        tables.push(&media);
+    }
     let metadata = Value::obj(vec![
         ("@context", Value::Arr(vec![Value::str("http://www.w3.org/ns/csvw"), Value::obj(vec![("@language", Value::str("en"))])])),
         ("dc:conformsTo", Value::str(&format!("{TERMS}Dictionary"))),
@@ -400,7 +475,7 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
         ("tables", Value::Arr(tables.iter().map(|t| t.schema()).collect())),
     ]);
     ds.files.push(("Dictionary-metadata.json".into(), pretty(&metadata)));
-    for t in tables {
+    for t in &tables {
         ds.files.push((t.url.to_string(), t.csv()));
     }
     ds.files.push(("README.md".into(), readme(o, &ds, &lang.name)));
@@ -501,12 +576,17 @@ fn readme(o: &Options, ds: &Dataset, language: &str) -> String {
     let language = if language.is_empty() { "the project's language" } else { language };
     format!(
         "# {title}\n\nA CLDF Dictionary dataset of {language}, exported from wugs ({generator}).\n\n\
-- `entries.csv`: {entries}\n- `senses.csv`: {senses}, with semantic domains and Concepticon concept sets where the lexicon has them\n- `examples.csv`: {examples}, in Leipzig interlinear form (words and glosses separated by tabs), each with its text and time span in milliseconds\n- `languages.csv`: the language and the languages of the translations\n\n\
+- `entries.csv`: {entries}\n- `senses.csv`: {senses}, with semantic domains and Concepticon concept sets where the lexicon has them\n- `examples.csv`: {examples}, in Leipzig interlinear form (words and glosses separated by tabs), each with its text and time span in milliseconds\n- `languages.csv`: the language and the languages of the translations\n{media}\n\
 Validate with `pip install pycldf` and `cldf validate Dictionary-metadata.json`.\n\n\
 Before publishing, add a licence (`dc:license` in the metadata) and a citation, and check that the speakers agreed to publication. \
 {restricted}\n",
         title = o.title,
         generator = o.generator,
+        media = if o.audio.is_some() {
+            format!("- `media.csv` and `audio/`: {}, cut from the recordings, each named in its example's `Media_ID`\n", plural(ds.clips.len(), "sound clip", "sound clips"))
+        } else {
+            String::new()
+        },
         entries = plural(ds.entries, "entry", "entries"),
         senses = plural(ds.senses, "sense", "senses"),
         examples = plural(ds.examples, "glossed sentence", "glossed sentences"),

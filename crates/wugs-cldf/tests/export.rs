@@ -61,7 +61,7 @@ fn build() -> Built {
 }
 
 fn run(b: &Built, include_restricted: bool) -> Dataset {
-    export(&b.p, &Options { title: "Kanu dictionary", generator: "wugs test", transcription_tiers: &b.tiers.0, translation_tiers: &b.tiers.1, include_restricted }).unwrap()
+    export(&b.p, &Options { title: "Kanu dictionary", generator: "wugs test", transcription_tiers: &b.tiers.0, translation_tiers: &b.tiers.1, include_restricted, audio: None }).unwrap()
 }
 
 fn file<'a>(d: &'a Dataset, name: &str) -> &'a str {
@@ -98,14 +98,67 @@ fn restricted_texts_come_in_only_when_asked() {
     std::fs::remove_dir_all(&b.root).ok();
 }
 
+const BLOB: &str = "blake3:0000000000000000000000000000000000000000000000000000000000000001";
+
+/// The first text linked to a recording whose audio is "on this computer".
+fn with_recording(b: &mut Built) {
+    let src = b.p.add_source("Counting session", None, "audio", None).unwrap();
+    b.p.add_media_track(&src, BLOB, "audio", "mic", 0).unwrap();
+    let text = b.p.proj.entities_of_kind("text").unwrap().into_iter().find(|t| b.p.proj.field_str(t, "title").unwrap().as_deref() == Some("Counting, part 1")).unwrap();
+    b.p.set_text_source(&text, Some(&src)).unwrap();
+}
+
+fn run_with_audio(b: &Built, include_restricted: bool) -> Dataset {
+    let has = |blob: &str| blob == BLOB;
+    export(&b.p, &Options { title: "Kanu dictionary", generator: "wugs test", transcription_tiers: &b.tiers.0, translation_tiers: &b.tiers.1, include_restricted, audio: Some(&has) }).unwrap()
+}
+
+#[test]
+fn timed_examples_get_a_sound_clip_from_their_recording() {
+    let mut b = build();
+    assert!(!run(&b, true).files.iter().any(|(n, _)| n == "media.csv"), "no media table unless asked");
+    with_recording(&mut b);
+    let d = run_with_audio(&b, true);
+    // The linked text's example gets a clip; the other text has no recording.
+    assert_eq!(d.clips.len(), 1, "{:?}", d.clips);
+    assert_eq!(d.clips_missing, 1);
+    let clip = &d.clips[0];
+    assert_eq!((clip.blob.as_str(), clip.start_ms, clip.end_ms), (BLOB, 0.0, 1200.0));
+    assert!(clip.file.starts_with("audio/audio-seg_") && clip.file.ends_with(".wav"), "{}", clip.file);
+    let media = file(&d, "media.csv");
+    assert!(media.starts_with("ID,Name,Description,Media_Type,Download_URL\n"), "{media}");
+    assert!(media.contains("\"Counting, part 1 0.00–1.20 s\",audio/wav,audio/audio-seg_"), "{media}");
+    let examples = file(&d, "examples.csv");
+    assert!(examples.lines().next().unwrap().ends_with(",Media_ID"));
+    let id = clip.file.trim_start_matches("audio/").trim_end_matches(".wav");
+    assert!(examples.lines().any(|l| l.ends_with(&format!(",{id}"))), "{examples}");
+    assert!(d.notes.iter().any(|n| n.contains("1 timed example has no sound clip")), "{:?}", d.notes);
+    assert!(file(&d, "README.md").contains("1 sound clip"));
+    // A restricted recording gives no clip unless restricted material was asked for.
+    let src = b.p.proj.entities_of_kind("source").unwrap().pop().unwrap();
+    b.p.set_access(&src, "restricted").unwrap();
+    assert_eq!(run_with_audio(&b, false).clips.len(), 0);
+    assert_eq!(run_with_audio(&b, true).clips.len(), 1);
+    // Audio not on this computer: no clip, said in the notes.
+    let none = |_: &str| false;
+    let d = export(&b.p, &Options { title: "K", generator: "t", transcription_tiers: &b.tiers.0, translation_tiers: &b.tiers.1, include_restricted: true, audio: Some(&none) }).unwrap();
+    assert_eq!((d.clips.len(), d.clips_missing), (0, 2));
+    std::fs::remove_dir_all(&b.root).ok();
+}
+
 #[test]
 fn the_reference_validator_accepts_the_dataset() {
-    let b = build();
-    let d = run(&b, true);
+    let mut b = build();
+    with_recording(&mut b);
+    let d = run_with_audio(&b, true);
     let dir = b.root.join("cldf-out");
     std::fs::create_dir_all(&dir).unwrap();
     for (name, contents) in &d.files {
         std::fs::write(dir.join(name), contents).unwrap();
+    }
+    std::fs::create_dir_all(dir.join("audio")).unwrap();
+    for c in &d.clips {
+        std::fs::write(dir.join(&c.file), b"RIFF").unwrap();
     }
     match Command::new("cldf").arg("validate").arg(dir.join("Dictionary-metadata.json")).output() {
         Ok(out) => {
