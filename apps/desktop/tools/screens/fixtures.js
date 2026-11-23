@@ -245,8 +245,8 @@ const LEXICON = [
   const DOMAINS = [
     { id: "dom-8", code: "8", label: "States", description: "Use this domain for general words referring to states and conditions.", depth: 0 },
     { id: "dom-8.1", code: "8.1", label: "Quantity", description: "Use this domain for words referring to the quantity or amount of something.", depth: 1 },
-    { id: "dom-8.1.1", code: "8.1.1", label: "Number", description: "Use this domain for words referring to numbers.", depth: 2 },
-    { id: "dom-8.1.1.1", code: "8.1.1.1", label: "Cardinal numbers", description: "Use this domain for the cardinal numbers.", depth: 3 },
+    { id: "dom-8.1.1", code: "8.1.1", label: "Number", description: "Use this domain for words referring to numbers.", depth: 2, words: 2 },
+    { id: "dom-8.1.1.1", code: "8.1.1.1", label: "Cardinal numbers", description: "Use this domain for the cardinal numbers.", depth: 3, words: 7 },
     { id: "dom-8.1.1.2", code: "8.1.1.2", label: "Ordinal numbers", description: "Use this domain for the ordinal numbers.", depth: 3 },
     { id: "dom-1.3", code: "1.3", label: "Water", description: "Use this domain for general words referring to water.", depth: 1 },
     { id: "dom-1.6.1.1", code: "1.6.1.1", label: "Mammal", description: "Use this domain for general words referring to mammals.", depth: 3 },

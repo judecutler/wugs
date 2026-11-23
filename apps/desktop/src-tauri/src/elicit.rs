@@ -461,6 +461,27 @@ mod tests {
     use super::*;
 
     #[test]
+    fn domains_count_the_words_collected_in_them() {
+        let dir = std::env::temp_dir().join(format!("wugs-domain-count-{}", wugs_model::ulid()));
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir.join("project"), "tester").unwrap();
+        crate::lexicon::domains_load_sil(&mut session).unwrap();
+        let all = crate::lexicon::domains_list(&mut session).unwrap();
+        assert!(all.iter().all(|d| d.words == 0));
+        let sun = all.iter().find(|d| d.code == "1.1.1").unwrap().id.clone();
+        domain_collect(&mut session, &sun, "sol", "sun").unwrap();
+        domain_collect(&mut session, &sun, "lumo", "light").unwrap();
+        let all = crate::lexicon::domains_list(&mut session).unwrap();
+        assert_eq!(all.iter().find(|d| d.id == sun).unwrap().words, 2);
+        assert_eq!(all.iter().filter(|d| d.words > 0).count(), 1, "a parent does not count its subdomains' words");
+        let lumo = crate::lexicon::lexicon_list(&mut session, "lumo").unwrap()[0].id.clone();
+        crate::lexicon::lexicon_delete(&mut session, &lumo).unwrap();
+        let all = crate::lexicon::domains_list(&mut session).unwrap();
+        assert_eq!(all.iter().find(|d| d.id == sun).unwrap().words, 1, "a deleted entry's sense no longer counts");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn a_table_of_ones_own_becomes_a_word_list_once() {
         let header: Vec<String> = ["No.", "English", "Concepticon_ID", "Concepticon_Gloss", "Notes"].iter().map(|s| s.to_string()).collect();
         let rows: Vec<Vec<String>> = [["1", "head", "1256", "HEAD", ""], ["2", "hair (of the head)", "1040", "HAIR", "ask twice"], ["3", "", "", "", ""], ["4", "rice paddy", "x", "", ""]]

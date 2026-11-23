@@ -581,6 +581,13 @@ def main():
             run.page.locator(".panel-elicit button", has_text="Load a table").wait_for()
             run.shot("state-elicit-add", run.page.locator(".panel-elicit"))
             run.page.locator(".panel-elicit button", has_text="Close").click()
+            # Semantic domains: how many words each holds, and the next one still empty.
+            run.page.locator(".panel-elicit button", has_text="Semantic domains").click()
+            run.page.locator(".panel-elicit .el-coverage").wait_for()
+            run.shot("state-elicit-domains", run.page.locator(".panel-elicit"))
+            if "9 words in 2 of 7 domains" not in run.page.locator(".panel-elicit .el-coverage").inner_text():
+                failures.append("Semantic domains did not say how many domains hold words")
+            run.page.locator(".panel-elicit button", has_text="Word lists").click()
             # The entry list can show only the entries with work left, with counts.
             run.front("lexicon", "Lexicon")
             run.page.locator(".panel-lexicon .lx-show").select_option("gloss")

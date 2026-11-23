@@ -527,6 +527,8 @@ Each form keeps its Concepticon concept and is cut into sound segments. If the p
 
 Each word becomes a lexicon entry in that domain. The field keeps focus for the next word.
 
+Above the list, a line says how many words the project holds in how many domains, and each domain shows how many words it has. To work through the domains in order, as a Rapid Word Collection session does, click **Next empty domain**: it opens the next domain in the outline that has no words yet. Tick **Only domains with no words yet** to list just those.
+
 ## Record people and consent
 
 The **People** panel records who speaks in your recordings and what each person agreed to. It is optional.
