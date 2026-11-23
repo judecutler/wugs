@@ -29,9 +29,9 @@ test("what stays out of wugs is listed with counts", () => {
   ]);
 });
 
-test("without Praat, pitch and intensity are built in and formants say they need Praat", () => {
-  assert.match(overlayTitle("pitch", false), /built-in/);
-  assert.match(overlayTitle("intensity", false), /built-in/);
-  assert.match(overlayTitle("formants", false), /need Praat/);
-  assert.match(overlayTitle("formants", true), /your Praat/);
+test("without Praat, the overlays say they are wugs's own analysis", () => {
+  for (const kind of ["pitch", "intensity", "formants"] as const) {
+    assert.match(overlayTitle(kind, false), /built-in/);
+    assert.match(overlayTitle(kind, true), /your Praat/);
+  }
 });
