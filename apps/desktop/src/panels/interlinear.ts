@@ -37,7 +37,7 @@ async function linesOf(text: TextDetail): Promise<Line[]> {
       const full = text.segments.find((s) => s.id === seg.id)!;
       const translation = translationLines(full, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
       const words: ExampleWord[] = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
-      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs });
+      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, notes: (v.segmentNotes ?? []).map((n) => n.body) });
     });
   }
   return lines;
@@ -149,7 +149,7 @@ export const interlinearPanel: PanelDef = {
           { className: `il-row${sel?.segmentId === l.id ? " il-selected" : ""}${analysed(l) ? "" : " il-unglossed"}`, tabIndex: 0, title: "Open this sentence in the Gloss panel" },
           h("span", { className: "il-num", textContent: `(${l.number})` }),
           play,
-          h("div", { className: "il-body" }, body, l.translation === null ? null : h("p", { className: "il-tr", textContent: `‘${l.translation}’` })),
+          h("div", { className: "il-body" }, body, l.translation === null ? null : h("p", { className: "il-tr", textContent: `‘${l.translation}’` }), ...(l.notes ?? []).map((n) => h("p", { className: "il-note", textContent: `Note: ${n}` }))),
         );
         row.dataset.id = l.id;
         const pick = () => seg !== undefined && selectSegment({ textId: text.id, tierId: seg.tier, segmentId: seg.id });

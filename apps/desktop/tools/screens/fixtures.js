@@ -150,6 +150,7 @@
         readsAs: forms,
         hidden: [],
         alternatives: [],
+        segmentNotes: [],
       };
     }
     return {
@@ -184,6 +185,7 @@
       readsAs: ["nikani", "ŋai", "toɾuma", "kesi"],
       hidden: [],
       alternatives: [],
+      segmentNotes: segmentId === "u01" ? [{ id: "ann_1", body: "Speaker counts on her fingers here; check «ŋai» with her." }] : [],
     };
   };
 
@@ -672,6 +674,8 @@
     }),
     update_check: () => ({ currentVersion: "0.0.1", available: null }),
     gloss_get: ({ segmentId }) => glossView(segmentId),
+    gloss_add_note: glossEdit,
+    gloss_set_note: glossEdit,
     // A tagged sentence for the Sentence panel: ni-kani ŋai toɾu-ma kesi, "I count one, two, three".
     sentence_get: ({ segmentId }) => ({
       segmentId,

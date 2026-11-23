@@ -955,7 +955,7 @@ impl SearchScope {
     fn kinds(self) -> &'static [&'static str] {
         match self {
             SearchScope::All => &[],
-            SearchScope::Texts => &["text", "segment"],
+            SearchScope::Texts => &["text", "segment", "annotation"],
             SearchScope::Lexicon => &["lexeme", "sense"],
         }
     }
@@ -964,7 +964,18 @@ impl SearchScope {
 pub fn search(session: &mut Session, query: &str, scope: SearchScope) -> Result<Vec<SearchRow>, String> {
     let p = project(session)?;
     let mut rows = Vec::new();
-    for hit in p.proj.search(query, scope.kinds(), SEARCH_LIMIT)? {
+    for mut hit in p.proj.search(query, scope.kinds(), SEARCH_LIMIT)? {
+        // A note on a sentence is found as that sentence, its field `note`.
+        if hit.kind == "annotation" {
+            match p.proj.field_str(&hit.target, "target")? {
+                Some(seg) if p.proj.field_str(&hit.target, "kind")?.as_deref() == Some("note") && p.proj.entity_kind(&seg)?.as_deref() == Some("segment") && !p.proj.is_tombstoned(&seg)? => {
+                    hit.target = seg;
+                    hit.kind = "segment".into();
+                    hit.field = "note".into();
+                }
+                _ => continue,
+            }
+        }
         // A sense whose entry was deleted (say, on another device while this
         // one added the sense) is not part of the lexicon any more.
         if hit.kind == "sense" {

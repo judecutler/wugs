@@ -590,6 +590,16 @@ fn gloss_set(s: State<SessionThread>, text_id: String, segment_id: String, morph
 }
 
 #[tauri::command(async)]
+fn gloss_add_note(s: State<SessionThread>, text_id: String, segment_id: String, body: String) -> Result<GlossEdit, String> {
+    s.run(move |s| gloss::gloss_add_note(s, &text_id, &segment_id, &body))
+}
+
+#[tauri::command(async)]
+fn gloss_set_note(s: State<SessionThread>, text_id: String, segment_id: String, note_id: String, body: String) -> Result<GlossEdit, String> {
+    s.run(move |s| gloss::gloss_set_note(s, &text_id, &segment_id, &note_id, &body))
+}
+
+#[tauri::command(async)]
 fn gloss_pick_sense(s: State<SessionThread>, text_id: String, segment_id: String, morph_id: String, sense_id: String, gloss: String) -> Result<GlossEdit, String> {
     s.run(move |s| gloss::gloss_pick_sense(s, &text_id, &segment_id, &morph_id, &sense_id, &gloss))
 }
@@ -1663,6 +1673,8 @@ pub fn run() {
             gloss_apply_all,
             gloss_set,
             gloss_pick_sense,
+            gloss_add_note,
+            gloss_set_note,
             gloss_add_lexeme,
             gloss_lexicon,
             gloss_restore,

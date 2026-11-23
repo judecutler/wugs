@@ -186,7 +186,9 @@ export type HiddenEdit = { parent: string; member: string; label: string; fields
 export type Alternative = { parent: string; members: string[]; surfaces: string[]; glosses: string[] };
 
 /** `readsAs`: the words as the transcription spells them (a CoNLL-U multi-word token as one), to tell whether it changed. */
-export type GlossView = { segmentId: string; words: WordView[]; readsAs: string[]; hidden: HiddenEdit[]; alternatives: Alternative[] };
+export type GlossView = { segmentId: string; words: WordView[]; readsAs: string[]; hidden: HiddenEdit[]; alternatives: Alternative[]; segmentNotes: NoteView[] };
+/** A note on a sentence (an Annotation of kind `note`). */
+export type NoteView = { id: string; body: string };
 /** Every edit answers with the segment's fresh view, and notes worth a toast. */
 export type GlossEdit = { view: GlossView; notes: string[] };
 export type ApplyAllResult = { applied: number; texts: number; skippedAnalysed: number; view: GlossView };
@@ -202,6 +204,9 @@ export const glossApply = (args: SegmentArgs & { tokenId: string; morphs: MorphS
 export const glossApplyAll = (args: SegmentArgs & { form: string; morphs: MorphSpec[] }) => invoke<ApplyAllResult>("gloss_apply_all", args);
 /** `lang` null sets the primary gloss, a tag sets `gloss:<tag>`. */
 export const glossSet = (args: SegmentArgs & { morphId: string; gloss: string; lang: string | null }) => invoke<GlossEdit>("gloss_set", args);
+/** Add a note to the sentence; retype one (empty deletes it). */
+export const glossAddNote = (args: SegmentArgs & { body: string }) => invoke<GlossEdit>("gloss_add_note", args);
+export const glossSetNote = (args: SegmentArgs & { noteId: string; body: string }) => invoke<GlossEdit>("gloss_set_note", args);
 export const glossPickSense = (args: SegmentArgs & { morphId: string; senseId: string; gloss: string }) => invoke<GlossEdit>("gloss_pick_sense", args);
 export const glossAddLexeme = (args: SegmentArgs & { morphId: string; lemma: string; gloss: string }) => invoke<GlossEdit>("gloss_add_lexeme", args);
 /** Put a hidden word or morph back into its parent's list. */

@@ -48,6 +48,7 @@
             </words>
             <item type="gls" lang="en">The dogs came.</item>
             <item type="gls" lang="de">Die Hunde kamen.</item>
+            <item type="note" lang="en">Said quickly; check the vowel of "came".</item>
           </phrase>
           <phrase guid="c0de0001-0000-4000-8000-0000000000f2">
             <item type="segnum" lang="en">2</item>

@@ -24,6 +24,7 @@ mod elicitation;
 mod gloss;
 pub mod language;
 pub mod metadata;
+pub mod notes;
 mod lexicon;
 pub mod paradigms;
 pub mod parse;
