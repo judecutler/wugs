@@ -50,6 +50,8 @@ wugs-cldf = { path = "../../../crates/wugs-cldf" }
 # CQP-style queries in the Concordance: regular expressions over token attributes, %d by stripping marks.
 regex = "1"
 unicode-normalization = "0.1"
+unicode_names2 = "4"
+unicode-script = "0.5"
 # The OS keychain for the device key (DECISIONS 2026-11-08): Keychain
 # Services, Windows Credential Manager, the Secret Service on Linux.
 keyring = "4"

@@ -126,6 +126,10 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
 .share { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .share h3 { margin: 0 0 2px; font-family: var(--font-display); font-weight: 400; font-size: 15px; color: var(--ink); }
 .share-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.ck-char { font-family: var(--font-ipa); font-size: 1.4em; min-width: 2.2em; display: inline-block; text-align: center; }
+.ck-chars td { padding: 2px 6px; }
+.ck-chars .ck-char { font-size: 1.2em; }
+.ck-flagged td { background: var(--machine-unsure); }
 .el-sound { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-sm); white-space: nowrap; }
 .el-sound-hint:empty { display: none; }
 .st-check { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }

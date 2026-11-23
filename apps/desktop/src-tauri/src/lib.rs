@@ -2,6 +2,7 @@ pub mod abbreviations;
 pub mod assist;
 pub mod capability;
 pub mod capture;
+pub mod characters;
 pub mod concordance;
 pub mod cqp;
 pub mod cwb;
@@ -319,6 +320,12 @@ fn sentence_check_status(s: State<SessionThread>, text_id: String) -> Result<sen
 #[tauri::command(async)]
 fn sentence_mark_checked(s: State<SessionThread>, text_id: String, segment_ids: Vec<String>) -> Result<sentence::CheckView, String> {
     s.run(move |s| sentence::mark_checked(s, &text_id, &segment_ids))
+}
+
+/// Every character the project's transcriptions and lexicon use, with what may be a slip.
+#[tauri::command(async)]
+fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory, String> {
+    s.run(characters::inventory)
 }
 
 /// Glottolog's languages and dialects a typed name or code fits, best first.
@@ -1807,6 +1814,7 @@ pub fn run() {
             morphosyntax_choose_spacy,
             morphosyntax_choose_stanza,
             glottolog_find,
+            character_inventory,
             sentence_check_status,
             sentence_mark_checked,
             morphosyntax_allow_web,

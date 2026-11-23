@@ -341,6 +341,19 @@ Under **Not in the lexicon**, the Checks panel lists every root you have glossed
 
 Then fill in the entries in the Lexicon panel: part of speech, definitions, examples.
 
+### Check the characters you type
+
+Many typing slips are invisible: a Cyrillic «а» from the wrong keyboard among Latin letters, an ASCII apostrophe `'` beside the glottal stop's `ʼ`, `g` beside IPA `ɡ`, or a no-break space pasted from a document. Words with them look right but never match in a search or the lexicon.
+
+Under **Characters**, the Checks panel counts every character your transcriptions and lexicon headwords use. It lists first the ones worth a look, saying why:
+
+- a letter from another script than most of your letters;
+- a character that looks like another one the project also uses;
+- an invisible character;
+- a letter or accent used only once or twice.
+
+Each card shows a sentence that uses the character, and **Every word with it** opens the Concordance on every word containing it. Fix a slip in Search's **Replace…**. **Every character** shows the whole inventory with each character's code, Unicode name, script and counts, a quick way to check an orthography.
+
 ### Copy an example into a paper
 
 Click **Copy example** at the top of the Gloss panel. The segment is copied as a numbered example: the words split into morphs, the glosses under them with grammatical glosses in small capitals, and the free translation in quotes. Then paste it into your paper.

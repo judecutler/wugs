@@ -630,6 +630,8 @@ export const projectLanguage = () => invoke<import("./cldf/logic").Language>("pr
 export type Languoid = import("./cldf/logic").Languoid;
 /** Glottolog's languages and dialects a typed name or code fits, best first (at most 8). */
 export const glottologFind = (args: { query: string }) => invoke<Languoid[]>("glottolog_find", args);
+/** Every character the project's transcriptions and lexicon use (src-tauri/src/characters.rs). */
+export const characterInventory = () => invoke<import("./checks/logic").Inventory>("character_inventory");
 export const setProjectLanguage = (args: { language: import("./cldf/logic").Language }) => invoke<import("./cldf/logic").Language>("set_project_language", args);
 /** Every text as one CWB corpus for CQPweb, NoSketch Engine or Sketch Engine (src-tauri/src/cwb.rs). */
 export const exportCorpus = (args: { folder: string; date: string; includeRestricted: boolean }) =>

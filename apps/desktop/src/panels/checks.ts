@@ -2,8 +2,9 @@
 // glossed more than one way across the project (src-tauri/src/consistency.rs),
 // each with its glosses, how often each is used, where one occurs, and a
 // button that makes one gloss the only one.
-import { errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify } from "../api";
-import { addedLine, addLabel, cardNote, missingSummary, summary, unifiedLine, useLabel, type Inconsistent, type Missing } from "../checks/logic";
+import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify } from "../api";
+import { addedLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
+import { askConcordance } from "./concordance";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { marked } from "../gloss/morphs";
@@ -22,6 +23,8 @@ export const checksPanel: PanelDef = {
     const el = h("div", { className: "panel panel-checks" });
     let rows: Inconsistent[] | null = null;
     let missing: Missing[] = [];
+    let chars: Inventory | null = null;
+    let showAllChars = false;
     let key = "";
     let seq = 0;
     let busy = false;
@@ -32,11 +35,12 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing()]).then(
-        ([r, m]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory()]).then(
+        ([r, m, c]) => {
           if (mine !== seq) return;
           rows = r;
           missing = m;
+          chars = c;
           paint();
         },
         (e) => {
@@ -118,6 +122,62 @@ export const checksPanel: PanelDef = {
       );
     };
 
+    /** Where a character occurs: a sentence to open, or the entry using it. */
+    const where = (r: CharRow): HTMLElement | null => {
+      if (r.place !== null) {
+        const p = r.place;
+        const show = h("button", { type: "button", className: "ck-show", textContent: `in «${p.textTitle || "(untitled)"}»`, title: p.context });
+        show.onclick = () => selectSegment({ textId: p.textId, tierId: p.tierId, segmentId: p.segmentId });
+        return show;
+      }
+      return r.entry === null ? null : h("span", { className: "note", textContent: `in the entry «${r.entry[1]}»` });
+    };
+
+    const charCard = (r: CharRow): HTMLElement => {
+      const find = findable(r) ? h("button", { type: "button", className: "ck-show", textContent: "Every word with it", title: `Open the Concordance on *${r.ch}*` }) : null;
+      if (find !== null) find.onclick = () => askConcordance(`*${r.ch}*`, "word", null, false);
+      return h(
+        "li",
+        { className: "ck-card ck-slip" },
+        h("div", { className: "ck-head" }, h("span", { className: "ck-char", textContent: glyph(r) }), h("span", { className: "ck-kind", textContent: `${r.code} · ${r.name}` })),
+        ...r.flags.map((f) => h("p", { className: "note", textContent: f })),
+        h("div", { className: "ck-variant" }, h("span", { className: "ck-count", textContent: `× ${r.inTexts} in texts${r.inLexicon > 0 ? `, ${r.inLexicon} in the lexicon` : ""}` }), where(r), find),
+      );
+    };
+
+    const charTable = (all: CharRow[]): HTMLElement => {
+      const head = h("tr", {}, ...["", "Code", "Name", "Script", "Texts", "Lexicon"].map((t) => h("th", { textContent: t })));
+      const rows = all.map((r) =>
+        h(
+          "tr",
+          { className: r.flags.length > 0 ? "ck-flagged" : "" },
+          h("td", { className: "ck-char", textContent: glyph(r) }),
+          h("td", { textContent: r.code }),
+          h("td", { textContent: r.name }),
+          h("td", { textContent: r.script }),
+          h("td", { className: "num", textContent: String(r.inTexts) }),
+          h("td", { className: "num", textContent: String(r.inLexicon) }),
+        ),
+      );
+      return h("table", { className: "fq-table ck-chars" }, h("thead", {}, head), h("tbody", {}, ...rows));
+    };
+
+    const charSection = (): HTMLElement[] => {
+      if (chars === null) return [];
+      const flagged = chars.rows.filter((r) => r.flags.length > 0);
+      const toggle = h("button", { type: "button", textContent: showAllChars ? "Hide the full list" : `Every character (${chars.rows.length})` });
+      toggle.onclick = () => {
+        showAllChars = !showAllChars;
+        paint();
+      };
+      return [
+        h("h3", { className: "ck-title", textContent: "Characters" }),
+        h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: inventoryNote(chars) }), chars.rows.length > 0 ? toggle : null),
+        h("ul", { className: "ck-list" }, ...flagged.map(charCard)),
+        ...(showAllChars ? [charTable(chars.rows)] : []),
+      ];
+    };
+
     const paint = () => {
       if (rows === null) {
         el.replaceChildren(emptyState("Checks", "Looking through every gloss…"));
@@ -141,6 +201,7 @@ export const checksPanel: PanelDef = {
         h("h3", { className: "ck-title", textContent: "Not in the lexicon" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
         h("ul", { className: "ck-list" }, ...missing.map(missingCard)),
+        ...charSection(),
       );
     };
 
@@ -158,7 +219,7 @@ export const checksPanel: PanelDef = {
       if (!busy) load();
     };
 
-    const unprovide = provide("checks", () => [{ id: "checks:again", title: "Check glosses again", group: "Checks", words: ["consistency", "typo", "inconsistent", "lexicon", "missing", "word list"], run: load }]);
+    const unprovide = provide("checks", () => [{ id: "checks:again", title: "Check glosses again", group: "Checks", words: ["consistency", "typo", "inconsistent", "lexicon", "missing", "word list", "characters", "alphabet", "orthography", "unicode", "spelling"], run: load }]);
     return { element: el, render: draw, dispose: unprovide };
   },
 };
