@@ -558,6 +558,9 @@ export const setProjectLanguage = (args: { language: import("./cldf/logic").Lang
 /** Every text as one CWB corpus for CQPweb, NoSketch Engine or Sketch Engine (src-tauri/src/cwb.rs). */
 export const exportCorpus = (args: { folder: string; date: string; includeRestricted: boolean }) =>
   invoke<{ path: string; corpus: string; texts: number; sentences: number; restrictedLeftOut: number; notes: string[] }>("export_corpus", args);
+/** The lexicon as one HTML dictionary to print or share (src-tauri/src/dictionary.rs). */
+export const exportDictionary = (args: { folder: string; date: string; includeRestricted: boolean }) =>
+  invoke<{ path: string; entries: number; senses: number; examples: number; restrictedLeftOut: number }>("export_dictionary", args);
 export const exportCldf = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Published>("export_cldf", args);
 /** Save a document built here (a text's interlinear examples) as a new file in `folder`. */
 export const saveDocument = (args: { folder: string; title: string; extension: string; contents: string }) => invoke<{ path: string; notes: string[] }>("save_document", args);

@@ -505,6 +505,10 @@ Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cld
 
 Sentences from texts that are not open (restricted or community-only) are left out unless you tick **Include texts that are not open**. Tick it only if the speakers agreed to publication. Before you publish the dataset, add a licence and check it with `cldf validate Dictionary-metadata.json` (from `pip install pycldf`).
 
+### Print the dictionary
+
+Press **Dictionary to print…** beside the lexicon export. wugs writes one HTML file. Entries are in the order of your alphabet (the writing system's sort order, if the project has one), under letter headings. Each entry shows its part of speech and numbered senses, each sense with its glosses, definition, usage and semantic domains. Each sense also gets one example from your texts, with its translation. An index of glosses closes the file. Open it in a browser and print it to PDF, or open it in Word or Google Docs to edit it. Examples from texts that are not open are left out unless you tick **Include texts that are not open**.
+
 ### Load the corpus into CQPweb or Sketch Engine
 
 Press **Corpus for CQPweb…** to export every text as one corpus. wugs makes a folder with three files:

@@ -145,7 +145,7 @@ fn domain_ref(p: &Project, id: &str) -> Result<DomainRef, String> {
     Ok(DomainRef { id: id.to_string(), code: str_field(p, id, "code")?, label: str_field(p, id, "label")? })
 }
 
-fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
+pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
     require(p, id, "lexeme")?;
     let lemma = str_field(p, id, "lemma")?;
     let mut sense_views = Vec::new();

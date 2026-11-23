@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { glottocodeProblem, isoProblem, publishedLines, corpusLines } from "./logic.ts";
+import { glottocodeProblem, isoProblem, publishedLines, corpusLines, dictionaryLines } from "./logic.ts";
 
 test("codes are optional, and checked when typed", () => {
   assert.equal(glottocodeProblem(""), null);
@@ -23,4 +23,10 @@ test("a corpus export says where it went and what was left out", () => {
   assert.equal(lines[0], "Saved the corpus KAN_WUGS in /x/wugs-cwb-2026-11-23: 3 texts, 41 sentences.");
   assert.equal(lines[2], "1 text that is not open was left out.");
   assert.equal(lines.at(-1), "n");
+});
+
+test("a dictionary export says how to print it", () => {
+  const lines = dictionaryLines({ path: "/x/Kanu dictionary.html", entries: 120, senses: 150, examples: 1, restrictedLeftOut: 2 });
+  assert.equal(lines[0], "Saved the dictionary as /x/Kanu dictionary.html: 120 entries, 150 senses, 1 example from the texts.");
+  assert.equal(lines[2], "2 examples were left out because their texts are not open.");
 });

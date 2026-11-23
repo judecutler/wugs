@@ -20,6 +20,16 @@ export function isoProblem(code: string): string | null {
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** The toast after publishing. */
+/** What a dictionary export wrote, in words. */
+export function dictionaryLines(r: { path: string; entries: number; senses: number; examples: number; restrictedLeftOut: number }): string[] {
+  const lines = [
+    `Saved the dictionary as ${r.path}: ${plural(r.entries, "entry", "entries")}, ${plural(r.senses, "sense", "senses")}, ${plural(r.examples, "example", "examples")} from the texts.`,
+    "Open it in a browser and print it to PDF, or open it in Word or Google Docs to edit it.",
+  ];
+  if (r.restrictedLeftOut > 0) lines.push(`${plural(r.restrictedLeftOut, "example was", "examples were")} left out because ${r.restrictedLeftOut === 1 ? "its text is" : "their texts are"} not open.`);
+  return lines;
+}
+
 /** What a corpus export wrote, in words. */
 export function corpusLines(r: { path: string; corpus: string; texts: number; sentences: number; restrictedLeftOut: number; notes: string[] }): string[] {
   const lines = [

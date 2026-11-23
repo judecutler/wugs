@@ -682,6 +682,32 @@ pub(crate) fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<V
             out.push((p.proj.field_str(&tier, "language")?, content));
         }
     }
+    if out.is_empty() {
+        // A timed sentence with no paired translation: the translation
+        // segment overlapping it most on a time-aligned translation track
+        // (ELAN's shape, and the tutorial's), as CLDF's examples pair them.
+        let (Some(start), Some(end)) = (p.proj.field_num(segment, "start")?, p.proj.field_num(segment, "end")?) else { return Ok(out) };
+        let Some(text) = p.proj.field_str(segment, "text")? else { return Ok(out) };
+        let mut best: Option<(f64, String, String)> = None;
+        for other in p.proj.ordered_children("text", &text, "segment")? {
+            if other == segment || p.proj.is_tombstoned(&other)? || p.proj.field_str(&other, "parent")?.is_some() {
+                continue;
+            }
+            let tier = p.proj.field_str(&other, "tier")?.unwrap_or_default();
+            if session::tier_role(p, &tier)?.as_deref() != Some("translation") {
+                continue;
+            }
+            let (Some(a), Some(b)) = (p.proj.field_num(&other, "start")?, p.proj.field_num(&other, "end")?) else { continue };
+            let overlap = end.min(b) - start.max(a);
+            let content = p.proj.field_str(&other, "content")?.unwrap_or_default();
+            if overlap > 0.0 && !content.trim().is_empty() && best.as_ref().is_none_or(|(o, _, _)| overlap > *o) {
+                best = Some((overlap, tier, content));
+            }
+        }
+        if let Some((_, tier, content)) = best {
+            out.push((p.proj.field_str(&tier, "language")?, content));
+        }
+    }
     Ok(out)
 }
 
