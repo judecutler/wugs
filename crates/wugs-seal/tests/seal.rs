@@ -152,6 +152,10 @@ fn bag_verifies_and_its_exports_reimport() {
     wugs_flex::import_lift(&mut d, &read(&bag, "data/exports/lift/lexicon.lift")).unwrap();
     assert_eq!(live(&d, "lexeme").len(), lexemes.len());
     assert_eq!(live(&d, "sense").len(), live(&f.project, "sense").len());
+
+    // The lexicon as a CLDF dataset too: one entry row per live lexeme.
+    json::parse(&read(&bag, "data/exports/cldf/Dictionary-metadata.json")).unwrap();
+    assert_eq!(read(&bag, "data/exports/cldf/entries.csv").lines().count(), lexemes.len() + 1);
 }
 
 #[test]

@@ -617,9 +617,96 @@ pub fn seal_project(s: &mut Session, folder: &Path, date: &str) -> Result<Sealed
     })
 }
 
+/// The language a project documents, as the Import and export section shows it.
+#[derive(Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDto {
+    pub name: String,
+    pub glottocode: String,
+    pub iso: String,
+}
+
+pub fn project_language(s: &mut Session) -> Result<LanguageDto, String> {
+    let l = session::project(s)?.project_language()?;
+    Ok(LanguageDto { name: l.name, glottocode: l.glottocode, iso: l.iso })
+}
+
+pub fn set_project_language(s: &mut Session, language: &LanguageDto) -> Result<LanguageDto, String> {
+    session::project(s)?.set_project_language(&language.name, &language.glottocode, &language.iso)?;
+    project_language(s)
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Published {
+    pub path: String,
+    pub entries: usize,
+    pub senses: usize,
+    pub examples: usize,
+    pub restricted_left_out: usize,
+    pub notes: Vec<String>,
+}
+
+/// Write the lexicon and every glossed sentence as a CLDF Dictionary dataset
+/// in a new folder `wugs-cldf-<date>` (then `-2` …) inside `folder`.
+pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricted: bool, generator: &str) -> Result<Published, String> {
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+    outside_project(s, folder)?;
+    let p = session::project(s)?;
+    let (translation_tiers, transcription_tiers) = crate::concordance::corpus_tiers(p)?;
+    let lang = p.project_language()?;
+    let title = if lang.name.is_empty() { "Dictionary".to_string() } else { format!("{} dictionary", lang.name) };
+    let ds = wugs_cldf::export(p, &wugs_cldf::Options { title: &title, generator, transcription_tiers: &transcription_tiers, translation_tiers: &translation_tiers, include_restricted })?;
+    let date = crate::corrections::date_or_today(date);
+    let mut out = folder.join(format!("wugs-cldf-{date}"));
+    let mut n = 2;
+    while out.symlink_metadata().is_ok() {
+        out = folder.join(format!("wugs-cldf-{date}-{n}"));
+        n += 1;
+    }
+    // Written whole into a scratch folder beside it, then renamed, so a failure leaves nothing half-written.
+    let scratch = folder.join(format!(".{}.partial", out.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+    let written = (|| {
+        fs::create_dir(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
+        for (name, contents) in &ds.files {
+            fs::write(scratch.join(name), contents).map_err(|e| format!("{name}: {e}"))?;
+        }
+        fs::rename(&scratch, &out).map_err(|e| format!("{}: {e}", out.display()))
+    })();
+    if let Err(e) = written {
+        fs::remove_dir_all(&scratch).ok();
+        return Err(e);
+    }
+    Ok(Published { path: out.display().to_string(), entries: ds.entries, senses: ds.senses, examples: ds.examples, restricted_left_out: ds.restricted_left_out, notes: ds.notes })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_project_publishes_as_cldf_beside_its_language() {
+        let dir = std::env::temp_dir().join(format!("wugs-cldf-desktop-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let lang = set_project_language(&mut s, &LanguageDto { name: "Kanu".into(), glottocode: "abcd1234".into(), iso: String::new() }).unwrap();
+        assert_eq!(lang.glottocode, "abcd1234");
+        assert!(set_project_language(&mut s, &LanguageDto { name: "Kanu".into(), glottocode: "nope".into(), iso: String::new() }).is_err());
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let r = export_cldf(&mut s, &out, "2026-11-23", false, "wugs test").unwrap();
+        assert!(r.path.ends_with("wugs-cldf-2026-11-23"));
+        assert!(r.examples > 0 && r.entries > 0, "{r:?}");
+        let examples = fs::read_to_string(Path::new(&r.path).join("examples.csv")).unwrap();
+        assert!(examples.lines().count() > 1);
+        let again = export_cldf(&mut s, &out, "2026-11-23", false, "wugs test").unwrap();
+        assert!(again.path.ends_with("wugs-cldf-2026-11-23-2"), "never replaces a dataset");
+        assert!(export_cldf(&mut s, &dir.join("sample"), "2026-11-23", false, "x").is_err(), "not inside the project");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn stems_are_safe_file_names() {

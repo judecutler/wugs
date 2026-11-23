@@ -124,22 +124,7 @@ fn joined(parts: &[(String, String)]) -> String {
 /// association tier with no role. Transcription: no role or `transcription`,
 /// time-aligned or untyped. Live tiers only.
 pub(crate) fn corpus_tiers(p: &Project) -> Result<(Vec<String>, Vec<String>), String> {
-    let mut translation_tiers = Vec::new();
-    let mut transcription_tiers = Vec::new();
-    for t in p.proj.entities_of_kind("tier")? {
-        let role = p.proj.field_str(&t, "role")?;
-        let origin = p.proj.field_str(&t, "origin")?;
-        let tier_kind = p.proj.field_str(&t, "kind")?;
-        let translation = role.as_deref() == Some("translation")
-            || origin.as_deref() == Some(wugs_flex::flextext::TIER_FREE)
-            || (role.is_none() && tier_kind.as_deref() == Some("symbolic-association"));
-        if translation {
-            translation_tiers.push(t);
-        } else if matches!(role.as_deref(), None | Some("transcription")) && matches!(tier_kind.as_deref(), None | Some("time-aligned")) {
-            transcription_tiers.push(t);
-        }
-    }
-    Ok((translation_tiers, transcription_tiers))
+    wugs_cldf::corpus_tiers(p)
 }
 
 /// One segment as the corpus tools read it.
