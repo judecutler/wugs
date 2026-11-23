@@ -59,6 +59,16 @@ export function siteLines(r: Site): string[] {
   return lines;
 }
 
+export type Flashcards = { path: string; cards: number; sounds: number; noGloss: number };
+
+export function flashcardLines(r: Flashcards): string[] {
+  const lines = [`Saved ${plural(r.cards, "flashcard", "flashcards")} in ${r.path}: anki.txt for Anki (each word asked both ways) and quizlet.txt for Quizlet. The README there says how to import them.`];
+  if (r.sounds > 0) lines.push(`${plural(r.sounds, "card plays", "cards play")} the word as it is said: copy the sounds folder into Anki's media folder first.`);
+  else lines.push("No card has a sound yet: give an entry a pronunciation heard in a recording, in the Lexicon.");
+  if (r.noGloss > 0) lines.push(`${plural(r.noGloss, "entry with no gloss was", "entries with no gloss were")} left out.`);
+  return lines;
+}
+
 export function publishedLines(r: Published): string[] {
   return [
     `Saved a CLDF dataset in ${r.path}.`,

@@ -237,7 +237,7 @@ pub fn export_dictionary(s: &mut Session, folder: &Path, date: &str, include_res
 
 /// Where a headword is heard, for a ▶ on a site: its first pronunciation
 /// with a recording that is on this computer and may be shown.
-fn headword_clip(p: &Project, e: &EntryView, include_restricted: bool) -> Result<Option<(String, f64, f64)>, String> {
+pub(crate) fn headword_clip(p: &Project, e: &EntryView, include_restricted: bool) -> Result<Option<(String, f64, f64)>, String> {
     for x in &e.pronunciations {
         let Some(a) = &x.audio else { continue };
         if !include_restricted && p.proj.field_str(&a.source_id, "access")?.is_some_and(|l| l != "open") {
