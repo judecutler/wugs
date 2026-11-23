@@ -715,7 +715,7 @@ pub(crate) fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<V
 /// HTML or plain text) as `<title>.<ext>` in `folder`, never replacing a
 /// file and never inside the project.
 pub fn save_document(s: &mut Session, folder: &Path, title: &str, extension: &str, contents: &str) -> Result<Exported, String> {
-    if !matches!(extension, "tex" | "html" | "txt") {
+    if !matches!(extension, "tex" | "html" | "txt" | "svg") {
         return Err(format!("wugs does not save .{extension} documents"));
     }
     outside_project(s, folder)?;

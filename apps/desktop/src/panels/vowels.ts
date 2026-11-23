@@ -5,7 +5,8 @@
 // (src-tauri/src/measure.rs), so they match the Timeline's overlays and
 // Measure…'s table. Rules in ../vowels/logic.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, measurePoints } from "../api";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { errorText, measurePoints, saveDocument } from "../api";
 import { emptyState, h } from "../dom";
 import { hear, recordingForShown } from "../hear/hear";
 import { trackToMeasure } from "../measure/logic";
@@ -23,6 +24,33 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
   if (text !== undefined) el.textContent = text;
   return el;
+}
+
+/** The plot as a file of its own: every colour and font the stylesheet gave
+ * it written onto the elements, so it looks the same in a paper or an editor. */
+export function standalone(shown: SVGSVGElement): string {
+  const copy = shown.cloneNode(true) as SVGSVGElement;
+  const from = [shown, ...shown.querySelectorAll("*")];
+  const to = [copy, ...copy.querySelectorAll("*")];
+  const props = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity", "font-family", "font-size", "font-weight", "paint-order"];
+  from.forEach((el, i) => {
+    const target = to[i];
+    if (!(el instanceof SVGElement) || target === undefined || el.tagName === "title") return;
+    const cs = getComputedStyle(el);
+    for (const p of props) {
+      const v = cs.getPropertyValue(p);
+      if (v !== "") target.setAttribute(p, v);
+    }
+    target.removeAttribute("class");
+    target.removeAttribute("tabindex");
+  });
+  copy.setAttribute("xmlns", SVG);
+  copy.setAttribute("width", String(W));
+  copy.setAttribute("height", String(H));
+  const bg = document.createElementNS(SVG, "rect");
+  for (const [k, v] of Object.entries({ x: 0, y: 0, width: W, height: H, fill: "#ffffff" })) bg.setAttribute(k, String(v));
+  copy.insertBefore(bg, copy.firstChild);
+  return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(copy)}\n`;
 }
 
 const W = 560;
@@ -169,6 +197,22 @@ export const vowelsPanel: PanelDef = {
           (e) => showToast({ tone: "error", lines: [errorText(e)] }),
         );
       };
+      const save = h("button", { textContent: "Save picture…", disabled: current === null, title: "Save the plot as an SVG file for a paper or slides (opens in Word, Inkscape, Illustrator and browsers)" });
+      save.onclick = () => {
+        const shownPlot = el.querySelector<SVGSVGElement>(".vw-plot");
+        if (current === null || shownPlot === null) return;
+        const contents = standalone(shownPlot);
+        void (async () => {
+          const folder = await pickFile({ directory: true, title: "Where should the picture go?" });
+          if (typeof folder !== "string") return;
+          try {
+            const r = await saveDocument({ folder, title: `${current.track} vowel space${normalize ? " (normalized)" : ""}`, extension: "svg", contents });
+            showToast({ tone: "info", lines: [`Saved the picture as ${r.path}.`] });
+          } catch (e) {
+            showToast({ tone: "error", lines: [errorText(e)] });
+          }
+        })();
+      };
       const bar = h(
         "div",
         { className: "vw-bar" },
@@ -177,6 +221,7 @@ export const vowelsPanel: PanelDef = {
         h("label", { title: "Lobanov normalization: each formant as standard deviations from this speaker's mean, so speakers can be compared" }, norm, " Normalize"),
         h("label", { title: "Show a dot for every segment, not only each label's mean" }, tok, " Every token"),
         copy,
+        save,
       );
       const body: Node[] = [];
       if (problem !== null) body.push(h("p", { className: "note vw-problem", textContent: problem }));

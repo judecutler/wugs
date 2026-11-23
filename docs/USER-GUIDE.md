@@ -476,6 +476,7 @@ Segment the recording so each vowel (or each word you want to compare) is one se
 - **Every token** shows or hides the dots, leaving only the means and ellipses.
 - Click a dot to hear its segment and open it on the Timeline.
 - **Copy table** copies every segment's label, times, pitch and F1 to F3 for a spreadsheet or R.
+- **Save picture…** saves the plot as an SVG file for a paper or slides. Word, Inkscape, Illustrator and web browsers open it.
 
 The numbers come from the same analysis as the overlays and **Measure…**: your Praat when wugs finds it, else wugs's own.
 
