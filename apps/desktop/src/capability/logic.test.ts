@@ -9,6 +9,7 @@ const view = (over: Partial<CapabilityView>): CapabilityView => ({ id: "phone-tr
 test("automatic matches the backend: best score, then unscored", () => {
   assert.equal(bestReady([row("a", true), row("b", true, 0.3), row("c", true, 0.2), row("d", false, 0.1)])?.id, "c");
   assert.equal(bestReady([row("a", true), row("d", false, 0.1)])?.id, "a");
+  assert.equal(bestReady([{ ...row("web", true, 0.01), kind: "web service" }]), null, "a web service is never Automatic's pick");
   assert.equal(bestReady([row("d", false)]), null);
 });
 

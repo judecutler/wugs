@@ -572,6 +572,17 @@ Click a word in the tree to find its row. If the tree has a problem (no root, tw
 
 Sentences imported from CoNLL-U or TEI arrive with their tags and tree. A sentence typed in wugs gets them the first time you correct a cell. Every correction comes back out in a CoNLL-U or TEI export.
 
+### Tag and parse a text automatically
+
+A tagger can fill in lemmas, parts of speech, features and a tree for every sentence, ready for you to check. wugs uses UDPipe, a tagger made at Charles University with models for over a hundred languages. Select a sentence of the text, then press **Tag and parse this text** at the top of the **Sentence** panel.
+
+Choose where UDPipe runs under **Tagger…**:
+
+- **UDPipe on this computer.** Nothing leaves your computer. Install UDPipe 1 from [ufal.mff.cuni.cz/udpipe/1](https://ufal.mff.cuni.cz/udpipe/1) and download a model for your language from the UDPipe models page. Then press **Choose UDPipe…** (if wugs did not find it) and **Choose a model…**.
+- **UDPipe 2 (LINDAT web service).** Nothing to install, and its models are better. Your text goes to ÚFAL in Prague, and their terms let them keep what is sent, so each project must allow it first. Texts that are not open are never sent. The service picks the model from the project's language (set in the Texts panel), or type a language or model name.
+
+Only sentences with no tags yet are sent. Sentences you corrected or imported with tags keep theirs. For words you already split in the Gloss panel, the tags are added to your words and your glosses stay. A sentence whose words you split differently from the tagger is left alone, and wugs tells you how many. Check the result: a tagger's guess is a start, not an answer.
+
 ## Count words, morphs and glosses
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.

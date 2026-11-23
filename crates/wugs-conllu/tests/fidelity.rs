@@ -228,3 +228,44 @@ fn a_sentence_with_no_analysis_gets_one_at_its_first_correction() {
     assert_eq!((r.rows[0].head, r.rows[0].deprel.as_str()), (Some(2), "nsubj"));
     std::fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn a_taggers_output_annotates_segments_without_touching_glosses() {
+    use wugs_conllu::annotate::{annotate, F_TAGGED_BY};
+    let (root, mut p) = temp_project();
+    let tier = tier(&mut p);
+    let text = p.create_text("Typed").unwrap();
+    let (bare, _) = p.add_segment(&text, &tier, 0, None, None, "The dog runs.").unwrap();
+    let (glossed, _) = p.add_segment(&text, &tier, 1, None, None, "Dogs run.").unwrap();
+    let (toks, _) = p.tokenize(&text, &glossed, &["Dogs", "run"]).unwrap();
+    let m = |surface: &str, kind: &str, gloss: &str| MorphSpec { surface: surface.into(), morph_type: kind.into(), gloss: Some(gloss.into()), glosses_by_lang: Default::default(), sense: None };
+    p.apply_analysis(&text, &toks[0], &[m("dog", "root", "dog"), m("-s", "suffix", "PL")]).unwrap();
+    let (other, _) = p.add_segment(&text, &tier, 2, None, None, "Cats sleep.").unwrap();
+    p.tokenize(&text, &other, &["Cat", "s", "sleep"]).unwrap();
+    let tagged = "1\tThe\tthe\tDET\tDT\t_\t2\tdet\t_\t_\n2\tdog\tdog\tNOUN\tNN\tNumber=Sing\t3\tnsubj\t_\t_\n3\truns\trun\tVERB\tVBZ\t_\t0\troot\t_\tSpaceAfter=No\n4\t.\t.\tPUNCT\t.\t_\t3\tpunct\t_\t_\n\n\
+1\tDogs\tdog\tNOUN\tNNS\tNumber=Plur\t2\tnsubj\t_\t_\n2\trun\trun\tVERB\tVBP\t_\t0\troot\t_\tSpaceAfter=No\n3\t.\t.\tPUNCT\t.\t_\t2\tpunct\t_\t_\n\n\
+1\tCats\tcat\tNOUN\tNNS\t_\t2\tnsubj\t_\t_\n2\tsleep\tsleep\tVERB\tVBP\t_\t0\troot\t_\tSpaceAfter=No\n3\t.\t.\tPUNCT\t.\t_\t2\tpunct\t_\t_\n\n";
+    let sentences = format::parse(tagged).unwrap();
+    let items: Vec<(String, format::Sentence)> = vec![bare.clone(), glossed.clone(), other.clone()].into_iter().zip(sentences).collect();
+    let r = annotate(&mut p, &text, &items, "udpipe test-model").unwrap();
+    assert_eq!((r.annotated, r.tokenized, r.differ, r.kept), (2, 1, 1, 0), "{r:?}");
+    // The bare segment got the tagger's tokens, punctuation marked as such.
+    let bare_toks = p.proj.members(&bare).unwrap();
+    assert_eq!(bare_toks.len(), 4);
+    assert!(p.proj.is_punct_token(&bare_toks[3]));
+    let rows = wugs_conllu::tree::rows(&p, &bare).unwrap();
+    assert!(rows.annotated && rows.problems.is_empty(), "{:?}", rows.problems);
+    assert_eq!((rows.rows[1].upos.as_str(), rows.rows[1].head), ("NOUN", Some(3)));
+    assert_eq!(p.proj.field_str(&bare, F_TAGGED_BY).unwrap().as_deref(), Some("udpipe test-model"));
+    // The glossed segment kept its tokens and morphs; its rows name them.
+    assert_eq!(p.proj.members(&glossed).unwrap(), toks);
+    assert_eq!(p.proj.members(&toks[0]).unwrap().len(), 2, "the analysis stays");
+    let g = wugs_conllu::tree::rows(&p, &glossed).unwrap();
+    assert_eq!((g.rows[0].lemma.as_str(), g.rows[0].upos.as_str(), g.rows[1].head), ("dog", "NOUN", Some(0)));
+    // Split differently: left alone.
+    assert!(p.proj.field(&other, wugs_conllu::F_ANALYSIS).unwrap().is_none());
+    // Again: every annotated segment is kept as it is now.
+    let again = annotate(&mut p, &text, &items, "udpipe test-model").unwrap();
+    assert_eq!((again.annotated, again.kept), (0, 2));
+    std::fs::remove_dir_all(root).ok();
+}

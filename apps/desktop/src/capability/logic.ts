@@ -16,11 +16,11 @@ export function choiceOptions(v: CapabilityView): ChoiceOption[] {
   ];
 }
 
-/** Automatic's pick among ready providers, as the backend makes it: best score, then unscored, then listed order. */
+/** Automatic's pick among ready providers, as the backend makes it: best score, then unscored, then listed order; never a web service, which runs only when chosen. */
 export function bestReady(options: ProviderRow[]): ProviderRow | null {
   let best: ProviderRow | null = null;
   for (const o of options) {
-    if (!o.ready) continue;
+    if (!o.ready || o.kind === "web service") continue;
     if (best === null) best = o;
     else if (o.score !== null && (best.score === null || o.score < best.score)) best = o;
   }

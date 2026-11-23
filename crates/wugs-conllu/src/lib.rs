@@ -18,6 +18,7 @@
 
 pub mod format;
 pub mod tree;
+pub mod annotate;
 
 use std::collections::{BTreeMap, HashMap};
 

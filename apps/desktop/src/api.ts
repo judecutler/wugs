@@ -528,6 +528,13 @@ export const sealProject = (args: { folder: string; date: string }) => invoke<Se
 export const textMetadata = (args: { textId: string }) => invoke<import("./metadata/logic").MetaView>("text_metadata", args);
 /** Set one key of a text's metadata; an empty value clears it. */
 export const setTextMetadata = (args: { textId: string; key: string; value: string }) => invoke<import("./metadata/logic").MetaView>("set_text_metadata", args);
+/** Tagging and parsing (src-tauri/src/morphosyntax.rs): UDPipe's program and model on this computer, and whether the project allows the web service. */
+export type MorphosyntaxSetup = { local: { program: string | null; model: string | null }; webOk: boolean };
+export type Tagged = { annotated: number; tokenized: number; kept: number; differ: number; words: number; by: string };
+export const morphosyntaxSetup = () => invoke<MorphosyntaxSetup>("morphosyntax_setup");
+export const morphosyntaxChoose = (args: { program: string | null; model: string | null }) => invoke<void>("morphosyntax_choose", args);
+export const morphosyntaxAllowWeb = (args: { allow: boolean }) => invoke<void>("morphosyntax_allow_web", args);
+export const morphosyntaxRun = (args: { textId: string; model: string }) => invoke<Tagged>("morphosyntax_run", args);
 /** Every detail's values across the project, for picking texts by one. */
 export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
 /** Bring in a CSV or TSV of document metadata, one row per text. */
@@ -562,7 +569,7 @@ export const MODEL_CHANGED = "Phone transcription now uses ";
 
 // Capabilities: src-tauri/src/capability.rs (roadmap 53). Feature code asks for a
 // job; what powers it is chosen here (this computer's choice, the project's pin).
-export type ProviderRow = { id: string; name: string; kind: "model" | "program" | "built-in"; ready: boolean; note: string; score: number | null };
+export type ProviderRow = { id: string; name: string; kind: "model" | "program" | "built-in" | "web service"; ready: boolean; note: string; score: number | null };
 export type CapabilityView = {
   id: string;
   title: string;

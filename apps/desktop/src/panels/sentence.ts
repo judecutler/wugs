@@ -7,6 +7,7 @@ import { emptyState, h } from "../dom";
 import { arcs, columns, DEPRELS, headChoices, rootOf, UPOS, type SentenceView, type WordRow } from "../sentence/logic";
 import { dataGeneration, getSelection, getState, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
+import { tagBar } from "../morphosyntax/bar";
 
 const SVG = "http://www.w3.org/2000/svg";
 const LEVEL_PX = 26;
@@ -75,6 +76,15 @@ export const sentencePanel: PanelDef = {
     let picked: number | null = null;
     let queue: Promise<unknown> = Promise.resolve();
     const relations = h("datalist", { id: "st-deprels" }, ...DEPRELS.map((d) => h("option", { value: d })));
+    /** The Tag and parse bar for the text on screen, redrawn in place when its data arrives. */
+    const bar = (): HTMLElement => {
+      const s = getState();
+      if (s.kind !== "open" || s.text === null) return h("span");
+      return tagBar({ id: s.text.id, title: s.text.title }, () => {
+        const old = el.querySelector(".st-tag");
+        if (old !== null) old.replaceWith(bar());
+      });
+    };
 
     const selected = () => {
       const s = getState();
@@ -162,14 +172,15 @@ export const sentencePanel: PanelDef = {
       if (view === null) return;
       const v = view;
       const notes: HTMLElement[] = [];
-      if (!v.annotated && v.words.length > 0) notes.push(h("p", { className: "note", textContent: "No tags or tree yet. Choose a head and relation for each word below, or import the text from a tagger's CoNLL-U output." }));
+      if (!v.annotated && v.words.length > 0) notes.push(h("p", { className: "note", textContent: "No tags or tree yet. Tag and parse the text above, or choose a head and relation for each word below." }));
       if (v.emptyNodes > 0) notes.push(h("p", { className: "note", textContent: `${v.emptyNodes} empty ${v.emptyNodes === 1 ? "node is" : "nodes are"} kept as imported and not drawn.` }));
       for (const p of v.problems) notes.push(h("p", { className: "note st-problem", textContent: p }));
       if (v.words.length === 0) {
-        el.replaceChildren(emptyState("Sentence", "This segment is not broken into words yet. Break it into words in the Gloss panel, or import a tagged text (CoNLL-U or TEI)."));
+        el.replaceChildren(bar(), emptyState("Sentence", "This segment is not broken into words yet. Tag and parse the text above, break it into words in the Gloss panel, or import a tagged text (CoNLL-U or TEI)."));
         return;
       }
       el.replaceChildren(
+        bar(),
         h("p", { className: "st-content", textContent: v.content }),
         h("div", { className: "st-tree-box" }, tree(v, picked, (i) => {
           picked = i;
@@ -194,7 +205,7 @@ export const sentencePanel: PanelDef = {
       if (sel === null) {
         view = null;
         key = "";
-        el.replaceChildren(emptyState("Sentence", "Select a sentence in Transcribe, the Concordance or Search. Its words, tags and dependency tree appear here, ready to correct."));
+        el.replaceChildren(bar(), emptyState("Sentence", "Select a sentence in Transcribe, the Concordance or Search. Its words, tags and dependency tree appear here, ready to correct."));
         return;
       }
       const wanted = `${sel.text.id}|${sel.segment.id}`;
