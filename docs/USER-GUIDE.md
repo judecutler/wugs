@@ -982,6 +982,8 @@ To search only some texts, end the query with `::` and a condition on their deta
 
 A text that lacks the detail reads as empty, so `!=` keeps it.
 
+The lines of a CQP query in a tagged corpus can show each word's part of speech beside it: press **Tags** above the lines, and `a el mar` reads `a_ADP el_DET mar_NOUN`, as AntConc shows a tagged corpus. **Copy rows** then copies the tags too. The choice is remembered on this computer.
+
 Lemmas and tags come from CoNLL-U files. For words you glossed in wugs, the lemma is the root's lexicon entry, and its part of speech is the tag. Punctuation counts as a token in a query, so `[upos!="PUNCT"]` skips it. A match never runs from one sentence into the next. If a query has a mistake, the panel says what is wrong and where.
 
 ## Correct a sentence's tags and tree

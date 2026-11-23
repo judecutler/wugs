@@ -620,7 +620,7 @@ const LEXICON = [
     link_recording: () => null,
     concordance_query: () => ({
       total: 1,
-      hits: [{ textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, len: 1, breakdown: null, glosses: null }],
+      hits: [{ textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, len: 1, breakdown: null, glosses: null, tags: ["VERB", "NUM", "NUM", "NUM"] }],
     }),
     // Find and replace: three invented sentences, one glossed.
     replace_preview: ({ find }) => {

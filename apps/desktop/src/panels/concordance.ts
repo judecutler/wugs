@@ -7,7 +7,7 @@ import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { marks, per1000, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
-import { asTsv, clip, countLine, isRtl, keyword, left, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
+import { asTsv, clip, countLine, hasTags, isRtl, keyword, left, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
@@ -140,6 +140,20 @@ export const concordancePanel: PanelDef = {
     sizePicker.setAttribute("aria-label", "Words in a cluster");
     const sidePicker = h("select", { className: "cc-sort", title: "Where the item stands in the cluster" }, ...CLUSTER_SIDES.map((x) => h("option", { value: x.id, textContent: x.label })));
     sidePicker.setAttribute("aria-label", "Where the item stands");
+    const TAGS_KEY = "wugs.concordance.tags";
+    let tagsOn = (() => {
+      try {
+        return localStorage.getItem(TAGS_KEY) === "on";
+      } catch {
+        return false;
+      }
+    })();
+    const tagsToggle = h("button", { type: "button", textContent: "Tags", title: "Show each word's part of speech beside it (word_TAG), as AntConc shows a tagged corpus" });
+    tagsToggle.setAttribute("aria-pressed", String(tagsOn));
+    tagsToggle.classList.toggle("active", tagsOn);
+    tagsToggle.hidden = true;
+    /** The lines as shown: with tags when they have them and Tags is on. */
+    const shownHits = (): Hit[] => (tagsOn ? hits.map(withTags) : hits);
     const count = h("p", { className: "note cc-count" });
     const rows = h("div", { className: "cc-rows", role: "list" });
 
@@ -288,8 +302,9 @@ export const concordancePanel: PanelDef = {
       const scoped = exactFor !== null && exactFor.query === asked && exactFor.kind === kind ? exactFor : null;
       const only = [scoped?.text ? `«${scoped.text.title}»` : null, scoped?.within ? whereWords(scoped.within) : null].filter((x) => x !== null);
       count.textContent = countLine(hits.length, total, texts) + (only.length > 0 ? ` Only in ${only.join(", among ")}.` : "");
+      tagsToggle.hidden = !hasTags(hits);
       rows.replaceChildren(
-        ...sortHits(hits, sortBy).map((hit) => {
+        ...sortHits(shownHits(), sortBy).map((hit) => {
           const play = playButton("Open this segment and play it", () => void open(hit, true));
           play.classList.add("cc-play");
           play.disabled = hit.startMs === null;
@@ -411,6 +426,18 @@ export const concordancePanel: PanelDef = {
       plotSort = plotSorter.value as PlotSort;
       drawRows();
     };
+    tagsToggle.onclick = () => {
+      tagsOn = !tagsOn;
+      tagsToggle.setAttribute("aria-pressed", String(tagsOn));
+      tagsToggle.classList.toggle("active", tagsOn);
+      try {
+        localStorage.setItem(TAGS_KEY, tagsOn ? "on" : "off");
+      } catch {
+        // storage unavailable: the choice lasts this session
+      }
+      drawRows();
+    };
+
     copy.onclick = () => {
       if (clustersOn && asked !== "") {
         void writeText(clustersTsv(shownClusters)).then(
@@ -427,7 +454,7 @@ export const concordancePanel: PanelDef = {
         return;
       }
       if (hits.length === 0) return;
-      void writeText(asTsv(sortHits(hits, sortBy))).then(
+      void writeText(asTsv(sortHits(shownHits(), sortBy))).then(
         () =>
           showToast({
             tone: "info",
@@ -469,7 +496,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, plotSorter, sizePicker, sidePicker, plotToggle, clusterToggle, copy, copyExamples), chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, plotSorter, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, copy, copyExamples), chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */

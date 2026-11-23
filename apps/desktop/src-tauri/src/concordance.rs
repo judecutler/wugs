@@ -62,6 +62,9 @@ pub struct Hit {
     /// For a morph or gloss match: the word's morphs and their glosses, as the Gloss panel writes them.
     pub breakdown: Option<String>,
     pub glosses: Option<String>,
+    /// For a CQP query: each word's tag (UPOS, else XPOS; empty when it has none).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tags: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -432,6 +435,7 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
                     len: f.len,
                     breakdown: f.breakdown,
                     glosses: f.glosses,
+                    tags: None,
                 });
             }
         }
