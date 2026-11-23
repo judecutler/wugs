@@ -327,6 +327,16 @@ Choose where it will go in the list beside the button:
 
 wugs remembers the choice on this computer. The number is the segment's place in its text. A morph with no gloss yet shows **?**, so you can see the gap before you send the paper. Grammatical glosses paste as slightly smaller capitals, which read as small capitals in every word processor.
 
+### Read a whole text glossed
+
+The **Interlinear** tab, beside Gloss, shows the selected text the way you would print it: each sentence with its number, its words, the morph breakdown, the glosses with grammatical glosses in small capitals, and the free translation in quotes. Sentences not glossed yet show their transcription in grey.
+
+- The line at the top says how many sentences and words are glossed so far.
+- Click a sentence, or move to it with the arrow keys and press Enter, to open it in the Gloss panel.
+- Click ▶ to hear a sentence that has times.
+
+To get the whole text into a paper or handout, use **Glossed examples for** under the Texts panel (see "Export a text or the lexicon").
+
 ## Build the lexicon
 
 The **Lexicon** panel has a list of entries beside an editor for the selected entry.
