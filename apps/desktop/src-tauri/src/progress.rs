@@ -26,6 +26,8 @@ pub struct TextProgress {
     pub words: usize,
     /// Words broken into morphs.
     pub glossed_words: usize,
+    /// The morphs of those words: over `glossed_words`, the index of synthesis.
+    pub morphs: usize,
     /// Transcribed sentences with a translation.
     pub translated: usize,
 }
@@ -76,8 +78,10 @@ pub fn progress(session: &mut Session) -> Result<Progress, String> {
         row.transcribed += 1;
         row.words += seg.words.len();
         for token in &seg.tokens {
-            if !p.proj.members(token)?.is_empty() {
+            let morphs = p.proj.members(token)?.len();
+            if morphs > 0 {
                 row.glossed_words += 1;
+                row.morphs += morphs;
             }
         }
         if let (Some(start), Some(end)) = (p.proj.field_num(&seg.id, "start")?, p.proj.field_num(&seg.id, "end")?) {
@@ -136,7 +140,7 @@ mod tests {
         assert_eq!(r.texts.len(), 1);
         let t = &r.texts[0];
         // «wʌn tuː θɹiː», «fɔɹ faɪv» transcribed, glossed and translated; «sɪks» left to do.
-        assert_eq!((t.transcribed, t.words, t.glossed_words), (2, 5, 5), "{t:?}");
+        assert_eq!((t.transcribed, t.words, t.glossed_words, t.morphs), (2, 5, 5, 5), "{t:?}");
         assert!(t.sentences >= 3, "{t:?}");
         assert_eq!(t.translated, 2);
         let rec = t.recording_ms.expect("the tutorial recording is here");

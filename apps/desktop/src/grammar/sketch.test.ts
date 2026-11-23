@@ -19,7 +19,7 @@ const base: SketchInput = {
   entries: 12,
   features: [{ id: "GB020", question: "Are there definite articles?", answer: "absent", note: "a <demonstrative> serves" }],
   featureSource: "Grambank 1.0",
-  texts: [{ title: "Pig hunt", sentences: 4, words: 20, glossed: 8 }],
+  texts: [{ title: "Pig hunt", sentences: 4, words: 20, glossed: 8, morphs: 18 }],
   date: "2026-11-23",
   generator: "wugs 0.4",
 };
@@ -41,6 +41,7 @@ test("the sketch lays out what the project knows, chapter by chapter", () => {
   assert.match(html, /<h1>A grammar sketch of Kalam<\/h1>/);
   assert.match(html, /Glottocode kala1397, ISO 639-3 kmh/);
   assert.match(html, /1 text \(20 words, 8 of them glossed\) and a lexicon of 12 entries/);
+  assert.match(html, /has 2\.3 morphemes on average \(18 in 8 words\)/);
   // Consonants by place and manner, vowels, then frequency.
   assert.match(html, /<th>Bilabial<\/th>/);
   assert.match(html, /<th>Plosive<\/th>/);

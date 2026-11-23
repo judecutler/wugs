@@ -14,7 +14,7 @@ import type { Answer, Ours } from "../typology/logic.ts";
 export type Morpheme = { form: string; kind: "prefix" | "suffix" | "infix" | "proclitic" | "enclitic"; glosses: string[]; category: string };
 export type Feature = { id: string; question: string; answer: string; note: string };
 export type Grapheme = { grapheme: string; ipa: string };
-export type SketchText = { title: string; sentences: number; words: number; glossed: number };
+export type SketchText = { title: string; sentences: number; words: number; glossed: number; /** Morphs of the glossed words. */ morphs?: number };
 
 export type SketchInput = {
   language: { name: string; glottocode: string; iso: string };
@@ -160,6 +160,11 @@ export function grammarSketch(d: SketchInput): string {
   }
 
   parts.push(`<h2>4. Morphology</h2>`);
+  const glossedWords = d.texts.reduce((n, t) => n + t.glossed, 0);
+  const morphCount = d.texts.reduce((n, t) => n + (t.morphs ?? 0), 0);
+  if (glossedWords > 0 && morphCount > 0) {
+    parts.push(`<p>A glossed word in the texts has ${(morphCount / glossedWords).toFixed(1)} morphemes on average (${morphCount.toLocaleString("en")} in ${glossedWords.toLocaleString("en")} words), Greenberg's index of synthesis.</p>`);
+  }
   const byKind = ORDER.map((k) => [k, d.morphemes.filter((m) => m.kind === k)] as const).filter(([, ms]) => ms.length > 0);
   if (byKind.length === 0) {
     parts.push(todo("Affixes and clitics (lexicon entries written with markers, such as -ler, ni- or =ma, are listed here)"));

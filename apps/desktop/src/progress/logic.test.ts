@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { duration, percent, progressTsv, rowCells, summaryLines, totals, type Progress } from "./logic.ts";
+import { duration, percent, ratio, progressTsv, rowCells, summaryLines, totals, type Progress } from "./logic.ts";
 
 const text = (title: string, rec: number | null, sentences: number, transcribed: number, words: number, glossed: number, translated: number) => ({
   id: title,
@@ -11,6 +11,7 @@ const text = (title: string, rec: number | null, sentences: number, transcribed:
   transcribedMs: transcribed * 2000,
   words,
   glossedWords: glossed,
+  morphs: glossed * 2 + 3,
   translated,
 });
 const progress: Progress = {
@@ -41,10 +42,16 @@ test("the summary and table add the texts up", () => {
   assert.equal(lines[0], "2 texts, 2 min 05 s recorded (1 recording is not on this computer and not counted).");
   assert.equal(lines[1], "8 of 14 sentences transcribed (57%), covering 16 s of timed speech.");
   assert.equal(lines[2], "40 words; 30 glossed (75%); 8 sentences translated (100%).");
-  assert.equal(lines[3], "Lexicon: 12 entries, 15 senses, 2 still without a gloss.");
-  assert.deepEqual(rowCells(progress.texts[1]!), ["Market", "—", "4", "0 (0%)", "—", "0", "0 (—)", "0 (—)"]);
+  assert.equal(lines[3], "Sentences average 5.0 words; glossed words average 2.2 morphs (the index of synthesis).");
+  assert.equal(lines[4], "Lexicon: 12 entries, 15 senses, 2 still without a gloss.");
+  assert.deepEqual(rowCells(progress.texts[1]!), ["Market", "—", "4", "0 (0%)", "—", "0", "0 (—)", "—", "0 (—)"]);
   const tsv = progressTsv(progress).split("\n");
   assert.equal(tsv.length, 4);
-  assert.equal(tsv[1], "Fox\t2.1\t10\t8\t0.3\t40\t30\t8");
+  assert.equal(tsv[1], "Fox\t2.1\t10\t8\t0.3\t40\t30\t63\t8");
   assert.equal(tsv[3]!.split("\t")[0], "All texts");
+});
+
+test("ratios to one decimal", () => {
+  assert.equal(ratio(7, 2), "3.5");
+  assert.equal(ratio(1, 0), "—");
 });

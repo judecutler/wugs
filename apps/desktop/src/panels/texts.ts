@@ -389,7 +389,7 @@ async function exportSketch() {
       entries: progress.entries,
       features,
       featureSource,
-      texts: progress.texts.map((t) => ({ title: t.title, sentences: t.sentences, words: t.words, glossed: t.glossedWords })),
+      texts: progress.texts.map((t) => ({ title: t.title, sentences: t.sentences, words: t.words, glossed: t.glossedWords, morphs: t.morphs })),
       date: localDay(new Date()),
       generator: "wugs",
     });
