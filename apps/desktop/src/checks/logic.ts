@@ -30,3 +30,25 @@ export function useLabel(v: Variant, r: Inconsistent, armed: boolean): string {
 export function unifiedLine(changed: number, gloss: string): string {
   return changed === 0 ? "Nothing needed changing any more." : `${n(changed, "morph now reads", "morphs now read")} «${gloss}».`;
 }
+
+/** A glossed root with no lexicon entry (src-tauri/src/consistency.rs `missing`). */
+export type Missing = { surface: string; key: string; total: number; variants: Variant[] };
+export type Added = { entries: number; senses: number; linked: number };
+
+/** The line over the roots with no entry. */
+export function missingSummary(rows: readonly Missing[]): string {
+  if (rows.length === 0) return "Every glossed root has a lexicon entry.";
+  const uses = rows.reduce((t, r) => t + r.total, 0);
+  return `${n(rows.length, "root is", "roots are")} glossed in the texts (${n(uses, "use", "uses")}) but not in the lexicon yet.`;
+}
+
+/** What adding a root makes: an entry, with a sense per gloss. */
+export function addLabel(r: Missing): string {
+  return r.variants.length > 1 ? `Add with ${r.variants.length} senses` : "Add to lexicon";
+}
+
+/** The toast after adding roots. */
+export function addedLine(a: Added): string {
+  if (a.entries === 0) return "Nothing to add any more.";
+  return `Added ${n(a.entries, "entry", "entries")} with ${n(a.senses, "sense", "senses")}, and linked ${n(a.linked, "use", "uses")} in the texts to them.`;
+}
