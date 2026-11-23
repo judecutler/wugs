@@ -693,6 +693,13 @@ A sound is a letter with every diacritic and modifier written after it, so `tʰ`
 
 **Minimal pairs** lists every pair of sounds that two words tell apart, such as `p ~ b` for `pata` and `bata`, best attested first. Click a pair of sounds to see its words, and click a word to open its lines in the Concordance. Choose a sound to see only the pairs it is in. **Copy pairs** copies the words as a table. In a large corpus the 20,000 commonest word types are read.
 
+**Environments** compares where two sounds occur, to test whether they are separate phonemes or allophones of one. Choose the two sounds, or press **Environments** beside a pair of sounds under Minimal pairs. The line under them says what the counts suggest:
+
+- If the two share an environment (the same sound before and after, such as `a_a`, with `#` for the edge of a word), they contrast there or vary freely, and minimal pairs tell which.
+- If they never do, they may be in complementary distribution. When one side alone tells them apart, it says so, such as "«s» only before a, o, u, «ʃ» only before i, e".
+
+The **Before** and **After** tables count each sound by what follows and what precedes it. Under them, every whole environment is listed with an example word of each sound, which opens its lines in the Concordance. Rows where both sounds occur are shaded. Counts are of running words. **Copy table** copies the environments with their counts and examples.
+
 **Word shapes** shows each word as consonants (C) and vowels (V), such as `CVCV` or `CVC`, with its share of the running words. **Where sounds occur** gives, for each sound, the share of its uses at the start of a word, inside one, at the end, and as a word on its own. A note names the consonants never found at the start or at the end of a word, the gaps a phonology chapter describes.
 
 **Consonant clusters** says how many consonants a word starts with before its first vowel and ends with after its last, the syllable limits a grammar states, then lists every run of two or more consonants with how often it starts a word, stands inside one or ends one, and an example word. Click a cluster to see every word with it in the Concordance.

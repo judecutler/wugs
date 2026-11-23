@@ -686,6 +686,14 @@ def main():
             run.shot("state-sounds-pairs", run.page.locator(".panel-sounds"))
             if run.page.locator(".panel-sounds .sd-pairs li").count() < 2:
                 failures.append("Minimal pairs did not list the pairs of the first contrast")
+            run.page.locator(".panel-sounds .sd-bar button", has_text="Environments").click()
+            run.page.wait_for_timeout(200)
+            run.page.locator(".panel-sounds .sd-env-note").scroll_into_view_if_needed()
+            run.shot("state-sounds-environments", run.page.locator(".panel-sounds"))
+            if "share" not in run.page.locator(".panel-sounds .sd-env-note").inner_text():
+                failures.append("Environments did not say where a minimal pair's sounds both occur")
+            if run.page.locator(".panel-sounds .sd-env tbody tr").count() == 0:
+                failures.append("Environments listed no environment")
             clusters = run.page.locator(".panel-sounds .sd-h", has_text="Consonant clusters")
             clusters.locator("xpath=following-sibling::div[1]").scroll_into_view_if_needed()
             run.shot("state-sounds-clusters", run.page.locator(".panel-sounds"))
