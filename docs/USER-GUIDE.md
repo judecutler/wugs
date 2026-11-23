@@ -202,6 +202,8 @@ If a save fails, the segment is marked and your typing stays. Select the segment
 
 Click **IPA** in the Transcribe panel to show or hide the IPA palette. It has groups for vowels, consonants, diacritics, suprasegmentals, and tone. Click a symbol to insert it. Its first row, **This project**, holds the letters and accents your project already uses that a plain keyboard does not type, commonest first, so the special letters of a practical orthography are one click away too. A letter of another script (such as a Cyrillic «а» typed among Latin letters) is left out of that row, since it is usually a mistake; the Checks panel's Characters lists those.
 
+If you type IPA in X-SAMPA, click **X-SAMPA** in the Transcribe panel. Type `S` for ʃ, `N` for ŋ, `@` for ə, `t_h` for tʰ, `r\` for ɹ, `"` for the primary stress mark and `:` for length. Beside the field, wugs shows the IPA it will save. When you press Enter or leave the field, the text becomes that IPA. Characters with no X-SAMPA meaning stay as typed, so IPA you pasted or picked from the palette is kept. X-SAMPA reads digits and capital letters as symbols (`1` is ɨ, `E` is ɛ), so turn it off for an orthographic track. wugs remembers the setting on this computer.
+
 ### Get machine suggestions
 
 Speech assist suggests a phonetic transcription, in IPA, for empty segments. The model runs on your computer. Your recordings are never sent anywhere.
