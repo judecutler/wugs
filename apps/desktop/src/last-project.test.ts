@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { autoOpen, lastProject, rememberProject } from "./last-project.ts";
+import { autoOpen, forgetProject, lastProject, recentProjects, rememberProject } from "./last-project.ts";
 
 const memory = () => {
   const m = new Map<string, string>();
@@ -47,4 +47,18 @@ test("a project the person already opened is never replaced", async () => {
   let calls = 0;
   assert.deepEqual(await autoOpen(store, "prs_A", () => true, async () => void calls++, describe), { kind: "skipped" });
   assert.equal(calls, 0);
+});
+
+test("recent project folders: the latest first, each once, at most six", () => {
+  const store = memory();
+  assert.deepEqual(recentProjects(store), []);
+  store.setItem("wugs.lastProject", "/old");
+  assert.deepEqual(recentProjects(store), ["/old"], "an older version's last project is kept");
+  for (const p of ["/a", "/b", "/a", "/c", "/d", "/e", "/f", "/g"]) rememberProject(store, p);
+  assert.deepEqual(recentProjects(store), ["/g", "/f", "/e", "/d", "/c", "/a"]);
+  forgetProject(store, "/g");
+  assert.deepEqual(recentProjects(store), ["/f", "/e", "/d", "/c", "/a"]);
+  assert.equal(lastProject(store), "", "the forgotten one is not reopened at start");
+  store.setItem("wugs.recentProjects", "not json");
+  assert.deepEqual(recentProjects(store), []);
 });

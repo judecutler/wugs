@@ -581,6 +581,12 @@ def main():
             run.page.locator(".panel-elicit button", has_text="Load a table").wait_for()
             run.shot("state-elicit-add", run.page.locator(".panel-elicit"))
             run.page.locator(".panel-elicit button", has_text="Close").click()
+            # The Project menu lists folders opened lately, but not the one open now.
+            run.page.evaluate("localStorage.setItem('wugs.recentProjects', JSON.stringify(['/home/ana/Kanu fieldwork 2025', '/home/ana/Pilot recordings']))")
+            run.page.locator(".project-menu").click()
+            run.page.locator(".menu-item", has_text="Pilot recordings").wait_for()
+            run.shot("state-project-recent", run.page.locator(".menu-list").first)
+            run.page.keyboard.press("Escape")
             # Transcribe: the project's typing shortcuts.
             run.front("transcribe", "Transcribe")
             run.page.locator(".panel-transcribe button", has_text="Shortcuts").click()
