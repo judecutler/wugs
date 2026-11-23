@@ -518,6 +518,8 @@ export const exportText = (args: { textId: string; format: TextFormat; folder: s
 export const exportLexicon = (args: { format: LexiconFormat; folder: string }) => invoke<Exported>("export_lexicon", args);
 /** `date`: today on this computer's calendar (YYYY-MM-DD), which names the package folder. */
 export const sealProject = (args: { folder: string; date: string }) => invoke<Sealed>("seal_project", args);
+/** Save a document built here (a text's interlinear examples) as a new file in `folder`. */
+export const saveDocument = (args: { folder: string; title: string; extension: string; contents: string }) => invoke<{ path: string; notes: string[] }>("save_document", args);
 // People and consent (roadmap 61): src-tauri/src/people.rs. Every command returns the whole view.
 /** A term's answer: true agreed, false refused, null not asked. */
 export type PeopleConsent = { id: string; covers: string; terms: [string, boolean | null][]; date: string; evidenceName: string | null; hasEvidence: boolean };

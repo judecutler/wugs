@@ -197,6 +197,12 @@ fn export_lexicon(s: State<SessionThread>, format: String, folder: String) -> Re
     s.run(move |s| interchange::export_lexicon(s, format, std::path::Path::new(&folder)))
 }
 
+/// Save a document the frontend built (interlinear examples) into `folder`.
+#[tauri::command(async)]
+fn save_document(s: State<SessionThread>, folder: String, title: String, extension: String, contents: String) -> Result<interchange::Exported, String> {
+    s.run(move |s| interchange::save_document(s, std::path::Path::new(&folder), &title, &extension, &contents))
+}
+
 /// Seal the project as an archive package in a new folder inside `folder`.
 #[tauri::command(async)]
 fn seal_project(s: State<SessionThread>, folder: String, date: String) -> Result<interchange::Sealed, String> {
@@ -1429,6 +1435,7 @@ pub fn run() {
             export_text,
             export_lexicon,
             seal_project,
+            save_document,
             add_segment,
             add_translation,
             edit_segment_content,
