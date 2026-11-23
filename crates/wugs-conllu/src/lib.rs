@@ -178,8 +178,9 @@ fn columns(cols: &Cols, skip: &[usize], p: &Project) -> BTreeMap<String, Value> 
     m
 }
 
-/// A live text titled `title` whose segments on `tier` read `contents`.
-fn same_text(p: &Project, title: &str, tier: &str, contents: &[String]) -> Result<Option<String>, String> {
+/// A live text titled `title` whose segments on `tier` read `contents` (an
+/// importer's "the same file again adds nothing"; TEI uses it too).
+pub fn same_text(p: &Project, title: &str, tier: &str, contents: &[String]) -> Result<Option<String>, String> {
     for t in p.proj.entities_of_kind("text")? {
         if p.proj.is_tombstoned(&t)? || p.proj.field_str(&t, "title")?.as_deref() != Some(title) {
             continue;
@@ -220,17 +221,26 @@ pub struct Exported {
 /// lexicon gives the LEMMA and, through the entry's category, XPOS (and
 /// UPOS when the category names a UD tag).
 pub fn export(p: &Project, title: &str, sentences: &[ExportSentence]) -> Result<Exported, String> {
+    let (out, notes) = export_sentences(p, title, sentences)?;
+    let out: Vec<Sentence> = out.into_iter().map(|(_, s)| s).collect();
+    Ok(Exported { conllu: format::write(&out), notes })
+}
+
+/// The sentences [`export`] writes, each with the index of the
+/// [`ExportSentence`] it came from (segments with no words are left out),
+/// and the notes; for writers of other formats (TEI) that share the rules.
+pub fn export_sentences(p: &Project, title: &str, sentences: &[ExportSentence]) -> Result<(Vec<(usize, Sentence)>, Vec<String>), String> {
     let mut out = Vec::new();
     let mut notes = Notes::default();
     for (si, es) in sentences.iter().enumerate() {
         let s = sentence(p, title, si, es, &mut notes)?;
         if !s.lines.is_empty() {
-            out.push(s);
+            out.push((si, s));
         } else {
             notes.empty += 1;
         }
     }
-    Ok(Exported { conllu: format::write(&out), notes: notes.lines() })
+    Ok((out, notes.lines()))
 }
 
 #[derive(Default)]

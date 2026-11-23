@@ -28,6 +28,8 @@ pub enum Format {
     Table { tabs: bool },
     /// CoNLL-U (Universal Dependencies): sentences with tags and trees.
     Conllu,
+    /// TEI P5: curated corpora (ParlaMint, historical and spoken collections).
+    Tei,
 }
 
 impl Format {
@@ -40,6 +42,7 @@ impl Format {
             "toolbox" => Format::Toolbox,
             "plaintext" => Format::PlainText,
             "conllu" => Format::Conllu,
+            "tei" => Format::Tei,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -54,6 +57,7 @@ impl Format {
             Format::Table { tabs: true } => "tsv",
             Format::Table { tabs: false } => "csv",
             Format::Conllu => "conllu",
+            Format::Tei => "xml",
         }
     }
 
@@ -67,6 +71,7 @@ impl Format {
             Format::PlainText => "plain text",
             Format::Table { .. } => "table of sentences",
             Format::Conllu => "CoNLL-U",
+            Format::Tei => "TEI",
         }
     }
 }
@@ -84,6 +89,7 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "csv" => return Some(Format::Table { tabs: false }),
         "tsv" | "tab" => return Some(Format::Table { tabs: true }),
         "conllu" | "conll" => return Some(Format::Conllu),
+        "tei" => return Some(Format::Tei),
         _ => {}
     }
     let head = sniff(&bytes[..bytes.len().min(4096)]);
@@ -105,6 +111,8 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         Some(Format::Toolbox)
     } else if head.starts_with("File type = \"ooTextFile\"") {
         Some(Format::TextGrid)
+    } else if ext == "xml" && (head.contains("<TEI") || head.contains("<teiCorpus")) {
+        Some(Format::Tei)
     } else if ext == "txt" && tab_table(head) {
         // Excel's "Unicode text": tab-separated columns saved as .txt.
         Some(Format::Table { tabs: true })
@@ -243,12 +251,12 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, a .csv/.tsv table of sentences, or a plain .txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, a .csv/.tsv table of sentences, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::Conllu => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::Conllu | Format::Tei => decode_xml(&bytes, file_name)?,
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
         Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
@@ -435,6 +443,24 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             }
             (r.texts.first().or(r.matched.first()).cloned(), false)
         }
+        Format::Tei => {
+            let tier = session::utterance_tier(p)?;
+            let r = wugs_tei::import_tei(p, input, &stem, &tier).map_err(|e| format!("{file_name}: {e}"))?;
+            if !r.texts.is_empty() {
+                lines.push(format!("{} with {} and {}.", plural(r.texts.len(), "new text", "new texts"), plural(r.segments, "segment", "segments"), plural(r.words, "word", "words")));
+                if r.words > 0 {
+                    lines.push("Lemmas and tags on the words are kept and come back out in a CoNLL-U or TEI export.".into());
+                }
+                if r.blocks_as_segments > 0 {
+                    lines.push(format!("{} with no <s> inside came in a segment each.", plural(r.blocks_as_segments, "paragraph or turn", "paragraphs or turns")));
+                }
+            }
+            if !r.matched.is_empty() {
+                lines.push(format!("{} matched a text already here; nothing was added for them.", plural(r.matched.len(), "document", "documents")));
+            }
+            lines.extend(not_carried(&r.not_carried));
+            (r.texts.first().or(r.matched.first()).cloned(), false)
+        }
         Format::Toolbox => {
             let r = wugs_legacy::import_toolbox(p, input).map_err(|e| e.to_string())?;
             lines.push(format!(
@@ -566,6 +592,14 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             let out = wugs_conllu::export(p, &title, &sentences)?;
             notes.extend(out.notes);
             out.conllu
+        }
+        Format::Tei => {
+            let segments = one_track(p, text_id, &mut notes, "TEI")?;
+            let sentences = segments.into_iter().map(|segment| Ok(wugs_conllu::ExportSentence { translations: translations_of(p, &segment)?, segment })).collect::<Result<Vec<_>, String>>()?;
+            // The project's language goes in once it can be recorded (the CLDF branch's `project_language`).
+            let out = wugs_tei::export_tei(p, &title, None, &sentences, concat!("wugs ", env!("CARGO_PKG_VERSION")))?;
+            notes.extend(out.notes);
+            out.tei
         }
         Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
     };
@@ -736,6 +770,27 @@ mod tests {
     }
 
     #[test]
+    fn tei_comes_in_and_goes_out() {
+        let dir = std::env::temp_dir().join(format!("wugs-tei-desktop-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("debate.xml");
+        fs::write(&file, "<TEI xmlns=\"http://www.tei-c.org/ns/1.0\"><teiHeader><fileDesc><titleStmt><title>Debate</title></titleStmt></fileDesc></teiHeader><text><body><u who=\"#A\"><s><w lemma=\"hola\" pos=\"INTJ\" join=\"right\">Hola</w><pc>!</pc></s></u></body></text></TEI>").unwrap();
+        let r = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert_eq!(r.format, "TEI");
+        let text = r.text.unwrap();
+        assert_eq!(session::list_texts(&mut s).unwrap()[0].title, "Debate");
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let e = export_text(&mut s, &text, Format::Tei, &out).unwrap();
+        let tei = fs::read_to_string(&e.path).unwrap();
+        assert!(e.path.ends_with("Debate.xml"));
+        assert!(tei.contains("<w lemma=\"hola\" pos=\"INTJ\" join=\"right\">Hola</w>"), "{tei}");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn detects_by_extension_then_content() {
         assert_eq!(detect(Path::new("a.EAF"), b""), Some(Format::Elan));
         assert_eq!(detect(Path::new("a.TextGrid"), b""), Some(Format::TextGrid));
@@ -749,6 +804,10 @@ mod tests {
         assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
         assert_eq!(detect(Path::new("en_ewt-ud-train.conllu"), b""), Some(Format::Conllu));
         assert_eq!(detect(Path::new("old.CONLL"), b""), Some(Format::Conllu));
+        assert_eq!(detect(Path::new("ParlaMint-ES.xml"), b"<?xml version=\"1.0\"?>\n<TEI xmlns=\"http://www.tei-c.org/ns/1.0\">"), Some(Format::Tei));
+        assert_eq!(detect(Path::new("corpus.xml"), b"<teiCorpus>"), Some(Format::Tei));
+        assert_eq!(detect(Path::new("other.xml"), b"<html/>"), None, "XML that is not TEI is not taken");
+        assert_eq!(detect(Path::new("x.tei"), b""), Some(Format::Tei));
         assert_eq!(detect(Path::new("dict.txt"), b"\n\\lx kanu\n\\ps n\n"), Some(Format::Toolbox), "MDF with no header");
         assert_eq!(detect(Path::new("dict.txt"), b"\\lx\n"), Some(Format::Toolbox));
         let essay = b"\\noindent The fox came to the well.\nIt looked down.\nThen it went home.\n";
