@@ -20,6 +20,7 @@ use wugs_validate::{default_validators, has_hold, run_all, Validator};
 
 pub mod assist;
 pub mod conflicts;
+pub mod converted;
 pub mod examples;
 pub mod pronunciations;
 pub mod relations;

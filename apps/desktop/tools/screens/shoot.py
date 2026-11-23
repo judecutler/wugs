@@ -43,6 +43,7 @@ PANELS = [
     ("vowels", "Vowel space"),
     ("sounds", "Sounds"),
     ("typology", "Typology"),
+    ("orthography", "Orthography"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),
@@ -522,6 +523,15 @@ def main():
             run.shot("state-sounds-where", run.page.locator(".panel-sounds"))
             if run.page.locator(".panel-sounds .sd-shape").count() < 3:
                 failures.append("Sounds did not show word shapes")
+            # Orthography: a practical spelling previewed as IPA.
+            run.front("orthography", "Orthography")
+            run.page.locator(".panel-orthography .or-grid").wait_for()
+            run.page.locator(".panel-orthography button", has_text="Preview").click()
+            run.page.locator(".panel-orthography .or-changes").wait_for()
+            run.page.locator(".panel-orthography .or-changes").scroll_into_view_if_needed()
+            run.shot("state-orthography", run.page.locator(".panel-orthography"))
+            if run.page.locator(".panel-orthography .or-changes tbody tr").count() < 2:
+                failures.append("Orthography did not preview the conversion")
             # Elicit: answers heard in the Timeline's selected segment.
             run.front("elicit", "Elicit")
             run.page.locator(".panel-elicit .el-sound input").check()

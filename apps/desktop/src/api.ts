@@ -631,6 +631,16 @@ export type Languoid = import("./cldf/logic").Languoid;
 /** Glottolog's languages and dialects a typed name or code fits, best first (at most 8). */
 /** What Grambank or WALS says about a language, beside its relatives (src-tauri/src/typology.rs). */
 export const typologyProfile = (args: { glottocode: string; source: import("./typology/logic").Source }) => invoke<import("./typology/logic").Profile>("typology_profile", args);
+/** The project's orthography profile and the tracks it can convert (src-tauri/src/orthography.rs). */
+export const orthographyGet = () => invoke<import("./orthography/logic").Stored>("orthography_get");
+/** Keep a profile as the project's. */
+export const orthographySave = (args: { profile: string }) => invoke<import("./orthography/logic").Check>("orthography_save", args);
+/** A starting profile from a track's own letters. */
+export const orthographyDraft = (args: { tierId: string; textId: string | null; ignoreCase: boolean }) => invoke<string>("orthography_draft", args);
+/** What converting a track with a profile would write. */
+export const orthographyPreview = (args: { profile: string; tierId: string; textId: string | null; column: string; ignoreCase: boolean }) => invoke<import("./orthography/logic").Preview>("orthography_preview", args);
+/** Convert a track with a profile onto a transcription track. */
+export const orthographyConvert = (args: { profile: string; tierId: string; textId: string | null; column: string; ignoreCase: boolean; target: string }) => invoke<import("./orthography/logic").Converted>("orthography_convert", args);
 /** The project's own answers to Grambank or WALS features. */
 export const typologyAnswers = (args: { source: import("./typology/logic").Source }) => invoke<import("./typology/logic").Ours[]>("typology_answers", args);
 /** Write (or clear, with an empty value and note) the project's answer to one feature. */

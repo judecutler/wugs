@@ -44,6 +44,7 @@ pub mod sentence;
 pub mod session;
 pub mod sounds;
 pub mod typology;
+pub mod orthography;
 pub mod spectrogram;
 pub mod updater;
 pub mod voice_analysis;
@@ -352,6 +353,36 @@ fn typology_answers(s: State<SessionThread>, source: typology::Source) -> Result
 #[tauri::command(async)]
 fn set_typology_answer(s: State<SessionThread>, source: typology::Source, id: String, value: String, note: String) -> Result<typology::Ours, String> {
     s.run(move |s| typology::set_answer(s, source, &id, &value, &note))
+}
+
+/// The project's orthography profile, what it says, and the tracks to convert (src/orthography.rs).
+#[tauri::command(async)]
+fn orthography_get(s: State<SessionThread>) -> Result<orthography::Stored, String> {
+    s.run(orthography::stored)
+}
+
+/// Keep a profile as the project's.
+#[tauri::command(async)]
+fn orthography_save(s: State<SessionThread>, profile: String) -> Result<orthography::Check, String> {
+    s.run(move |s| orthography::save(s, &profile))
+}
+
+/// A starting profile from a track's own letters.
+#[tauri::command(async)]
+fn orthography_draft(s: State<SessionThread>, tier_id: String, text_id: Option<String>, ignore_case: bool) -> Result<String, String> {
+    s.run(move |s| orthography::draft(s, &tier_id, text_id, ignore_case))
+}
+
+/// What converting a track with a profile would write.
+#[tauri::command(async)]
+fn orthography_preview(s: State<SessionThread>, profile: String, tier_id: String, text_id: Option<String>, column: String, ignore_case: bool) -> Result<orthography::Preview, String> {
+    s.run(move |s| orthography::preview(s, &profile, &tier_id, text_id, &column, ignore_case))
+}
+
+/// Convert a track with a profile onto a transcription track.
+#[tauri::command(async)]
+fn orthography_convert(s: State<SessionThread>, profile: String, tier_id: String, text_id: Option<String>, column: String, ignore_case: bool, target: String) -> Result<orthography::Converted, String> {
+    s.run(move |s| orthography::convert(s, &profile, &tier_id, text_id, &column, ignore_case, &target))
 }
 
 /// Glottolog's languages and dialects a typed name or code fits, best first.
@@ -1842,6 +1873,11 @@ pub fn run() {
             glottolog_find,
             typology_profile,
             typology_answers,
+            orthography_get,
+            orthography_save,
+            orthography_draft,
+            orthography_preview,
+            orthography_convert,
             set_typology_answer,
             character_inventory,
             sound_words,
