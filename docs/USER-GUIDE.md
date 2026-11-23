@@ -323,6 +323,14 @@ Under **Notes**, at the bottom of the Gloss panel, type anything you want to rem
 
 Notes belong to the sentence's text, so they have its sharing level, and they sync with the project. Two people can add notes to the same sentence at once, and both notes stay. The **Interlinear** tab shows each note under its sentence, and **Search** finds words in notes too: the hit opens the sentence and says "note". Notes go in and out of FlexText as FLEx's Note line.
 
+### Check that each morph is glossed one way
+
+Over months of glossing, the same suffix can end up as `PL` in one text and `pl.` in another. The **Checks** panel finds them. Press **Ctrl+K** and choose **Show Checks** (it is not placed in the workspace at first).
+
+It lists every morph glossed more than one way across the project, the ones that differ only in capitals, spaces or dots (almost surely slips) first. Under each morph are its glosses, how many times each is used, and a link to a sentence that uses it. Click **Use «PL» for all**, then click again to confirm, and every use of that morph glossed otherwise is changed to it.
+
+Two morphs that sound alike but mean different things (a plural `-s` and a third-person `-s`) show up too. Leave them, or link each one to its own lexicon entry in the Gloss panel, and they drop off the list.
+
 ### Copy an example into a paper
 
 Click **Copy example** at the top of the Gloss panel. The segment is copied as a numbered example: the words split into morphs, the glosses under them with grammatical glosses in small capitals, and the free translation in quotes. Then paste it into your paper.

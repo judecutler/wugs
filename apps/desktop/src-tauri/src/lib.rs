@@ -11,6 +11,7 @@ pub mod collocates;
 pub mod frequencies;
 pub mod keywords;
 pub mod conflicts;
+pub mod consistency;
 pub mod convert;
 pub mod corrections;
 pub mod drops;
@@ -153,6 +154,18 @@ fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, 
 fn dispersion(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>, within: Option<concordance::Where>) -> Result<dispersion::Dispersion, String> {
     let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
     s.run(move |s| dispersion::dispersion(s, &query, kind, how, &concordance::Scope::of(text_id, within)))
+}
+
+/// Morphs glossed more than one way across the project (`src/consistency.rs`).
+#[tauri::command(async)]
+fn gloss_consistency(s: State<SessionThread>) -> Result<Vec<consistency::Inconsistent>, String> {
+    s.run(consistency::glosses)
+}
+
+/// Gloss every morph of `key` and `kind` that reads `from` as `to` instead.
+#[tauri::command(async)]
+fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String, to: String) -> Result<usize, String> {
+    s.run(move |s| consistency::unify(s, &key, &kind, &from, &to))
 }
 
 /// The project's own meanings of these gloss abbreviations (`src/abbreviations.rs`).
@@ -1634,6 +1647,8 @@ pub fn run() {
             concordance_query,
             dispersion,
             abbreviation_meanings,
+            gloss_consistency,
+            gloss_unify,
             set_abbreviation_meaning,
             text_metadata,
             set_text_metadata,

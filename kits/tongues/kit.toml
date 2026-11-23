@@ -38,6 +38,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "sentence",                      # one sentence's tags and dependency tree; not placed, opened from Settings or Ctrl+K
   "collocates",                    # which words keep company with a word; not placed either
   "keywords",                      # which words set a text apart; not placed either
+  "checks",                        # glosses to tidy: a morph glossed more than one way; not placed either
   "assist",                        # speech assist: machine phone transcription
   "people",                        # speakers and what each agreed to (optional)
 ]

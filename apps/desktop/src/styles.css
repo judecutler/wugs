@@ -1165,3 +1165,21 @@ body::before {
 .kit-install h3 { margin: 0 0 4px; font-family: var(--font-display); font-weight: 400; font-size: 15px; }
 .kit-install .kit-note { margin: 0; }
 .kit-problem { color: var(--error); }
+
+/* Checks (src/panels/checks.ts) */
+.panel-checks { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
+.ck-title { margin: 0; }
+.ck-bar { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+.ck-bar .note { margin: 0; }
+.ck-list, .ck-variants { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ck-card { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); padding: 8px 10px; }
+.ck-slip { border-left: 3px solid var(--attention); }
+.ck-head { display: flex; gap: 8px; align-items: baseline; }
+.ck-morph { font-family: var(--font-ipa); font-size: 16px; }
+.ck-kind { font-size: var(--text-xs); color: var(--muted); }
+.ck-card .note { margin: 2px 0 6px; }
+.ck-variant { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.ck-gloss { min-width: 5em; font-weight: 600; }
+.ck-gloss .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
+.ck-count { color: var(--muted); font-size: var(--text-sm); min-width: 3em; }
+.ck-show { border: none; background: none; color: var(--accent); padding: 0; text-decoration: underline; cursor: pointer; font-size: var(--text-sm); }

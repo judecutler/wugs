@@ -1,0 +1,118 @@
+// Checks: what to tidy before a grammar or a deposit. First check: morphs
+// glossed more than one way across the project (src-tauri/src/consistency.rs),
+// each with its glosses, how often each is used, where one occurs, and a
+// button that makes one gloss the only one.
+import { errorText, glossConsistency, glossUnify } from "../api";
+import { cardNote, summary, unifiedLine, useLabel, type Inconsistent } from "../checks/logic";
+import { emptyState, h } from "../dom";
+import { glossRuns } from "../gloss/example";
+import { marked } from "../gloss/morphs";
+import type { MorphType } from "../gloss/morphs";
+import { provide } from "../palette/registry";
+import { dataGeneration, getState, refreshAll, selectSegment, showToast } from "../store";
+import type { PanelDef, PanelView } from "./panel";
+
+function glossNode(gloss: string): HTMLElement {
+  return h("span", { className: "ck-gloss" }, ...glossRuns(gloss).map((r) => (r.caps ? h("span", { className: "sc", textContent: r.text }) : document.createTextNode(r.text))));
+}
+
+export const checksPanel: PanelDef = {
+  title: "Checks",
+  create(): PanelView {
+    const el = h("div", { className: "panel panel-checks" });
+    let rows: Inconsistent[] | null = null;
+    let key = "";
+    let seq = 0;
+    let busy = false;
+    /** The armed "use for all" button: morph key, kind and gloss. */
+    let armed: string | null = null;
+
+    const load = () => {
+      const s = getState();
+      if (s.kind !== "open") return;
+      const mine = ++seq;
+      glossConsistency().then(
+        (r) => {
+          if (mine !== seq) return;
+          rows = r;
+          paint();
+        },
+        (e) => {
+          if (mine === seq) el.replaceChildren(emptyState("Checks", errorText(e)));
+        },
+      );
+    };
+
+    const unify = async (r: Inconsistent, to: string) => {
+      busy = true;
+      paint();
+      let changed = 0;
+      try {
+        for (const v of r.variants) if (v.gloss !== to) changed += await glossUnify({ key: r.key, kind: r.kind, from: v.gloss, to });
+        showToast({ tone: "info", lines: [unifiedLine(changed, to)] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      busy = false;
+      armed = null;
+      await refreshAll();
+      load();
+    };
+
+    const card = (r: Inconsistent): HTMLElement => {
+      const variants = r.variants.map((v) => {
+        const id = `${r.key}\u0001${r.kind}\u0001${v.gloss}`;
+        const use = h("button", { type: "button", className: armed === id ? "danger" : "", textContent: useLabel(v, r, armed === id), disabled: busy, title: `Gloss every «${marked({ surface: r.surface, type: r.kind as MorphType })}» that reads otherwise as «${v.gloss}»` });
+        use.onclick = () => {
+          if (armed !== id) {
+            armed = id;
+            paint();
+            return;
+          }
+          void unify(r, v.gloss);
+        };
+        const show = h("button", { type: "button", className: "ck-show", textContent: `in «${v.textTitle || "(untitled)"}»`, title: "Open a sentence where it is glossed this way" });
+        show.onclick = () => selectSegment({ textId: v.textId, tierId: v.tierId, segmentId: v.segmentId });
+        return h("li", { className: "ck-variant" }, glossNode(v.gloss), h("span", { className: "ck-count", textContent: `× ${v.count}` }), show, use);
+      });
+      return h(
+        "li",
+        { className: `ck-card${r.slip ? " ck-slip" : ""}` },
+        h("div", { className: "ck-head" }, h("span", { className: "ck-morph", textContent: marked({ surface: r.surface, type: r.kind as MorphType }) }), h("span", { className: "ck-kind", textContent: r.kind })),
+        h("p", { className: "note", textContent: cardNote(r) }),
+        h("ul", { className: "ck-variants" }, ...variants),
+      );
+    };
+
+    const paint = () => {
+      if (rows === null) {
+        el.replaceChildren(emptyState("Checks", "Looking through every gloss…"));
+        return;
+      }
+      const again = h("button", { type: "button", textContent: "Check again", disabled: busy });
+      again.onclick = load;
+      el.replaceChildren(
+        h("h3", { className: "ck-title", textContent: "Glosses" }),
+        h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: summary(rows) }), again),
+        h("ul", { className: "ck-list" }, ...rows.map(card)),
+      );
+    };
+
+    const draw = () => {
+      const s = getState();
+      if (s.kind !== "open") {
+        key = "";
+        rows = null;
+        el.replaceChildren(emptyState("No project open", "Open a project to check its glosses."));
+        return;
+      }
+      const wanted = `${s.info.projectId}|${dataGeneration()}`;
+      if (wanted === key) return;
+      key = wanted;
+      if (!busy) load();
+    };
+
+    const unprovide = provide("checks", () => [{ id: "checks:again", title: "Check glosses again", group: "Checks", words: ["consistency", "typo", "inconsistent"], run: load }]);
+    return { element: el, render: draw, dispose: unprovide };
+  },
+};
