@@ -524,6 +524,9 @@ export const exportText = (args: { textId: string; format: TextFormat; folder: s
 export const exportLexicon = (args: { format: LexiconFormat; folder: string }) => invoke<Exported>("export_lexicon", args);
 /** `date`: today on this computer's calendar (YYYY-MM-DD), which names the package folder. */
 export const sealProject = (args: { folder: string; date: string }) => invoke<Sealed>("seal_project", args);
+export const projectLanguage = () => invoke<import("./cldf/logic").Language>("project_language");
+export const setProjectLanguage = (args: { language: import("./cldf/logic").Language }) => invoke<import("./cldf/logic").Language>("set_project_language", args);
+export const exportCldf = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Published>("export_cldf", args);
 // People and consent (roadmap 61): src-tauri/src/people.rs. Every command returns the whole view.
 /** A term's answer: true agreed, false refused, null not asked. */
 export type PeopleConsent = { id: string; covers: string; terms: [string, boolean | null][]; date: string; evidenceName: string | null; hasEvidence: boolean };

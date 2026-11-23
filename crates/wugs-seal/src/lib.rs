@@ -9,6 +9,9 @@
 //!   payloads removed (`SealOptions::strip_loro`), keeping `resolved`
 //! - `exports/elan/<text>.eaf`, `exports/flextext/<text>.flextext`,
 //!   `exports/lift/lexicon.lift`: current state in community formats
+//! - `exports/cldf/`: the lexicon and every glossed sentence as a CLDF
+//!   Dictionary dataset (`wugs-cldf`), restricted texts included like
+//!   everything else in the bag, when the project has entries or glosses
 //! - `metadata/olac.xml` (one OLAC record), `metadata/imdi.xml` (minimal
 //!   IMDI; enrich when Person/Session entities land, roadmap item 11),
 //!   `metadata/access.json` (access levels, people, consent)
@@ -173,6 +176,17 @@ fn write_bag(project: &Project, staging: &Path, opts: &SealOptions) -> Result<Se
     let lexemes = live_of_kind(project, "lexeme")?.len();
     if lexemes > 0 {
         bag.put("exports/lift/lexicon.lift", wugs_flex::export_lift(project)?.as_bytes())?;
+    }
+
+    let (translation_tiers, transcription_tiers) = wugs_cldf::corpus_tiers(project)?;
+    let cldf = wugs_cldf::export(
+        project,
+        &wugs_cldf::Options { title: "Dictionary", generator: "wugs-seal", transcription_tiers: &transcription_tiers, translation_tiers: &translation_tiers, include_restricted: true },
+    )?;
+    if cldf.entries + cldf.examples > 0 {
+        for (name, contents) in &cldf.files {
+            bag.put(&format!("exports/cldf/{name}"), contents.as_bytes())?;
+        }
     }
 
     let title = project_title(project)?;

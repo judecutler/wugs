@@ -218,6 +218,24 @@ fn export_lexicon(s: State<SessionThread>, format: String, folder: String) -> Re
     s.run(move |s| interchange::export_lexicon(s, format, std::path::Path::new(&folder)))
 }
 
+/// The language the project documents (name, Glottocode, ISO 639-3).
+#[tauri::command(async)]
+fn project_language(s: State<SessionThread>) -> Result<interchange::LanguageDto, String> {
+    s.run(interchange::project_language)
+}
+
+#[tauri::command(async)]
+fn set_project_language(s: State<SessionThread>, language: interchange::LanguageDto) -> Result<interchange::LanguageDto, String> {
+    s.run(move |s| interchange::set_project_language(s, &language))
+}
+
+/// Publish the lexicon and glossed sentences as a CLDF dataset in a new folder inside `folder`.
+#[tauri::command(async)]
+fn export_cldf(app: AppHandle, s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<interchange::Published, String> {
+    let generator = format!("wugs {}", app.package_info().version);
+    s.run(move |s| interchange::export_cldf(s, std::path::Path::new(&folder), &date, include_restricted, &generator))
+}
+
 /// Seal the project as an archive package in a new folder inside `folder`.
 #[tauri::command(async)]
 fn seal_project(s: State<SessionThread>, folder: String, date: String) -> Result<interchange::Sealed, String> {
@@ -1453,6 +1471,9 @@ pub fn run() {
             export_text,
             export_lexicon,
             seal_project,
+            project_language,
+            set_project_language,
+            export_cldf,
             add_segment,
             add_translation,
             edit_segment_content,

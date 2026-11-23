@@ -22,6 +22,7 @@ pub mod assist;
 pub mod conflicts;
 mod elicitation;
 mod gloss;
+pub mod language;
 mod lexicon;
 pub mod paradigms;
 pub mod people;

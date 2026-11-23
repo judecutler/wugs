@@ -468,12 +468,27 @@ To export the lexicon, choose LIFT or Toolbox beside **Lexicon as** and click **
 
 wugs names the file after the text's title and never replaces a file that exists. It adds " (2)" to the name instead. You cannot export into the project folder itself.
 
+### Say which language the project documents
+
+At the top of **Import and export**, type the language's name and, if you know them, its Glottocode (from [glottolog.org](https://glottolog.org), like `stan1293`) and ISO 639-3 code (three letters, like `tur`). Each field saves when you press Enter or leave it. Archive packages and CLDF datasets carry them, so the data can be found and joined with other datasets. Everyone on the project sees the same language.
+
+### Publish the dictionary and examples as CLDF
+
+Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cldf-<date>` holding a CLDF Dictionary dataset: the CSV tables and metadata that pycldf, Zenodo, Dictionaria and other CLLD sites read.
+
+- `entries.csv`: one row per lexicon entry, with its part of speech, citation form and homograph number
+- `senses.csv`: one row per sense, with its glosses in each language, definition, usage, semantic domains, the Concepticon concept you elicited it for, and the examples that use it
+- `examples.csv`: every glossed sentence in Leipzig form (words, morpheme glosses, free translation), with its text and time span
+- `languages.csv`: the project's language and the languages of its translations
+
+Sentences from texts that are not open (restricted or community-only) are left out unless you tick **Include texts that are not open**. Tick it only if the speakers agreed to publication. Before you publish the dataset, add a licence and check it with `cldf validate Dictionary-metadata.json` (from `pip install pycldf`).
+
 ### Seal a version for the archive
 
 1. Click **Seal a version for the archive…**.
 2. Choose a folder outside the project folder.
 
-wugs writes a BagIt package named `wugs-sealed-<date>`. It holds ELAN, FLEx, and LIFT copies, OLAC and IMDI metadata, every recording, the full history, and checksums for every file. ELAR, PARADISEC, and AILLA accept BagIt deposits.
+wugs writes a BagIt package named `wugs-sealed-<date>`. It holds ELAN, FLEx, LIFT and CLDF copies, OLAC and IMDI metadata, every recording, the full history, and checksums for every file. ELAR, PARADISEC, and AILLA accept BagIt deposits.
 
 If any of the project is restricted, the message says so. The package then holds restricted data, so treat the whole package as restricted.
 

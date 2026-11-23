@@ -1,5 +1,6 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { createText, errorText, exportLexicon, exportText, importFile, sealProject, type LexiconFormat, type TextFormat } from "../api";
+import { createText, errorText, exportCldf, exportLexicon, exportText, importFile, projectLanguage, sealProject, setProjectLanguage, type LexiconFormat, type TextFormat } from "../api";
+import { glottocodeProblem, isoProblem, publishedLines, type Language } from "../cldf/logic";
 import { megabytes } from "../assist/logic";
 import { localDay } from "../dates";
 import { emptyState, h } from "../dom";
@@ -34,6 +35,12 @@ const LEXICON_FORMATS: [LexiconFormat, string][] = [
 let textFormat: TextFormat = "elan";
 let lexiconFormat: LexiconFormat = "lift";
 let busy: string | null = null;
+// The project's language, fetched once per project; the CLDF choice resets with it.
+let language: { project: string; value: Language } | null = null;
+let languageFor: string | null = null;
+let includeRestricted = false;
+// What is typed but not saved yet, so a redraw while typing keeps it.
+const drafts: Partial<Language> = {};
 // Every open copy of the panel, so the one showing when work ends redraws,
 // even if the panel was closed and reopened while it ran.
 const live = new Set<() => void>();
@@ -115,6 +122,72 @@ async function seal() {
   });
 }
 
+async function loadLanguage(project: string) {
+  if (languageFor === project) return;
+  languageFor = project;
+  includeRestricted = false;
+  for (const k of Object.keys(drafts) as (keyof Language)[]) delete drafts[k];
+  try {
+    language = { project, value: await projectLanguage() };
+  } catch {
+    language = { project, value: { name: "", glottocode: "", iso: "" } };
+  }
+  redrawAll();
+}
+
+async function saveLanguage(project: string, next: Language) {
+  const problem = glottocodeProblem(next.glottocode) ?? isoProblem(next.iso);
+  if (problem !== null) {
+    showToast({ tone: "warn", lines: [problem] });
+    return;
+  }
+  const now = language?.value;
+  if (now !== undefined && now.name === next.name.trim() && now.glottocode === next.glottocode.trim().toLowerCase() && now.iso === next.iso.trim().toLowerCase()) return;
+  try {
+    const saved = await setProjectLanguage({ language: next });
+    if (languageFor === project) language = { project, value: saved };
+  } catch (e) {
+    showToast({ tone: "error", lines: [errorText(e)] });
+  }
+  redrawAll();
+}
+
+/** Name, Glottocode and ISO 639-3, each saved on Enter or when focus leaves it. */
+function languageRow(project: string): HTMLElement {
+  const v = language?.project === project ? language.value : { name: "", glottocode: "", iso: "" };
+  const field = (key: keyof Language, placeholder: string, title: string, size: number) => {
+    const input = h("input", { value: drafts[key] ?? v[key], placeholder, title, size, spellcheck: false });
+    input.setAttribute("aria-label", `Language: ${placeholder}`);
+    input.oninput = () => (drafts[key] = input.value);
+    const commit = () => {
+      delete drafts[key];
+      void saveLanguage(project, { ...v, [key]: input.value });
+    };
+    input.onchange = commit;
+    input.onkeydown = (ev: KeyboardEvent) => {
+      if (ev.key === "Enter" && !ev.isComposing) commit();
+    };
+    return input;
+  };
+  return h(
+    "div",
+    { className: "share-row" },
+    h("span", { className: "share-label", textContent: "Language" }),
+    field("name", "Name", "The language this project documents, as you call it", 14),
+    field("glottocode", "Glottocode", "From glottolog.org, like stan1293: lets the data join other datasets", 9),
+    field("iso", "ISO 639-3", "Three letters, like tur: archives use it in their catalogue", 6),
+  );
+}
+
+async function publishCldf() {
+  const folder = await chooseFolder("Choose where the CLDF dataset goes");
+  if (folder === null) return;
+  await work("cldf", async () => {
+    const r = await exportCldf({ folder, date: localDay(new Date()), includeRestricted });
+    showToast({ tone: r.notes.length > 0 ? "warn" : "info", lines: publishedLines(r) });
+  });
+}
+
 function select<T extends string>(options: [T, string][], value: T, onchange: (v: T) => void): HTMLSelectElement {
   const el = h("select", {}, ...options.map(([id, label]) => h("option", { value: id, textContent: label, selected: id === value })));
   el.onchange = () => onchange(el.value as T);
@@ -168,6 +241,7 @@ export const textsPanel: PanelDef = {
         "section",
         { className: "share" },
         h("h3", { textContent: "Import and export" }),
+        languageRow(s.info.projectId),
         h(
           "div",
           { className: "share-row" },
@@ -210,6 +284,23 @@ export const textsPanel: PanelDef = {
           { className: "share-row" },
           h("button", {
             type: "button",
+            textContent: busy === "cldf" ? "Publishing…" : "Publish as CLDF…",
+            title: "The lexicon and every glossed sentence as a CLDF Dictionary dataset (CSV files with metadata), what Zenodo, pycldf and CLLD dictionaries read",
+            disabled: busy !== null,
+            onclick: () => void publishCldf(),
+          }),
+          h(
+            "label",
+            { className: "share-label", title: "Sentences from texts marked restricted or community-only. Leave this off unless the speakers agreed to publication." },
+            h("input", { type: "checkbox", checked: includeRestricted, onchange: (ev: Event) => (includeRestricted = (ev.target as HTMLInputElement).checked) }),
+            " Include texts that are not open",
+          ),
+        ),
+        h(
+          "div",
+          { className: "share-row" },
+          h("button", {
+            type: "button",
             textContent: busy === "seal" ? "Sealing…" : "Seal a version for the archive…",
             title: "A self-describing package (BagIt) with every text, the lexicon, recordings and full history, for ELAR, PARADISEC or AILLA",
             disabled: busy !== null,
@@ -217,6 +308,7 @@ export const textsPanel: PanelDef = {
           }),
         ),
       );
+      void loadLanguage(s.info.projectId);
       el.replaceChildren(form, list, share);
     };
     const view = sliced(el, slice, draw);
