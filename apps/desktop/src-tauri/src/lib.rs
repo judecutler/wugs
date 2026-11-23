@@ -43,6 +43,7 @@ pub mod segmentation;
 pub mod sentence;
 pub mod session;
 pub mod sounds;
+pub mod typology;
 pub mod spectrogram;
 pub mod updater;
 pub mod voice_analysis;
@@ -333,6 +334,12 @@ fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory,
 #[tauri::command(async)]
 fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option<String>) -> Result<sounds::SoundWords, String> {
     s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
+}
+
+/// What Grambank or WALS says about a language, beside its relatives (src/typology.rs).
+#[tauri::command(async)]
+fn typology_profile(glottocode: String, source: typology::Source) -> Result<typology::Profile, String> {
+    typology::profile(&glottocode, source)
 }
 
 /// Glottolog's languages and dialects a typed name or code fits, best first.
@@ -1821,6 +1828,7 @@ pub fn run() {
             morphosyntax_choose_spacy,
             morphosyntax_choose_stanza,
             glottolog_find,
+            typology_profile,
             character_inventory,
             sound_words,
             sentence_check_status,

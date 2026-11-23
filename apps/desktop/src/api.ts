@@ -629,6 +629,8 @@ export const projectLanguage = () => invoke<import("./cldf/logic").Language>("pr
 /** A language or dialect in Glottolog (5.4, embedded; src-tauri/src/glottolog.rs). */
 export type Languoid = import("./cldf/logic").Languoid;
 /** Glottolog's languages and dialects a typed name or code fits, best first (at most 8). */
+/** What Grambank or WALS says about a language, beside its relatives (src-tauri/src/typology.rs). */
+export const typologyProfile = (args: { glottocode: string; source: import("./typology/logic").Source }) => invoke<import("./typology/logic").Profile>("typology_profile", args);
 export const glottologFind = (args: { query: string }) => invoke<Languoid[]>("glottolog_find", args);
 /** Every character the project's transcriptions and lexicon use (src-tauri/src/characters.rs). */
 /** The word types on a transcription track, for the Sounds panel (src-tauri/src/sounds.rs). */

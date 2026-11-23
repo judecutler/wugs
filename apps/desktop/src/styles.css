@@ -1226,6 +1226,30 @@ body::before {
 .ck-count { color: var(--muted); font-size: var(--text-sm); min-width: 3em; }
 .ck-show { border: none; background: none; color: var(--accent); padding: 0; text-decoration: underline; cursor: pointer; font-size: var(--text-sm); }
 
+/* Typology (src/panels/typology.ts) */
+.panel-typology { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
+.panel-typology > * { flex-shrink: 0; }
+.panel-typology > .note { margin: 0; }
+.ty-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.ty-bar input[type="search"] { min-width: 14em; flex: 1; }
+.ty-title { margin: 4px 0 0; font-family: var(--font-display); font-weight: 400; }
+.ty-sources { display: inline-flex; gap: 4px; }
+.ty-chip { border: 1px solid var(--line); background: var(--surface-raised); border-radius: var(--radius-sm); padding: 2px 10px; cursor: pointer; }
+.ty-chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.ty-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ty-item { border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); padding: 6px 10px; }
+.ty-item.is-unlike { border-left: 3px solid var(--attention); }
+.ty-head { display: flex; gap: 8px; align-items: baseline; }
+.ty-id { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.ty-q { font-weight: 600; }
+.ty-answer { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; margin-top: 2px; }
+.ty-answer .note { margin: 0; }
+.ty-open { color: var(--muted); font-weight: 400; font-style: italic; }
+.ty-dist { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 4px; gap: 1px; background: var(--line); }
+.ty-seg { background: var(--muted); opacity: 0.35; }
+.ty-seg.is-own { background: var(--accent); opacity: 1; }
+.ty-credit { font-size: var(--text-xs); }
+
 /* Sounds (src/panels/sounds.ts) */
 .panel-sounds { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
 .sd-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
