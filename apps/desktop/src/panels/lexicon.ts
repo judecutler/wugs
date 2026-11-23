@@ -14,7 +14,7 @@ import {
 } from "../api";
 import { emptyState, h } from "../dom";
 import { normalizeLangTag } from "../gloss/lang";
-import { filterDomains, glossLine, headword, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
+import { filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
@@ -39,6 +39,10 @@ export const lexiconPanel: PanelDef = {
   create(): PanelView {
     const el = h("div", { className: "panel panel-lexicon" });
     const search = h("input", { type: "search", placeholder: "Find an entry by lemma or gloss" });
+    /** Which entries the list shows: every one, or those with work left. */
+    let show: ListShow = "all";
+    const showPicker = h("select", { className: "lx-show", ariaLabel: "Which entries to list" });
+    const searchBar = h("div", { className: "lx-search" }, search, showPicker);
     const newLemma = h("input", { placeholder: "Lemma", ariaLabel: "New entry lemma" });
     const newGloss = h("input", { placeholder: "Gloss", ariaLabel: "New entry gloss" });
     const addForm = h(
@@ -378,7 +382,19 @@ export const lexiconPanel: PanelDef = {
 
     // ------------------------------------------------------------------ drawing
 
+    function drawShowPicker() {
+      const current = LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!;
+      showPicker.title = current.title;
+      showPicker.replaceChildren(...LIST_SHOWS.map((x) => h("option", { value: x.id, textContent: showLabel(rows, x), title: x.title, selected: x.id === show })));
+    }
+
     function drawList() {
+      drawShowPicker();
+      const listed = rows.filter((r) => shows(r, show));
+      if (rows.length > 0 && listed.length === 0) {
+        list.replaceChildren(h("li", { className: "empty", textContent: (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).done }));
+        return;
+      }
       if (rows.length === 0) {
         list.replaceChildren(
           h("li", { className: "empty", textContent: search.value.trim() === "" ? "No entries yet. Add one above, or gloss a word and add it from there." : "No entries match." }),
@@ -386,7 +402,7 @@ export const lexiconPanel: PanelDef = {
         return;
       }
       list.replaceChildren(
-        ...rows.map((r) =>
+        ...listed.map((r) =>
           h(
             "li",
             {
@@ -1044,6 +1060,10 @@ export const lexiconPanel: PanelDef = {
     // ------------------------------------------------------------------ wiring
 
     let timer: number | undefined;
+    showPicker.onchange = () => {
+      show = showPicker.value as ListShow;
+      quietly(drawList);
+    };
     search.oninput = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void loadList(), 120);
@@ -1110,7 +1130,8 @@ export const lexiconPanel: PanelDef = {
           picker = null;
           uses = null;
           search.value = "";
-          quietly(() => el.replaceChildren(search, addForm, body));
+          show = "all";
+          quietly(() => el.replaceChildren(searchBar, addForm, body));
         } else {
           // Another device's ops or another panel's edit: domains may have
           // arrived too. An open picker stays open on the same sense.

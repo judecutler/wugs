@@ -239,7 +239,8 @@ const LEXICON = [
     ["lx-tela1", "tela", 1, "n", ["river"]],
     ["lx-tela2", "tela", 2, "v", ["wade across"]],
     ["lx-wiripa", "wiripa", null, "n", ["fox"]],
-  ].map(([id, lemma, homograph, posOfSpeech, glosses]) => ({ id, lemma, homograph, posOfSpeech, glosses }));
+    ["lx-toruma", "toruma", null, "", [""]],
+  ].map(([id, lemma, homograph, posOfSpeech, glosses]) => ({ id, lemma, homograph, posOfSpeech, glosses, used: !["lx-wiripa", "lx-toruma", "lx-tela2"].includes(id) }));
 
   const DOMAINS = [
     { id: "dom-8", code: "8", label: "States", description: "Use this domain for general words referring to states and conditions.", depth: 0 },

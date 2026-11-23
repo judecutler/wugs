@@ -29,6 +29,9 @@ pub struct EntryRow {
     pub pos_of_speech: String,
     /// The primary glosses of the entry's senses, in order.
     pub glosses: Vec<String>,
+    /// Some sense is linked from a morph of a live text (the list's "Not in
+    /// any text" picks the entries where it is false).
+    pub used: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -255,14 +258,16 @@ pub fn lexicon_list(session: &mut Session, query: &str) -> Result<Vec<EntryRow>,
     for id in p.proj.entities_of_kind("lexeme")? {
         let lemma = str_field(p, &id, "lemma")?;
         let mut glosses = Vec::new();
+        let mut used = false;
         for s in senses(p, &id)? {
             glosses.push(str_field(p, &s, "gloss")?);
+            used = used || linked_in_a_text(p, &s)?;
         }
         let hit = q.is_empty()
             || fold_key(&p.proj.nfc(&lemma)).contains(&q)
             || glosses.iter().any(|g| fold_key(&p.proj.nfc(g)).contains(&q));
         if hit {
-            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, id, lemma, glosses });
+            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, id, lemma, glosses, used });
         }
     }
     rows.sort_by_cached_key(|r| (fold_key(&r.lemma), r.homograph, r.id.clone()));
@@ -328,6 +333,22 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
 /// Morphs linked to a sense that a reader can see: shown in their word's
 /// analysis, the word shown in its segment, the segment and its text live.
 /// Hidden or orphaned morphs (a re-analysis, a deleted segment) do not count.
+/// Whether a live morph of a live token, segment and text links this sense:
+/// the list's cheap form of `occurrences` (it stops at the first and does not
+/// ask whether a membership list hides the morph).
+fn linked_in_a_text(p: &Project, sense: &str) -> Result<bool, String> {
+    let live = |id: &str| -> Result<bool, String> { Ok(p.proj.entity_kind(id)?.is_some() && !p.proj.is_tombstoned(id)?) };
+    for morph in p.proj.children_by_ref("sense", sense, "morph")? {
+        let Some(token) = p.proj.field_str(&morph, "token")? else { continue };
+        let Some(segment) = p.proj.field_str(&token, "segment")? else { continue };
+        let Some(text) = p.proj.field_str(&segment, "text")? else { continue };
+        if live(&token)? && live(&segment)? && live(&text)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 fn occurrences(p: &Project, sense: &str) -> Result<usize, String> {
     let mut n = 0;
     // A frequent sense shares segments and tokens: read each list once.
@@ -800,4 +821,29 @@ pub fn lexicon_delete_form(session: &mut Session, id: &str, form: &str, axes: &[
     form_of(p, id, form)?;
     let res = p.delete_form(form)?;
     Ok(ParadigmEdit { paradigm: paradigm_of(p, id, axes)?, notes: lines(&res) })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_list_says_which_entries_a_text_uses() {
+        let dir = std::env::temp_dir().join(format!("wugs-lexicon-list-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir, "tester").unwrap();
+        let before = lexicon_list(&mut session, "").unwrap();
+        assert!(before.iter().any(|r| r.used));
+        for r in &before {
+            let entry = lexicon_entry(&mut session, &r.id).unwrap();
+            assert_eq!(r.used, entry.senses.iter().any(|s| s.occurrences > 0), "{} agrees with used in N words", r.lemma);
+        }
+        let id = lexicon_add(&mut session, "zuzu", "").unwrap().entry.unwrap().id;
+        let row = lexicon_list(&mut session, "zuzu").unwrap().into_iter().find(|r| r.id == id).unwrap();
+        assert!(!row.used);
+        assert_eq!(row.glosses, vec![String::new()], "an entry added with no gloss has one sense with an empty gloss");
+        drop(session);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

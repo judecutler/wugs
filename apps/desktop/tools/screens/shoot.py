@@ -556,6 +556,14 @@ def main():
             run.page.locator(".panel-elicit button", has_text="Load a table").wait_for()
             run.shot("state-elicit-add", run.page.locator(".panel-elicit"))
             run.page.locator(".panel-elicit button", has_text="Close").click()
+            # The entry list can show only the entries with work left, with counts.
+            run.front("lexicon", "Lexicon")
+            run.page.locator(".panel-lexicon .lx-show").select_option("gloss")
+            run.page.wait_for_timeout(200)
+            run.shot("state-lexicon-todo", run.page.locator(".panel-lexicon"))
+            if run.page.locator(".panel-lexicon .lx-list li").count() != 1:
+                failures.append("Needs a gloss did not list the one entry without a gloss")
+            run.page.locator(".panel-lexicon .lx-show").select_option("all")
             # Paradigm templates of the project's own: pick one, then open the form for a new one.
             run.front("lexicon", "Lexicon")
             run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()

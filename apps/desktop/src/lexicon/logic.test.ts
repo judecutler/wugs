@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName } from "./logic.ts";
+import { domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName, LIST_SHOWS, showLabel, shows } from "./logic.ts";
 
 test("a numbered homograph shows a subscript", () => {
   assert.equal(headword("yüz", null), "yüz");
@@ -65,4 +65,18 @@ test("relations read in words from the entry they are shown under", () => {
   assert.equal(relationLabel("calendar"), "Calendar", "a file's own type is shown as written");
   assert.equal(relatedName({ otherLemma: "tela", otherHomograph: 2, otherSense: null }), headword("tela", 2));
   assert.equal(relatedName({ otherLemma: "laki", otherHomograph: null, otherSense: 2 }), "laki (sense 2)");
+});
+
+test("the entry list can show only the entries with work left", () => {
+  const rows = [
+    { glosses: ["dog"], posOfSpeech: "n", used: true },
+    { glosses: [""], posOfSpeech: "", used: false },
+    { glosses: [], posOfSpeech: "v", used: true },
+    { glosses: ["eat", " "], posOfSpeech: "v", used: false },
+  ];
+  assert.deepEqual(rows.map((r) => shows(r, "gloss")), [false, true, true, true]);
+  assert.deepEqual(rows.map((r) => shows(r, "category")), [false, true, false, false]);
+  assert.deepEqual(rows.map((r) => shows(r, "unused")), [false, true, false, true]);
+  assert.ok(rows.every((r) => shows(r, "all")));
+  assert.equal(showLabel(rows, LIST_SHOWS[1]!), "Needs a gloss (3)");
 });
