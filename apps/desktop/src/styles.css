@@ -1106,6 +1106,7 @@ body::before {
 .fq-table tbody tr:hover, .fq-table tbody tr:focus { background: var(--accent-soft); outline: none; }
 .fq-rank { color: var(--muted); width: 3em; }
 .fq-item { font-family: var(--font-ipa); }
+.fq-endings .fq-item, .fq-endings th:nth-child(2) { text-align: right; }
 .fq-num, .fq-table th:nth-child(n+3) { text-align: right; font-variant-numeric: tabular-nums; }
 .fq-table th:nth-child(6), .fq-table td.fq-lexicon { text-align: left; white-space: nowrap; }
 .co-table th:nth-child(n+2) { text-align: right; }

@@ -126,6 +126,8 @@ export const frequenciesPanel: PanelDef = {
       missingBox.hidden = !withLexicon;
       const columns = ["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts", ...(withLexicon ? ["In lexicon"] : [])];
       const head = h("tr", {}, ...columns.map((t) => h("th", { textContent: t, scope: "col" })));
+      // A reverse list lines its words up at their ends, so shared endings read down the column.
+      table.classList.toggle("fq-endings", sortBy === "ending");
       table.replaceChildren(
         h("thead", {}, head),
         h(

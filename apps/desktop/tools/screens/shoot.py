@@ -408,6 +408,13 @@ def main():
             run.shot("state-frequencies", run.page.locator(".panel-frequencies"))
             if run.page.locator(".panel-frequencies .fq-table tbody tr").count() == 0:
                 failures.append("the frequency list showed no rows")
+            # A reverse list lines words up at their ends.
+            run.page.locator(".panel-frequencies .fq-sort").select_option("ending")
+            run.page.wait_for_timeout(200)
+            run.shot("state-frequencies-endings", run.page.locator(".panel-frequencies"))
+            if run.page.locator(".panel-frequencies .fq-table.fq-endings").count() != 1:
+                failures.append("By ending did not line the words up at their ends")
+            run.page.locator(".panel-frequencies .fq-sort").select_option("count")
             # Only the words the lexicon lacks, each with Add.
             run.page.locator(".panel-frequencies .fq-missing input").check()
             run.page.wait_for_timeout(200)
