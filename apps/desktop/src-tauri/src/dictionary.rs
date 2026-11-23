@@ -164,6 +164,14 @@ pub fn export_dictionary(s: &mut Session, folder: &Path, date: &str, include_res
     }
     crate::interchange::outside_project(s, folder)?;
     let p = session::project(s)?;
+    let (title, html, mut d) = document(p, date, include_restricted)?;
+    let path = crate::interchange::write_new(folder, &crate::interchange::file_stem(&title, "dictionary"), "html", html.as_bytes())?;
+    d.path = path.display().to_string();
+    Ok(d)
+}
+
+/// The dictionary as one HTML page: its title, the page, and what it holds (`path` empty).
+pub(crate) fn document(p: &Project, date: &str, include_restricted: bool) -> Result<(String, String, Dictionary), String> {
     let units = alphabet(p)?;
     let mut entries: Vec<EntryView> = p.proj.entities_of_kind("lexeme")?.iter().map(|id| entry_view(p, id)).collect::<Result<_, _>>()?;
     entries.retain(|e| !e.lemma.trim().is_empty());
@@ -248,8 +256,8 @@ pub fn export_dictionary(s: &mut Session, folder: &Path, date: &str, include_res
         codes = if codes.is_empty() { String::new() } else { format!(" · {}", esc(&codes.join(", "))) },
         note = if include_restricted { " Examples from texts that are not open are included: check before sharing." } else { "" },
     );
-    let path = crate::interchange::write_new(folder, &crate::interchange::file_stem(&title, "dictionary"), "html", html.as_bytes())?;
-    Ok(Dictionary { path: path.display().to_string(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out })
+    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out };
+    Ok((title, html, d))
 }
 
 #[cfg(test)]

@@ -601,6 +601,17 @@ Sentences from texts that are not open (restricted or community-only) are left o
 
 Press **Dictionary to print…** beside the lexicon export. wugs writes one HTML file. Entries are in the order of your alphabet (the writing system's sort order, if the project has one), under letter headings. Each entry shows its part of speech and numbered senses, each sense with its glosses, definition, usage and semantic domains. Each sense also gets its example sentences from the lexicon, or, when it has none, its first use in your texts, with its translation. An index of glosses closes the file. Open it in a browser and print it to PDF, or open it in Word or Google Docs to edit it. Examples from texts that are not open are left out unless you tick **Include texts that are not open**.
 
+### Publish a website for the community
+
+Press **Publish as a website…** to make a folder of web pages from your texts and dictionary, for the people whose language it is. It needs no server and nothing to install: open `index.html` in any browser, copy the folder to a USB stick or a phone, or put it on any web host.
+
+- The first page lists the texts, with a link to the dictionary.
+- Each text shows its sentences one by one: the sentence, each glossed word's morphs and glosses under it, and the translation.
+- With **With sound clips** ticked, a ▶ beside each timed sentence plays it, cut from the text's recording.
+- The dictionary is the same page **Dictionary to print…** makes.
+
+Texts that are not open are left out unless you tick **Include texts that are not open**, and notes on sentences are never published. Check that the speakers agreed before you share the site. Each export goes into a new folder named `wugs-site-` and the date; an earlier one is never replaced.
+
 ### Load the corpus into CQPweb or Sketch Engine
 
 Press **Corpus for CQPweb…** to export every text as one corpus. wugs makes a folder with three files:

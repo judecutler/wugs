@@ -31,6 +31,7 @@ pub mod morphosyntax;
 pub mod people;
 pub mod plaintext;
 pub mod replace;
+pub mod website;
 pub mod table_text;
 pub mod listen;
 pub mod praat;
@@ -933,6 +934,12 @@ fn set_acoustic_voice(s: State<SessionThread>, source: String, voice: String) ->
     s.run(move |s| praat_analysis::set_voice(s, &source, &voice))
 }
 
+/// The texts and dictionary as a folder of web pages (`website.rs`).
+#[tauri::command(async)]
+fn export_website(s: State<SessionThread>, folder: String, date: String, include_restricted: bool, audio: bool) -> Result<website::Site, String> {
+    s.run(move |s| website::export_website(s, std::path::Path::new(&folder), &date, include_restricted, audio))
+}
+
 /// Every sentence a find and replace would change, before and after.
 #[tauri::command(async)]
 fn replace_preview(s: State<SessionThread>, find: replace::Find) -> Result<replace::Preview, String> {
@@ -1832,6 +1839,7 @@ pub fn run() {
             acoustic_analysis,
             measure_track,
             replace_preview,
+            export_website,
             replace_apply,
             acoustic_voice,
             set_acoustic_voice,

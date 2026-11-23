@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { glottocodeProblem, isoProblem, publishedLines, corpusLines, dictionaryLines } from "./logic.ts";
+import { glottocodeProblem, isoProblem, publishedLines, corpusLines, dictionaryLines, siteLines } from "./logic.ts";
 
 test("codes are optional, and checked when typed", () => {
   assert.equal(glottocodeProblem(""), null);
@@ -20,6 +20,15 @@ test("the report counts in words and keeps the notes", () => {
   assert.equal(clipped[2], "2 sentences come with their sound clip, cut from the recording, in the audio folder.");
   const withExamples = publishedLines({ path: "/x", entries: 1, senses: 1, examples: 3, lexiconExamples: 1, restrictedLeftOut: 0, notes: [] });
   assert.match(withExamples[1]!, /3 glossed sentences, with 1 example sentence from the lexicon, ready/u);
+});
+
+test("a website export says what it holds and what was left out", () => {
+  const lines = siteLines({ path: "/x/wugs-site-2026-11-23", texts: 2, sentences: 31, entries: 120, clips: 30, restrictedLeftOut: 1, clipsMissing: 1 });
+  assert.match(lines[0]!, /^Saved a website in \/x\/wugs-site-2026-11-23: 2 texts \(31 sentences\) and a dictionary of 120 entries\./u);
+  assert.equal(lines[1], "30 sentences play from their recording.");
+  assert.match(lines[2]!, /^1 timed sentence has no sound/u);
+  assert.equal(lines[3], "1 text that is not open was left out.");
+  assert.match(siteLines({ path: "/x", texts: 0, sentences: 0, entries: 4, clips: 0, restrictedLeftOut: 0, clipsMissing: 0 })[0]!, /: a dictionary of 4 entries\./u);
 });
 
 test("a corpus export says where it went and what was left out", () => {
