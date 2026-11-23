@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nearSpellings, oneApart, pairNote, spellingSummary } from "./spelling.ts";
+import { nearSpellings, oneApart, pairNote, spellingSummary, countWords, didYouMean, spellIndex } from "./spelling.ts";
 
 test("one letter apart, counted in letters with their marks", () => {
   const u = (s: string) => Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(s), (g) => g.segment);
@@ -43,4 +43,22 @@ test("the summary", () => {
   assert.equal(spellingSummary([], 0), "No transcribed words yet.");
   assert.match(spellingSummary([], 1200), /1,200 different words/);
   assert.match(spellingSummary([{ rare: "a", rareCount: 1, common: "b", commonCount: 9, why: "letter" }], 10), /^1 rare word is one letter/);
+});
+
+test("a typed word is checked against the project's words", () => {
+  const index = spellIndex([
+    { word: "kesi", count: 40 },
+    { word: "Mopa", count: 12 },
+    { word: "tela", count: 3 },
+    { word: "kési", count: 1 },
+  ]);
+  assert.deepEqual(didYouMean(index, "kési"), { word: "kesi", count: 40, why: "accents" });
+  assert.deepEqual(didYouMean(index, "mopaa"), { word: "mopa", count: 12, why: "letter" }, "case folded, one letter added");
+  assert.deepEqual(didYouMean(index, "kezi"), { word: "kesi", count: 40, why: "letter" });
+  assert.equal(didYouMean(index, "kesi"), null, "a common word is known");
+  assert.equal(didYouMean(index, "telo"), null, "tela is not common enough to offer");
+  assert.equal(didYouMean(index, "ab"), null);
+  assert.equal(didYouMean(index, "123"), null);
+  countWords(index, ["kezi", "kezi", "kezi"]);
+  assert.equal(didYouMean(index, "kezi"), null, "a word used three times is the project's own");
 });

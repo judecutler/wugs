@@ -472,6 +472,9 @@ form.inline input { flex: 1; min-width: 0; }
 .lx-ex-new input:first-child { font-family: var(--font-ipa); }
 .tx-row { display: flex; gap: 10px; align-items: center; padding: 6px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); cursor: default; }
 .tx-row.selected { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent-bright); }
+/* The field keeps room to type; hints beside it wrap under it in a narrow panel. */
+.tx-row.selected { flex-wrap: wrap; }
+.tx-row.selected .tx-field { min-width: 12em; }
 .tx-time { flex: none; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .tx-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tx-field { flex: 1; min-width: 0; font-size: 15px; }
@@ -1359,3 +1362,5 @@ body::before {
 .af-gloss .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
 .af-table td, .af-table th { text-align: left; }
 .af-table tbody tr { cursor: default; }
+.tx-spell { font-family: var(--font-ipa); font-size: var(--text-sm); color: var(--accent); background: none; border: 1px dashed var(--accent-bright); border-radius: var(--radius-sm); padding: 0 6px; white-space: nowrap; cursor: pointer; }
+.tx-spell[hidden] { display: none; }

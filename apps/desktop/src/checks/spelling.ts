@@ -98,3 +98,70 @@ export function spellingSummary(pairs: readonly NearPair[], read: number): strin
   if (pairs.length === 0) return `No rare word in the ${read.toLocaleString("en")} different words looks like a slip for a common one.`;
   return `${pairs.length} rare word${pairs.length === 1 ? "" : "s"} ${pairs.length === 1 ? "is" : "are"} one letter, or only accents, away from a common word. Some are real words; open each to check, and fix slips with Replace… in the Search panel.`;
 }
+
+/** The project's words as a typed word is checked against them: counts, and
+ * the common words by their bare form and by each one-letter deletion. */
+export type SpellIndex = {
+  counts: Map<string, number>;
+  byBare: Map<string, string[]>;
+  byDeletion: Map<string, string[]>;
+};
+
+const deletions = (us: readonly string[]): string[] => us.map((_, i) => [...us.slice(0, i), ...us.slice(i + 1)].join(""));
+
+export function spellIndex(words: readonly WordCount[]): SpellIndex {
+  const counts = new Map<string, number>();
+  for (const { word, count } of words) {
+    const w = word.normalize("NFC").toLowerCase();
+    if (/\p{L}/u.test(w)) counts.set(w, (counts.get(w) ?? 0) + count);
+  }
+  const byBare = new Map<string, string[]>();
+  const byDeletion = new Map<string, string[]>();
+  for (const [w, n] of counts) {
+    // Only a word used often enough is ever offered.
+    if (n < 4) continue;
+    byBare.set(bare(w), [...(byBare.get(bare(w)) ?? []), w]);
+    const us = units(w);
+    if (us.length < SHORTEST - 1) continue;
+    for (const k of new Set([us.join(""), ...deletions(us)])) byDeletion.set(k, [...(byDeletion.get(k) ?? []), w]);
+  }
+  return { counts, byBare, byDeletion };
+}
+
+/** A common word the typed one may be a slip for, as Spellings to check would
+ * pair them (same rules), or null when the word is known or nothing is near. */
+export function didYouMean(index: SpellIndex, typed: string): { word: string; count: number; why: NearPair["why"] } | null {
+  const w = typed.normalize("NFC").toLowerCase();
+  if (!/\p{L}/u.test(w)) return null;
+  const n = index.counts.get(w) ?? 0;
+  if (n > RARE_AT) return null;
+  const enough = (c: number) => c >= Math.max(4, RATIO * Math.max(n, 1));
+  const best = (cands: readonly string[], ok: (c: string) => boolean): { word: string; count: number } | null => {
+    let found: { word: string; count: number } | null = null;
+    for (const c of cands) {
+      const k = index.counts.get(c) ?? 0;
+      if (c === w || !enough(k) || !ok(c)) continue;
+      if (found === null || k > found.count || (k === found.count && c < found.word)) found = { word: c, count: k };
+    }
+    return found;
+  };
+  const accents = best(index.byBare.get(bare(w)) ?? [], () => true);
+  if (accents !== null) return { ...accents, why: "accents" };
+  const us = units(w);
+  if (us.length < SHORTEST - 1) return null;
+  const cands = new Set<string>();
+  for (const k of new Set([us.join(""), ...deletions(us)])) for (const c of index.byDeletion.get(k) ?? []) cands.add(c);
+  const letter = best([...cands], (c) => {
+    const uc = units(c);
+    return Math.max(uc.length, us.length) >= SHORTEST && bare(c) !== bare(w) && oneApart(uc, us);
+  });
+  return letter === null ? null : { ...letter, why: "letter" };
+}
+
+/** Add a saved transcription's words to the counts, so they are known at once. */
+export function countWords(index: SpellIndex, words: readonly string[]): void {
+  for (const word of words) {
+    const w = word.normalize("NFC").toLowerCase();
+    if (/\p{L}/u.test(w)) index.counts.set(w, (index.counts.get(w) ?? 0) + 1);
+  }
+}
