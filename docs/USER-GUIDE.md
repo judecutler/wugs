@@ -393,7 +393,7 @@ Each example's sentence and translation are fields you can edit like any other. 
 
 The lexicon is shared with everyone the project reaches. A sentence from a text that is not open to everyone cannot be copied in, so type an example that may be shared instead.
 
-Examples go out with the lexicon: in LIFT files (FLEx's `<example>` with its translation and source), in the printed dictionary (in place of the sense's first use in a text), and in Search, which finds them under **Lexicon**. Examples in a LIFT file you import come in the same way.
+Examples go out with the lexicon: in LIFT files (FLEx's `<example>` with its translation and source), in Toolbox files (`\xv` with its `\xe`), in the CLDF dataset (listed under their sense), in the printed dictionary (in place of the sense's first use in a text), and in Search, which finds them under **Lexicon**. Examples in a LIFT or Toolbox file you import come in the same way.
 
 ### Give entries semantic domains
 

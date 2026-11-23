@@ -88,7 +88,7 @@ fn fixture_reads_as_intended() {
 fn round_trip_is_identical() {
     let (root, mut p) = temp_project();
     let r = import_toolbox(&mut p, DB).unwrap();
-    assert_eq!((r.entries_created, r.senses_created, r.variants_created), (7, 9, 2), "everything imported once");
+    assert_eq!((r.entries_created, r.senses_created, r.variants_created, r.examples_created), (7, 9, 2, 2), "everything imported once");
     assert_eq!(canon(&export_toolbox(&p).unwrap()), canon(DB), "export has every line, in place");
     fs::remove_dir_all(root).ok();
 }
@@ -98,7 +98,7 @@ fn report_counts_every_verbatim_line() {
     let (root, mut p) = temp_project();
     let r = import_toolbox(&mut p, DB).unwrap();
     let want: BTreeMap<String, usize> =
-        [("cf", 1), ("dt", 5), ("ge", 1), ("gn", 1), ("nt", 2), ("xe", 2), ("xv", 2)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+        [("cf", 1), ("dt", 5), ("ge", 1), ("gn", 1), ("nt", 2)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
     assert_eq!(r.markers_kept_verbatim.0, want, "uncarried markers, plus the repeated \\ge, counted by marker");
     assert_eq!(r.duplicate_headwords, 1, "second bank without \\hm reported");
     fs::remove_dir_all(root).ok();
@@ -205,6 +205,35 @@ fn edits_made_in_wugs_reach_the_export() {
     assert_eq!(r.entries_created, 0, "edited and born-digital entries re-import onto themselves");
     assert_eq!(counts(&p), before);
     assert_eq!(s(&p, &born, "lemma").as_deref(), Some("kedi"));
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn examples_come_in_with_their_sense_and_go_back_out() {
+    let (root, mut p) = temp_project();
+    import_toolbox(&mut p, DB).unwrap();
+    let kopek = lexeme(&p, "köpek", None);
+    let ks = senses(&p, &kopek)[0].clone();
+    let ex = p.examples(&ks).unwrap();
+    assert_eq!((ex.len(), ex[0].sentence.as_str(), ex[0].translation.as_str()), (1, "Köpek havladı.", "The dog barked."));
+    let gel = lexeme(&p, "gel", None);
+    assert_eq!(p.examples(&senses(&p, &gel)[0]).unwrap()[0].sentence, "Geldi.", "an example under \\sn 1 belongs to sense 1");
+    // Edited in wugs: the line keeps its place; a new example follows the sense's lines.
+    p.set_example_text(&ex[0].id, "translation", "The dog was barking.").unwrap();
+    p.add_example(&ks, "Köpek koştu.", "The dog ran.", None, None).unwrap();
+    p.add_example(&ks, "Köpek!", "", None, None).unwrap();
+    let out = canon(&export_toolbox(&p).unwrap());
+    let k: Vec<String> = out.records.iter().find(|r| r[0].1 == "köpek").unwrap().iter().map(|(m, v)| format!("{m} {v}")).collect();
+    assert_eq!(
+        k,
+        ["lx köpek", "ps n", "ge dog", "de a domesticated canine", "gn chien", "xv Köpek havladı.", "xe The dog was barking.", "va köpük", "dt 12/Mar/2004", "xv Köpek koştu.", "xe The dog ran.", "xv Köpek!"],
+        "no empty \\xe for an example without a translation"
+    );
+    let before = counts(&p);
+    let exported = export_toolbox(&p).unwrap();
+    let r = import_toolbox(&mut p, &exported).unwrap();
+    assert_eq!(r.entries_created, 0);
+    assert_eq!(counts(&p), before, "our own export re-imports onto itself");
     fs::remove_dir_all(root).ok();
 }
 

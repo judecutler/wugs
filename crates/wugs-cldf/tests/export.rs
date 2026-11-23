@@ -43,6 +43,7 @@ fn build() -> Built {
     p.assign_domain(&count, &domain_id("00000000-0000-0000-0000-000000000001").unwrap()).unwrap();
     p.import_concept_list("test:list", "Test list", "", &[ConceptRow { key: "k1".into(), number: 1, gloss: "count".into(), concepticon: "1234".into(), concepticon_gloss: "COUNT".into() }]).unwrap();
     p.link_concept(&count, &concept_id("test:list", "k1")).unwrap();
+    p.add_example(&count, "kani toru", "count two", None, Some("Notebook 2")).unwrap();
 
     for (title, restricted) in [("Counting, part 1", false), ("Private talk", true)] {
         let text = p.create_text(title).unwrap();
@@ -83,7 +84,12 @@ fn a_glossed_project_becomes_a_dictionary_with_examples() {
     let senses = file(&d, "senses.csv");
     assert!(senses.starts_with("ID,Entry_ID,Description,Gloss_es,Definition,Usage,Semantic_Domains,Concepticon_ID,Concepticon_Gloss,Example_IDs\n"), "{senses}");
     let count_row = senses.lines().find(|l| l.starts_with(&b.count_sense)).unwrap();
-    assert!(count_row.contains(",count,contar,,,8 Number,1234,COUNT,seg_"), "{count_row}");
+    assert!(count_row.contains(",count,contar,,,8 Number,1234,COUNT,"), "{count_row}");
+    // The sense lists its glossed sentence and the lexicon's own example.
+    assert!(count_row.contains("exm_") && count_row.contains("seg_"), "{count_row}");
+    assert_eq!(d.lexicon_examples, 1);
+    assert!(examples.lines().any(|l| l.starts_with("exm_") && l.contains(",abcd1234,kani toru,,,count two,")), "{examples}");
+    assert!(file(&d, "README.md").contains("1 example sentence the lexicon gives"), "{}", file(&d, "README.md"));
     let entries = file(&d, "entries.csv");
     assert!(entries.lines().nth(1).unwrap().contains(",abcd1234,kani,v,"), "kani sorts before teka: {entries}");
     std::fs::remove_dir_all(&b.root).ok();
