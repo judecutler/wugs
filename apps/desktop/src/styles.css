@@ -1366,3 +1366,4 @@ body::before {
 .tx-spell[hidden] { display: none; }
 .lx-picture { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
 .lx-picture img { max-width: 160px; max-height: 120px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface-raised); }
+.rate-select { font-size: var(--text-sm); padding: 2px 4px; }

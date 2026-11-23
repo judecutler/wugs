@@ -35,7 +35,7 @@ export const transcribePanel: PanelDef = {
       xsampaToggle.setAttribute("aria-pressed", String(xsampa));
     };
     showXsampa();
-    const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, paletteToggle, xsampaToggle, keys, hint);
+    const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, paletteToggle, xsampaToggle, playback.rateSelect(), keys, hint);
     const list = h("div", { className: "tx-list" });
     const palette = h("div", { className: "tx-palette" });
     const field = h("input", { className: "tx-field", spellcheck: false, title: "Enter: save, next and play. Shift+Enter: previous. Tab or Ctrl/Cmd+Enter: replay. Esc: revert. Shift+Tab leaves the field." });
