@@ -213,6 +213,12 @@ export const glossTokenize = (args: SegmentArgs & { forms: string[] }) => invoke
 export const glossRetokenize = (args: SegmentArgs & { forms: string[] }) => invoke<GlossEdit>("gloss_retokenize", args);
 export const glossApply = (args: SegmentArgs & { tokenId: string; morphs: MorphSpec[] }) => invoke<GlossEdit>("gloss_apply", args);
 export const glossApplyAll = (args: SegmentArgs & { form: string; morphs: MorphSpec[] }) => invoke<ApplyAllResult>("gloss_apply_all", args);
+/** A word form with uses not yet analysed, and the analysis it would most likely get. */
+export type WordTypeRow = { form: string; unanalysed: number; uses: number; suggestion: Suggestion | null };
+export type WordTypes = { rows: WordTypeRow[]; unbrokenWords: number; unbrokenSentences: number; types: number };
+export const glossWordTypes = (args: { textId: string | null }) => invoke<WordTypes>("gloss_word_types", args);
+export const glossBreakAll = (args: { textId: string | null }) => invoke<number>("gloss_break_all", args);
+export const glossApplyType = (args: { form: string; morphs: MorphSpec[] }) => invoke<{ applied: number; texts: number }>("gloss_apply_type", args);
 /** `lang` null sets the primary gloss, a tag sets `gloss:<tag>`. */
 export const glossSet = (args: SegmentArgs & { morphId: string; gloss: string; lang: string | null }) => invoke<GlossEdit>("gloss_set", args);
 /** Add a note to the sentence; retype one (empty deletes it). */

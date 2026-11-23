@@ -46,6 +46,7 @@ PANELS = [
     ("typology", "Typology"),
     ("progress", "Progress"),
     ("affixes", "Affixes"),
+    ("wordtypes", "Words to gloss"),
     ("orthography", "Orthography"),
     ("assist", "Speech assist"),
     ("people", "People"),
@@ -558,6 +559,17 @@ def main():
             run.shot("state-characters", run.page.locator(".panel-checks"))
             if run.page.locator(".panel-checks .ck-chars tbody tr").count() != 8:
                 failures.append("Every character did not list the inventory")
+            # Words to gloss: one analysis typed for every unanalysed use of a form.
+            run.front("wordtypes", "Words to gloss")
+            run.page.locator(".panel-wordtypes .wt-row").first.wait_for()
+            run.page.locator('.panel-wordtypes [data-key="wt-b:wuno"]').fill("wu- no")
+            run.page.locator('.panel-wordtypes [data-key="wt-g:wuno"]').fill("3SG eat")
+            run.shot("state-wordtypes", run.page.locator(".panel-wordtypes"))
+            run.page.locator('.panel-wordtypes [data-key="wt-g:wuno"]').press("Enter")
+            run.page.wait_for_timeout(500)
+            if "Analysed 4 uses of «wuno»" not in " ".join(run.toasts()):
+                failures.append("Words to gloss did not apply an analysis")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Sounds: the IPA track's sounds on the chart.
             run.front("sounds", "Sounds")
             run.page.locator(".panel-sounds .sd-consonants").wait_for()
