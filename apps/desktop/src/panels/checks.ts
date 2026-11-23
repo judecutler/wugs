@@ -4,7 +4,8 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
 import { addedLine, addLabel, consentLine, consentNote, type ConsentGaps, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
@@ -32,6 +33,7 @@ export const checksPanel: PanelDef = {
     let consent: ConsentGaps | null = null;
     let chars: Inventory | null = null;
     let near: { pairs: NearPair[]; read: number } | null = null;
+    let doubles: { pairs: LikelyPair[]; entries: number } | null = null;
     let gaps: { without: number; fillable: number } | null = null;
     let trees: { sentences: TreeProblem[]; total: number; annotated: number } | null = null;
     let showAllChars = false;
@@ -45,9 +47,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null)]).then(
-        ([r, m, c, w, g, t, d, k]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" })]).then(
+        ([r, m, c, w, g, t, d, k, l]) => {
           if (mine !== seq) return;
+          doubles = { pairs: likelyDuplicates(l), entries: l.length };
           consent = k;
           drift = d;
           gaps = g;
@@ -348,6 +351,60 @@ export const checksPanel: PanelDef = {
       return [h("h3", { className: "ck-title", textContent: "Example sentences" }), h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: exampleGapsLine(gaps) }), fill)];
     };
 
+    const merge = async (p: LikelyPair) => {
+      busy = true;
+      armed = null;
+      paint();
+      try {
+        await lexiconMerge({ keep: p.keep.id, other: p.other.id });
+        touchLexicon();
+        showToast({ tone: "info", lines: [`Merged ${headwordOf({ headword: p.other.lemma, homograph: p.other.homograph })} into ${headwordOf({ headword: p.keep.lemma, homograph: p.keep.homograph })}: its senses, forms and links are now there.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      } finally {
+        busy = false;
+      }
+      refreshAll();
+    };
+
+    const doubleCard = (p: LikelyPair): HTMLElement => {
+      const name = (x: LikelyPair["keep"]) => headwordOf({ headword: x.lemma, homograph: x.homograph });
+      const open = (x: LikelyPair["keep"]) => {
+        const b = h("button", { type: "button", className: "ck-show ck-word", textContent: name(x), title: `Open «${name(x)}» in the Lexicon (${x.glosses.join("; ")})` });
+        b.onclick = () => {
+          openEntry(x.id);
+          window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "lexicon" }));
+        };
+        return b;
+      };
+      const id = `merge:${p.keep.id}:${p.other.id}`;
+      const go = h("button", {
+        type: "button",
+        className: armed === id ? "danger" : "",
+        disabled: busy,
+        textContent: armed === id ? `Merge «${name(p.other)}» into «${name(p.keep)}»: sure?` : `Merge «${name(p.other)}» into «${name(p.keep)}»`,
+        title: "Move the second entry's senses, forms, pronunciations and relations to the first, and delete the second",
+      });
+      go.onclick = () => {
+        if (armed !== id) {
+          armed = id;
+          paint();
+          return;
+        }
+        void merge(p);
+      };
+      return h("li", { className: "ck-card" }, h("div", { className: "ck-variant" }, open(p.keep), h("span", { className: "note", textContent: "and" }), open(p.other)), h("p", { className: "note", textContent: duplicateNote(p) }), go);
+    };
+
+    const doublesSection = (): HTMLElement[] =>
+      doubles === null
+        ? []
+        : [
+            h("h3", { className: "ck-title", textContent: "Entries that may be one word" }),
+            h("p", { className: "note", textContent: duplicatesLine(doubles.pairs, doubles.entries) }),
+            h("ul", { className: "ck-list" }, ...doubles.pairs.map(doubleCard)),
+          ];
+
     const spellingSection = (): HTMLElement[] =>
       near === null
         ? []
@@ -383,6 +440,7 @@ export const checksPanel: PanelDef = {
         h("h3", { className: "ck-title", textContent: "Unlike the lexicon" }),
         h("p", { className: "note", textContent: driftSummary(drift) }),
         h("ul", { className: "ck-list" }, ...drift.map(driftCard)),
+        ...doublesSection(),
         ...examplesSection(),
         ...treesSection(),
         ...consentSection(),

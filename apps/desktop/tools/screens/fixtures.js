@@ -240,7 +240,9 @@ const LEXICON = [
     ["lx-tela2", "tela", 2, "v", ["wade across"]],
     ["lx-wiripa", "wiripa", null, "n", ["fox"]],
     ["lx-toruma", "toruma", null, "", [""]],
-  ].map(([id, lemma, homograph, posOfSpeech, glosses]) => ({ id, lemma, homograph, posOfSpeech, glosses, used: !["lx-wiripa", "lx-toruma", "lx-tela2"].includes(id) }));
+    // Typed twice: Checks' "Entries that may be one word" pairs it with liwa.
+    ["lx-lima", "lima", null, "n", ["hand"]],
+  ].map(([id, lemma, homograph, posOfSpeech, glosses]) => ({ id, lemma, homograph, posOfSpeech, glosses, used: !["lx-wiripa", "lx-toruma", "lx-tela2", "lx-lima"].includes(id) }));
 
   const DOMAINS = [
     { id: "dom-8", code: "8", label: "States", description: "Use this domain for general words referring to states and conditions.", depth: 0 },

@@ -585,6 +585,11 @@ def main():
             run.shot("state-checks-trees", run.page.locator(".panel-checks"))
             if "1 of 4 parsed sentences has" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not list the tree problem")
+            doubles = run.page.locator(".panel-checks .ck-title", has_text="Entries that may be one word")
+            doubles.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
+            run.shot("state-checks-doubles", run.page.locator(".panel-checks"))
+            if "Merge «lima» into «liwa»" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not offer to merge two entries that may be one word")
             spelling = run.page.locator(".panel-checks .ck-title", has_text="Spellings to check")
             spelling.scroll_into_view_if_needed()
             run.shot("state-spellings", run.page.locator(".panel-checks"))
