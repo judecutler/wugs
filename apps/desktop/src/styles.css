@@ -1077,6 +1077,24 @@ body::before {
 @media (prefers-reduced-motion: reduce) { .menu-landed { animation: none; } }
 
 /* Sentence (Scrolls): a dependency tree over the words, and the table to correct it. */
+.panel-interlinear { overflow: auto; padding: 10px 14px; }
+.il-title { margin: 0 0 2px; font-family: var(--font-display); }
+.il-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.il-row { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: start; padding: 6px 8px; border-radius: var(--radius-md); cursor: pointer; }
+.il-row:hover { background: var(--panel); }
+.il-row:focus-visible { outline: var(--focus-ring); outline-offset: 1px; }
+.il-selected { background: var(--accent-soft); }
+.il-num { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+.il-body { min-width: 0; }
+.il-words { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+.il-word { display: inline-flex; flex-direction: column; }
+.il-form { font-family: var(--font-ipa); font-weight: 600; color: var(--ink); }
+.il-morphs { font-family: var(--font-ipa); font-style: italic; color: var(--ink); min-height: 1.2em; }
+.il-gloss { color: var(--ink); min-height: 1.2em; }
+.il-gloss .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
+.il-plain { margin: 0; font-family: var(--font-ipa); color: var(--ink); }
+.il-unglossed .il-plain { color: var(--muted); }
+.il-tr { margin: 3px 0 0; color: var(--muted); }
 .panel-sentence { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .panel-sentence > * { flex: none; }
 .st-content { margin: 0; font-family: var(--font-ipa); color: var(--ink); }

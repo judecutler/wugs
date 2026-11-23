@@ -8,6 +8,7 @@ import { keywordsPanel } from "./keywords";
 import { frequenciesPanel } from "./frequencies";
 import { glossPanel } from "./gloss";
 import { helpPanel } from "./help";
+import { interlinearPanel } from "./interlinear";
 import { kitsPanel } from "./kits";
 import { lexiconPanel } from "./lexicon";
 import { mediaPanel } from "./media";
@@ -28,6 +29,7 @@ export const PANELS = {
   transcribe: transcribePanel,
   gloss: glossPanel,
   sentence: sentencePanel,
+  interlinear: interlinearPanel,
   lexicon: lexiconPanel,
   elicit: elicitPanel,
   search: searchPanel,

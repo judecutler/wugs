@@ -31,6 +31,7 @@ enabled = [
   "search",
   "gloss",                         # morph analysis of one sentence
   "sentence",                      # one sentence's tags and dependency tree, to correct
+  "interlinear",                   # the whole text, glossed, sentence by sentence
   "lexicon",                       # the corpus vocabulary
   "transcribe",                    # read and correct the text sentence by sentence
 ]
@@ -47,6 +48,7 @@ panels = [
   { panel = "transcribe", place = "below", of = "concordance", height = 280 },
   { panel = "gloss", place = "right", of = "transcribe", width = 460 },
   { panel = "sentence", place = "tab", of = "gloss" },
+  { panel = "interlinear", place = "tab", of = "gloss" },
 ]
 active = ["texts", "concordance", "frequencies"]
 
