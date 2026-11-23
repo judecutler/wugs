@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { glottocodeProblem, isoProblem, publishedLines, corpusLines, dictionaryLines, flashcardLines, siteLines } from "./logic.ts";
+import { glottocodeProblem, isoProblem, publishedLines, corpusLines, dictionaryLines, flashcardLines, sheetLines, siteLines } from "./logic.ts";
 import { languoidLine, pickedLanguage, worthLooking } from "./logic.ts";
 
 test("codes are optional, and checked when typed", () => {
@@ -70,4 +70,11 @@ test("flashcard lines say what to import and what is missing", () => {
   assert.equal(lines[1], "1 card plays the word as it is said: copy the sounds folder into Anki's media folder first.");
   assert.equal(lines[2], "2 entries with no gloss were left out.");
   assert.match(flashcardLines({ path: "/x", cards: 1, sounds: 0, noGloss: 0 })[1]!, /^No card has a sound yet/u);
+});
+
+test("catalogue sheet lines", () => {
+  const lines = sheetLines({ path: "/x/a.csv", texts: 3, withoutRecording: 1, notOpen: 2 });
+  assert.match(lines[0]!, /^Saved a catalogue sheet of 3 texts in \/x\/a\.csv/u);
+  assert.equal(lines[1], "1 text has no recording linked here, so no file name or length.");
+  assert.equal(lines[2], "2 texts are not open; the access column says so.");
 });

@@ -9,6 +9,7 @@ pub mod cqp;
 pub mod cwb;
 pub mod dictionary;
 pub mod flashcards;
+pub mod archive_sheet;
 pub mod dispersion;
 pub mod collocates;
 pub mod frequencies;
@@ -1145,6 +1146,12 @@ fn export_website(s: State<SessionThread>, folder: String, date: String, include
     s.run(move |s| website::export_website(s, std::path::Path::new(&folder), &date, include_restricted, audio))
 }
 
+/// One catalogue row per text for an archive's item forms (`archive_sheet.rs`).
+#[tauri::command(async)]
+fn export_archive_sheet(s: State<SessionThread>, folder: String) -> Result<archive_sheet::Sheet, String> {
+    s.run(move |s| archive_sheet::export_sheet(s, std::path::Path::new(&folder)))
+}
+
 /// The lexicon as flashcards for Anki and Quizlet (`flashcards.rs`).
 #[tauri::command(async)]
 fn export_flashcards(s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<flashcards::Flashcards, String> {
@@ -2105,6 +2112,7 @@ pub fn run() {
             acoustic_analysis,
             measure_track,
             export_flashcards,
+            export_archive_sheet,
             save_clips,
             replace_preview,
             export_website,
