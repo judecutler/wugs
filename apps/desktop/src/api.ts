@@ -174,7 +174,8 @@ export type HiddenEdit = { parent: string; member: string; label: string; fields
 /** The other side of a conflict on a word's morphs or the segment's words, offered as "use that instead". */
 export type Alternative = { parent: string; members: string[]; surfaces: string[]; glosses: string[] };
 
-export type GlossView = { segmentId: string; words: WordView[]; hidden: HiddenEdit[]; alternatives: Alternative[] };
+/** `readsAs`: the words as the transcription spells them (a CoNLL-U multi-word token as one), to tell whether it changed. */
+export type GlossView = { segmentId: string; words: WordView[]; readsAs: string[]; hidden: HiddenEdit[]; alternatives: Alternative[] };
 /** Every edit answers with the segment's fresh view, and notes worth a toast. */
 export type GlossEdit = { view: GlossView; notes: string[] };
 export type ApplyAllResult = { applied: number; texts: number; skippedAnalysed: number; view: GlossView };
@@ -499,7 +500,7 @@ export const assistDelete = (args: { id: string }) => invoke<void>("assist_delet
 /** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
 // Import and export in other tools' formats: src-tauri/src/interchange.rs.
-export type TextFormat = "elan" | "flextext" | "textgrid" | "plaintext";
+export type TextFormat = "elan" | "flextext" | "textgrid" | "conllu" | "plaintext";
 export type LexiconFormat = "lift" | "toolbox";
 /** `text`: the text to show afterwards; `lexicon`: the lexicon changed; `lines`: what happened, in words. */
 export type Imported = { format: string; text: string | null; lexicon: boolean; lines: string[] };

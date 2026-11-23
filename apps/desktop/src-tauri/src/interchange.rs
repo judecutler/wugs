@@ -26,6 +26,8 @@ pub enum Format {
     /// A `.csv` or `.tsv` with a header row: one text per document column
     /// value, a segment per row, other columns kept (`table_text`). Import only.
     Table { tabs: bool },
+    /// CoNLL-U (Universal Dependencies): sentences with tags and trees.
+    Conllu,
 }
 
 impl Format {
@@ -37,6 +39,7 @@ impl Format {
             "lift" => Format::Lift,
             "toolbox" => Format::Toolbox,
             "plaintext" => Format::PlainText,
+            "conllu" => Format::Conllu,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -50,6 +53,7 @@ impl Format {
             Format::Toolbox | Format::PlainText => "txt",
             Format::Table { tabs: true } => "tsv",
             Format::Table { tabs: false } => "csv",
+            Format::Conllu => "conllu",
         }
     }
 
@@ -62,6 +66,7 @@ impl Format {
             Format::Toolbox => "Toolbox lexicon",
             Format::PlainText => "plain text",
             Format::Table { .. } => "table of sentences",
+            Format::Conllu => "CoNLL-U",
         }
     }
 }
@@ -78,6 +83,7 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "db" | "sfm" | "lex" => return Some(Format::Toolbox),
         "csv" => return Some(Format::Table { tabs: false }),
         "tsv" | "tab" => return Some(Format::Table { tabs: true }),
+        "conllu" | "conll" => return Some(Format::Conllu),
         _ => {}
     }
     let head = sniff(&bytes[..bytes.len().min(4096)]);
@@ -237,12 +243,12 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, a .csv/.tsv table of sentences, or a plain .txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, a .csv/.tsv table of sentences, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::Conllu => decode_xml(&bytes, file_name)?,
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
         Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
@@ -405,6 +411,30 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             }
             (first, false)
         }
+        Format::Conllu => {
+            if input.contains('\0') {
+                return Err(format!("{file_name} is not valid UTF-8 or UTF-16 text; it may be damaged, so nothing was imported"));
+            }
+            let tier = session::utterance_tier(p)?;
+            let r = wugs_conllu::import_conllu(p, input, &stem, &tier).map_err(|e| format!("{file_name}: {e}"))?;
+            if !r.texts.is_empty() {
+                lines.push(format!(
+                    "{} with {} and {}{}.",
+                    plural(r.texts.len(), "new text", "new texts"),
+                    plural(r.sentences, "sentence", "sentences"),
+                    plural(r.words, "word", "words"),
+                    if r.texts.len() > 1 { ", one per # newdoc" } else { "" }
+                ));
+                lines.push("Lemmas, tags, features and the dependency tree are kept with each sentence and come back out in a CoNLL-U export.".into());
+            }
+            if r.ranges + r.empty_nodes > 0 {
+                lines.push(format!("{} and {} kept.", plural(r.ranges, "multi-word token", "multi-word tokens"), plural(r.empty_nodes, "empty node", "empty nodes")));
+            }
+            if !r.matched.is_empty() {
+                lines.push(format!("{} matched a text already here; nothing was added for them.", plural(r.matched.len(), "document", "documents")));
+            }
+            (r.texts.first().or(r.matched.first()).cloned(), false)
+        }
         Format::Toolbox => {
             let r = wugs_legacy::import_toolbox(p, input).map_err(|e| e.to_string())?;
             lines.push(format!(
@@ -526,43 +556,77 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             out.textgrid
         }
         Format::PlainText => {
-            // One tier, in time order: the utterance tier when it holds this
-            // text's segments, else the transcription tier with the most.
-            let (_, transcription) = crate::concordance::corpus_tiers(p)?;
-            let mut by_tier: Vec<(String, Vec<(Option<f64>, usize, String)>)> = Vec::new();
-            for (i, seg) in p.proj.ordered_children("text", text_id, "segment")?.into_iter().enumerate() {
-                let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
-                if !transcription.contains(&tier) {
-                    continue;
-                }
-                let row = (p.proj.field_num(&seg, "start")?, i, p.proj.field_str(&seg, "content")?.unwrap_or_default());
-                match by_tier.iter_mut().find(|(t, _)| *t == tier) {
-                    Some((_, rows)) => rows.push(row),
-                    None => by_tier.push((tier, vec![row])),
-                }
-            }
-            let utterance = session::find_utterance_tier(p)?;
-            let pick = by_tier.iter().position(|(t, _)| Some(t) == utterance.as_ref()).or_else(|| (0..by_tier.len()).max_by_key(|&i| by_tier[i].1.len()));
-            let mut rows = pick.map(|i| by_tier[i].1.clone()).unwrap_or_default();
-            // Timed segments by start, untimed after them in their own order.
-            rows.sort_by(|a, b| match (a.0, b.0) {
-                (Some(x), Some(y)) => x.total_cmp(&y).then(a.1.cmp(&b.1)),
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => a.1.cmp(&b.1),
-            });
-            if by_tier.len() > 1 {
-                if let Some(i) = pick {
-                    let name = p.proj.field_str(&by_tier[i].0, "name")?.unwrap_or_default();
-                    notes.push(format!("Plain text holds one track: «{name}» was written; the other transcription tracks were left out."));
-                }
-            }
-            crate::plaintext::export(&rows.into_iter().map(|r| r.2).collect::<Vec<_>>())
+            let segments = one_track(p, text_id, &mut notes, "Plain text")?;
+            let rows: Vec<String> = segments.iter().map(|s| p.proj.field_str(s, "content").map(Option::unwrap_or_default)).collect::<Result<_, _>>()?;
+            crate::plaintext::export(&rows)
+        }
+        Format::Conllu => {
+            let segments = one_track(p, text_id, &mut notes, "CoNLL-U")?;
+            let sentences = segments.into_iter().map(|segment| Ok(wugs_conllu::ExportSentence { translations: translations_of(p, &segment)?, segment })).collect::<Result<Vec<_>, String>>()?;
+            let out = wugs_conllu::export(p, &title, &sentences)?;
+            notes.extend(out.notes);
+            out.conllu
         }
         Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
     };
     let path = write_new(folder, &file_stem(&title, "text"), format.extension(), contents.as_bytes())?;
     Ok(Exported { path: path.display().to_string(), notes })
+}
+
+/// The segments of one transcription track of a text, in time order: the
+/// utterance tier when it holds this text's segments, else the
+/// transcription tier with the most; untimed segments after the timed, in
+/// their own order. A note names the track when others were left out.
+fn one_track(p: &wugs_core::Project, text_id: &str, notes: &mut Vec<String>, format: &str) -> Result<Vec<String>, String> {
+    let (_, transcription) = crate::concordance::corpus_tiers(p)?;
+    let mut by_tier: Vec<(String, Vec<(Option<f64>, usize, String)>)> = Vec::new();
+    for (i, seg) in p.proj.ordered_children("text", text_id, "segment")?.into_iter().enumerate() {
+        let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
+        if !transcription.contains(&tier) {
+            continue;
+        }
+        let row = (p.proj.field_num(&seg, "start")?, i, seg);
+        match by_tier.iter_mut().find(|(t, _)| *t == tier) {
+            Some((_, rows)) => rows.push(row),
+            None => by_tier.push((tier, vec![row])),
+        }
+    }
+    let utterance = session::find_utterance_tier(p)?;
+    let pick = by_tier.iter().position(|(t, _)| Some(t) == utterance.as_ref()).or_else(|| (0..by_tier.len()).max_by_key(|&i| by_tier[i].1.len()));
+    let mut rows = pick.map(|i| by_tier[i].1.clone()).unwrap_or_default();
+    rows.sort_by(|a, b| match (a.0, b.0) {
+        (Some(x), Some(y)) => x.total_cmp(&y).then(a.1.cmp(&b.1)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.1.cmp(&b.1),
+    });
+    if by_tier.len() > 1 {
+        if let Some(i) = pick {
+            let name = p.proj.field_str(&by_tier[i].0, "name")?.unwrap_or_default();
+            notes.push(format!("{format} holds one track: «{name}» was written; the other transcription tracks were left out."));
+        }
+    }
+    Ok(rows.into_iter().map(|r| r.2).collect())
+}
+
+/// A sentence's translations: segments naming it as `parent` on a
+/// translation track, with the track's language when it has one.
+fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<Vec<(Option<String>, String)>, String> {
+    let mut out = Vec::new();
+    for child in p.proj.children_by_ref("parent", segment, "segment")? {
+        if p.proj.is_tombstoned(&child)? {
+            continue;
+        }
+        let tier = p.proj.field_str(&child, "tier")?.unwrap_or_default();
+        if session::tier_role(p, &tier)?.as_deref() != Some("translation") {
+            continue;
+        }
+        let content = p.proj.field_str(&child, "content")?.unwrap_or_default();
+        if !content.trim().is_empty() {
+            out.push((p.proj.field_str(&tier, "language")?, content));
+        }
+    }
+    Ok(out)
 }
 
 /// Export the whole lexicon as LIFT or Toolbox into `folder`.
@@ -644,6 +708,34 @@ mod tests {
     }
 
     #[test]
+    fn conllu_comes_in_and_goes_back_out_the_same() {
+        let dir = std::env::temp_dir().join(format!("wugs-conllu-desktop-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("treebank.conllu");
+        let original = "# sent_id = 1\n# text = Hello, world.\n1\tHello\thello\tINTJ\t_\t_\t0\troot\t_\tSpaceAfter=No\n2\t,\t,\tPUNCT\t_\t_\t1\tpunct\t_\t_\n3\tworld\tworld\tNOUN\t_\t_\t1\tvocative\t_\tSpaceAfter=No\n4\t.\t.\tPUNCT\t_\t_\t1\tpunct\t_\t_\n\n";
+        fs::write(&file, original).unwrap();
+        let r = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert_eq!(r.format, "CoNLL-U");
+        let text = r.text.unwrap();
+        assert_eq!(session::list_texts(&mut s).unwrap()[0].title, "treebank");
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let e = export_text(&mut s, &text, Format::Conllu, &out).unwrap();
+        assert_eq!(fs::read_to_string(&e.path).unwrap(), original);
+        assert!(e.path.ends_with("treebank.conllu"));
+        // Punctuation tokens are not words for the corpus tools.
+        let f = crate::frequencies::frequencies(&mut s, crate::concordance::Kind::Word, None).unwrap();
+        assert_eq!(f.tokens, 2, "Hello and world, not the comma and the stop");
+        // The same file again adds nothing and says so.
+        let again = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert!(again.lines.iter().any(|l| l.contains("matched")), "{:?}", again.lines);
+        assert_eq!(session::list_texts(&mut s).unwrap().len(), 1);
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn detects_by_extension_then_content() {
         assert_eq!(detect(Path::new("a.EAF"), b""), Some(Format::Elan));
         assert_eq!(detect(Path::new("a.TextGrid"), b""), Some(Format::TextGrid));
@@ -655,6 +747,8 @@ mod tests {
         assert_eq!(detect(Path::new("story.txt"), b"Kesi mopa toru.\tThe dog came home.\nToru mopa.\tIt ran.\n"), Some(Format::PlainText), "sentence-tab-translation lines are a story");
         assert_eq!(windows_1252("\u{93}Caf\u{e9}\u{94} \u{85} \u{80}".into(), b"\x93Caf\xe9\x94 \x85 \x80"), "\u{201c}Café\u{201d} … €");
         assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
+        assert_eq!(detect(Path::new("en_ewt-ud-train.conllu"), b""), Some(Format::Conllu));
+        assert_eq!(detect(Path::new("old.CONLL"), b""), Some(Format::Conllu));
         assert_eq!(detect(Path::new("dict.txt"), b"\n\\lx kanu\n\\ps n\n"), Some(Format::Toolbox), "MDF with no header");
         assert_eq!(detect(Path::new("dict.txt"), b"\\lx\n"), Some(Format::Toolbox));
         let essay = b"\\noindent The fox came to the well.\nIt looked down.\nThen it went home.\n";

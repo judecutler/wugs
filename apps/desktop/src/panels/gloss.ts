@@ -685,7 +685,7 @@ export const glossPanel: PanelDef = {
       stamp = next;
       closeMenu();
 
-      const state = tokenState(sel.segment.content, v.words.map((w) => w.form));
+      const state = tokenState(sel.segment.content, v.readsAs);
       const head = h(
         "div",
         { className: "gl-head" },

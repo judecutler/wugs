@@ -231,7 +231,7 @@ pub(crate) fn each_segment(
             let content = p.proj.field_str(&seg, "content")?.unwrap_or_default();
             let mut tokens: Vec<String> = p.proj.members(&seg)?;
             // FLEx keeps punctuation as tokens of their own; they are not words.
-            tokens.retain(|t| p.proj.field_str(t, "x.flex.kind").ok().flatten().as_deref() != Some("punct"));
+            tokens.retain(|t| !p.proj.is_punct_token(t));
             let words: Vec<String> = if tokens.is_empty() {
                 words_of(&content)
             } else {
