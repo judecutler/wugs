@@ -20,9 +20,26 @@ export const analysed = (l: Line): boolean => l.words.some((w) => w.morphs.lengt
 /** The line over the text: how many sentences are glossed, and how many words. */
 export function progress(lines: readonly Line[]): string {
   if (lines.length === 0) return "This text has no sentences yet.";
-  const done = lines.filter(analysed).length;
+  // A sentence counts as glossed once no word is left to gloss.
+  const done = lines.filter((l) => l.words.length > 0 && l.words.every((w) => w.morphs.length > 0)).length;
   const words = lines.reduce((n, l) => n + l.words.length, 0);
   const glossedWords = lines.reduce((n, l) => n + l.words.filter((w) => w.morphs.length > 0).length, 0);
   const pct = words === 0 ? 0 : Math.round((glossedWords / words) * 100);
   return `${done} of ${lines.length} ${lines.length === 1 ? "sentence" : "sentences"} glossed; ${glossedWords} of ${words} ${words === 1 ? "word" : "words"} (${pct}%).`;
+}
+
+/** A sentence that still needs glossing: transcribed, and not yet broken
+ * into words or with a word that has no analysis. */
+export const toGloss = (l: Line): boolean => l.content.trim() !== "" && (l.words.length === 0 || l.words.some((w) => w.morphs.length === 0));
+
+/** The next sentence still to gloss after `current` (from the start when
+ * nothing or a sentence not listed is current), wrapping round; null when
+ * every sentence is glossed. */
+export function nextToGloss(lines: readonly Line[], current: string | null): Line | null {
+  const at = lines.findIndex((l) => l.id === current);
+  for (let k = 1; k <= lines.length; k++) {
+    const l = lines[(at + k + lines.length) % lines.length]!;
+    if (toGloss(l)) return l;
+  }
+  return null;
 }

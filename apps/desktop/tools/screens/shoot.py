@@ -435,6 +435,19 @@ def main():
             run.shot("state-gloss-guess", run.page.locator(".panel-gloss"))
             if run.page.locator(".panel-gloss .gl-guessed").count() == 0:
                 failures.append("a word starting ni- did not show its guess")
+            # Interlinear: only the sentences still to gloss, and Next to gloss.
+            run.front("interlinear", "Interlinear")
+            run.page.wait_for_timeout(600)
+            run.page.locator(".panel-interlinear .il-only input").check()
+            run.page.wait_for_timeout(300)
+            run.shot("state-interlinear-todo", run.page.locator(".panel-interlinear"))
+            if run.page.locator(".panel-interlinear .il-row").count() == 0:
+                failures.append("Only sentences still to gloss showed none")
+            run.page.locator(".panel-interlinear .il-bar button", has_text="Next to gloss").click()
+            run.page.wait_for_timeout(400)
+            if run.page.locator(".panel-interlinear .il-selected").count() != 1:
+                failures.append("Next to gloss selected no sentence")
+            run.page.locator(".panel-interlinear .il-only input").uncheck()
 
             # Media bin (roadmap 66): a card dragged onto the Timeline is used for the text on screen.
             run.front("media", "Media")

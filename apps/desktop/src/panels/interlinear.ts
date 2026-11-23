@@ -8,9 +8,13 @@ import { glossRuns, wordLines, type ExampleWord } from "../gloss/example";
 import { numbering } from "../gloss/document";
 import { translationLines } from "../gloss/translation";
 import { hear, playButton } from "../hear/hear";
-import { analysed, progress, sentencesOf, type Line } from "../interlinear/logic";
-import { dataGeneration, getSelection, getState, selectSegment, subscribeSelection } from "../store";
+import { analysed, nextToGloss, progress, sentencesOf, toGloss, type Line } from "../interlinear/logic";
+import { provide } from "../palette/registry";
+import { dataGeneration, getSelection, getState, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
+
+/** Show only the sentences still to gloss (kept while the app runs). */
+let onlyToGloss = false;
 
 /** How many sentences are read from the engine at once. */
 const BATCH = 8;
@@ -47,9 +51,25 @@ export const interlinearPanel: PanelDef = {
     let seq = 0;
     let lines: Line[] = [];
 
+    /** Select the next sentence still to gloss, for the Gloss panel, and bring its row into view. */
+    const goNext = () => {
+      const s = getState();
+      if (s.kind !== "open" || s.text === null) return;
+      const text = s.text;
+      const next = nextToGloss(lines, getSelection()?.segmentId ?? null);
+      const seg = next === null ? undefined : text.segments.find((x) => x.id === next.id);
+      if (seg === undefined) {
+        showToast({ tone: "info", lines: [lines.length === 0 ? "This text has no sentences yet." : "Every sentence of this text is glossed."] });
+        return;
+      }
+      selectSegment({ textId: text.id, tierId: seg.tier, segmentId: seg.id });
+      window.requestAnimationFrame(() => el.querySelector<HTMLElement>(`.il-row[data-id="${CSS.escape(seg.id)}"]`)?.scrollIntoView({ block: "nearest" }));
+    };
+
     const paint = (text: TextDetail) => {
       const sel = getSelection();
-      const rows = lines.map((l) => {
+      const shown = onlyToGloss ? lines.filter(toGloss) : lines;
+      const rows = shown.map((l) => {
         const seg = text.segments.find((s) => s.id === l.id);
         const play = playButton("Play this sentence", () => {
           if (seg !== undefined) void hear({ textId: text.id, tierId: seg.tier, segmentId: seg.id, startMs: seg.startMs, endMs: seg.endMs });
@@ -72,6 +92,7 @@ export const interlinearPanel: PanelDef = {
           play,
           h("div", { className: "il-body" }, body, l.translation === null ? null : h("p", { className: "il-tr", textContent: `‘${l.translation}’` })),
         );
+        row.dataset.id = l.id;
         const pick = () => seg !== undefined && selectSegment({ textId: text.id, tierId: seg.tier, segmentId: seg.id });
         row.onclick = (e) => {
           if ((e.target as HTMLElement).closest("button") === null) pick();
@@ -87,7 +108,16 @@ export const interlinearPanel: PanelDef = {
         return row;
       });
       const focused = el.contains(document.activeElement) ? [...el.querySelectorAll(".il-row")].indexOf(document.activeElement as Element) : -1;
-      el.replaceChildren(h("h3", { className: "il-title", textContent: text.title || "(untitled)" }), h("p", { className: "note", textContent: progress(lines) }), h("ol", { className: "il-list" }, ...rows));
+      const only = h("input", { type: "checkbox", checked: onlyToGloss });
+      only.onchange = () => {
+        onlyToGloss = only.checked;
+        paint(text);
+      };
+      const next = h("button", { type: "button", textContent: "Next to gloss", title: "Open the next sentence still to gloss in the Gloss panel" });
+      next.onclick = goNext;
+      const bar = h("div", { className: "il-bar" }, h("label", { className: "il-only" }, only, " Only sentences still to gloss"), next);
+      const empty = onlyToGloss && shown.length === 0 && lines.length > 0 ? h("p", { className: "note", textContent: "Every sentence of this text is glossed." }) : null;
+      el.replaceChildren(h("h3", { className: "il-title", textContent: text.title || "(untitled)" }), h("p", { className: "note", textContent: progress(lines) }), bar, ...(empty === null ? [] : [empty]), h("ol", { className: "il-list" }, ...rows));
       if (focused >= 0) el.querySelectorAll<HTMLElement>(".il-row")[focused]?.focus();
     };
 
@@ -126,6 +156,16 @@ export const interlinearPanel: PanelDef = {
     };
 
     const unsubscribe = subscribeSelection(draw);
-    return { element: el, render: draw, dispose: unsubscribe };
+    const unprovide = provide("interlinear", () => [
+      { id: "interlinear:next", title: "Go to the next sentence to gloss", group: "Interlinear", words: ["unglossed", "next", "skip", "todo"], run: goNext },
+    ]);
+    return {
+      element: el,
+      render: draw,
+      dispose: () => {
+        unsubscribe();
+        unprovide();
+      },
+    };
   },
 };

@@ -20,6 +20,21 @@ test("progress counts sentences and words", () => {
     { id: "a", number: 1, content: "", words: [w(1), w(0)], translation: null, startMs: null },
     { id: "b", number: 2, content: "", words: [w(0)], translation: null, startMs: null },
   ];
-  assert.equal(progress(lines), "1 of 2 sentences glossed; 1 of 3 words (33%).");
+  assert.equal(progress(lines), "0 of 2 sentences glossed; 1 of 3 words (33%).", "a sentence with a word left is not glossed yet");
+  assert.equal(progress([lines[0]!, { ...lines[0]!, id: "c", words: [w(2)] }]), "1 of 2 sentences glossed; 2 of 3 words (67%).");
   assert.equal(progress([]), "This text has no sentences yet.");
+});
+
+test("the next sentence to gloss comes after the current one and wraps round", async () => {
+  const { nextToGloss, toGloss } = await import("./logic.ts");
+  const w = (n: number) => ({ form: "w", morphs: Array.from({ length: n }, () => ({ surface: "w", type: "root", gloss: "g" })) });
+  const line = (id: string, words: ReturnType<typeof w>[], content = "x"): Line => ({ id, number: 0, content, words, translation: null, startMs: null });
+  const lines = [line("a", [w(1)]), line("b", [w(0)]), line("c", [w(1), w(1)]), line("d", []), line("e", [], "  ")];
+  assert.deepEqual(lines.map(toGloss), [false, true, false, true, false], "untokenized counts; empty does not");
+  assert.equal(nextToGloss(lines, null)?.id, "b");
+  assert.equal(nextToGloss(lines, "b")?.id, "d");
+  assert.equal(nextToGloss(lines, "d")?.id, "b", "wraps round");
+  assert.equal(nextToGloss(lines, "gone")?.id, "b");
+  assert.equal(nextToGloss([line("a", [w(1)])], "a"), null);
+  assert.equal(nextToGloss([line("a", [w(0)])], null)?.id, "a");
 });
