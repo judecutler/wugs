@@ -994,7 +994,7 @@ body::before {
   @keyframes palette-in { from { opacity: 0; transform: translateY(-6px); } }
 }
 
-/* The sample project on the welcome card, and the first-run tour (roadmap 68). */
+/* The tutorial project on the welcome card, and the first-run tour (roadmap 68). */
 .welcome-sample { margin: 4px auto 14px; padding: 12px 14px; max-width: 360px; border: 1px dashed var(--line); border-radius: var(--radius-md); }
 .welcome-sample button { padding: 7px 14px; }
 .welcome-sample .note { margin: 6px 0 0; }
@@ -1066,3 +1066,12 @@ body::before {
    keyword sits on its right; that side is cut at its far (right) end. */
 .cc-row[dir="rtl"] .cc-left { direction: ltr; text-align: left; }
 .cc-row[dir="rtl"] .cc-right { direction: rtl; text-align: right; unicode-bidi: plaintext; }
+
+/* The first-run Tutorial button and its jump into the Project menu. */
+.menu-button.tutorial-button { background: var(--accent-bright); color: var(--on-bright); border: var(--ink-line); font-weight: 650; }
+.menu-button.tutorial-button::after { content: none; }
+.menu-button.tutorial-button:hover:not(:disabled) { background: color-mix(in srgb, var(--accent-bright) 82%, white); }
+.tutorial-flyer { position: fixed; z-index: 950; pointer-events: none; transform-origin: 0 0; margin: 0; }
+@keyframes menu-landed { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
+.menu-landed { animation: menu-landed 420ms ease-out; }
+@media (prefers-reduced-motion: reduce) { .menu-landed { animation: none; } }
