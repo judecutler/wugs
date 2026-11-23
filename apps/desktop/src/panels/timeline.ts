@@ -4,7 +4,8 @@
 // tier gutter, the editing buttons (Auto-segment, Split, Merge, Undo, Redo)
 // and the perf toggle.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { addTier, importMedia, linkRecording, listSources, peaksInfo, type SourceRow, type TierTemplate } from "../api";
+import { addTier, importMedia, linkRecording, listSources, measureTrack, peaksInfo, type SourceRow, type TierTemplate } from "../api";
+import { measuredLines, trackToMeasure } from "../measure/logic";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
 import { attempt, dataGeneration, getSelection, getState, mediaSource, refreshText, reloadTexts, showToast, takeWantedMedia } from "../store";
@@ -88,7 +89,9 @@ export const timelinePanel: PanelDef = {
     const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, splitButton, mergeButton, undoButton, redoButton);
     const spectroButton = h("button", { textContent: "Spectrogram", title: "Show the recording's spectrogram under the waveform (0–5000 Hz, darker where louder), made by wugs itself, a minute of view at a time" });
     spectroButton.setAttribute("aria-pressed", "false");
-    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, perfButton, praat.element);
+    const MEASURE_TITLE = "Measure every segment of the selected segment's track (else the utterance track): duration, pitch, intensity and formants, saved as a CSV table for R or a spreadsheet";
+    const measureButton = h("button", { textContent: "Measure…", title: MEASURE_TITLE });
+    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, measureButton, perfButton, praat.element);
 
     const updateEditButtons = () => {
       const stack = view?.history() ?? null;
@@ -97,6 +100,12 @@ export const timelinePanel: PanelDef = {
       undoButton.title = stack?.undoLabel() != null ? `Undo ${stack.undoLabel()} (Ctrl+Z)` : "Undo (Ctrl+Z)";
       redoButton.title = stack?.redoLabel() != null ? `Redo ${stack.redoLabel()} (Ctrl+Shift+Z or Ctrl+Y)` : "Redo (Ctrl+Shift+Z or Ctrl+Y)";
       autoButton.disabled = autoButton.dataset.busy === "1" || view === null || selectedSource === null;
+      const s = getState();
+      const sel = getSelection();
+      const track = s.kind === "open" && s.text !== null ? trackToMeasure(s.text.tiers, s.text.segments, sel?.segmentId ?? null) : null;
+      measureButton.disabled = measureButton.dataset.busy === "1" || view === null || selectedSource === null || track === null;
+      measureButton.title =
+        selectedSource === null ? `${MEASURE_TITLE}. Load a recording first.` : track === null ? `${MEASURE_TITLE}. No track has timed segments yet.` : `${MEASURE_TITLE}. Now: «${track.name}».`;
       syncSpectro();
       byPicker.disabled = autoButton.disabled;
       // The same rule as the S and M keys; the title says why when disabled.
@@ -121,6 +130,29 @@ export const timelinePanel: PanelDef = {
         autoButton.dataset.busy = "";
         autoButton.textContent = "Auto-segment";
         updateEditButtons();
+      });
+    };
+    measureButton.onclick = () => {
+      const s = getState();
+      const source = selectedSource;
+      if (s.kind !== "open" || s.text === null || source === null) return;
+      const track = trackToMeasure(s.text.tiers, s.text.segments, getSelection()?.segmentId ?? null);
+      if (track === null) return;
+      const textId = s.text.id;
+      void attempt(async () => {
+        const folder = await pickFile({ directory: true, title: `Where should the measurements of «${track.name}» go?` });
+        if (typeof folder !== "string") return;
+        measureButton.dataset.busy = "1";
+        measureButton.textContent = "Measuring…";
+        updateEditButtons();
+        try {
+          const report = await measureTrack({ textId, tierId: track.id, source, folder });
+          showToast({ tone: report.unvoiced > 0 || report.untimed > 0 ? "warn" : "info", lines: measuredLines(track.name, report) });
+        } finally {
+          measureButton.dataset.busy = "";
+          measureButton.textContent = "Measure…";
+          updateEditButtons();
+        }
       });
     };
     // Transport (docs/design/EDITOR.md): play, the clock, and zoom, laid
@@ -195,6 +227,7 @@ export const timelinePanel: PanelDef = {
       { id: "timeline:auto", title: "Auto-segment the recording", group: "Timeline", words: ["detect", "speech", "segments", "automatic"], disabled: () => needsRecording() ?? asButton(autoButton)(), run: () => autoButton.click() },
       { id: "timeline:undo", title: "Undo a timeline edit", group: "Timeline", keys: "Ctrl+Z", disabled: () => needsView() ?? (undoButton.disabled ? "Nothing to undo" : null), run: () => void view?.undo() },
       { id: "timeline:redo", title: "Redo a timeline edit", group: "Timeline", keys: "Ctrl+Shift+Z", disabled: () => needsView() ?? (redoButton.disabled ? "Nothing to redo" : null), run: () => void view?.redo() },
+      { id: "timeline:measure", title: "Measure a track: pitch, intensity, formants…", group: "Timeline", words: ["phonetics", "vowel", "formant", "pitch", "f0", "csv", "duration", "acoustic"], disabled: () => needsRecording() ?? asButton(measureButton)(), run: () => measureButton.click() },
       { id: "timeline:import", title: "Import audio…", group: "Timeline", words: ["recording", "wav", "mp3", "m4a"], disabled: () => needsView() ?? (importButton.disabled ? "An import is running" : null), run: () => importButton.click() },
     ];
     const unprovide = provide("timeline", timelineCommands);
