@@ -94,6 +94,7 @@ export const glossConsistency = () => invoke<import("./checks/logic").Inconsiste
 /** Gloss every morph of `key` and `kind` that reads `from` as `to`; returns how many changed. */
 export const glossMissing = () => invoke<import("./checks/logic").Missing[]>("gloss_missing");
 export const glossSenseDrift = () => invoke<import("./checks/logic").Drift[]>("gloss_sense_drift");
+export const consentGaps = () => invoke<import("./checks/logic").ConsentGaps>("consent_gaps");
 export const glossSettleDrift = (args: { senseId: string; textGloss: string; useLexicon: boolean }) => invoke<number>("gloss_settle_drift", args);
 export const glossAddMissing = (args: { keys: string[] }) => invoke<import("./checks/logic").Added>("gloss_add_missing", args);
 export const glossUnify = (args: { key: string; kind: string; from: string; to: string }) => invoke<number>("gloss_unify", args);

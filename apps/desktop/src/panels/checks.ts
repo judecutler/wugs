@@ -4,11 +4,12 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
-import { addedLine, addLabel, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
+import { addedLine, addLabel, consentLine, consentNote, type ConsentGaps, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
 import { headwordOf } from "../notes/logic";
+import { termLabel } from "../people/logic";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { marked } from "../gloss/morphs";
@@ -28,6 +29,7 @@ export const checksPanel: PanelDef = {
     let rows: Inconsistent[] | null = null;
     let missing: Missing[] = [];
     let drift: Drift[] = [];
+    let consent: ConsentGaps | null = null;
     let chars: Inventory | null = null;
     let near: { pairs: NearPair[]; read: number } | null = null;
     let gaps: { without: number; fillable: number } | null = null;
@@ -43,9 +45,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift()]).then(
-        ([r, m, c, w, g, t, d]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null)]).then(
+        ([r, m, c, w, g, t, d, k]) => {
           if (mine !== seq) return;
+          consent = k;
           drift = d;
           gaps = g;
           trees = t;
@@ -107,6 +110,25 @@ export const checksPanel: PanelDef = {
       armed = null;
       await refreshAll();
       load();
+    };
+
+    const consentSection = (): HTMLElement[] => {
+      if (consent === null || consent.total === 0) return [];
+      const people = h("button", { type: "button", textContent: "Open People", title: "Add or edit consent records in the People panel" });
+      people.onclick = () => window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "people" }));
+      return [
+        h("h3", { className: "ck-title", textContent: "Consent records" }),
+        h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: consentLine(consent) }), people),
+        h(
+          "ul",
+          { className: "ck-list" },
+          ...consent.texts.slice(0, 200).map((t) => {
+            const open = h("button", { type: "button", className: "link-button", textContent: t.title || "(untitled)", title: "Open this text" });
+            open.onclick = () => void selectText(t.textId);
+            return h("li", { className: `ck-card${t.records === 0 ? " ck-slip" : ""}` }, h("div", { className: "ck-head" }, open, h("span", { className: "note", textContent: ` · ${t.records} ${t.records === 1 ? "record" : "records"}` })), h("p", { className: "note", textContent: consentNote(t, termLabel) }));
+          }),
+        ),
+      ];
     };
 
     const driftCard = (d: Drift): HTMLElement => {
@@ -363,6 +385,7 @@ export const checksPanel: PanelDef = {
         h("ul", { className: "ck-list" }, ...drift.map(driftCard)),
         ...examplesSection(),
         ...treesSection(),
+        ...consentSection(),
         ...spellingSection(),
         ...charSection(),
       );

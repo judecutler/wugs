@@ -194,6 +194,11 @@ fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String,
 
 /// Glossed roots with no lexicon entry (the Checks panel).
 #[tauri::command(async)]
+fn consent_gaps(s: State<SessionThread>) -> Result<people::ConsentGaps, String> {
+    s.run(people::consent_gaps)
+}
+
+#[tauri::command(async)]
 fn gloss_sense_drift(s: State<SessionThread>) -> Result<Vec<consistency::Drift>, String> {
     s.run(consistency::sense_drift)
 }
@@ -2051,6 +2056,7 @@ pub fn run() {
             gloss_missing,
             gloss_sense_drift,
             gloss_settle_drift,
+            consent_gaps,
             gloss_add_missing,
             set_abbreviation_meaning,
             text_metadata,

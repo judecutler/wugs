@@ -769,6 +769,14 @@ const LEXICON = [
         { relation: "obl:tmod", direction: "dependent", total: 7, items: [["morning", 4, 8.8, 4], ["night", 3, 8.3, 3]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
       ],
     }),
+    consent_gaps: () => ({
+      texts: [
+        { textId: "t-market", title: "Greetings at the market", records: 0, no: [], communityOnly: false },
+        { textId: "t-fox", title: "The fox and the well", records: 1, no: ["web-ok"], communityOnly: true },
+      ],
+      total: 3,
+      records: 2,
+    }),
     gloss_sense_drift: () => [
       { senseId: "sense-lx-tela1-0", entryId: "lx-tela1", headword: "tela", homograph: 1, senseGloss: "river", textGloss: "stream", count: 3, first: { gloss: "stream", count: 3, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03" } },
     ],

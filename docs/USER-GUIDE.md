@@ -391,6 +391,10 @@ Under **Characters**, the Checks panel counts every character your transcription
 
 Each card shows a sentence that uses the character, and **Every word with it** opens the Concordance on every word containing it. Fix a slip in Search's **Replace…**. **Every character** shows the whole inventory with each character's code, Unicode name, script and counts, a quick way to check an orthography.
 
+### See which texts have consent records
+
+Under **Consent records**, the Checks panel lists the texts that no consent record covers (no record for the text, its recording or the whole project), then the texts covered by a record that limits them: a no to publishing online, depositing or speech tools, or sharing within the community only. Click a text to open it, or **Open People** to add or edit records. Records inform what you share; nothing in wugs waits on them.
+
 ### Check the dependency trees
 
 After tagging and parsing, or importing CoNLL-U or TEI, some trees may be broken: two words both marked as the root, a word whose head is itself through a loop, or a head pointing to a word that is gone. Under **Dependency trees**, the Checks panel lists every parsed sentence with such a problem and says what it is. Click a sentence to open it in the **Sentence** panel and correct its heads there. When every tree is well formed, the section says so.
