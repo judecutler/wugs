@@ -17,7 +17,7 @@ import { typeWithShortcuts } from "../typing";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
-import { filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
+import { categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
@@ -394,14 +394,21 @@ export const lexiconPanel: PanelDef = {
     function drawShowPicker() {
       const current = LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!;
       showPicker.title = current.title;
-      showPicker.replaceChildren(...LIST_SHOWS.map((x) => h("option", { value: x.id, textContent: showLabel(rows, x), title: x.title, selected: x.id === show })));
+      const cats = categoriesOf(rows, show);
+      if (show.startsWith("pos:")) showPicker.title = `Entries whose category is «${show.slice(4)}»`;
+      showPicker.replaceChildren(
+        ...LIST_SHOWS.map((x) => h("option", { value: x.id, textContent: showLabel(rows, x), title: x.title, selected: x.id === show })),
+        ...(cats.length === 0
+          ? []
+          : [h("optgroup", { label: "Category" }, ...cats.map((c) => h("option", { value: `pos:${c.category}`, textContent: `${c.category} (${c.count.toLocaleString("en")})`, selected: `pos:${c.category}` === show })))]),
+      );
     }
 
     function drawList() {
       drawShowPicker();
       const listed = rows.filter((r) => shows(r, show));
       if (rows.length > 0 && listed.length === 0) {
-        list.replaceChildren(h("li", { className: "empty", textContent: (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).done }));
+        list.replaceChildren(h("li", { className: "empty", textContent: show.startsWith("pos:") ? `No entry found has the category «${show.slice(4)}».` : (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).done }));
         return;
       }
       if (rows.length === 0) {

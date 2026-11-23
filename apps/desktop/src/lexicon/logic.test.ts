@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName, LIST_SHOWS, showLabel, shows, tableImportLines } from "./logic.ts";
+import { categoriesOf, domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName, LIST_SHOWS, showLabel, shows, tableImportLines } from "./logic.ts";
 
 test("a numbered homograph shows a subscript", () => {
   assert.equal(headword("yüz", null), "yüz");
@@ -91,4 +91,17 @@ test("a lexicon table import is reported in words", () => {
     "1 row has no word and was skipped.",
   ]);
   assert.equal(tableImportLines({ ...r, entries: 0, senses: 0, ambiguous: [], noLemma: 0, ignored: [] })[0], "Nothing new: every row is in the lexicon already.");
+});
+
+test("entries by category", () => {
+  const rows = [
+    { glosses: ["dog"], posOfSpeech: "n", used: true },
+    { glosses: ["run"], posOfSpeech: "v ", used: true },
+    { glosses: ["cat"], posOfSpeech: "n", used: false },
+    { glosses: ["the"], posOfSpeech: "", used: true },
+  ];
+  assert.deepEqual(categoriesOf(rows), [{ category: "n", count: 2 }, { category: "v", count: 1 }]);
+  assert.deepEqual(categoriesOf(rows.slice(0, 1), "pos:v"), [{ category: "n", count: 1 }, { category: "v", count: 0 }]);
+  assert.deepEqual(rows.filter((r) => shows(r, "pos:n")).map((r) => r.glosses[0]), ["dog", "cat"]);
+  assert.equal(shows(rows[1]!, "pos:v"), true);
 });
