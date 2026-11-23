@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, featureName, isOwn, layout, otherFormLine, parseValues, templateById, templateFromDraft, templateId, TEMPLATES } from "./paradigms.ts";
+import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, featureName, isOwn, layout, otherFormLine, parseValues, templateById, templateFromDraft, templateId, TEMPLATES } from "./paradigms.ts";
 
 const pn = templateById("person-number");
 const form = (id: string, surface: string, features: Record<string, string>) => ({ id, form: surface, features });
@@ -99,4 +99,14 @@ test("feature names are what the engine takes", () => {
     { value: "b", label: "bee" },
   ]);
   assert.equal(templateId("***", []), "template");
+});
+
+test("an entry's forms in the texts", () => {
+  const l = (words: string, at: number, breakdown: string | null, glosses: string | null) => ({ words: words.split(" "), at, breakdown, glosses });
+  const lines = [l("nikani ŋai", 0, "ni-kani", "1SG-count"), l("Nikani ra", 0, "ni-kani", "1SG-count"), l("ta kani", 1, null, null), l("kanira", 0, "kani-ra", "count-PL")];
+  const forms = attestedForms(lines, ["kani", "kanira"]);
+  assert.deepEqual(forms.map((f) => [f.form, f.count, f.inGrid]), [["nikani", 2, false], ["kani", 1, true], ["kanira", 1, true]]);
+  assert.equal(attestedLine(forms, 4, 4), "3 forms of this entry in the texts. 1 not in the paradigm yet.");
+  assert.equal(attestedLine(forms.slice(1), 2, 9), "2 forms of this entry in the texts (from the first 2 of 9 uses). Every one is in the paradigm.");
+  assert.equal(attestedLine([], 0, 0), "No word in the texts is linked to this entry yet. Gloss a few and link them to it.");
 });

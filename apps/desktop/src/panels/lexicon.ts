@@ -18,10 +18,12 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
 import { filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
-import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
+import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { keyword, type Hit } from "../concordance/logic";
+import { glossRuns } from "../gloss/example";
+import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
 const SELECT_FIRST = "Select the segment where the word is said (on the Timeline or in Transcribe), then try again.";
@@ -66,6 +68,8 @@ export const lexiconPanel: PanelDef = {
     let template: Template = templateById(localStorage.getItem(PARADIGM_KEY));
     /** The selected entry's paradigm for `template`; null until it loads. */
     let paradigm: ParadigmView | null = null;
+    /** The entry's word forms in the texts, asked for under the paradigm. */
+    let attested: { lexeme: string; lines: Hit[] | null; total: number } | null = null;
     /** The project's own paradigm templates (shared through the project). */
     let ownTemplates: Template[] = [];
     /** The template form, while it is open: the template being edited (null
@@ -686,7 +690,75 @@ export const lexiconPanel: PanelDef = {
                 ),
               ),
             );
-      return h("section", { className: "lx-paradigm" }, head, form, table, others);
+      return h("section", { className: "lx-paradigm" }, head, form, table, others, attestedBlock(e, pd));
+    }
+
+    /** The word forms of the entry its glossed words show, to fill the grid from. */
+    function attestedBlock(e: EntryView, pd: ParadigmView) {
+      const at = attested?.lexeme === e.id ? attested : null;
+      if (at === null) {
+        const b = h("button", {
+          type: "button",
+          className: "link-button",
+          textContent: "Forms in the texts",
+          title: "List the word forms of this entry that glossed words in the texts show, to fill the grid from",
+          onclick: () => void loadAttested(e),
+        });
+        b.dataset.key = `pdg-attested:${e.id}`;
+        return h("div", { className: "lx-pdg-attested" }, b);
+      }
+      if (at.lines === null) return h("p", { className: "note", textContent: "Finding the entry's forms in the texts…" });
+      const held = [...pd.cells.flatMap((c) => c.forms), ...pd.others].map((f) => f.form);
+      const forms = attestedForms(at.lines, held);
+      return h(
+        "div",
+        { className: "lx-pdg-attested" },
+        h("p", { className: "note", textContent: attestedLine(forms, at.lines.length, at.total) }),
+        forms.length === 0
+          ? null
+          : h(
+              "ul",
+              {},
+              ...forms.slice(0, 60).map((f) =>
+                h(
+                  "li",
+                  { className: f.inGrid ? "lx-pdg-held" : "" },
+                  h("button", {
+                    type: "button",
+                    className: "link-button",
+                    textContent: f.form,
+                    title: `Show every «${f.form}» in the Concordance`,
+                    onclick: () => askConcordance(f.form, "word", null, true),
+                  }),
+                  f.breakdown !== null && f.breakdown !== f.form ? h("span", { textContent: ` ${f.breakdown}` }) : null,
+                  f.glosses !== null ? h("span", { className: "note" }, " ", ...glossRuns(f.glosses).map((r) => (r.caps ? h("span", { className: "sc", textContent: r.text }) : document.createTextNode(r.text)))) : null,
+                  h("span", { className: "note", textContent: ` ×${f.count}${f.inGrid ? " · in the paradigm" : ""}` }),
+                ),
+              ),
+            ),
+      );
+    }
+
+    async function loadAttested(e: EntryView) {
+      attested = { lexeme: e.id, lines: null, total: 0 };
+      drawEditor();
+      const gen = projectGen;
+      try {
+        const found = await Promise.all(e.senses.map((s) => concordance({ query: s.id, kind: "sense" })));
+        if (gen !== projectGen || attested?.lexeme !== e.id) return;
+        // A word with morphs linked to two senses of the entry is one use.
+        const seen = new Set<string>();
+        const lines = found.flatMap((r) => r.hits).filter((x) => {
+          const k = `${x.segmentId} ${x.at}`;
+          return !seen.has(k) && seen.add(k) !== undefined;
+        });
+        const cut = found.some((r) => r.total > r.hits.length);
+        attested = { lexeme: e.id, lines, total: cut ? found.reduce((n, r) => n + r.total, 0) : lines.length };
+      } catch (err) {
+        if (attested?.lexeme === e.id) attested = null;
+        showToast({ tone: "error", lines: [errorText(err)] });
+      }
+      drawEditor();
     }
 
     /** The template form: a name, the rows' feature and values, and
