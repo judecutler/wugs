@@ -907,9 +907,20 @@ async fn acoustic_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>,
 #[tauri::command]
 async fn measure_track(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, tier_id: String, source: String, folder: String) -> Result<measure::MeasureReport, String> {
     let into = std::path::PathBuf::from(&folder);
-    let prepared = s.run(move |s| measure::prepare(s, &text_id, &tier_id, &source, std::path::Path::new(&folder)))?;
+    let prepared = s.run(move |s| {
+        interchange::outside_project(s, std::path::Path::new(&folder))?;
+        measure::prepare(s, &text_id, &tier_id, &source)
+    })?;
     let app_data = dir.0.clone();
     tauri::async_runtime::spawn_blocking(move || measure::run(prepared, &app_data, &into)).await.map_err(|e| e.to_string())?
+}
+
+/// The F1/F2 of every timed segment of a track, for the Vowel space panel.
+#[tauri::command]
+async fn measure_points(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, tier_id: String, source: String) -> Result<measure::PointsView, String> {
+    let prepared = s.run(move |s| measure::prepare(s, &text_id, &tier_id, &source))?;
+    let app_data = dir.0.clone();
+    tauri::async_runtime::spawn_blocking(move || measure::points(&prepared, &app_data)).await.map_err(|e| e.to_string())?
 }
 
 /// The spectrogram of ten seconds of `source`'s recording (chunk `index`),
@@ -1772,6 +1783,7 @@ pub fn run() {
             praat_discard,
             acoustic_analysis,
             measure_track,
+            measure_points,
             spectrogram,
             conflict_resolve,
             list_sources,

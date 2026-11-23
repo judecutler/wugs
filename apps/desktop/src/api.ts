@@ -644,6 +644,9 @@ export const praatDiscard = (args: { text: string }) => invoke<void>("praat_disc
 /** Measure every timed segment of a track into a CSV table in `folder` (src-tauri/src/measure.rs). */
 export const measureTrack = (args: { textId: string; tierId: string; source: string; folder: string }) =>
   invoke<import("./measure/logic").MeasureReport>("measure_track", args);
+/** F1/F2 of every timed segment of a track, for the Vowel space panel. */
+export const measurePoints = (args: { textId: string; tierId: string; source: string }) =>
+  invoke<{ points: import("./vowels/logic").Point[]; untimed: number; analysedBy: string }>("measure_points", args);
 export const acousticAnalysis = (args: { source: string; chunks: number[] }) =>
   invoke<import("./praat/analysis").Chunk[]>("acoustic_analysis", args);
 

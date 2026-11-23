@@ -160,8 +160,7 @@ pub struct Prepared {
     pub pin: Option<String>,
 }
 
-pub fn prepare(s: &mut Session, text_id: &str, tier_id: &str, source: &str, folder: &Path) -> Result<Prepared, String> {
-    crate::interchange::outside_project(s, folder)?;
+pub fn prepare(s: &mut Session, text_id: &str, tier_id: &str, source: &str) -> Result<Prepared, String> {
     let detail = session::get_text(s, text_id)?;
     let track = detail.tiers.iter().find(|t| t.id == tier_id).map(|t| t.name.clone()).ok_or("That track is not in this text.")?;
     let mut targets = Vec::new();
@@ -202,8 +201,14 @@ pub struct MeasureReport {
     pub analysed_by: String,
 }
 
-/// Measure `p`, off the session thread, and write the table into `folder`.
-pub fn run(p: Prepared, app_data: &Path, folder: &Path) -> Result<MeasureReport, String> {
+/// Every segment measured, with what analysed them.
+pub struct Computed {
+    pub rows: Vec<(Target, Measured)>,
+    pub analysed_by: String,
+}
+
+/// Measure `p`'s segments, off the session thread.
+pub fn compute(p: &Prepared, app_data: &Path) -> Result<Computed, String> {
     if p.targets.is_empty() {
         return Err(if p.untimed > 0 { "This track's segments have no times, so there is nothing to measure.".into() } else { "This track has no segments to measure.".into() });
     }
@@ -214,11 +219,52 @@ pub fn run(p: Prepared, app_data: &Path, folder: &Path) -> Result<MeasureReport,
     };
     let chunks = analyse(&provider, &p.job, &chunks_for(&p.targets))?;
     let rows: Vec<(Target, Measured)> = p.targets.iter().map(|t| (t.clone(), measure(t, &chunks))).collect();
+    Ok(Computed { rows, analysed_by })
+}
+
+/// Measure `p`, off the session thread, and write the table into `folder`.
+pub fn run(p: Prepared, app_data: &Path, folder: &Path) -> Result<MeasureReport, String> {
+    let Computed { rows, analysed_by } = compute(&p, app_data)?;
     let unvoiced = rows.iter().filter(|(_, m)| m.f0_mean.is_none()).count();
     let body = table(&p.text, &p.track, &analysed_by, &rows);
     let stem = format!("{} {} measurements", crate::interchange::file_stem(&p.text, "text"), crate::interchange::file_stem(&p.track, "track"));
     let path = crate::interchange::write_new(folder, &stem, "csv", body.as_bytes())?;
     Ok(MeasureReport { path: path.display().to_string(), measured: rows.len(), untimed: p.untimed, unvoiced, analysed_by })
+}
+
+/// One measured segment for the Vowel space panel.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointView {
+    pub segment: String,
+    pub label: String,
+    pub start_ms: f64,
+    pub end_ms: f64,
+    pub f0: Option<f64>,
+    /// F1–F3 over the middle half, else at the middle frame.
+    pub f1: Option<f64>,
+    pub f2: Option<f64>,
+    pub f3: Option<f64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointsView {
+    pub points: Vec<PointView>,
+    pub untimed: usize,
+    pub analysed_by: String,
+}
+
+pub fn points(p: &Prepared, app_data: &Path) -> Result<PointsView, String> {
+    let Computed { rows, analysed_by } = compute(p, app_data)?;
+    let points = rows
+        .into_iter()
+        .map(|(t, m)| {
+            let f = |k: usize| m.middle_half[k].or(m.mid[k]);
+            PointView { segment: t.segment, label: t.label, start_ms: t.start_ms, end_ms: t.end_ms, f0: m.f0_mean, f1: f(0), f2: f(1), f3: f(2) }
+        })
+        .collect();
+    Ok(PointsView { points, untimed: p.untimed, analysed_by })
 }
 
 #[cfg(test)]
@@ -299,8 +345,12 @@ mod tests {
         let source = text.recording.clone().expect("the tutorial is linked");
         let timed = detail.segments.iter().filter(|x| x.tier == tier && x.start_ms.is_some()).count();
         // Inside the project is refused.
-        assert!(prepare(&mut s, &text.id, &tier, &source, &dir.join("project")).is_err());
-        let p = prepare(&mut s, &text.id, &tier, &source, &out).unwrap();
+        assert!(crate::interchange::outside_project(&mut s, &dir.join("project")).is_err());
+        let p = prepare(&mut s, &text.id, &tier, &source).unwrap();
+        // The Vowel space panel's points: one per timed segment, with F1 and F2.
+        let pts = points(&p, &dir.join("app-data")).unwrap();
+        assert_eq!(pts.points.len(), timed);
+        assert!(pts.points.iter().filter(|x| x.f1.is_some() && x.f2.is_some()).count() >= 2);
         let report = run(p, &dir.join("app-data"), &out).unwrap();
         assert_eq!(report.measured, timed);
         let csv = std::fs::read_to_string(&report.path).unwrap();
