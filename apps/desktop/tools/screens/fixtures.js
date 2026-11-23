@@ -610,6 +610,7 @@
     corrections_summary: () => ({ ready: 12, recordedNo: 1, restricted: 2, unchecked: 3, unusable: 0, emptied: 1, partial: null }),
     praat_status: () => ({ path: "/usr/bin/praat", version: "6.4.27", chosen: false, problem: null }),
     praat_pending: () => false,
+    project_language: () => ({ name: "Kanu", glottocode: "abcd1234", iso: "" }),
     update_check: () => ({ currentVersion: "0.0.1", available: null }),
     gloss_get: ({ segmentId }) => glossView(segmentId),
     // A tagged sentence for the Sentence panel: ni-kani ŋai toɾu-ma kesi, "I count one, two, three".

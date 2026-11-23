@@ -179,7 +179,7 @@ function languageRow(project: string): HTMLElement {
     h("span", { className: "share-label", textContent: "Language" }),
     field("name", "Name", "The language this project documents, as you call it", 14),
     field("glottocode", "Glottocode", "From glottolog.org, like stan1293: lets the data join other datasets", 9),
-    field("iso", "ISO 639-3", "Three letters, like tur: archives use it in their catalogue", 6),
+    field("iso", "ISO 639-3", "Three letters, like tur: archives use it in their catalogue", 9),
   );
 }
 

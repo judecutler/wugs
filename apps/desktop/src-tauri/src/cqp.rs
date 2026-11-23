@@ -567,6 +567,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("wugs-cqp-{}", wugs_model::ulid()));
         let mut s: Session = None;
         crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        crate::sample::add_morphology(&mut s).unwrap();
         let p = project(&mut s).unwrap();
         let tier = crate::session::utterance_tier(p).unwrap();
         let ud = "# text = Vámonos al mar.\n1-2\tVámonos\t_\t_\t_\t_\t_\t_\t_\t_\n1\tVamos\tir\tVERB\t_\tMood=Imp\t0\troot\t_\t_\n2\tnos\tnosotros\tPRON\t_\t_\t1\tobj\t_\t_\n3-4\tal\t_\t_\t_\t_\t_\t_\t_\t_\n3\ta\ta\tADP\t_\t_\t5\tcase\t_\t_\n4\tel\tel\tDET\t_\t_\t5\tdet\t_\t_\n5\tmar\tmar\tNOUN\t_\t_\t1\tobl\t_\tSpaceAfter=No\n6\t.\t.\tPUNCT\t_\t_\t1\tpunct\t_\t_\n\n";
@@ -577,7 +578,7 @@ mod tests {
         assert_eq!(&h.words[h.at..h.at + h.len], ["a", "el", "mar"]);
         assert_eq!(h.words.last().map(String::as_str), Some("."), "punctuation is a token to a query");
         assert_eq!(run(&mut s, "[feats=\".*Mood=Imp.*\"]", None).unwrap().total, 1);
-        // The sample's glossed words: lemmas come from the lexicon, glosses from the morphs.
+        // Glossed words: lemmas come from the lexicon, glosses from the morphs.
         assert!(run(&mut s, "[gloss=\".*1SG.*\"]", None).unwrap().total >= 1);
         assert!(run(&mut s, "[lemma=\"kani\"]", None).unwrap().total >= 1);
         assert!(run(&mut s, "[lema=\"x\"]", None).unwrap_err().contains("not an attribute"));

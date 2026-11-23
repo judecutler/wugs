@@ -7739,6 +7739,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wugs-cldf"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-flex",
+ "wugs-model",
+ "wugs-projection",
+]
+
+[[package]]
 name = "wugs-conllu"
 version = "0.0.1"
 dependencies = [
@@ -7780,6 +7790,7 @@ dependencies = [
  "wugs-asr",
  "wugs-auth",
  "wugs-blob",
+ "wugs-cldf",
  "wugs-conllu",
  "wugs-core",
  "wugs-elan",
@@ -7881,6 +7892,7 @@ dependencies = [
 name = "wugs-seal"
 version = "0.0.1"
 dependencies = [
+ "wugs-cldf",
  "wugs-core",
  "wugs-elan",
  "wugs-flex",

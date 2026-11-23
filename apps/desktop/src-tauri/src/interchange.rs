@@ -608,8 +608,11 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
         Format::Tei => {
             let segments = one_track(p, text_id, &mut notes, "TEI")?;
             let sentences = segments.into_iter().map(|segment| Ok(wugs_conllu::ExportSentence { translations: translations_of(p, &segment)?, segment })).collect::<Result<Vec<_>, String>>()?;
-            // The project's language goes in once it can be recorded (the CLDF branch's `project_language`).
-            let out = wugs_tei::export_tei(p, &title, None, &sentences, concat!("wugs ", env!("CARGO_PKG_VERSION")))?;
+            let lang = p.project_language()?;
+            let tag = tei_language_tag(&lang.iso, &lang.glottocode);
+            let name = if lang.name.is_empty() { tag.clone().unwrap_or_default() } else { lang.name.clone() };
+            let language = tag.as_deref().map(|t| (name.as_str(), t));
+            let out = wugs_tei::export_tei(p, &title, language, &sentences, concat!("wugs ", env!("CARGO_PKG_VERSION")))?;
             notes.extend(out.notes);
             out.tei
         }
@@ -755,6 +758,19 @@ pub struct LanguageDto {
     pub iso: String,
 }
 
+/// The project's language as an `xml:lang` tag (BCP 47): its ISO 639-3
+/// code, else its Glottocode as a private-use subtag (`und-x-abcd1234`),
+/// since a Glottocode is not itself a language tag. None when neither is set.
+fn tei_language_tag(iso: &str, glottocode: &str) -> Option<String> {
+    if !iso.is_empty() {
+        Some(iso.to_string())
+    } else if !glottocode.is_empty() {
+        Some(format!("und-x-{glottocode}"))
+    } else {
+        None
+    }
+}
+
 pub fn project_language(s: &mut Session) -> Result<LanguageDto, String> {
     let l = session::project(s)?.project_language()?;
     Ok(LanguageDto { name: l.name, glottocode: l.glottocode, iso: l.iso })
@@ -833,6 +849,14 @@ mod tests {
         let again = export_cldf(&mut s, &out, "2026-11-23", false, "wugs test").unwrap();
         assert!(again.path.ends_with("wugs-cldf-2026-11-23-2"), "never replaces a dataset");
         assert!(export_cldf(&mut s, &dir.join("sample"), "2026-11-23", false, "x").is_err(), "not inside the project");
+        // TEI names the same language: a Glottocode alone is a private-use tag.
+        let text = session::list_texts(&mut s).unwrap().into_iter().next().unwrap().id;
+        let tei = export_text(&mut s, &text, Format::Tei, &out).unwrap();
+        let xml = fs::read_to_string(&tei.path).unwrap();
+        assert!(xml.contains("und-x-abcd1234") && xml.contains("Kanu"), "{xml}");
+        set_project_language(&mut s, &LanguageDto { name: String::new(), glottocode: "abcd1234".into(), iso: "kan".into() }).unwrap();
+        let xml = fs::read_to_string(export_text(&mut s, &text, Format::Tei, &out).unwrap().path).unwrap();
+        assert!(xml.contains("xml:lang=\"kan\"") && !xml.contains("und-x-"), "ISO 639-3 wins: {xml}");
         drop(s);
         fs::remove_dir_all(dir).ok();
     }
