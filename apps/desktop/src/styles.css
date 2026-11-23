@@ -1183,3 +1183,17 @@ body::before {
 .ck-gloss .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
 .ck-count { color: var(--muted); font-size: var(--text-sm); min-width: 3em; }
 .ck-show { border: none; background: none; color: var(--accent); padding: 0; text-decoration: underline; cursor: pointer; font-size: var(--text-sm); }
+
+.panel-vowels { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.vw-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.vw-bar label { display: inline-flex; gap: 4px; align-items: center; }
+.vw-plot { width: 100%; max-width: 760px; height: auto; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.vw-grid { stroke: var(--line); stroke-width: 1; }
+.vw-tick { font-size: 11px; fill: var(--muted); font-family: var(--font-ui); }
+.vw-axis { font-size: 12px; fill: var(--ink); font-family: var(--font-ui); }
+.vw-ellipse { fill: var(--accent-bright); fill-opacity: 0.08; stroke: var(--accent); stroke-width: 1.2; }
+.vw-dot { fill: var(--accent); fill-opacity: 0.55; cursor: pointer; }
+.vw-dot:hover, .vw-dot:focus { fill-opacity: 1; outline: none; stroke: var(--ink); stroke-width: 1.5; }
+.vw-dot.is-selected { fill: var(--error); fill-opacity: 1; }
+.vw-label { font-family: var(--font-ipa); font-size: 18px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface-raised); stroke-width: 4px; pointer-events: none; }
+.vw-problem { color: var(--error); }

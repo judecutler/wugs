@@ -466,6 +466,19 @@ Each row is one segment: its label, start and end, duration, mean, lowest and hi
 
 Segments without times are left out, and the message after measuring says how many.
 
+### Plot the vowel space
+
+The **Vowel space** panel puts every timed segment of a track at its F1 and F2, the chart phoneticians draw for a vowel system: F2 runs from right to left and F1 from top to bottom, so front vowels sit on the left and high vowels at the top. Open it from Settings (Closed panels) or with **Find an action**.
+
+Segment the recording so each vowel (or each word you want to compare) is one segment, and label each segment with its vowel. Choose the track and click **Plot**. wugs measures each segment's middle half, the steady part of a vowel, and draws a dot for it. Each label gets its mean, written in large letters, and an ellipse one standard deviation wide.
+
+- **Normalize** shows each formant as standard deviations from this speaker's mean (Lobanov normalization), so recordings of different speakers can be compared.
+- **Every token** shows or hides the dots, leaving only the means and ellipses.
+- Click a dot to hear its segment and open it on the Timeline.
+- **Copy table** copies every segment's label, times, pitch and F1 to F3 for a spreadsheet or R.
+
+The numbers come from the same analysis as the overlays and **Measure…**: your Praat when wugs finds it, else wugs's own.
+
 ### Show a spectrogram
 
 Click **Spectrogram** in the Timeline toolbar to see the recording's spectrogram under the waveform: frequency from 0 at the bottom to 5000 Hz at the top, darker where louder, the way Praat draws it. Formants show as dark bands, fricatives as noise high up, and stop closures as gaps. wugs makes the spectrogram itself, so it works without Praat. Turn on **Formants** too, and the formant dots sit on the bands.

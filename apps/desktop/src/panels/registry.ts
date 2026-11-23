@@ -20,6 +20,7 @@ import { sentencePanel } from "./sentence";
 import { textsPanel } from "./texts";
 import { timelinePanel } from "./timeline";
 import { transcribePanel } from "./transcribe";
+import { vowelsPanel } from "./vowels";
 
 /** Every panel a layout may name. The key is both the dockview component
  * name and the panel id: each panel exists at most once. */
@@ -39,6 +40,7 @@ export const PANELS = {
   collocates: collocatesPanel,
   keywords: keywordsPanel,
   checks: checksPanel,
+  vowels: vowelsPanel,
   assist: assistPanel,
   people: peoplePanel,
   conflicts: conflictsPanel,

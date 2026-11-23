@@ -1,0 +1,210 @@
+// Vowel space: every timed segment of a track at its F1 and F2, the way a
+// phonetician plots vowels (F2 right to left, F1 top to bottom), with each
+// label's mean and a one-standard-deviation ellipse, in Hz or Lobanov-
+// normalized. The numbers come from the acoustic-analysis capability
+// (src-tauri/src/measure.rs), so they match the Timeline's overlays and
+// Measure…'s table. Rules in ../vowels/logic.ts.
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { errorText, measurePoints } from "../api";
+import { emptyState, h } from "../dom";
+import { hear, recordingForShown } from "../hear/hear";
+import { trackToMeasure } from "../measure/logic";
+import { provide } from "../palette/registry";
+import { getSelection, getState, showToast } from "../store";
+import { ellipsePath, groups, place, plotNote, plotted, ranges, table, ticks, type Point } from "../vowels/logic";
+import type { PanelDef, PanelView } from "./panel";
+
+const SVG = "http://www.w3.org/2000/svg";
+const NORMALIZE_KEY = "wugs.vowels.normalize";
+const TOKENS_KEY = "wugs.vowels.tokens";
+
+function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>, text?: string): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  if (text !== undefined) el.textContent = text;
+  return el;
+}
+
+const W = 560;
+const H = 420;
+const BOX = { left: 56, top: 16, width: W - 72, height: H - 60 };
+
+export const vowelsPanel: PanelDef = {
+  title: "Vowel space",
+  create(): PanelView {
+    const el = h("div", { className: "panel panel-vowels" });
+    let normalize = localStorage.getItem(NORMALIZE_KEY) === "on";
+    let showTokens = localStorage.getItem(TOKENS_KEY) !== "off";
+    let tier: string | null = null;
+    let result: { key: string; textId: string; tierId: string; track: string; points: Point[]; untimed: number; analysedBy: string } | null = null;
+    let busy = false;
+    let problem: string | null = null;
+    let lastText = "";
+
+    const run = async () => {
+      const s = getState();
+      if (s.kind !== "open" || s.text === null || tier === null || busy) return;
+      const source = recordingForShown();
+      if (source === null) {
+        problem = "Load this text's recording on the Timeline first.";
+        paint();
+        return;
+      }
+      const textId = s.text.id;
+      const tierId = tier;
+      const track = s.text.tiers.find((t) => t.id === tierId)?.name ?? "";
+      busy = true;
+      problem = null;
+      paint();
+      try {
+        const r = await measurePoints({ textId, tierId, source });
+        result = { key: `${textId}|${tierId}`, textId, tierId, track, ...r };
+      } catch (e) {
+        problem = errorText(e);
+      }
+      busy = false;
+      paint();
+    };
+
+    const plot = (): SVGSVGElement => {
+      const r = result!;
+      const ps = plotted(r.points, normalize);
+      const gs = groups(ps);
+      const rg = ranges(ps, normalize);
+      const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "vw-plot", role: "img", "aria-label": `Vowel space of ${r.track}: ${gs.length} labels` });
+      // Grid and axes.
+      for (const t of ticks(rg.x)) {
+        const { px } = place(t, rg.y.lo, rg, BOX);
+        root.append(svg("line", { x1: px, x2: px, y1: BOX.top, y2: BOX.top + BOX.height, class: "vw-grid" }), svg("text", { x: px, y: BOX.top + BOX.height + 16, class: "vw-tick", "text-anchor": "middle" }, String(t)));
+      }
+      for (const t of ticks(rg.y)) {
+        const { py } = place(rg.x.hi, t, rg, BOX);
+        root.append(svg("line", { x1: BOX.left, x2: BOX.left + BOX.width, y1: py, y2: py, class: "vw-grid" }), svg("text", { x: BOX.left - 6, y: py + 4, class: "vw-tick", "text-anchor": "end" }, String(t)));
+      }
+      const unit = normalize ? " (z)" : " (Hz)";
+      root.append(
+        svg("text", { x: BOX.left + BOX.width / 2, y: H - 8, class: "vw-axis", "text-anchor": "middle" }, `F2${unit} ←`),
+        svg("text", { x: 14, y: BOX.top + BOX.height / 2, class: "vw-axis", "text-anchor": "middle", transform: `rotate(-90 14 ${BOX.top + BOX.height / 2})` }, `F1${unit} →`),
+      );
+      // A clipped layer, so a wide ellipse never draws over the axes.
+      const clip = svg("clipPath", { id: "vw-clip" });
+      clip.append(svg("rect", { x: BOX.left, y: BOX.top, width: BOX.width, height: BOX.height }));
+      const layer = svg("g", { "clip-path": "url(#vw-clip)" });
+      root.append(svg("defs", {}), layer);
+      root.querySelector("defs")!.append(clip);
+      for (const g of gs) {
+        // Traced in data units and placed point by point, so the flipped,
+        // unequally scaled axes draw it exactly.
+        const d = ellipsePath(g)
+          .map((q, i) => {
+            const { px, py } = place(q.x, q.y, rg, BOX);
+            return `${i === 0 ? "M" : "L"}${px.toFixed(1)},${py.toFixed(1)}`;
+          })
+          .join("");
+        if (d !== "") layer.append(svg("path", { d: `${d}Z`, class: "vw-ellipse" }));
+      }
+      if (showTokens) {
+        for (const p of ps) {
+          const { px, py } = place(p.x, p.y, rg, BOX);
+          const dot = svg("circle", { cx: px, cy: py, r: 3.2, class: "vw-dot", tabindex: 0 });
+          dot.append(svg("title", {}, `${p.group}: F1 ${Math.round(p.point.f1!)} Hz, F2 ${Math.round(p.point.f2!)} Hz — click to hear it`));
+          const open = () => void hear({ textId: r.textId, tierId: r.tierId, segmentId: p.point.segment, startMs: p.point.startMs, endMs: p.point.endMs });
+          dot.addEventListener("click", open);
+          dot.addEventListener("keydown", (ev) => {
+            if ((ev as KeyboardEvent).key === "Enter") open();
+          });
+          if (getSelection()?.segmentId === p.point.segment) dot.classList.add("is-selected");
+          layer.append(dot);
+        }
+      }
+      for (const g of gs) {
+        const { px, py } = place(g.x, g.y, rg, BOX);
+        layer.append(svg("text", { x: px, y: py + 5, class: "vw-label", "text-anchor": "middle" }, g.label.length > 12 ? `${g.label.slice(0, 11)}…` : g.label));
+      }
+      return root;
+    };
+
+    const paint = () => {
+      const s = getState();
+      if (s.kind !== "open") {
+        el.replaceChildren(emptyState("No project open", "Open a project to plot its vowels."));
+        return;
+      }
+      if (s.text === null) {
+        el.replaceChildren(emptyState("Vowel space", "Select a text whose recording is segmented, one vowel to a segment, to plot F1 against F2."));
+        return;
+      }
+      const timedTiers = s.text.tiers.filter((t) => s.text!.segments.some((x) => x.tier === t.id && x.startMs !== null && x.endMs !== null && x.endMs > x.startMs));
+      if (tier === null || !timedTiers.some((t) => t.id === tier)) tier = trackToMeasure(s.text.tiers, s.text.segments, getSelection()?.segmentId ?? null)?.id ?? null;
+      if (timedTiers.length === 0) {
+        el.replaceChildren(emptyState("Vowel space", "This text has no timed segments yet. Segment the recording on the Timeline, one vowel (or one word) to a segment, then plot it here."));
+        return;
+      }
+      const picker = h("select", { title: "The track to plot: each timed segment is one point, grouped by its label" }, ...timedTiers.map((t) => h("option", { value: t.id, textContent: t.name })));
+      picker.value = tier ?? "";
+      picker.onchange = () => {
+        tier = picker.value;
+        paint();
+      };
+      const go = h("button", { className: "primary", textContent: busy ? "Measuring…" : "Plot", disabled: busy, title: "Measure every timed segment of this track and plot F1 against F2" });
+      go.onclick = () => void run();
+      const norm = h("input", { type: "checkbox", checked: normalize });
+      norm.onchange = () => {
+        normalize = norm.checked;
+        localStorage.setItem(NORMALIZE_KEY, normalize ? "on" : "off");
+        paint();
+      };
+      const tok = h("input", { type: "checkbox", checked: showTokens });
+      tok.onchange = () => {
+        showTokens = tok.checked;
+        localStorage.setItem(TOKENS_KEY, showTokens ? "on" : "off");
+        paint();
+      };
+      const current = result !== null && result.key === `${s.text.id}|${tier}` ? result : null;
+      const copy = h("button", { textContent: "Copy table", disabled: current === null, title: "Copy every segment's label, times, F0 and F1–F3 as a table for a spreadsheet or R" });
+      copy.onclick = () => {
+        if (current === null) return;
+        void writeText(table(current.points)).then(
+          () => showToast({ tone: "info", lines: [`Copied ${current.points.length} rows.`] }),
+          (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+        );
+      };
+      const bar = h(
+        "div",
+        { className: "vw-bar" },
+        h("label", {}, "Track ", picker),
+        go,
+        h("label", { title: "Lobanov normalization: each formant as standard deviations from this speaker's mean, so speakers can be compared" }, norm, " Normalize"),
+        h("label", { title: "Show a dot for every segment, not only each label's mean" }, tok, " Every token"),
+        copy,
+      );
+      const body: Node[] = [];
+      if (problem !== null) body.push(h("p", { className: "note vw-problem", textContent: problem }));
+      if (current !== null) {
+        const shown = plotted(current.points, false).length;
+        body.push(plot(), h("p", { className: "note", textContent: plotNote(current.points, shown, current.untimed, current.analysedBy) }));
+      } else if (problem === null) {
+        body.push(
+          h("p", {
+            className: "note",
+            textContent: "Plot measures every timed segment of the track (its middle half, the steady part of a vowel) and puts it at its F1 and F2. Label segments with the vowel they hold, and each label gets its mean and spread.",
+          }),
+        );
+      }
+      el.replaceChildren(bar, ...body);
+    };
+
+    const render = () => {
+      const s = getState();
+      const now = s.kind === "open" ? `${s.info.projectId}|${s.text?.id ?? ""}|${JSON.stringify(s.text?.segments.length ?? 0)}` : "closed";
+      if (now !== lastText) {
+        lastText = now;
+        problem = null;
+      }
+      paint();
+    };
+
+    const unprovide = provide("vowels", () => [{ id: "vowels:plot", title: "Plot the vowel space", group: "Vowel space", words: ["formant", "f1", "f2", "vowel chart", "phonetics"], run: () => void run() }]);
+    return { element: el, render, dispose: unprovide };
+  },
+};

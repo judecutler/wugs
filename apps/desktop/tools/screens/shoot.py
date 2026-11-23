@@ -40,6 +40,7 @@ PANELS = [
     ("collocates", "Collocates"),
     ("keywords", "Keywords"),
     ("checks", "Checks"),
+    ("vowels", "Vowel space"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),
@@ -233,6 +234,9 @@ def prepare(run, panel_id):
         box = page.locator(".panel-search input").first
         box.fill("kesi")
         page.locator(".panel-search mark").first.wait_for()
+    elif panel_id == "vowels":
+        page.locator(".panel-vowels button", has_text="Plot").click()
+        page.locator(".panel-vowels .vw-plot").wait_for()
     elif panel_id == "kits":
         # The user kit, so the shot shows the editor and the wug picker.
         page.locator(".panel-kits .kit-name", has_text="Word-list sprint").click()

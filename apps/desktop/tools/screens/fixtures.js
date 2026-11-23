@@ -583,6 +583,21 @@
       total: 1,
       hits: [{ textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, len: 1, breakdown: null, glosses: null }],
     }),
+    // A synthetic speaker's vowels: five qualities, six tokens each, spread deterministically.
+    measure_points: () => {
+      const means = { i: [300, 2300], e: [450, 2000], a: [750, 1300], o: [480, 900], u: [320, 800] };
+      const points = [];
+      let k = 0;
+      for (const [label, [f1, f2]] of Object.entries(means)) {
+        for (let j = 0; j < 6; j++) {
+          const w = Math.sin(++k * 1.7);
+          const v = Math.cos(k * 2.3);
+          points.push({ segment: `v${k}`, label, startMs: k * 400, endMs: k * 400 + 180, f0: 120 + 10 * w, f1: f1 + 40 * w, f2: f2 + 120 * v + 60 * w, f3: 2700 });
+        }
+      }
+      points.push({ segment: "v-silent", label: "a", startMs: 13000, endMs: 13200, f0: null, f1: null, f2: null, f3: null });
+      return { points, untimed: 1, analysedBy: "Acoustic analysis (built in)" };
+    },
     gloss_consistency: () => [
       { surface: "ma", kind: "clitic", key: "ma", total: 9, slip: true, variants: [
         { gloss: "FOC", count: 7, textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01" },
