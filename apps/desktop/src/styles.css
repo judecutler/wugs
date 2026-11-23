@@ -1080,6 +1080,12 @@ body::before {
 .cc-plot-title { grid-area: title; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cc-plot-count { grid-area: count; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 .cc-plot-bar { grid-area: bar; position: relative; height: 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); }
+.panel-notes .nt-list { overflow: auto; flex: 1; min-height: 0; }
+.panel-notes .nt-head { font-family: var(--font-display); font-size: 15px; margin: 12px 0 4px; }
+.panel-notes .nt-item { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.panel-notes .nt-where { font-family: var(--font-ipa); text-align: left; }
+.panel-notes .nt-body { margin: 2px 0 0; white-space: pre-wrap; }
+.panel-notes .nt-filter { flex: 1; min-width: 10em; }
 .wt-list { display: grid; grid-template-columns: minmax(5em, max-content) max-content minmax(7em, 1fr) minmax(7em, 1fr) max-content max-content; gap: 6px 8px; align-items: center; margin-top: 8px; }
 .wt-row { display: contents; }
 .wt-form { font-family: var(--font-ipa); justify-self: start; }

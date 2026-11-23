@@ -245,6 +245,22 @@ export function touchLexicon() {
   for (const f of listeners) f();
 }
 
+let wantedEntry: string | null = null;
+
+/** Ask the Lexicon panel to open an entry (from another panel); it takes it
+ * at its next draw, so this works whether or not the panel is on screen yet. */
+export function openEntry(id: string) {
+  wantedEntry = id;
+  touchLexicon();
+}
+
+/** The entry another panel asked to open, once. */
+export function takeWantedEntry(): string | null {
+  const w = wantedEntry;
+  wantedEntry = null;
+  return w;
+}
+
 /** Bumped whenever other devices' ops may have arrived, for panels that
  * fetch their own data (the media bin) to know when to fetch again. */
 export const dataGeneration = (): number => generation;

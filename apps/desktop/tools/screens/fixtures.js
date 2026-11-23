@@ -755,6 +755,13 @@ const LEXICON = [
       };
     },
     lexicon_example_gaps: () => ({ without: 6, fillable: 4 }),
+    all_notes: () => ({
+      sentences: [
+        { noteId: "n1", body: "Is wu- the third person or a plural? Ask again.", textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01", content: "wu no" },
+        { noteId: "n2", body: "Speaker laughed here.", textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u02", content: "fɔɹ faɪv" },
+      ],
+      entries: [{ entryId: "lx-tela1", headword: "tela", homograph: 1, sense: 1, gloss: "river", body: "Also a stream? Check with the fishers." }],
+    }),
     tree_problems: () => ({
       sentences: [{ textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u02", content: "fɔɹ faɪv", problems: ["The tree has 2 roots: words 1 and 2."] }],
       total: 1,

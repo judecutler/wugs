@@ -25,6 +25,7 @@ import { typologyPanel } from "./typology";
 import { progressPanel } from "./progress";
 import { affixesPanel } from "./affixes";
 import { wordTypesPanel } from "./wordtypes";
+import { notesPanel } from "./notes";
 import { orthographyPanel } from "./orthography";
 import { vowelsPanel } from "./vowels";
 import { contoursPanel } from "./contours";
@@ -54,6 +55,7 @@ export const PANELS = {
   progress: progressPanel,
   affixes: affixesPanel,
   wordtypes: wordTypesPanel,
+  notes: notesPanel,
   orthography: orthographyPanel,
   assist: assistPanel,
   people: peoplePanel,
