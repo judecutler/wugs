@@ -270,12 +270,13 @@ fn lift_report_names_what_is_not_carried() {
     let r = import_lift(&mut p, LIFT).unwrap();
     assert_eq!(r.spans_flattened, 1, "one span flattened");
     let nc = &r.not_carried.0;
-    assert_eq!(nc.get("example/note"), Some(&1), "an example's note counted: {nc:?}");
+    assert_eq!(nc.get("example/note"), None, "an example's note is kept: {nc:?}");
+    assert_eq!(r.kept.0.get("example/note"), Some(&1), "{:?}", r.kept.0);
     assert_eq!(nc.get("entry/note"), None, "an entry's note is carried: {nc:?}");
     assert_eq!(r.notes, 1);
     assert_eq!(nc.get("header"), Some(&1), "header counted: {nc:?}");
     assert_eq!(nc.get("form/annotation"), Some(&1), "form annotation counted: {nc:?}");
-    assert_eq!(r.not_carried.total(), 3, "nothing else dropped: {nc:?}");
+    assert_eq!(r.not_carried.total(), 2, "nothing else dropped: {nc:?}");
     fs::remove_dir_all(root).ok();
 }
 
@@ -711,4 +712,42 @@ fn lift_semantic_domain_traits_become_links_and_go_back_out() {
     assert!(out.contains(r#"value="1 Universe, creation""#), "{out}");
     assert!(!out.contains(r#"value="1.1 Sky""#), "{out}");
     fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn lift_etymologies_fields_and_subsenses_are_kept_and_written_back() {
+    let (root, mut p) = temp_project();
+    let lift = r#"<?xml version="1.0" encoding="UTF-8"?>
+<lift version="0.13">
+  <entry id="gul_1" guid="22220000-0000-4000-8000-000000000002">
+    <lexical-unit><form lang="tr"><text>gül</text></form></lexical-unit>
+    <etymology type="borrowed" source="Persian"><form lang="fa"><text>گل</text></form><gloss lang="en"><text>rose</text></gloss></etymology>
+    <field type="literal-meaning"><form lang="en"><text>the <span lang="fa">gol</span> flower</text></form></field>
+    <sense id="gul_s1">
+      <gloss lang="en"><text>rose</text></gloss>
+      <subsense id="gul_s1a"><gloss lang="en"><text>wild rose</text></gloss></subsense>
+      <example><form lang="tr"><text>Gül açtı.</text></form><note type="source"><form lang="en"><text>elicited, 2024</text></form></note></example>
+    </sense>
+  </entry>
+</lift>"#;
+    let r = import_lift(&mut p, lift).unwrap();
+    assert_eq!(r.not_carried.total(), 0, "{:?}", r.not_carried.0);
+    assert_eq!(r.kept.total(), 4, "{:?}", r.kept.0);
+    let flat = |x: &str| x.lines().map(str::trim).collect::<String>();
+    let out = flat(&export_lift(&p).unwrap());
+    for want in [
+        r#"<etymology type="borrowed" source="Persian"><form lang="fa"><text>گل</text></form><gloss lang="en"><text>rose</text></gloss></etymology>"#,
+        r#"<field type="literal-meaning"><form lang="en"><text>the gol flower</text></form></field>"#,
+        r#"<subsense id="gul_s1a"><gloss lang="en"><text>wild rose</text></gloss></subsense>"#,
+        r#"<note type="source"><form lang="en"><text>elicited, 2024</text></form></note></example>"#,
+    ] {
+        assert!(out.contains(want), "{want}\nin\n{out}");
+    }
+    // Our own export reads back to the same file.
+    let (root2, mut q) = temp_project();
+    let raw = export_lift(&p).unwrap();
+    import_lift(&mut q, &raw).unwrap();
+    assert_eq!(export_lift(&q).unwrap(), raw);
+    fs::remove_dir_all(root).ok();
+    fs::remove_dir_all(root2).ok();
 }

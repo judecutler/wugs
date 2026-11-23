@@ -6,8 +6,10 @@
 //! examples with their translations), variants, and
 //! relations between entries and senses, in every writing system, plus
 //! every attribute of entries, pronunciations, senses, examples, variants
-//! and relations. Everything else is counted in
-//! `ImportReport::not_carried`.
+//! and relations. Any other element of an entry, sense or example
+//! (etymologies, custom fields, subsenses, an example's notes) is kept as
+//! written and put back on export, counted in `ImportReport::kept`.
+//! Everything else is counted in `ImportReport::not_carried`.
 
 use wugs_core::{Project, SCOPE_LEXICON};
 use wugs_model::{pos_seq, Value};
@@ -46,6 +48,9 @@ const F_NOTES: &str = "x.lift.notes";
 const F_TRAITS: &str = "x.lift.traits";
 /// FLEx's trait naming a sense's semantic domain (`value="1.1 Sky"`).
 const DOMAIN_TRAIT: &str = "semantic-domain-ddp4";
+/// An entry's, sense's or example's other elements, each as XML text,
+/// written back after the ones wugs edits.
+const F_KEPT: &str = "x.lift.kept";
 
 #[derive(Debug, Default)]
 pub struct ImportReport {
@@ -69,6 +74,8 @@ pub struct ImportReport {
     /// the markup is not).
     pub spans_flattened: usize,
     pub not_carried: NotCarried,
+    /// Elements wugs does not edit, kept as written and put back on export, by name.
+    pub kept: NotCarried,
     pub commits: usize,
     pub findings: usize,
 }
@@ -91,6 +98,8 @@ struct Entry {
     notes: Vec<Value>,
     /// Each `<trait>`'s attributes.
     traits: Vec<Value>,
+    /// Other elements, as XML text.
+    kept: Vec<String>,
 }
 
 struct Sense {
@@ -107,12 +116,47 @@ struct Sense {
     illustrations: Vec<Value>,
     notes: Vec<Value>,
     traits: Vec<Value>,
+    kept: Vec<String>,
 }
 
 struct Example {
     attrs: Value,
     forms: MultiText,
     translations: Vec<(Option<String>, MultiText)>,
+    kept: Vec<String>,
+}
+
+fn kept_value(kept: &[String]) -> Value {
+    Value::Arr(kept.iter().map(|x| Value::str(x)).collect())
+}
+
+/// An element wugs does not edit, as XML text to write back. Mixed content
+/// (`a<span>b</span>c`) is read as its text, as everywhere else in LIFT.
+fn keep(node: &XmlNode, owner: &str, report: &mut ImportReport) -> String {
+    fn plain(n: &XmlNode, report: &mut ImportReport) -> XmlNode {
+        let mixed = !n.head.trim().is_empty() || n.children.iter().any(|c| !c.tail.trim().is_empty());
+        if mixed {
+            report.spans_flattened += count_spans(n);
+            let mut flat = XmlNode::new(&n.name);
+            flat.attrs = n.attrs.clone();
+            flat.text = n.deep_text();
+            return flat;
+        }
+        let mut out = XmlNode::new(&n.name);
+        out.attrs = n.attrs.clone();
+        out.text = if n.children.is_empty() { n.text.clone() } else { String::new() };
+        out.children = n.children.iter().map(|c| plain(c, report)).collect();
+        out
+    }
+    report.kept.add(&format!("{owner}/{}", node.name));
+    let xml = plain(node, report).to_xml();
+    xml.split_once('\n').map(|(_, body)| body.trim_end().to_string()).unwrap_or(xml)
+}
+
+/// The kept elements of an entity, parsed back.
+fn kept_nodes(project: &Project, id: &str) -> Result<Vec<XmlNode>, String> {
+    let Some(Value::Arr(items)) = field_value(project, id, F_KEPT)? else { return Ok(Vec::new()) };
+    items.iter().filter_map(|v| v.as_str()).map(|x| xml::parse(x).map_err(|e| format!("a kept LIFT element no longer reads: {e}"))).collect()
 }
 
 fn translations_value(ts: &[(Option<String>, MultiText)]) -> Value {
@@ -197,6 +241,9 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
         if !e.traits.is_empty() {
             fields.push((F_TRAITS, Value::Arr(e.traits.clone())));
         }
+        if !e.kept.is_empty() {
+            fields.push((F_KEPT, kept_value(&e.kept)));
+        }
         let lex = t.create("lexeme", "lex", SCOPE_LEXICON, fields);
         pending.extend(e.relations.iter().map(|r| (lex.clone(), r.clone())));
 
@@ -245,6 +292,9 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
             if !kept.is_empty() {
                 fields.push((F_TRAITS, Value::Arr(kept)));
             }
+            if !s.kept.is_empty() {
+                fields.push((F_KEPT, kept_value(&s.kept)));
+            }
             let sen = t.create("sense", "sen", SCOPE_LEXICON, fields);
             for dom in &linked {
                 t.create("sense-domain", "sdm", SCOPE_LEXICON, vec![("sense", Value::str(&sen)), ("domain", Value::str(dom))]);
@@ -271,6 +321,9 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
                 }
                 if let Some(src) = x.attrs.get_str("source") {
                     fields.push(("reference", Value::str(src)));
+                }
+                if !x.kept.is_empty() {
+                    fields.push((F_KEPT, kept_value(&x.kept)));
                 }
                 t.create("example", "exm", SCOPE_LEXICON, fields);
                 report.examples_created += 1;
@@ -495,6 +548,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
         relations: Vec::new(),
         notes: Vec::new(),
         traits: Vec::new(),
+        kept: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -529,7 +583,10 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
             "relation" => e.relations.push(parse_relation(c, report)),
             "note" => e.notes.push(parse_note(c, report)),
             "trait" => e.traits.push(parse_trait(c, report)),
-            other => report.not_carried.add(&format!("entry/{other}")),
+            _ => {
+                let x = keep(c, "entry", report);
+                e.kept.push(x);
+            }
         }
     }
     if e.lexical_unit.is_empty() {
@@ -558,6 +615,7 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
         illustrations: Vec::new(),
         notes: Vec::new(),
         traits: Vec::new(),
+        kept: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -589,7 +647,10 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
                 }
                 s.illustrations.push(Value::Obj(vec![("attrs".to_string(), attrs_value(c)), ("label".to_string(), multi_value(&label))].into_iter().collect()));
             }
-            other => report.not_carried.add(&format!("sense/{other}")),
+            _ => {
+                let x = keep(c, "sense", report);
+                s.kept.push(x);
+            }
         }
     }
     Ok(s)
@@ -645,6 +706,7 @@ fn lift_ids(project: &Project) -> Result<std::collections::HashMap<String, Strin
 /// `<example source><form>…</form><translation type><form>…</form></translation></example>`
 fn parse_example(node: &XmlNode, report: &mut ImportReport) -> Example {
     let mut translations = Vec::new();
+    let mut kept = Vec::new();
     for c in &node.children {
         match c.name.as_str() {
             "form" => {}
@@ -654,10 +716,10 @@ fn parse_example(node: &XmlNode, report: &mut ImportReport) -> Example {
                 }
                 translations.push((c.attr("type").map(str::to_string), read_multi(c, report)));
             }
-            other => report.not_carried.add(&format!("example/{other}")),
+            _ => kept.push(keep(c, "example", report)),
         }
     }
-    Example { attrs: attrs_value(node), forms: read_multi(node, report), translations }
+    Example { attrs: attrs_value(node), forms: read_multi(node, report), translations, kept }
 }
 
 /// `<x><form lang><text>…</text></form>…</x>`
@@ -779,6 +841,7 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
                     }
                     x.children.push(tr);
                 }
+                x.children.extend(kept_nodes(project, &exm)?);
                 sense.children.push(x);
             }
             relation_nodes(project, &sen, &mut sense)?;
@@ -801,6 +864,7 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
                     sense.children.push(ill);
                 }
             }
+            sense.children.extend(kept_nodes(project, &sen)?);
             entry.children.push(sense);
         }
         entry.children.extend(note_nodes(project, lex, "en")?);
@@ -815,6 +879,7 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
             v = with_attrs(v, field_value(project, &frm, F_ATTRS)?, &[]);
             entry.children.push(v);
         }
+        entry.children.extend(kept_nodes(project, lex)?);
         root.children.push(entry);
     }
     Ok(root.to_xml())

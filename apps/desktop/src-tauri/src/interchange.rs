@@ -437,6 +437,17 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                     ));
                 }
             }
+            if r.kept.total() > 0 {
+                let mut names: Vec<&str> = r.kept.0.keys().map(|k| k.rsplit('/').next().unwrap_or(k)).collect();
+                names.sort_unstable();
+                names.dedup();
+                lines.push(format!(
+                    "{} wugs does not edit ({}) {} kept and will go back out in a LIFT export.",
+                    plural(r.kept.total(), "part", "parts"),
+                    names.join(", "),
+                    if r.kept.total() == 1 { "is" } else { "are" }
+                ));
+            }
             lines.extend(not_carried(&r.not_carried.0));
             (None, true)
         }
