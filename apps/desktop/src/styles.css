@@ -1364,3 +1364,5 @@ body::before {
 .af-table tbody tr { cursor: default; }
 .tx-spell { font-family: var(--font-ipa); font-size: var(--text-sm); color: var(--accent); background: none; border: 1px dashed var(--accent-bright); border-radius: var(--radius-sm); padding: 0 6px; white-space: nowrap; cursor: pointer; }
 .tx-spell[hidden] { display: none; }
+.lx-picture { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.lx-picture img { max-width: 160px; max-height: 120px; border-radius: var(--radius-sm); border: 1px solid var(--line); background: var(--surface-raised); }

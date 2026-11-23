@@ -414,6 +414,8 @@ export type SenseView = {
   domains: DomainRef[];
   occurrences: number;
   examples: ExampleView[];
+  /** A picture of what it means; `path` is the file here, absent when it is not on this computer. */
+  picture: { blob: string; name: string; path: string | null } | null;
 };
 /** An example sentence of a sense; `from` is the sentence it was taken from, while it is there. */
 export type ExampleView = {
@@ -472,6 +474,8 @@ export const lexiconSetSenseGloss = (args: { senseId: string; gloss: string; lan
   invoke<EntryEdit>("lexicon_set_sense_gloss", args);
 export const lexiconSetSenseText = (args: { senseId: string; field: "definition" | "usage"; text: string }) =>
   invoke<EntryEdit>("lexicon_set_sense_text", args);
+export const lexiconSetPicture = (args: { sense: string; path: string }) => invoke<EntryEdit>("lexicon_set_picture", args);
+export const lexiconClearPicture = (args: { sense: string }) => invoke<EntryEdit>("lexicon_clear_picture", args);
 export const lexiconAddAllomorph = (args: { id: string; form: string }) => invoke<EntryEdit>("lexicon_add_allomorph", args);
 export const lexiconDeleteAllomorph = (args: { id: string; formId: string }) => invoke<EntryEdit>("lexicon_delete_allomorph", args);
 export const lexiconAddPronunciation = (args: { id: string; form: string; segmentId: string | null }) => invoke<EntryEdit>("lexicon_add_pronunciation", args);

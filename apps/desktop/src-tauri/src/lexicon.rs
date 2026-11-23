@@ -56,6 +56,46 @@ pub struct SenseView {
     pub occurrences: usize,
     /// Example sentences chosen for this sense, in order.
     pub examples: Vec<ExampleView>,
+    /// A picture of what it means, for a picture dictionary.
+    pub picture: Option<PictureView>,
+}
+
+/// A sense's picture: its blob, the name it was chosen under, and where the
+/// file is in this project's blob store (absent when it is not on this computer).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PictureView {
+    pub blob: String,
+    pub name: String,
+    pub path: Option<String>,
+}
+
+/// The kinds of picture a sense takes: what every browser, Word and Anki show.
+pub const PICTURE_TYPES: &[&str] = &["png", "jpg", "jpeg", "gif", "webp"];
+/// A dictionary picture is a photo or drawing, not a scan of a book.
+pub const PICTURE_MAX_BYTES: u64 = 20 * 1024 * 1024;
+
+/// The MIME type of a picture by its file name's extension.
+pub(crate) fn picture_mime(name: &str) -> &'static str {
+    match name.rsplit('.').next().map(|e| e.to_ascii_lowercase()).as_deref() {
+        Some("png") => "image/png",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        _ => "image/jpeg",
+    }
+}
+
+/// The file extension a picture is written under (its own, else `jpg`).
+pub(crate) fn picture_ext(name: &str) -> String {
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    if PICTURE_TYPES.contains(&ext.as_str()) { ext } else { "jpg".into() }
+}
+
+fn picture_view(p: &Project, sense: &str) -> Result<Option<PictureView>, String> {
+    Ok(p.sense_picture(sense)?.map(|(blob, name)| {
+        let path = wugs_blob::parse_ref(&blob).map(|hex| p.root.join("blobs").join(hex.to_string())).filter(|f| f.is_file()).map(|f| f.display().to_string());
+        PictureView { blob, name, path }
+    }))
 }
 
 /// An example sentence of a sense (`wugs_core::examples`).
@@ -305,6 +345,7 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
             domains,
             occurrences: occurrences(p, &s)?,
             examples: example_views(p, &s)?,
+            picture: picture_view(p, &s)?,
             id: s,
         });
     }
@@ -548,6 +589,35 @@ pub fn lexicon_delete_allomorph(session: &mut Session, id: &str, form: &str) -> 
     }
     let res = p.delete_form(form)?;
     edit(p, id, &res)
+}
+
+/// Copy a picture into the blob store and show it with a sense.
+pub fn lexicon_set_picture(session: &mut Session, sense: &str, path: &str) -> Result<EntryEdit, String> {
+    let file = std::path::Path::new(path);
+    let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{path} has no usable file name"))?.to_string();
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    if !PICTURE_TYPES.contains(&ext.as_str()) {
+        return Err(format!("{name} is not a picture wugs can show: choose a PNG, JPEG, GIF or WebP file."));
+    }
+    let size = std::fs::metadata(file).map_err(|e| format!("{name}: {e}"))?.len();
+    if size > PICTURE_MAX_BYTES {
+        return Err(format!("{name} is {} MB; a dictionary picture can be at most 20 MB. Save a smaller copy and choose that.", size / (1024 * 1024)));
+    }
+    let p = project(session)?;
+    require(p, sense, "sense")?;
+    let entry = str_field(p, sense, "lexeme")?;
+    let store = wugs_blob::BlobStore::open(&p.root).map_err(|e| format!("open blob store: {e}"))?;
+    let blob = store.put_file(file).map_err(|e| format!("store {name}: {e}"))?;
+    let res = p.set_sense_picture(sense, Some((&blob, &name)))?;
+    edit(p, &entry, &res)
+}
+
+pub fn lexicon_clear_picture(session: &mut Session, sense: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    require(p, sense, "sense")?;
+    let entry = str_field(p, sense, "lexeme")?;
+    let res = p.set_sense_picture(sense, None)?;
+    edit(p, &entry, &res)
 }
 
 pub fn lexicon_delete(session: &mut Session, id: &str) -> Result<EntryEdit, String> {

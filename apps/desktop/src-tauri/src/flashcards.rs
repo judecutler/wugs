@@ -1,7 +1,7 @@
 //! Flashcards from the lexicon, for people learning the language: each entry
 //! a card with its headword (and its sound, when a pronunciation is heard in
-//! a recording here) on one side and its meanings, part of speech and an
-//! example on the other. Written as an Anki import file (both directions,
+//! a recording here) on one side and its meanings, picture, part of speech
+//! and an example on the other. Written as an Anki import file (both directions,
 //! GUIDs from the entry ids, so importing again updates rather than doubles),
 //! a plain `term<TAB>definition` file for Quizlet and the like, the sounds,
 //! and a README saying how to bring them in. Whole into a scratch folder,
@@ -24,6 +24,8 @@ pub struct Flashcards {
     pub cards: usize,
     /// Cards with a sound.
     pub sounds: usize,
+    /// Cards with a picture.
+    pub pictures: usize,
     /// Entries left out because no sense has a gloss yet.
     pub no_gloss: usize,
 }
@@ -42,7 +44,7 @@ fn flat(s: &str) -> String {
 
 /// The card's back: numbered meanings when there are several, the part of
 /// speech, and the first example with its translation.
-fn back(e: &EntryView) -> (String, String) {
+fn back(e: &EntryView, picture: Option<&str>) -> (String, String) {
     let glosses: Vec<&str> = e.senses.iter().map(|s| s.gloss.trim()).filter(|g| !g.is_empty()).collect();
     let meaning = if glosses.len() == 1 {
         glosses[0].to_string()
@@ -50,6 +52,9 @@ fn back(e: &EntryView) -> (String, String) {
         glosses.iter().enumerate().map(|(i, g)| format!("{}. {g}", i + 1)).collect::<Vec<_>>().join("; ")
     };
     let mut html = format!("<b>{}</b>", esc(&flat(&meaning)));
+    if let Some(file) = picture {
+        html.push_str(&format!("<br><img src=\"{}\">", esc(file)));
+    }
     if !e.pos_of_speech.trim().is_empty() {
         html.push_str(&format!("<br><i>{}</i>", esc(&flat(&e.pos_of_speech))));
     }
@@ -74,12 +79,12 @@ fn headword(e: &EntryView) -> String {
 const README: &str = "Flashcards made with wugs
 =========================
 
-anki.txt     every entry as a card, both ways: the word (with its sound) and its meaning
+anki.txt     every entry as a card, both ways: the word (with its sound) and its meaning (with its picture)
 quizlet.txt  the same as plain term<TAB>meaning lines
-sounds/      the sounds the cards play
+media/       the sounds and pictures the cards show
 
 Anki (desktop)
-1. Copy every file in sounds/ into Anki's media folder. To find it, open
+1. Copy every file in media/ into Anki's media folder. To find it, open
    Anki, choose Tools > Check Media, and click View Files; or look for
    collection.media inside your Anki profile folder.
 2. Choose File > Import and pick anki.txt. The file names its deck and the
@@ -92,7 +97,8 @@ Importing a newer anki.txt later updates the cards you already have
 AnkiDroid and AnkiMobile: import on the desktop and sync through AnkiWeb.
 
 Quizlet and other flashcard sites: choose Import, paste or pick quizlet.txt,
-and set \"between term and definition\" to Tab. Sounds are not carried there.
+and set \"between term and definition\" to Tab. Sounds and pictures are not
+carried there.
 ";
 
 pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_restricted: bool) -> Result<Flashcards, String> {
@@ -113,7 +119,8 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
     let deck = flat(&deck);
     let mut quizlet = String::new();
     let mut sounds: Vec<(String, String, f64, f64)> = Vec::new();
-    let mut out = Flashcards { path: String::new(), cards: 0, sounds: 0, no_gloss: 0 };
+    let mut pictures: Vec<(String, std::path::PathBuf)> = Vec::new();
+    let mut out = Flashcards { path: String::new(), cards: 0, sounds: 0, pictures: 0, no_gloss: 0 };
     for e in &entries {
         if e.senses.iter().all(|s| s.gloss.trim().is_empty()) {
             out.no_gloss += 1;
@@ -126,7 +133,12 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
             front.push_str(&format!(" [sound:{file}]"));
             sounds.push((file, blob, start, end));
         }
-        let (html, plain) = back(e);
+        let picture = e.senses.iter().find_map(|s| s.picture.as_ref().and_then(|x| x.path.as_ref().map(|path| (s, x, path)))).map(|(s, x, path)| {
+            let file = format!("wugs-{}.{}", s.id.to_ascii_lowercase().replace(|c: char| !c.is_ascii_alphanumeric() && c != '_', "-"), crate::lexicon::picture_ext(&x.name));
+            pictures.push((file.clone(), std::path::PathBuf::from(path)));
+            file
+        });
+        let (html, plain) = back(e, picture.as_deref());
         anki.push_str(&format!("wugs-{}\t{NOTETYPE}\t{deck}\t{front}\t{html}\n", e.id));
         quizlet.push_str(&format!("{word}\t{plain}\n"));
         out.cards += 1;
@@ -147,12 +159,15 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
         fs::write(scratch.join("anki.txt"), &anki).map_err(|e| format!("anki.txt: {e}"))?;
         fs::write(scratch.join("quizlet.txt"), &quizlet).map_err(|e| format!("quizlet.txt: {e}"))?;
         fs::write(scratch.join("README.txt"), README).map_err(|e| format!("README.txt: {e}"))?;
-        if !sounds.is_empty() {
-            fs::create_dir(scratch.join("sounds")).map_err(|e| format!("sounds: {e}"))?;
+        if !sounds.is_empty() || !pictures.is_empty() {
+            fs::create_dir(scratch.join("media")).map_err(|e| format!("media: {e}"))?;
+        }
+        for (file, from) in &pictures {
+            fs::copy(from, scratch.join("media").join(file)).map_err(|e| format!("{file}: {e}"))?;
         }
         for (file, blob, start, end) in &sounds {
             let hex = wugs_blob::parse_ref(blob).ok_or_else(|| format!("malformed blob ref {blob:?}"))?;
-            cut_clip(&p.root.join("blobs").join(hex), *start, *end, &scratch.join("sounds").join(file)).map_err(|e| format!("{file}: {e}"))?;
+            cut_clip(&p.root.join("blobs").join(hex), *start, *end, &scratch.join("media").join(file)).map_err(|e| format!("{file}: {e}"))?;
         }
         fs::rename(&scratch, &target).map_err(|e| format!("{}: {e}", target.display()))
     })();
@@ -161,6 +176,7 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
         return Err(e);
     }
     out.sounds = sounds.len();
+    out.pictures = pictures.len();
     out.path = target.display().to_string();
     Ok(out)
 }
@@ -197,7 +213,7 @@ mod tests {
         let file = format!("wugs-{}.wav", entry.to_ascii_lowercase());
         assert_eq!(cols[3], format!("wʌn [sound:{file}]"));
         assert!(cols[4].starts_with("<b>one</b>"), "{line}");
-        assert!(root.join("sounds").join(&file).is_file());
+        assert!(root.join("media").join(&file).is_file());
         assert!(fs::read_to_string(root.join("quizlet.txt")).unwrap().lines().any(|l| l == "wʌn\tone"));
         assert!(!anki.contains("zzz"));
         // The recording made restricted: the card stays, its sound does not.
@@ -206,6 +222,46 @@ mod tests {
         session::project(&mut s).unwrap().set_access(&src, "restricted").unwrap();
         let again = export_flashcards(&mut s, &out, "2026-11-23", false).unwrap();
         assert!(again.path.ends_with("-2") && again.sounds == 0 && again.cards == r.cards, "{again:?}");
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_picture_goes_with_its_sense_into_every_dictionary() {
+        let dir = std::env::temp_dir().join(format!("wugs-pics-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let png = dir.join("one finger.PNG");
+        fs::write(&png, b"\x89PNG\r\n\x1a\nnot a real picture").unwrap();
+        let txt = dir.join("notes.txt");
+        fs::write(&txt, b"x").unwrap();
+        let entry = crate::lexicon::lexicon_list(&mut s, "").unwrap().into_iter().find(|r| r.lemma == "wʌn").unwrap().id;
+        let sense = crate::lexicon::entry_view(session::project(&mut s).unwrap(), &entry).unwrap().senses[0].id.clone();
+        assert!(crate::lexicon::lexicon_set_picture(&mut s, &sense, txt.to_str().unwrap()).unwrap_err().contains("not a picture"));
+        let e = crate::lexicon::lexicon_set_picture(&mut s, &sense, png.to_str().unwrap()).unwrap().entry.unwrap();
+        let pic = e.senses[0].picture.clone().unwrap();
+        assert_eq!(pic.name, "one finger.PNG");
+        assert!(pic.path.as_deref().is_some_and(|p| Path::new(p).is_file()), "{pic:?}");
+
+        let printed = crate::dictionary::export_dictionary(&mut s, &out, "2026-11-23", false).unwrap();
+        assert_eq!(printed.pictures, 1);
+        let page = fs::read_to_string(&printed.path).unwrap();
+        assert!(page.contains("<img class=\"pic\" src=\"data:image/png;base64,iVBORw0KGgpub3QgYSByZWFsIHBpY3R1cmU=\" alt=\"one\">"), "{page}");
+
+        let site = crate::website::export_website(&mut s, &out, "2026-11-23", true, false).unwrap();
+        assert_eq!(site.pictures, 1);
+        assert!(Path::new(&site.path).join("pictures/p-1.png").is_file());
+        assert!(fs::read_to_string(Path::new(&site.path).join("dictionary.html")).unwrap().contains("src=\"pictures/p-1.png\""));
+
+        let cards = export_flashcards(&mut s, &out, "2026-11-23", false).unwrap();
+        assert_eq!(cards.pictures, 1);
+        let file = format!("wugs-{}.png", sense.to_ascii_lowercase());
+        assert!(Path::new(&cards.path).join("media").join(&file).is_file());
+        assert!(fs::read_to_string(Path::new(&cards.path).join("anki.txt")).unwrap().contains(&format!("<br><img src=\"{file}\">")));
+
+        let e = crate::lexicon::lexicon_clear_picture(&mut s, &sense).unwrap().entry.unwrap();
+        assert!(e.senses[0].picture.is_none());
         fs::remove_dir_all(&dir).ok();
     }
 }

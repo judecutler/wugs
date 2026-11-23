@@ -29,6 +29,8 @@ pub struct Site {
     pub clips_missing: usize,
     /// Of `clips`, the dictionary's headwords heard in a recording.
     pub headword_clips: usize,
+    /// Dictionary senses shown with their picture.
+    pub pictures: usize,
 }
 
 fn esc(s: &str) -> String {
@@ -150,9 +152,10 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     let name = if lang.name.is_empty() { "Texts and dictionary".to_string() } else { format!("{}: texts and dictionary", lang.name) };
     let lang_attr = if lang.iso.is_empty() { String::new() } else { format!(" lang=\"{}\"", esc(&lang.iso)) };
     let footer = format!("Made with wugs on {}.", esc(&date));
-    let mut site = Site { path: String::new(), texts: 0, sentences: 0, entries: 0, clips: 0, restricted_left_out: 0, clips_missing: 0, headword_clips: 0 };
+    let mut site = Site { path: String::new(), texts: 0, sentences: 0, entries: 0, clips: 0, restricted_left_out: 0, clips_missing: 0, headword_clips: 0, pictures: 0 };
     let mut files: Vec<(String, String)> = vec![("style.css".into(), STYLE.trim_start().to_string())];
     let mut clips: Vec<Clip> = Vec::new();
+    let mut pictures: Vec<(String, String)> = Vec::new();
 
     let mut texts: Vec<(String, String)> = Vec::new();
     for t in p.proj.entities_of_kind("text")? {
@@ -236,10 +239,11 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     site.texts = listed.len();
 
     let mut headwords = Vec::new();
-    let dictionary = match crate::dictionary::document(p, &date, include_restricted, audio) {
+    let dictionary = match crate::dictionary::document(p, &date, include_restricted, audio, crate::dictionary::Pictures::Files) {
         Ok((_, html, d)) => {
             site.entries = d.entries;
             headwords = d.headwords;
+            pictures = d.picture_files;
             site.headword_clips = d.clips.len();
             for c in d.clips {
                 clips.push(Clip { file: c.file, blob: c.blob, start: c.start, end: c.end });
@@ -310,6 +314,13 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
             let hex = wugs_blob::parse_ref(&c.blob).ok_or_else(|| format!("malformed blob ref {:?}", c.blob))?;
             cut_clip(&p.root.join("blobs").join(hex), c.start, c.end, &scratch.join(&c.file)).map_err(|e| format!("{}: {e}", c.file))?;
         }
+        if !pictures.is_empty() {
+            fs::create_dir(scratch.join("pictures")).map_err(|e| format!("pictures: {e}"))?;
+        }
+        for (file, blob) in &pictures {
+            let hex = wugs_blob::parse_ref(blob).ok_or_else(|| format!("malformed blob ref {blob:?}"))?;
+            fs::copy(p.root.join("blobs").join(hex.to_string()), scratch.join(file)).map_err(|e| format!("{file}: {e}"))?;
+        }
         fs::rename(&scratch, &out).map_err(|e| format!("{}: {e}", out.display()))
     })();
     if let Err(e) = written {
@@ -317,6 +328,7 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
         return Err(e);
     }
     site.clips = clips.len();
+    site.pictures = pictures.len();
     site.path = out.display().to_string();
     Ok(site)
 }
