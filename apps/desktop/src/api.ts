@@ -641,6 +641,9 @@ export const praatPending = (args: { text: string }) => invoke<boolean>("praat_p
 export const praatBringBack = (args: { text: string }) => invoke<PraatReturn>("praat_bring_back", args);
 export const praatApply = (args: { text: string }) => invoke<{ changes: number; findings: string[] }>("praat_apply", args);
 export const praatDiscard = (args: { text: string }) => invoke<void>("praat_discard", args);
+/** Measure every timed segment of a track into a CSV table in `folder` (src-tauri/src/measure.rs). */
+export const measureTrack = (args: { textId: string; tierId: string; source: string; folder: string }) =>
+  invoke<import("./measure/logic").MeasureReport>("measure_track", args);
 export const acousticAnalysis = (args: { source: string; chunks: number[] }) =>
   invoke<import("./praat/analysis").Chunk[]>("acoustic_analysis", args);
 

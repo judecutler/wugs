@@ -458,6 +458,14 @@ The analysis covers at most one minute of view at a time. If more is on screen, 
 
 The analysis uses Praat's standard speech settings. Pitch is tracked between 75 and 600 Hz, so a voice outside that range shows no pitch.
 
+### Measure a track
+
+Click **Measure…** in the Timeline toolbar to measure every timed segment of a track and save the numbers as a CSV table, ready for R, Python or a spreadsheet. wugs measures the track of the selected segment, or the utterance track when nothing is selected. Choose a folder outside the project, and the table goes there.
+
+Each row is one segment: its label, start and end, duration, mean, lowest and highest pitch, how much of it is voiced, mean intensity, F1 to F3 at its middle, and F1 to F3 averaged over its middle half (the steady part of a vowel). A value is left empty where there is nothing to measure, such as pitch in a voiceless stretch. The last column says what analysed it: your Praat when wugs finds it, else wugs's own analysis. The numbers are the same ones the Pitch, Intensity and Formants overlays draw.
+
+Segments without times are left out, and the message after measuring says how many.
+
 ### Show a spectrogram
 
 Click **Spectrogram** in the Timeline toolbar to see the recording's spectrogram under the waveform: frequency from 0 at the bottom to 5000 Hz at the top, darker where louder, the way Praat draws it. Formants show as dark bands, fricatives as noise high up, and stop closures as gaps. wugs makes the spectrogram itself, so it works without Praat. Turn on **Formants** too, and the formant dots sit on the bands.
