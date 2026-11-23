@@ -538,6 +538,17 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 plural(r.senses_created, "sense", "senses"),
                 plural(r.entries_skipped, "entry was", "entries were")
             ));
+            if r.pronunciations_created > 0 || r.examples_created > 0 || r.relations_created > 0 {
+                let parts: Vec<String> = [
+                    (r.pronunciations_created > 0).then(|| plural(r.pronunciations_created, "pronunciation", "pronunciations")),
+                    (r.examples_created > 0).then(|| plural(r.examples_created, "example sentence", "example sentences")),
+                    (r.relations_created > 0).then(|| plural(r.relations_created, "relation between entries", "relations between entries")),
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                lines.push(format!("With them came {}.", parts.join(" and ")));
+            }
             if r.entries_skipped_matched_by_headword > 0 {
                 lines.push(format!(
                     "{} share a headword with an entry made in wugs and were not imported; merge them by hand.",
