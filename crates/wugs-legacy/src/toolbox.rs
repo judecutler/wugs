@@ -47,6 +47,10 @@ enum Carried {
     Allomorph,
     Example,
     ExampleTranslation,
+    Phonetic,
+    Synonym,
+    Antonym,
+    Compare,
 }
 
 /// The MDF subset wugs carries: marker, meaning, and the field it lands in.
@@ -62,7 +66,24 @@ const MDF: &[(&str, Carried, &str)] = &[
     ("a", Carried::Allomorph, "form"),
     ("xv", Carried::Example, "sentence"),
     ("xe", Carried::ExampleTranslation, "translation"),
+    ("ph", Carried::Phonetic, "form"),
+    ("sy", Carried::Synonym, "relation"),
+    ("an", Carried::Antonym, "relation"),
+    ("cf", Carried::Compare, "relation"),
 ];
+
+/// A relation line's type, as wugs names it.
+fn relation_type(c: Carried) -> Option<&'static str> {
+    match c {
+        Carried::Synonym => Some("synonym"),
+        Carried::Antonym => Some("antonym"),
+        Carried::Compare => Some("compare"),
+        _ => None,
+    }
+}
+
+/// `x.toolbox.written` on a relation: each entry's line as written, by lexeme id.
+const F_WRITTEN: &str = "x.toolbox.written";
 
 fn carried(marker: &str) -> Option<(Carried, &'static str)> {
     MDF.iter().find(|(m, _, _)| *m == marker).map(|(_, c, f)| (*c, *f))
@@ -88,6 +109,11 @@ pub struct ToolboxReport {
     pub senses_created: usize,
     pub variants_created: usize,
     pub examples_created: usize,
+    pub pronunciations_created: usize,
+    /// `\sy`, `\an` and `\cf` lines that name an entry in the file or the
+    /// project; a pair written on both entries is one relation. A line that
+    /// names no entry stays verbatim.
+    pub relations_created: usize,
     /// Lines kept only verbatim, by marker.
     pub markers_kept_verbatim: Counts,
     /// Records sharing headword and homograph number with an earlier record.
@@ -102,6 +128,8 @@ enum Owner {
     Sense(usize),
     Variant(usize),
     Example(usize),
+    Pronunciation(usize),
+    Relation(usize),
 }
 
 enum Item {
@@ -129,6 +157,13 @@ struct EntryIn {
     variants: Vec<(String, &'static str)>,
     /// Example sentences in record order: (sense index, sentence, translation).
     examples: Vec<(usize, String, Option<String>)>,
+    /// `\ph` lines in record order.
+    pronunciations: Vec<String>,
+    /// `\sy` / `\an` / `\cf` lines: (type, the headword as written), and once
+    /// resolved, the relation each line is (None: kept verbatim).
+    relations: Vec<(&'static str, String, Option<String>)>,
+    /// The lexeme id this entry gets when it is created.
+    id: String,
 }
 
 /// Import a Toolbox MDF lexicon. One txn per entry, lexicon scope; the
@@ -174,6 +209,7 @@ pub fn import_toolbox(project: &mut Project, input: &str) -> Result<ToolboxRepor
 
     let origins: HashSet<String> = origin_index(project, "lexeme")?.into_keys().collect();
     let headwords = headword_keys(project)?;
+    let mut fresh: Vec<(usize, EntryIn)> = Vec::new();
     for (i, e) in entries.into_iter().enumerate() {
         if origins.contains(&e.origin) {
             report.entries_skipped += 1;
@@ -183,12 +219,134 @@ pub fn import_toolbox(project: &mut Project, input: &str) -> Result<ToolboxRepor
             report.entries_skipped_matched_by_headword += 1;
             continue;
         }
+        fresh.push((i, e));
+    }
+    let pending = resolve_relations(project, &mut fresh, &mut report)?;
+    for (i, e) in fresh {
         let res = create_entry(project, e, i, &mut report)?;
         report.entries_created += 1;
         report.commits += 1;
         report.findings += res;
     }
+    // The relations go in once both their entries are.
+    if !pending.is_empty() {
+        let mut t = project.intent("import-toolbox");
+        for r in &pending {
+            let written = Value::Obj(r.written.iter().map(|(k, v)| (k.clone(), Value::str(v))).collect());
+            t.create_with_id(
+                "lexical-relation",
+                &r.id,
+                SCOPE_LEXICON,
+                vec![("from", Value::str(&r.from)), ("to", Value::str(&r.to)), ("relation", Value::str(r.relation)), (F_WRITTEN, written)],
+            );
+            report.relations_created += 1;
+        }
+        report.findings += t.commit()?.findings.len();
+        report.commits += 1;
+    }
     Ok(report)
+}
+
+struct PendingRelation {
+    id: String,
+    from: String,
+    to: String,
+    relation: &'static str,
+    written: std::collections::BTreeMap<String, String>,
+}
+
+/// A headword as written in a relation line: the lemma, and a homograph
+/// number after it (`tela2`, `tela 2`, `tela₂`) when one is written.
+fn split_homograph(written: &str) -> (String, Option<u32>) {
+    let sub = |c: char| ('₀'..='₉').contains(&c);
+    let digits: String = written.chars().rev().take_while(|c| c.is_ascii_digit() || sub(*c)).collect::<Vec<_>>().into_iter().rev().collect();
+    if digits.is_empty() || digits.len() == written.len() {
+        return (written.to_string(), None);
+    }
+    let n = digits.chars().map(|c| if sub(c) { char::from(b'0' + (c as u32 - '₀' as u32) as u8) } else { c }).collect::<String>().parse().ok();
+    (written[..written.len() - digits.len()].trim_end().to_string(), n)
+}
+
+/// Point each relation line at the entry it names, among this file's new
+/// records and the project's entries; a symmetric pair written on both
+/// entries becomes one relation, and one the project already holds is reused.
+fn resolve_relations(project: &Project, fresh: &mut [(usize, EntryIn)], report: &mut ToolboxReport) -> Result<Vec<PendingRelation>, String> {
+    if fresh.iter().all(|(_, e)| e.relations.is_empty()) {
+        return Ok(Vec::new());
+    }
+    // Every headword the lines may name: (lemma, homograph) → lexeme ids.
+    let mut by_lemma: std::collections::HashMap<String, Vec<(Option<u32>, String)>> = std::collections::HashMap::new();
+    for (_, e) in fresh.iter() {
+        by_lemma.entry(project.proj.nfc(&e.lemma)).or_default().push((e.homograph.as_ref().map(|(h, _)| *h as u32), e.id.clone()));
+    }
+    for lex in project.proj.entities_of_kind("lexeme")? {
+        if project.proj.is_tombstoned(&lex)? {
+            continue;
+        }
+        let lemma = project.proj.nfc(&opt_str(project, &lex, "lemma")?.unwrap_or_default());
+        let hm = project.proj.field_num(&lex, "homograph")?.map(|h| h as u32);
+        by_lemma.entry(lemma).or_default().push((hm, lex));
+    }
+    let find = |written: &str| -> Option<String> {
+        let whole = project.proj.nfc(written);
+        if let Some([(_, id)]) = by_lemma.get(&whole).map(Vec::as_slice) {
+            return Some(id.clone());
+        }
+        let (lemma, n) = split_homograph(&whole);
+        let all = by_lemma.get(&lemma)?;
+        let picked: Vec<&String> = all.iter().filter(|(h, _)| n.is_none() || *h == n).map(|(_, id)| id).collect();
+        (picked.len() == 1).then(|| picked[0].clone())
+    };
+    let mut pending: Vec<PendingRelation> = Vec::new();
+    for (_, e) in fresh.iter_mut() {
+        let here = e.id.clone();
+        for (relation, written, slot) in e.relations.iter_mut() {
+            let Some(other) = find(written).filter(|o| *o != here) else { continue };
+            let symmetric = wugs_core::relations::symmetric(relation);
+            let twin = pending.iter_mut().find(|r| r.relation == *relation && ((r.from == here && r.to == other) || (symmetric && r.from == other && r.to == here)));
+            if let Some(r) = twin {
+                r.written.insert(here.clone(), written.clone());
+                *slot = Some(r.id.clone());
+                continue;
+            }
+            let existing = project
+                .relations(&other)
+                .unwrap_or_default()
+                .into_iter()
+                .find(|r| r.other == here && r.relation == *relation && symmetric);
+            if let Some(r) = existing {
+                *slot = Some(r.id);
+                continue;
+            }
+            let id = wugs_model::new_id("rel");
+            *slot = Some(id.clone());
+            pending.push(PendingRelation { id, from: here.clone(), to: other, relation, written: [(here.clone(), written.clone())].into_iter().collect() });
+        }
+        // Lines that name no entry stay as written.
+        let unresolved: Vec<usize> = e.relations.iter().enumerate().filter(|(_, r)| r.2.is_none()).map(|(i, _)| i).collect();
+        if !unresolved.is_empty() {
+            let back = |items: &mut Vec<Item>, report: &mut ToolboxReport| {
+                for it in items.iter_mut() {
+                    if let Item::Slot(m, Owner::Relation(i)) = it {
+                        if unresolved.contains(i) {
+                            report.markers_kept_verbatim.add(m);
+                            *it = Item::Verbatim(m.clone(), e.relations[*i].1.clone());
+                        }
+                    }
+                }
+            };
+            let mut block = std::mem::take(&mut e.block);
+            back(&mut block, report);
+            e.block = block;
+            for s in 0..e.senses.len() {
+                if let Some(mut b) = e.senses[s].block.take() {
+                    back(&mut b, report);
+                    e.senses[s].block = Some(b);
+                }
+            }
+        }
+    }
+    Ok(pending)
 }
 
 fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport) -> Result<EntryIn, ImportError> {
@@ -206,6 +364,9 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
         senses: Vec::new(),
         variants: Vec::new(),
         examples: Vec::new(),
+        pronunciations: Vec::new(),
+        relations: Vec::new(),
+        id: wugs_model::new_id("lex"),
     };
     let mut current: Option<usize> = None;
     // Lines that belong to the sense the next \sn opens.
@@ -288,6 +449,15 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
                     _ => None,
                 }
             }
+            Some((Carried::Phonetic, _)) if !f.value.is_empty() => {
+                e.pronunciations.push(f.value.clone());
+                Some(Owner::Pronunciation(e.pronunciations.len() - 1))
+            }
+            // Resolved once every record is read; a line naming no entry goes back to verbatim.
+            Some((c @ (Carried::Synonym | Carried::Antonym | Carried::Compare), _)) if !f.value.trim().is_empty() => {
+                e.relations.push((relation_type(c).unwrap_or("compare"), f.value.trim().to_string(), None));
+                Some(Owner::Relation(e.relations.len() - 1))
+            }
             Some((c @ (Carried::Variant | Carried::Allomorph), _)) if !f.value.is_empty() => {
                 e.variants.push((f.value.clone(), if c == Carried::Allomorph { "allomorph" } else { "variant" }));
                 Some(Owner::Variant(e.variants.len() - 1))
@@ -348,7 +518,13 @@ fn create_entry(project: &mut Project, e: EntryIn, record: usize, report: &mut T
     if let Some(c) = &e.citation {
         fields.push(("citation", Value::str(c)));
     }
-    let lex = t.create("lexeme", "lex", SCOPE_LEXICON, fields);
+    let lex = e.id.clone();
+    t.create_with_id("lexeme", &lex, SCOPE_LEXICON, fields);
+    let mut pronunciation_ids = Vec::new();
+    for (i, form) in e.pronunciations.iter().enumerate() {
+        pronunciation_ids.push(t.create("pronunciation", "prn", SCOPE_LEXICON, vec![("lexeme", Value::str(&lex)), ("pos", Value::str(&pos_seq(i))), ("form", Value::str(form))]));
+        report.pronunciations_created += 1;
+    }
 
     let mut sense_ids = Vec::new();
     for (i, s) in e.senses.iter().enumerate() {
@@ -392,6 +568,8 @@ fn create_entry(project: &mut Project, e: EntryIn, record: usize, report: &mut T
         Owner::Sense(i) => sense_ids[i].clone(),
         Owner::Variant(i) => variant_ids[i].clone(),
         Owner::Example(i) => example_ids[i].clone(),
+        Owner::Pronunciation(i) => pronunciation_ids[i].clone(),
+        Owner::Relation(i) => e.relations[i].2.clone().unwrap_or_default(),
     };
     t.set("lexeme", &lex, SCOPE_LEXICON, F_FIELDS, layout(&e.block, &ids))?;
     for (s, id) in e.senses.iter().zip(&sense_ids) {
@@ -459,6 +637,8 @@ fn newest_header(project: &Project) -> Result<Option<String>, String> {
 
 struct Writer<'a> {
     project: &'a Project,
+    /// The entry being written.
+    lex: String,
     out: Vec<Field>,
     /// (owner, field) pairs that have a line in some block of this entry.
     placed: HashSet<(String, &'static str)>,
@@ -493,8 +673,45 @@ impl Writer<'_> {
             },
             // A cleared translation writes no empty \xe line.
             Carried::ExampleTranslation => opt_str(self.project, owner, field)?.filter(|t| !t.is_empty()),
+            Carried::Phonetic => opt_str(self.project, owner, field)?.filter(|t| !t.is_empty()),
+            Carried::Synonym | Carried::Antonym | Carried::Compare => self.related(owner)?,
             _ => opt_str(self.project, owner, field)?,
         })
+    }
+
+    /// A relation line's value: the other end's headword, as this entry's
+    /// line wrote it while that still names it, else its lemma with its
+    /// homograph number.
+    fn related(&self, relation: &str) -> Result<Option<String>, String> {
+        let p = &self.project.proj;
+        let entry_of = |id: &str| -> Result<Option<String>, String> {
+            if p.entity_kind(id)?.is_none() || p.is_tombstoned(id)? {
+                return Ok(None);
+            }
+            Ok(match p.entity_kind(id)?.as_deref() {
+                Some("sense") => opt_str(self.project, id, "lexeme")?,
+                _ => Some(id.to_string()),
+            })
+        };
+        let (Some(from), Some(to)) = (opt_str(self.project, relation, "from")?, opt_str(self.project, relation, "to")?) else { return Ok(None) };
+        let (Some(a), Some(b)) = (entry_of(&from)?, entry_of(&to)?) else { return Ok(None) };
+        let other = if a == self.lex { b } else { a };
+        if p.is_tombstoned(&other)? {
+            return Ok(None);
+        }
+        let lemma = opt_str(self.project, &other, "lemma")?.unwrap_or_default();
+        let hm = p.field_num(&other, "homograph")?.map(|h| h as u32);
+        let written = opt_value(self.project, relation, F_WRITTEN)?.and_then(|w| w.get_str(&self.lex).map(str::to_string));
+        if let Some(w) = written {
+            let (l, n) = split_homograph(&w);
+            if w == lemma || (l == lemma && n == hm) {
+                return Ok(Some(w));
+            }
+        }
+        Ok(Some(match hm {
+            Some(n) => format!("{lemma}{n}"),
+            None => lemma,
+        }))
     }
 
     fn emit(&mut self, marker: &str, owner: &str) -> Result<(), String> {
@@ -552,11 +769,14 @@ fn export_entry(project: &Project, lex: &str) -> Result<Vec<Field>, String> {
             placed.insert((of.clone(), field));
         }
     }
-    let mut w = Writer { project, out: Vec::new(), placed, emitted: HashSet::new() };
+    let mut w = Writer { project, lex: lex.to_string(), out: Vec::new(), placed, emitted: HashSet::new() };
     w.emit("lx", lex)?;
     w.walk(lex_block)?;
     w.emit_new(Carried::Homograph, lex)?;
     w.emit_new(Carried::Citation, lex)?;
+    for x in p.ordered_children("lexeme", lex, "pronunciation")? {
+        w.emit_new(Carried::Phonetic, &x)?;
+    }
     for (v, c) in &variants {
         w.emit_new(*c, v)?;
     }
@@ -579,6 +799,19 @@ fn export_entry(project: &Project, lex: &str) -> Result<Vec<Field>, String> {
             w.emit_new(Carried::Example, &x)?;
             w.emit_new(Carried::ExampleTranslation, &x)?;
         }
+    }
+    // Relations made in wugs (an imported one keeps the lines it came with).
+    for r in project.relations(lex)? {
+        if opt_value(project, &r.id, F_WRITTEN)?.is_some() {
+            continue;
+        }
+        let c = match r.relation.as_str() {
+            "synonym" => Carried::Synonym,
+            "antonym" => Carried::Antonym,
+            "compare" => Carried::Compare,
+            _ => continue,
+        };
+        w.emit_new(c, &r.id)?;
     }
     Ok(w.out)
 }

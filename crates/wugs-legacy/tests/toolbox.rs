@@ -351,6 +351,36 @@ fn allomorphs_come_in_and_go_out_as_a_lines() {
     fs::remove_dir_all(root).ok();
 }
 
+#[test]
+fn pronunciations_and_relations_come_in_and_go_back_out() {
+    let (root, mut p) = temp_project();
+    let db = "\\_sh v3.0  400  MDF 4.0\n\n\\lx dakila\n\\ph daˈkila\n\\ps adj\n\\ge big\n\\sy laki\n\\an liit\n\\cf tela2\n\\cf nowhere\n\n\\lx laki\n\\ps adj\n\\ge large\n\\sy dakila\n\n\\lx liit\n\\ge small\n\n\\lx tela\n\\hm 1\n\\ge river\n\n\\lx tela\n\\hm 2\n\\ge wade\n";
+    let r = import_toolbox(&mut p, db).unwrap();
+    assert_eq!((r.entries_created, r.pronunciations_created, r.relations_created), (5, 1, 3), "the synonym written on both entries is one relation");
+    assert_eq!(r.markers_kept_verbatim.0.get("cf"), Some(&1), "a \\cf naming no entry stays as written");
+    let big = lexeme(&p, "dakila", None);
+    assert_eq!(p.pronunciations(&big).unwrap()[0].form, "daˈkila");
+    let mut rel: Vec<(String, String)> = p.relations(&big).unwrap().into_iter().map(|r| (r.relation, s(&p, &r.other, "lemma").unwrap())).collect();
+    rel.sort();
+    assert_eq!(rel, vec![("antonym".into(), "liit".into()), ("compare".into(), "tela".into()), ("synonym".into(), "laki".into())]);
+    assert_eq!(p.relations(&lexeme(&p, "tela", Some(2.0))).unwrap().len(), 1, "\\cf tela2 names the second tela");
+    assert_eq!(canon(&export_toolbox(&p).unwrap()), canon(db), "every line goes back where it was");
+    // Renamed in wugs, the other end's line follows; a relation made in wugs gets its own line.
+    p.set_lexeme_field(&lexeme(&p, "laki", None), "lemma", "lakí").unwrap();
+    let small = lexeme(&p, "liit", None);
+    let large = lexeme(&p, "lakí", None);
+    p.add_relation(&small, "compare", &large).unwrap();
+    let out = canon(&export_toolbox(&p).unwrap());
+    assert!(out.records[0].contains(&("sy".to_string(), "lakí".to_string())), "{out:?}");
+    assert!(out.records[2].contains(&("cf".to_string(), "lakí".to_string())), "{out:?}");
+    // Importing it again adds nothing.
+    let before = counts(&p);
+    let again = import_toolbox(&mut p, db).unwrap();
+    assert_eq!(again.relations_created, 0);
+    assert_eq!(counts(&p).0, before.0);
+    fs::remove_dir_all(root).ok();
+}
+
 const TEXT: &str = include_str!("fixtures/sample-text.txt");
 
 #[test]
