@@ -99,7 +99,7 @@ export function relatedName(r: { otherLemma: string; otherHomograph: number | nu
 }
 
 /** Which entries the list shows: every one, or those with work left to do. */
-export type ListShow = "all" | "gloss" | "category" | "unused";
+export type ListShow = "all" | "gloss" | "category" | "unused" | `pos:${string}`;
 export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean };
 
 export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; done: string }[] = [
@@ -111,10 +111,24 @@ export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; 
 
 /** Whether an entry belongs in the list shown. */
 export function shows(r: ListRow, show: ListShow): boolean {
+  if (show.startsWith("pos:")) return r.posOfSpeech.trim() === show.slice(4);
   if (show === "gloss") return r.glosses.length === 0 || r.glosses.some((g) => g.trim() === "");
   if (show === "category") return r.posOfSpeech.trim() === "";
   if (show === "unused") return !r.used;
   return true;
+}
+
+/** The categories (parts of speech) the entries use, the commonest first,
+ * each with how many entries have it; `keep` stays listed (with 0) when the
+ * list no longer has it, so a picked category does not vanish from its picker. */
+export function categoriesOf(rows: readonly ListRow[], keep: ListShow | null = null): { category: string; count: number }[] {
+  const n = new Map<string, number>();
+  for (const r of rows) {
+    const c = r.posOfSpeech.trim();
+    if (c !== "") n.set(c, (n.get(c) ?? 0) + 1);
+  }
+  if (keep !== null && keep.startsWith("pos:") && !n.has(keep.slice(4))) n.set(keep.slice(4), 0);
+  return [...n].map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
 }
 
 /** The picker's label with how many entries it would list: "Needs a gloss (12)". */

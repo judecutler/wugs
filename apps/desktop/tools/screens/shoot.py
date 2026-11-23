@@ -691,6 +691,10 @@ def main():
             run.shot("state-lexicon-todo", run.page.locator(".panel-lexicon"))
             if run.page.locator(".panel-lexicon .lx-list li").count() != 1:
                 failures.append("Needs a gloss did not list the one entry without a gloss")
+            run.page.locator(".panel-lexicon .lx-show").select_option("pos:num")
+            run.page.wait_for_timeout(200)
+            if run.page.locator(".panel-lexicon .lx-list li").count() != 7:
+                failures.append("the num category did not list its seven entries")
             run.page.locator(".panel-lexicon .lx-show").select_option("all")
             # Notes on the entry and on each meaning.
             run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()
