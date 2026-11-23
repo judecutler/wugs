@@ -411,6 +411,8 @@ export type SenseView = {
   glossesByLang: Record<string, string>;
   definition: string;
   usage: string;
+  /** The linguist's own notes on this meaning. */
+  notes: string;
   domains: DomainRef[];
   occurrences: number;
   examples: ExampleView[];
@@ -431,6 +433,8 @@ export type EntryView = {
   citation: string;
   posOfSpeech: string;
   homograph: number | null;
+  /** The linguist's own notes on the whole entry. */
+  notes: string;
   senses: SenseView[];
   /** Other entries with exactly this lemma: [id, homograph]. */
   sameLemma: [string, number | null][];
@@ -459,7 +463,7 @@ export type PronunciationView = {
 export type EntryEdit = { entry: EntryView | null; notes: string[] };
 export type DomainItem = { id: string; code: string; label: string; description: string; depth: number; words?: number };
 export type DomainsLoaded = { created: number; already: number; notes: string[] };
-export type LexemeField = "lemma" | "citation" | "pos-of-speech";
+export type LexemeField = "lemma" | "citation" | "pos-of-speech" | "notes";
 
 export const lexiconList = (args: { query: string }) => invoke<EntryRow[]>("lexicon_list", args);
 export const lexiconEntry = (args: { id: string }) => invoke<EntryView>("lexicon_entry", args);
@@ -472,7 +476,7 @@ export const lexiconMerge = (args: { keep: string; other: string }) => invoke<En
 export const lexiconAddSense = (args: { id: string; gloss: string }) => invoke<EntryEdit>("lexicon_add_sense", args);
 export const lexiconSetSenseGloss = (args: { senseId: string; gloss: string; lang: string | null }) =>
   invoke<EntryEdit>("lexicon_set_sense_gloss", args);
-export const lexiconSetSenseText = (args: { senseId: string; field: "definition" | "usage"; text: string }) =>
+export const lexiconSetSenseText = (args: { senseId: string; field: "definition" | "usage" | "notes"; text: string }) =>
   invoke<EntryEdit>("lexicon_set_sense_text", args);
 export const lexiconSetPicture = (args: { sense: string; path: string }) => invoke<EntryEdit>("lexicon_set_picture", args);
 export const lexiconClearPicture = (args: { sense: string }) => invoke<EntryEdit>("lexicon_clear_picture", args);

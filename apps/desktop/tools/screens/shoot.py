@@ -616,6 +616,16 @@ def main():
             if run.page.locator(".panel-lexicon .lx-list li").count() != 1:
                 failures.append("Needs a gloss did not list the one entry without a gloss")
             run.page.locator(".panel-lexicon .lx-show").select_option("all")
+            # Notes on the entry and on each meaning.
+            run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()
+            notes = run.page.locator(".panel-lexicon textarea[data-key='notes:lx-kani']")
+            notes.wait_for()
+            notes.scroll_into_view_if_needed()
+            run.shot("state-lexicon-notes", run.page.locator(".panel-lexicon .lx-entry"))
+            if "ask Mosa" not in notes.input_value():
+                failures.append("The entry's notes were not shown")
+            if run.page.locator(".panel-lexicon textarea[data-key='nsen:sense-kani-2']").input_value() != "Only heard from younger speakers.":
+                failures.append("A sense's notes were not shown")
             # Two entries share a lemma: number them, or merge the other into this one.
             run.page.locator(".panel-lexicon .lx-list li", has_text="river").first.click()
             run.page.locator(".panel-lexicon .gl-notice button", has_text="Merge").first.wait_for()

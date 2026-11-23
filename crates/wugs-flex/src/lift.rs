@@ -1,8 +1,9 @@
 //! LIFT 0.13 lexicons (FLEx's lexicon interchange format).
 //!
 //! Carried: entries (lexical-unit, citation, homograph `order`,
-//! pronunciations with their media file names), senses (gloss, definition,
-//! grammatical-info, examples with their translations), variants, and
+//! pronunciations with their media file names, notes), senses (gloss,
+//! definition, grammatical-info, notes, examples with their translations),
+//! variants, and
 //! relations between entries and senses, in every writing system, plus
 //! every attribute of entries, pronunciations, senses, examples, variants
 //! and relations. Everything else is counted in
@@ -36,6 +37,9 @@ const F_MEDIA: &str = "x.lift.media";
 const F_ILLUSTRATIONS: &str = "x.lift.illustrations";
 /// The `<label>` of the illustration that became the sense's picture.
 const F_PICTURE_LABEL: &str = "x.lift.picture-label";
+/// An entry's or sense's `<note>`s, each `{attrs, forms}`; the first one's
+/// first form is its `notes`, the rest written back as they came.
+const F_NOTES: &str = "x.lift.notes";
 
 #[derive(Debug, Default)]
 pub struct ImportReport {
@@ -46,6 +50,8 @@ pub struct ImportReport {
     pub examples_created: usize,
     pub pronunciations_created: usize,
     pub relations_created: usize,
+    /// `<note>`s on entries and senses.
+    pub notes: usize,
     /// Each `<illustration>`: the sense it belongs to and its `href`, for the
     /// caller to look for beside the file (`attach_illustration`).
     pub illustrations: Vec<(String, String)>,
@@ -71,6 +77,8 @@ struct Entry {
     pronunciations: Vec<(Value, MultiText, Vec<Value>)>,
     /// Each `<relation>`'s attributes (`type`, `ref`…).
     relations: Vec<Value>,
+    /// Each `<note>`: `{attrs, forms}`.
+    notes: Vec<Value>,
 }
 
 struct Sense {
@@ -85,6 +93,7 @@ struct Sense {
     relations: Vec<Value>,
     /// Each `<illustration>`: `{attrs, label}`.
     illustrations: Vec<Value>,
+    notes: Vec<Value>,
 }
 
 struct Example {
@@ -170,6 +179,7 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
         }
         push_opt(&mut fields, F_ID, &e.id);
         push_opt(&mut fields, F_GUID, &e.guid);
+        push_notes(&mut fields, &e.notes, &mut report);
         let lex = t.create("lexeme", "lex", SCOPE_LEXICON, fields);
         pending.extend(e.relations.iter().map(|r| (lex.clone(), r.clone())));
 
@@ -194,6 +204,7 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
             if !s.illustrations.is_empty() {
                 fields.push((F_ILLUSTRATIONS, Value::Arr(s.illustrations.clone())));
             }
+            push_notes(&mut fields, &s.notes, &mut report);
             let sen = t.create("sense", "sen", SCOPE_LEXICON, fields);
             for ill in &s.illustrations {
                 if let Some(href) = ill.get("attrs").and_then(|a| a.get_str("href")) {
@@ -299,6 +310,47 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
     Ok(report)
 }
 
+/// `notes` from the first `<note>`'s first form, every note kept for export.
+fn push_notes<'a>(fields: &mut Vec<(&'a str, Value)>, notes: &[Value], report: &mut ImportReport) {
+    let Some(first) = notes.first() else { return };
+    if let Some((_, text)) = first.get("forms").and_then(multi_from).and_then(|m| m.into_iter().next()) {
+        fields.push(("notes", Value::str(&text)));
+    }
+    fields.push((F_NOTES, Value::Arr(notes.to_vec())));
+    report.notes += notes.len();
+}
+
+/// `<note type><form lang><text>…</text></form></note>`: `{attrs, forms}`.
+fn parse_note(node: &XmlNode, report: &mut ImportReport) -> Value {
+    for c in node.children.iter().filter(|c| c.name != "form") {
+        report.not_carried.add(&format!("note/{}", c.name));
+    }
+    Value::Obj(vec![("attrs".to_string(), attrs_value(node)), ("forms".to_string(), multi_value(&read_multi(node, report)))].into_iter().collect())
+}
+
+/// The `<note>`s to write: the stored ones, the first carrying `notes` as
+/// it reads now (a note typed in wugs goes out in `lang`, untyped).
+fn note_nodes(project: &Project, id: &str, lang: &str) -> Result<Vec<XmlNode>, String> {
+    let mut notes: Vec<(Option<Value>, MultiText)> = match field_value(project, id, F_NOTES)? {
+        Some(Value::Arr(items)) => items.iter().map(|n| (n.get("attrs").cloned(), n.get("forms").and_then(multi_from).unwrap_or_default())).collect(),
+        _ => Vec::new(),
+    };
+    let now = project.proj.field_str(id, "notes")?.filter(|n| !n.trim().is_empty());
+    match notes.first_mut() {
+        Some((_, forms)) => *forms = with_primary(Some(std::mem::take(forms)), now, lang),
+        None => {
+            if let Some(n) = now {
+                notes.push((None, vec![(lang.to_string(), n)]));
+            }
+        }
+    }
+    Ok(notes
+        .into_iter()
+        .filter(|(_, forms)| !forms.is_empty())
+        .map(|(attrs, forms)| with_attrs(multi_node("note", &forms), attrs, &[]))
+        .collect())
+}
+
 fn push_opt<'a>(fields: &mut Vec<(&'a str, Value)>, key: &'a str, v: &Option<String>) {
     if let Some(v) = v {
         fields.push((key, Value::str(v)));
@@ -360,6 +412,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
         variants: Vec::new(),
         pronunciations: Vec::new(),
         relations: Vec::new(),
+        notes: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -392,6 +445,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
                 e.pronunciations.push((attrs_value(c), read_multi(c, report), media));
             }
             "relation" => e.relations.push(parse_relation(c, report)),
+            "note" => e.notes.push(parse_note(c, report)),
             other => report.not_carried.add(&format!("entry/{other}")),
         }
     }
@@ -419,6 +473,7 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
         attrs: attrs_value(node),
         relations: Vec::new(),
         illustrations: Vec::new(),
+        notes: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -441,6 +496,7 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
             }
             "example" => s.examples.push(parse_example(c, report)),
             "relation" => s.relations.push(parse_relation(c, report)),
+            "note" => s.notes.push(parse_note(c, report)),
             "illustration" => {
                 let label = c.child("label").map(|l| read_multi(l, report)).unwrap_or_default();
                 for ic in c.children.iter().filter(|ic| ic.name != "label") {
@@ -609,6 +665,7 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
             if !def.is_empty() {
                 sense.children.push(multi_node("definition", &def));
             }
+            sense.children.extend(note_nodes(project, &sen, "en")?);
             for exm in ordered_children(project, "sense", &sen, "example")? {
                 let forms = with_primary(field_multi(project, &exm, F_FORMS)?, p.field_str(&exm, "sentence")?, &lang);
                 let mut x = with_attrs(multi_node("example", &forms), field_value(project, &exm, F_ATTRS)?, &[("source", p.field_str(&exm, "reference")?.filter(|r| !r.is_empty()))]);
@@ -651,6 +708,7 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
             }
             entry.children.push(sense);
         }
+        entry.children.extend(note_nodes(project, lex, "en")?);
         relation_nodes(project, lex, &mut entry)?;
         for frm in ordered_children(project, "lexeme", lex, "form")? {
             // FLEx writes an entry's allomorphs as <variant>, so ours go out the same way.

@@ -271,11 +271,44 @@ fn lift_report_names_what_is_not_carried() {
     assert_eq!(r.spans_flattened, 1, "one span flattened");
     let nc = &r.not_carried.0;
     assert_eq!(nc.get("example/note"), Some(&1), "an example's note counted: {nc:?}");
-    assert_eq!(nc.get("entry/note"), Some(&1), "note counted: {nc:?}");
+    assert_eq!(nc.get("entry/note"), None, "an entry's note is carried: {nc:?}");
+    assert_eq!(r.notes, 1);
     assert_eq!(nc.get("header"), Some(&1), "header counted: {nc:?}");
     assert_eq!(nc.get("form/annotation"), Some(&1), "form annotation counted: {nc:?}");
-    assert_eq!(r.not_carried.total(), 4, "nothing else dropped: {nc:?}");
+    assert_eq!(r.not_carried.total(), 3, "nothing else dropped: {nc:?}");
     fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn lift_notes_come_in_and_go_back_out_with_edits() {
+    let (root, mut p) = temp_project();
+    import_lift(&mut p, LIFT).unwrap();
+    let lexemes = p.proj.entities_of_kind("lexeme").unwrap();
+    let yuz2 = lexemes.iter().find(|l| p.proj.field_str(l, "x.lift.id").unwrap().as_deref() == Some("yüz_2")).unwrap().clone();
+    assert_eq!(p.proj.field_str(&yuz2, "notes").unwrap().as_deref(), Some("homograph of yüz 'face'"));
+    let flat = |x: &str| x.lines().map(str::trim).collect::<String>();
+    let out = flat(&export_lift(&p).unwrap());
+    assert!(out.contains("<note><form lang=\"en\"><text>homograph of yüz 'face'</text></form></note>") || out.contains("<note><form lang=\"en\"><text>homograph of yüz &apos;face&apos;</text></form></note>"), "{out}");
+
+    // Edited in wugs, the note goes out as it reads now; a sense note typed in wugs goes out too.
+    p.set_lexeme_notes(&yuz2, "not the same word as yüz 'face'").unwrap();
+    let sense = p.proj.ordered_children("lexeme", &yuz2, "sense").unwrap()[0].clone();
+    p.set_sense_text(&sense, "notes", "ask about the causative").unwrap();
+    let out = flat(&export_lift(&p).unwrap());
+    assert!(!out.contains("homograph of"), "{out}");
+    assert!(out.contains("not the same word as yüz"), "{out}");
+    assert!(out.contains("<note><form lang=\"en\"><text>ask about the causative</text></form></note>"), "{out}");
+
+    // Cleared, it is left out; and the export reads back unchanged.
+    p.set_lexeme_notes(&yuz2, "").unwrap();
+    let out = export_lift(&p).unwrap();
+    assert!(!out.contains("not the same word"), "{out}");
+    let (root2, mut q) = temp_project();
+    let r = import_lift(&mut q, &out).unwrap();
+    assert_eq!(r.notes, 1, "the sense's note");
+    assert_eq!(export_lift(&q).unwrap(), out);
+    fs::remove_dir_all(root).ok();
+    fs::remove_dir_all(root2).ok();
 }
 
 #[test]

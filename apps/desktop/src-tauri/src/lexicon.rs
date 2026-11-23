@@ -51,6 +51,8 @@ pub struct SenseView {
     pub glosses_by_lang: BTreeMap<String, String>,
     pub definition: String,
     pub usage: String,
+    /// The linguist's notes on this meaning.
+    pub notes: String,
     pub domains: Vec<DomainRef>,
     /// Morphs in texts linked to this sense.
     pub occurrences: usize,
@@ -152,6 +154,8 @@ pub struct EntryView {
     pub citation: String,
     pub pos_of_speech: String,
     pub homograph: Option<u32>,
+    /// The linguist's notes on the whole entry.
+    pub notes: String,
     pub senses: Vec<SenseView>,
     /// Other live entries with exactly this lemma: (id, homograph).
     pub same_lemma: Vec<(String, Option<u32>)>,
@@ -344,6 +348,7 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
             glosses_by_lang,
             definition: str_field(p, &s, "definition")?,
             usage: str_field(p, &s, "usage")?,
+            notes: str_field(p, &s, "notes")?,
             domains,
             occurrences: occurrences(p, &s)?,
             examples: example_views(p, &s)?,
@@ -364,6 +369,7 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
         citation: str_field(p, id, "citation")?,
         pos_of_speech: str_field(p, id, "pos-of-speech")?,
         homograph: homograph(p, id)?,
+        notes: str_field(p, id, "notes")?,
         senses: sense_views,
         same_lemma,
         allomorphs: p.allomorphs(id)?,
@@ -435,7 +441,8 @@ pub fn lexicon_add(session: &mut Session, lemma: &str, gloss: &str) -> Result<En
 
 pub fn lexicon_set_field(session: &mut Session, id: &str, field: &str, value: &str) -> Result<EntryEdit, String> {
     let p = project(session)?;
-    let res = p.set_lexeme_field(id, field, value)?;
+    // An entry's notes are collaborative text, like a sense's definition.
+    let res = if field == "notes" { p.set_lexeme_notes(id, value)? } else { p.set_lexeme_field(id, field, value)? };
     edit(p, id, &res)
 }
 

@@ -98,9 +98,29 @@ fn report_counts_every_verbatim_line() {
     let (root, mut p) = temp_project();
     let r = import_toolbox(&mut p, DB).unwrap();
     let want: BTreeMap<String, usize> =
-        [("cf", 1), ("dt", 5), ("ge", 1), ("gn", 1), ("nt", 2)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
+        [("cf", 1), ("dt", 5), ("ge", 1), ("gn", 1)].into_iter().map(|(k, v)| (k.to_string(), v)).collect();
     assert_eq!(r.markers_kept_verbatim.0, want, "uncarried markers, plus the repeated \\ge, counted by marker");
     assert_eq!(r.duplicate_headwords, 1, "second bank without \\hm reported");
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn nt_is_a_sense_note_and_goes_back_out_with_edits() {
+    let (root, mut p) = temp_project();
+    import_toolbox(&mut p, DB).unwrap();
+    let yuz1 = p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "lemma").unwrap().as_deref() == Some("yüz") && p.proj.field_num(l, "homograph").unwrap() == Some(1.0)).unwrap();
+    let sense = p.proj.ordered_children("lexeme", &yuz1, "sense").unwrap()[0].clone();
+    assert_eq!(p.proj.field_str(&sense, "notes").unwrap().as_deref(), Some("body part;\ncontinues on a second line"));
+    p.set_sense_text(&sense, "notes", "body part").unwrap();
+    let out = export_toolbox(&p).unwrap();
+    assert!(out.contains("\\nt body part\n"), "{out}");
+    assert!(!out.contains("continues on a second line"), "{out}");
+    // A note typed in wugs on an entry with none gets its own line after the sense's.
+    let kopek = p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "lemma").unwrap().as_deref() == Some("köpek")).unwrap();
+    let ks = p.proj.ordered_children("lexeme", &kopek, "sense").unwrap()[0].clone();
+    p.set_sense_text(&ks, "notes", "also a term of abuse").unwrap();
+    let out = export_toolbox(&p).unwrap();
+    assert!(out.contains("\\nt also a term of abuse"), "{out}");
     fs::remove_dir_all(root).ok();
 }
 

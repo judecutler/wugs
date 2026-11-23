@@ -3,7 +3,8 @@
 //!
 //! Carried semantically (MDF meaning, see `MDF`): `\lx` lexeme, `\hm`
 //! homograph number, `\lc` citation form, `\sn` sense number, `\ps` part of
-//! speech, `\ge` English gloss, `\de` English definition, `\va` variant form,
+//! speech, `\ge` English gloss, `\de` English definition, `\nt` note (a
+//! sense's `notes`), `\va` variant form,
 //! `\a` allomorph, `\xv` example sentence and the `\xe` (English
 //! translation) right after it.
 //! Every other line, and any repeat of a carried marker within the same
@@ -43,6 +44,7 @@ enum Carried {
     Pos,
     Gloss,
     Definition,
+    Note,
     Variant,
     Allomorph,
     Example,
@@ -62,6 +64,7 @@ const MDF: &[(&str, Carried, &str)] = &[
     ("ps", Carried::Pos, F_PS),
     ("ge", Carried::Gloss, "gloss"),
     ("de", Carried::Definition, "definition"),
+    ("nt", Carried::Note, "notes"),
     ("va", Carried::Variant, "form"),
     ("a", Carried::Allomorph, "form"),
     ("xv", Carried::Example, "sentence"),
@@ -143,6 +146,7 @@ struct SenseIn {
     pos: Option<String>,
     gloss: Option<String>,
     definition: Option<String>,
+    notes: Option<String>,
     block: Option<Vec<Item>>,
 }
 
@@ -396,7 +400,7 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
                 current = Some(e.senses.len() - 1);
                 Some(Owner::Sense(e.senses.len() - 1))
             }
-            Some((c @ (Carried::Pos | Carried::Gloss | Carried::Definition), _)) => {
+            Some((c @ (Carried::Pos | Carried::Gloss | Carried::Definition | Carried::Note), _)) => {
                 // MDF: a \ps directly above \sn opens that sense; anything
                 // above the first \sn belongs to the first sense.
                 let s = match (c, current) {
@@ -411,6 +415,7 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
                     match c {
                         Carried::Pos => &mut sen.pos,
                         Carried::Gloss => &mut sen.gloss,
+                        Carried::Note => &mut sen.notes,
                         _ => &mut sen.definition,
                     }
                 }
@@ -529,7 +534,7 @@ fn create_entry(project: &mut Project, e: EntryIn, record: usize, report: &mut T
     let mut sense_ids = Vec::new();
     for (i, s) in e.senses.iter().enumerate() {
         let mut fields = vec![("lexeme", Value::str(&lex)), ("pos", Value::str(&pos_seq(i)))];
-        for (k, v) in [(F_SN, &s.sn), (F_PS, &s.pos), ("gloss", &s.gloss), ("definition", &s.definition)] {
+        for (k, v) in [(F_SN, &s.sn), (F_PS, &s.pos), ("gloss", &s.gloss), ("definition", &s.definition), ("notes", &s.notes)] {
             if let Some(v) = v {
                 fields.push((k, Value::str(v)));
             }
@@ -745,7 +750,7 @@ impl Writer<'_> {
     }
 }
 
-const SENSE_FIELDS: &[Carried] = &[Carried::Pos, Carried::Gloss, Carried::Definition];
+const SENSE_FIELDS: &[Carried] = &[Carried::Pos, Carried::Gloss, Carried::Definition, Carried::Note];
 
 fn export_entry(project: &Project, lex: &str) -> Result<Vec<Field>, String> {
     let p = &project.proj;

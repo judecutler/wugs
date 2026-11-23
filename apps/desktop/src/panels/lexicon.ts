@@ -330,7 +330,7 @@ export const lexiconPanel: PanelDef = {
       return input;
     }
 
-    /** A multi-line field (definition, usage): saves when it loses focus, or on Ctrl/⌘+Enter. */
+    /** A multi-line field (definition, usage, notes): saves when it loses focus, or on Ctrl/⌘+Enter. */
     function area(key: string, value: string, label: string, save: (v: string) => Promise<void>) {
       const ta = h("textarea", { value, placeholder: label, ariaLabel: label, rows: 2 });
       ta.dataset.key = key;
@@ -480,6 +480,7 @@ export const lexiconPanel: PanelDef = {
         ),
         row("Related", relationsBlock(e)),
         row("Homograph", homograph),
+        row("Notes", area(`notes:${e.id}`, e.notes, "Notes on this entry: etymology, doubts, what to ask", (v) => run(() => lexiconSetField({ id: e.id, field: "notes", value: v })))),
         note === null
           ? null
           : h(
@@ -828,6 +829,7 @@ export const lexiconPanel: PanelDef = {
         others.length === 0 ? null : h("p", { className: "note", textContent: others.map(([t, g]) => `${t}: ${g}`).join(" · ") }),
         h("div", { className: "lx-def" }, area(`def:${s.id}`, s.definition, "Definition", (v) => run(() => lexiconSetSenseText({ senseId: s.id, field: "definition", text: v })))),
         h("div", { className: "lx-def" }, area(`use:${s.id}`, s.usage, "Usage note", (v) => run(() => lexiconSetSenseText({ senseId: s.id, field: "usage", text: v })))),
+        h("div", { className: "lx-def" }, area(`nsen:${s.id}`, s.notes, "Notes on this meaning", (v) => run(() => lexiconSetSenseText({ senseId: s.id, field: "notes", text: v })))),
         examplesBlock(s),
         pictureBlock(s),
         h(
