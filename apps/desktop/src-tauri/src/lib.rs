@@ -236,6 +236,12 @@ fn export_cldf(app: AppHandle, s: State<SessionThread>, folder: String, date: St
     s.run(move |s| interchange::export_cldf(s, std::path::Path::new(&folder), &date, include_restricted, &generator))
 }
 
+/// Save a document the frontend built (interlinear examples) into `folder`.
+#[tauri::command(async)]
+fn save_document(s: State<SessionThread>, folder: String, title: String, extension: String, contents: String) -> Result<interchange::Exported, String> {
+    s.run(move |s| interchange::save_document(s, std::path::Path::new(&folder), &title, &extension, &contents))
+}
+
 /// Seal the project as an archive package in a new folder inside `folder`.
 #[tauri::command(async)]
 fn seal_project(s: State<SessionThread>, folder: String, date: String) -> Result<interchange::Sealed, String> {
@@ -1474,6 +1480,7 @@ pub fn run() {
             project_language,
             set_project_language,
             export_cldf,
+            save_document,
             add_segment,
             add_translation,
             edit_segment_content,

@@ -527,6 +527,8 @@ export const sealProject = (args: { folder: string; date: string }) => invoke<Se
 export const projectLanguage = () => invoke<import("./cldf/logic").Language>("project_language");
 export const setProjectLanguage = (args: { language: import("./cldf/logic").Language }) => invoke<import("./cldf/logic").Language>("set_project_language", args);
 export const exportCldf = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Published>("export_cldf", args);
+/** Save a document built here (a text's interlinear examples) as a new file in `folder`. */
+export const saveDocument = (args: { folder: string; title: string; extension: string; contents: string }) => invoke<{ path: string; notes: string[] }>("save_document", args);
 // People and consent (roadmap 61): src-tauri/src/people.rs. Every command returns the whole view.
 /** A term's answer: true agreed, false refused, null not asked. */
 export type PeopleConsent = { id: string; covers: string; terms: [string, boolean | null][]; date: string; evidenceName: string | null; hasEvidence: boolean };

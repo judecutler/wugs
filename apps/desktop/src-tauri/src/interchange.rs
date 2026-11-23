@@ -682,6 +682,18 @@ fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<Vec<(Option<
     Ok(out)
 }
 
+/// Save a document the app built (a text's interlinear examples as LaTeX,
+/// HTML or plain text) as `<title>.<ext>` in `folder`, never replacing a
+/// file and never inside the project.
+pub fn save_document(s: &mut Session, folder: &Path, title: &str, extension: &str, contents: &str) -> Result<Exported, String> {
+    if !matches!(extension, "tex" | "html" | "txt") {
+        return Err(format!("wugs does not save .{extension} documents"));
+    }
+    outside_project(s, folder)?;
+    let path = write_new(folder, &file_stem(title, "examples"), extension, contents.as_bytes())?;
+    Ok(Exported { path: path.display().to_string(), notes: Vec::new() })
+}
+
 /// Export the whole lexicon as LIFT or Toolbox into `folder`.
 pub fn export_lexicon(s: &mut Session, format: Format, folder: &Path) -> Result<Exported, String> {
     outside_project(s, folder)?;
@@ -821,6 +833,22 @@ mod tests {
         let again = export_cldf(&mut s, &out, "2026-11-23", false, "wugs test").unwrap();
         assert!(again.path.ends_with("wugs-cldf-2026-11-23-2"), "never replaces a dataset");
         assert!(export_cldf(&mut s, &dir.join("sample"), "2026-11-23", false, "x").is_err(), "not inside the project");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn documents_are_saved_beside_others_never_over_them() {
+        let dir = std::env::temp_dir().join(format!("wugs-doc-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let a = save_document(&mut s, &out, "Counting: examples", "tex", "\\documentclass{article}").unwrap();
+        let b = save_document(&mut s, &out, "Counting: examples", "tex", "x").unwrap();
+        assert!(a.path.ends_with("Counting_ examples.tex") && b.path.ends_with("Counting_ examples (2).tex"), "{a:?} {b:?}");
+        assert!(save_document(&mut s, &out, "x", "exe", "x").is_err());
+        assert!(save_document(&mut s, &dir.join("p"), "x", "txt", "x").is_err(), "not inside the project");
         drop(s);
         fs::remove_dir_all(dir).ok();
     }

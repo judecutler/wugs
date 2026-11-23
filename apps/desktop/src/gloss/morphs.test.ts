@@ -105,3 +105,9 @@ test("breakdownChanged compares what would be written, not the spelling of the i
   assert.equal(breakdownChanged("a--b", current), true, "an unparseable input is a change the editor must report");
   assert.equal(breakdownChanged("", []), false);
 });
+
+test("a surface that already carries its marker (as FLEx stores it) is not marked twice", () => {
+  assert.equal(joinedBreakdown([{ surface: "köpek", type: "root" }, { surface: "-ler", type: "suffix" }]), "köpek-ler");
+  assert.equal(joinedBreakdown([{ surface: "ni-", type: "prefix" }, { surface: "kani", type: "root" }, { surface: "=ma", type: "clitic" }]), "ni-kani=ma");
+  assert.equal(joinedBreakdown([{ surface: "s", type: "root" }, { surface: "<um>", type: "infix" }, { surface: "ulat", type: "root" }]), "s<um>ulat");
+});
