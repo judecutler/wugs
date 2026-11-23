@@ -127,11 +127,13 @@ impl Project {
         Ok((id, res))
     }
 
-    /// The lexeme's live allomorphs as `(form id, surface)`, by surface then id.
+    /// The lexeme's live other forms as `(form id, surface)`, by surface then
+    /// id: its allomorphs and the variants LIFT and Toolbox files bring
+    /// (`<variant>`, `\va`), which glossing lookups find the same way.
     pub fn allomorphs(&self, lexeme: &str) -> Result<Vec<(String, String)>, String> {
         let mut out = Vec::new();
         for id in self.proj.children_by_ref("lexeme", lexeme, "form")? {
-            if self.proj.field_str(&id, "kind")?.as_deref() != Some("allomorph") {
+            if !matches!(self.proj.field_str(&id, "kind")?.as_deref(), Some("allomorph" | "variant")) {
                 continue;
             }
             let form = self.proj.field_str(&id, "form")?.unwrap_or_default();
@@ -341,8 +343,13 @@ mod tests {
         let g = p.guess_analysis(&inv, "evlar");
         assert_eq!(g[0].morphs.iter().map(|m| (m.surface.as_str(), m.morph_type.as_str())).collect::<Vec<_>>(), [("ev", "root"), ("lar", "suffix")]);
         assert_eq!(g[0].morphs[1].sense.as_deref(), Some(sen.as_str()));
+        // A variant an imported LIFT or Toolbox file brought is an other form too.
+        let mut t = p.intent("test");
+        t.create("form", "frm", SCOPE_LEXICON, vec![("lexeme", Value::str(&lex)), ("kind", Value::str("variant")), ("form", Value::str("-lér"))]);
+        t.commit().unwrap();
+        assert_eq!(p.allomorphs(&lex).unwrap().len(), 2);
         p.delete_form(&frm).unwrap();
-        assert!(p.allomorphs(&lex).unwrap().is_empty());
+        assert_eq!(p.allomorphs(&lex).unwrap().iter().map(|(_, f)| f.as_str()).collect::<Vec<_>>(), ["-lér"]);
         std::fs::remove_dir_all(root).ok();
     }
 

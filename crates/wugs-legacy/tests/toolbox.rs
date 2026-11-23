@@ -302,3 +302,22 @@ fn homograph_numbers_export_as_written() {
     assert_eq!(out.records[0][1], ("hm".into(), "3".into()), "an edited number wins over the written text");
     fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn allomorphs_come_in_and_go_out_as_a_lines() {
+    let (root, mut p) = temp_project();
+    let db = "\\_sh v3.0  400  MDF 4.0\n\n\\lx -ler\n\\a -lar\n\\va -lér\n\\ps suf\n\\ge PL\n";
+    let r = import_toolbox(&mut p, db).unwrap();
+    assert_eq!(r.variants_created, 2);
+    let lex = lexeme(&p, "-ler", None);
+    let kinds: Vec<(Option<String>, Option<String>)> =
+        p.proj.ordered_children("lexeme", &lex, "form").unwrap().iter().map(|f| (s(&p, f, "kind"), s(&p, f, "form"))).collect();
+    assert_eq!(kinds, vec![(Some("allomorph".into()), Some("-lar".into())), (Some("variant".into()), Some("-lér".into()))]);
+    assert!(!r.markers_kept_verbatim.0.contains_key("a"), "\\a is carried, not kept verbatim");
+    assert_eq!(canon(&export_toolbox(&p).unwrap()), canon(db), "the lines go back where they were");
+    // An allomorph added in wugs goes out as a new \a line.
+    p.add_allomorph(&lex, "-lır").unwrap();
+    let out = export_toolbox(&p).unwrap();
+    assert!(out.contains("\\a -lır"), "{out}");
+    fs::remove_dir_all(root).ok();
+}

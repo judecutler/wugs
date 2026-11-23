@@ -494,3 +494,23 @@ fn reanalysing_an_imported_word_keeps_its_flex_identity() {
     assert!(out.contains(">PL.NOM</item>"), "the new gloss is exported");
     fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn an_allomorph_added_in_wugs_goes_out_as_a_variant() {
+    let (root, mut p) = temp_project();
+    let ((lex, _), _) = p.add_lexeme("-ler", "PL").unwrap();
+    p.add_allomorph(&lex, "-lar").unwrap();
+    let out = export_lift(&p).unwrap();
+    let doc = xml::parse(&out).unwrap();
+    let entry = doc.children_named("entry").next().unwrap();
+    let variants: Vec<Multi> = entry.children_named("variant").map(|v| forms(Some(v))).collect();
+    assert_eq!(variants.len(), 1, "{out}");
+    assert!(format!("{variants:?}").contains("-lar"), "{out}");
+    // Read back, it is an other form of the same entry.
+    let (root2, mut q) = temp_project();
+    import_lift(&mut q, &out).unwrap();
+    let lex2 = q.proj.entities_of_kind("lexeme").unwrap()[0].clone();
+    assert_eq!(q.allomorphs(&lex2).unwrap().iter().map(|(_, f)| f.as_str()).collect::<Vec<_>>(), ["-lar"]);
+    fs::remove_dir_all(root).ok();
+    fs::remove_dir_all(root2).ok();
+}
