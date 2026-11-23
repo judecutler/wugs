@@ -157,3 +157,19 @@ fn an_untokenized_segment_is_split_at_spaces_and_says_so() {
     assert_eq!(out.notes.len(), 2, "{:?}", out.notes);
     std::fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn vertical_and_tagged_text_carry_the_tags() {
+    let (root, mut p) = temp_project();
+    let tier = tier(&mut p);
+    let texts = import_conllu(&mut p, SAMPLE, "sample", &tier).unwrap().texts;
+    let mut s = sentences(&p, &texts[0], &tier);
+    s[0].translations.push((Some("en".into()), "Let's go to \"the\" sea.".into()));
+    let v = wugs_conllu::vertical(&p, "playa & co", &texts[0], &s).unwrap().conllu;
+    assert!(v.starts_with(&format!("<text id=\"{}\" title=\"playa &amp; co\">\n<s id=\"1\" translation=\"Let&apos;s go to &quot;the&quot; sea.\">\nVamos\tir\tVERB\tV\tMood=Imp|Number=Plur|Person=1\n", texts[0])), "{v}");
+    assert!(v.contains("mar\tmar\tNOUN\tNC\tNumber=Sing\n<g/>\n.\t.\tPUNCT\tFP\t_\n</s>"), "glue where no space follows: {v}");
+    assert!(v.trim_end().ends_with("</text>"));
+    let t = wugs_conllu::tagged_text(&p, "playa", &s).unwrap().conllu;
+    assert_eq!(t.lines().next(), Some("Vamos_VERB nos_PRON a_ADP el_DET mar_NOUN ._PUNCT"));
+    std::fs::remove_dir_all(root).ok();
+}

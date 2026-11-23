@@ -477,3 +477,62 @@ fn from_glossing(p: &Project, tok: &str, c: &mut Cols) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// XML's five special characters as entities, for vertical files (CWB's
+/// `cwb-encode -x` and Sketch Engine read them back).
+fn xml_text(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;").replace('\'', "&apos;")
+}
+
+/// The sentences as a CWB vertical file, what CQPweb, NoSketch Engine and
+/// Sketch Engine import: `<text>` around the document, `<s>` around each
+/// sentence, one token a line with the positional attributes word, lemma,
+/// UPOS, XPOS and FEATS separated by tabs (`_` when empty), and `<g/>`
+/// where no space follows (Sketch Engine's glue). Translations become the
+/// sentence's `translation` attribute.
+pub fn vertical(p: &Project, title: &str, text_id: &str, sentences: &[ExportSentence]) -> Result<Exported, String> {
+    let (out, notes) = export_sentences(p, title, sentences)?;
+    let mut v = format!("<text id=\"{}\" title=\"{}\">\n", xml_text(text_id), xml_text(title));
+    for (n, (si, s)) in out.iter().enumerate() {
+        let es = &sentences[*si];
+        let mut attrs = format!(" id=\"{}\"", n + 1);
+        if let Some((_, tr)) = es.translations.first() {
+            attrs.push_str(&format!(" translation=\"{}\"", xml_text(tr)));
+        }
+        v.push_str(&format!("<s{attrs}>\n"));
+        let words: Vec<(u32, &format::Cols)> = s.words().collect();
+        for (i, (_, c)) in words.iter().enumerate() {
+            let cols = [c[format::FORM].as_str(), c[format::LEMMA].as_str(), c[format::UPOS].as_str(), c[format::XPOS].as_str(), c[format::FEATS].as_str()];
+            v.push_str(&cols.iter().map(|x| xml_text(x)).collect::<Vec<_>>().join("\t"));
+            v.push('\n');
+            if i + 1 < words.len() && format::misc_has(&c[format::MISC], "SpaceAfter", "No") {
+                v.push_str("<g/>\n");
+            }
+        }
+        v.push_str("</s>\n");
+    }
+    v.push_str("</text>\n");
+    Ok(Exported { conllu: v, notes })
+}
+
+/// The sentences as AntConc reads a tagged text: one sentence a line, each
+/// word written `word_TAG` with its UPOS (else XPOS; a word with no tag is
+/// written bare). AntConc's Tag Settings ("_" as the separator) show or
+/// hide the tags.
+pub fn tagged_text(p: &Project, title: &str, sentences: &[ExportSentence]) -> Result<Exported, String> {
+    let (out, notes) = export_sentences(p, title, sentences)?;
+    let mut t = String::new();
+    for (_, s) in &out {
+        let line: Vec<String> = s
+            .words()
+            .map(|(_, c)| {
+                let tag = if c[format::UPOS] != "_" { &c[format::UPOS] } else { &c[format::XPOS] };
+                let form = c[format::FORM].replace(' ', "_");
+                if tag == "_" { form } else { format!("{form}_{tag}") }
+            })
+            .collect();
+        t.push_str(&line.join(" "));
+        t.push('\n');
+    }
+    Ok(Exported { conllu: t, notes })
+}

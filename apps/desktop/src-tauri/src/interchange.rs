@@ -30,6 +30,10 @@ pub enum Format {
     Conllu,
     /// TEI P5: curated corpora (ParlaMint, historical and spoken collections).
     Tei,
+    /// CWB vertical (export only): what CQPweb, NoSketch Engine and Sketch Engine import.
+    Vertical,
+    /// AntConc's tagged text (export only): a sentence a line, `word_TAG`.
+    AntConc,
 }
 
 impl Format {
@@ -43,6 +47,8 @@ impl Format {
             "plaintext" => Format::PlainText,
             "conllu" => Format::Conllu,
             "tei" => Format::Tei,
+            "vertical" => Format::Vertical,
+            "antconc" => Format::AntConc,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -58,6 +64,8 @@ impl Format {
             Format::Table { tabs: false } => "csv",
             Format::Conllu => "conllu",
             Format::Tei => "xml",
+            Format::Vertical => "vert",
+            Format::AntConc => "txt",
         }
     }
 
@@ -72,6 +80,8 @@ impl Format {
             Format::Table { .. } => "table of sentences",
             Format::Conllu => "CoNLL-U",
             Format::Tei => "TEI",
+            Format::Vertical => "CWB vertical",
+            Format::AntConc => "AntConc tagged text",
         }
     }
 }
@@ -257,6 +267,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
         Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::Conllu | Format::Tei => decode_xml(&bytes, file_name)?,
+        Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
         Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
@@ -461,6 +472,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             lines.extend(not_carried(&r.not_carried));
             (r.texts.first().or(r.matched.first()).cloned(), false)
         }
+        Format::Vertical | Format::AntConc => unreachable!("refused above"),
         Format::Toolbox => {
             let r = wugs_legacy::import_toolbox(p, input).map_err(|e| e.to_string())?;
             lines.push(format!(
@@ -600,6 +612,13 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             let out = wugs_tei::export_tei(p, &title, None, &sentences, concat!("wugs ", env!("CARGO_PKG_VERSION")))?;
             notes.extend(out.notes);
             out.tei
+        }
+        Format::Vertical | Format::AntConc => {
+            let segments = one_track(p, text_id, &mut notes, format.name())?;
+            let sentences = segments.into_iter().map(|segment| Ok(wugs_conllu::ExportSentence { translations: translations_of(p, &segment)?, segment })).collect::<Result<Vec<_>, String>>()?;
+            let out = if format == Format::Vertical { wugs_conllu::vertical(p, &title, text_id, &sentences)? } else { wugs_conllu::tagged_text(p, &title, &sentences)? };
+            notes.extend(out.notes);
+            out.conllu
         }
         Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
     };
@@ -765,6 +784,26 @@ mod tests {
         let again = import_file(&mut s, file.to_str().unwrap()).unwrap();
         assert!(again.lines.iter().any(|l| l.contains("matched")), "{:?}", again.lines);
         assert_eq!(session::list_texts(&mut s).unwrap().len(), 1);
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_tagged_text_goes_to_cqpweb_and_antconc() {
+        let dir = std::env::temp_dir().join(format!("wugs-vert-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("dogs.conllu");
+        fs::write(&file, "1\tDogs\tdog\tNOUN\t_\t_\t2\tnsubj\t_\t_\n2\tbark\tbark\tVERB\t_\t_\t0\troot\t_\tSpaceAfter=No\n3\t.\t.\tPUNCT\t_\t_\t2\tpunct\t_\t_\n\n").unwrap();
+        let text = import_file(&mut s, file.to_str().unwrap()).unwrap().text.unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let v = export_text(&mut s, &text, Format::Vertical, &out).unwrap();
+        assert!(v.path.ends_with("dogs.vert"));
+        assert!(fs::read_to_string(&v.path).unwrap().contains("<s id=\"1\">\nDogs\tdog\tNOUN\t_\t_\nbark\tbark\tVERB\t_\t_\n<g/>\n.\t.\tPUNCT"));
+        let a = export_text(&mut s, &text, Format::AntConc, &out).unwrap();
+        assert_eq!(fs::read_to_string(&a.path).unwrap(), "Dogs_NOUN bark_VERB ._PUNCT\n");
+        assert!(import_file(&mut s, v.path.as_str()).is_err(), "a .vert is not read back");
         drop(s);
         fs::remove_dir_all(dir).ok();
     }
