@@ -56,6 +56,9 @@ pub struct WrittenRow<'a> {
     pub translation: &'a str,
     /// `(x.<name>, value)` cells kept on the segment.
     pub extras: Vec<(String, String)>,
+    /// Its start and end in milliseconds, when the source timed it (a
+    /// subtitle cue, a table with start and end columns); else untimed.
+    pub span: Option<(f64, f64)>,
 }
 
 pub struct Project {
@@ -1115,7 +1118,7 @@ impl Project {
     /// A written text in one txn (a corpus document): the text and one
     /// untimed segment per unit on `tier`, in order. Empty units are left out.
     pub fn import_written_text(&mut self, title: &str, tier: &str, units: &[&str]) -> Result<(String, CommitResult), String> {
-        let rows: Vec<WrittenRow> = units.iter().map(|u| WrittenRow { text: u, translation: "", extras: Vec::new() }).collect();
+        let rows: Vec<WrittenRow> = units.iter().map(|u| WrittenRow { text: u, translation: "", extras: Vec::new(), span: None }).collect();
         self.import_written_rows(title, tier, None, &rows)
     }
 
@@ -1138,6 +1141,10 @@ impl Project {
         for (i, row) in rows.iter().filter(|r| !r.text.trim().is_empty()).enumerate() {
             let pos = wugs_model::pos_seq(i);
             let mut fields = vec![("text", Value::str(&id)), ("tier", Value::str(tier)), ("pos", Value::str(&pos)), ("content", Value::str(row.text.trim()))];
+            if let Some((start, end)) = row.span.filter(|(a, b)| a.is_finite() && b.is_finite() && *a >= 0.0 && b > a) {
+                fields.push(("start", Value::Num(start.round())));
+                fields.push(("end", Value::Num(end.round())));
+            }
             for (name, value) in &row.extras {
                 if name.starts_with("x.") && !value.is_empty() {
                     fields.push((name.as_str(), Value::str(value)));
@@ -2744,9 +2751,9 @@ mod tests {
         let (timed, _) = p.add_tier("translation", "time-aligned", Some("translation"), None).unwrap();
         let (free, _) = p.add_translation_tier("translation", &tier).unwrap();
         let rows = [
-            WrittenRow { text: "kesi bara", translation: "the dog runs", extras: vec![("x.csv.speaker".into(), "A".into())] },
-            WrittenRow { text: "  ", translation: "orphan", extras: Vec::new() },
-            WrittenRow { text: "lo", translation: " ", extras: Vec::new() },
+            WrittenRow { text: "kesi bara", translation: "the dog runs", extras: vec![("x.csv.speaker".into(), "A".into())], span: None },
+            WrittenRow { text: "  ", translation: "orphan", extras: Vec::new(), span: None },
+            WrittenRow { text: "lo", translation: " ", extras: Vec::new(), span: Some((1200.4, 2500.0)) },
         ];
         let (txt, _) = p.import_written_rows("Sentences", &tier, Some(&free), &rows).unwrap();
         let segs = p.proj.ordered_children("text", &txt, "segment").unwrap();
@@ -2757,6 +2764,8 @@ mod tests {
         assert_eq!(p.proj.field_str(&translations[0], "content").unwrap().as_deref(), Some("the dog runs"));
         assert_eq!(p.proj.field_str(&translations[0], "parent").unwrap().as_deref(), Some(main[0].as_str()));
         assert_eq!(p.proj.field_str(&main[0], "x.csv.speaker").unwrap().as_deref(), Some("A"));
+        assert_eq!(p.proj.field_num(&main[0], "start").unwrap(), None, "an untimed row stays untimed");
+        assert_eq!((p.proj.field_num(&main[1], "start").unwrap(), p.proj.field_num(&main[1], "end").unwrap()), (Some(1200.0), Some(2500.0)), "a timed row keeps its span");
         assert!(p.import_written_rows("Y", &tier, Some(&txt), &rows).is_err(), "a translation tier must be a tier");
         assert!(p.import_written_rows("Y", &tier, Some(&timed), &rows).is_err(), "a time-aligned track cannot hold paired translations");
         let lo = main[1].clone();

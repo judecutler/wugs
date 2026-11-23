@@ -15,6 +15,11 @@
 //!   not a column of yes/no marks; its cell becomes the row's translation,
 //!   a segment on a translation track paired with the row's segment. A
 //!   gloss column stays a kept column: it may hold morpheme glosses.
+//! - **Times:** columns named start and end (or begin, start time, end
+//!   time, tmin, tmax) whose every filled cell is a time (seconds, or
+//!   `h:mm:ss.mmm` as subtitles write it) time each row whose two cells hold
+//!   one, end after start; the rest stay untimed. A table wugs wrote reads
+//!   back with its times.
 //! - **Every other column is kept** on its row's segment as `x.csv.<header>`
 //!   (the header lower-cased, spaces and punctuation as `-`), so speaker,
 //!   date or genre columns stay with their sentences.
@@ -30,6 +35,8 @@ const TRANSLATION_NAMES: [&str; 6] = ["gloss", "translation", "free", "english",
 /// Names of the translation column, most preferred first (`translation…` also matches by prefix).
 const TRANSLATION_COLUMN: [&str; 7] = ["translation", "translations", "free translation", "free", "translated", "english", "meaning"];
 const GROUP_NAMES: [&str; 6] = ["document", "doc", "text_id", "file", "title", "source"];
+const START_NAMES: [&str; 6] = ["start", "begin", "start time", "start_time", "starttime", "tmin"];
+const END_NAMES: [&str; 5] = ["end", "end time", "end_time", "endtime", "tmax"];
 
 #[derive(Debug, PartialEq)]
 pub struct Row {
@@ -38,6 +45,8 @@ pub struct Row {
     pub translation: String,
     /// `(x.csv.<header>, value)` for the other columns.
     pub extras: Vec<(String, String)>,
+    /// Start and end in milliseconds from the start and end columns.
+    pub span: Option<(f64, f64)>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -206,18 +215,26 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
         })
         .ok_or_else(|| "no column holds text: every column is numbers or times".to_string())?;
     let group_at = GROUP_NAMES.iter().filter_map(|n| named(n)).find(|&g| g != text_at);
+    let is_time = |c: usize| column(c).iter().all(|v| v.trim().is_empty() || crate::subtitles::clock(v).is_some()) && column(c).iter().any(|v| !v.trim().is_empty());
+    let start_at = START_NAMES.iter().filter_map(|n| named(n)).find(|&c| c != text_at && is_time(c));
+    let end_at = END_NAMES.iter().filter_map(|n| named(n)).find(|&c| c != text_at && is_time(c));
+    let (start_at, end_at) = match (start_at, end_at) {
+        (Some(a), Some(b)) if Some(a) != group_at && Some(b) != group_at => (Some(a), Some(b)),
+        _ => (None, None),
+    };
     let translation_at = TRANSLATION_COLUMN
         .iter()
         .filter_map(|n| named(n))
         .chain((0..raw.len()).filter(|&c| specific_translation(&raw[c]).is_some()))
         .find(|&c| c != text_at && Some(c) != group_at && !numeric(&column(c)) && !flags(&column(c)));
     // Excel's trailing columns with no header and nothing in them are dropped.
-    let kept: Vec<usize> = (0..raw.len()).filter(|&c| c != text_at && Some(c) != group_at && Some(c) != translation_at && !(raw[c].is_empty() && records.iter().all(|r| r[c].is_empty()))).collect();
+    let kept: Vec<usize> = (0..raw.len()).filter(|&c| c != text_at && Some(c) != group_at && Some(c) != translation_at && Some(c) != start_at && Some(c) != end_at && !(raw[c].is_empty() && records.iter().all(|r| r[c].is_empty()))).collect();
     let mut documents: Vec<(Option<String>, Vec<Row>)> = Vec::new();
     let mut at: std::collections::HashMap<Option<String>, usize> = std::collections::HashMap::new();
     let mut ungrouped = 0;
     for r in records {
-        let row = Row { text: r[text_at].clone(), translation: translation_at.map(|c| r[c].clone()).unwrap_or_default(), extras: kept.iter().map(|&c| (format!("x.csv.{}", names[c]), r[c].clone())).collect() };
+        let span = start_at.zip(end_at).and_then(|(a, b)| Some((crate::subtitles::clock(&r[a])?, crate::subtitles::clock(&r[b])?))).filter(|(a, b)| b > a);
+        let row = Row { text: r[text_at].clone(), translation: translation_at.map(|c| r[c].clone()).unwrap_or_default(), extras: kept.iter().map(|&c| (format!("x.csv.{}", names[c]), r[c].clone())).collect(), span };
         let key = group_at.map(|g| r[g].clone()).filter(|v| !v.is_empty());
         if group_at.is_some() && key.is_none() {
             ungrouped += 1;
@@ -331,7 +348,7 @@ mod tests {
         assert_eq!(t.kept, ["speaker", "date"]);
         assert_eq!(t.documents.len(), 2);
         assert_eq!(t.documents[0].0.as_deref(), Some("A"));
-        assert_eq!(t.documents[0].1[0], Row { text: "Kesi mopa, toru.".into(), translation: String::new(), extras: vec![("x.csv.speaker".into(), "Maria".into()), ("x.csv.date".into(), "2024".into())] });
+        assert_eq!(t.documents[0].1[0], Row { text: "Kesi mopa, toru.".into(), translation: String::new(), extras: vec![("x.csv.speaker".into(), "Maria".into()), ("x.csv.date".into(), "2024".into())], span: None });
         assert_eq!(t.documents[1].1[0].text, "Two lines");
     }
 

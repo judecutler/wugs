@@ -41,6 +41,8 @@ pub enum Format {
     Vertical,
     /// AntConc's tagged text (export only): a sentence a line, `word_TAG`.
     AntConc,
+    /// Subtitles: SubRip `.srt`, or WebVTT `.vtt` when `vtt` (`subtitles`).
+    Subtitles { vtt: bool },
 }
 
 impl Format {
@@ -58,6 +60,8 @@ impl Format {
             "tei" => Format::Tei,
             "vertical" => Format::Vertical,
             "antconc" => Format::AntConc,
+            "srt" => Format::Subtitles { vtt: false },
+            "vtt" => Format::Subtitles { vtt: true },
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -75,6 +79,8 @@ impl Format {
             Format::Tei => "xml",
             Format::Vertical => "vert",
             Format::AntConc => "txt",
+            Format::Subtitles { vtt: false } => "srt",
+            Format::Subtitles { vtt: true } => "vtt",
         }
     }
 
@@ -93,6 +99,8 @@ impl Format {
             Format::Tei => "TEI",
             Format::Vertical => "CWB vertical",
             Format::AntConc => "AntConc tagged text",
+            Format::Subtitles { vtt: false } => "SubRip subtitles",
+            Format::Subtitles { vtt: true } => "WebVTT subtitles",
         }
     }
 }
@@ -111,6 +119,8 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "tsv" | "tab" => return Some(Format::Table { tabs: true }),
         "conllu" | "conll" => return Some(Format::Conllu),
         "tei" => return Some(Format::Tei),
+        "srt" => return Some(Format::Subtitles { vtt: false }),
+        "vtt" => return Some(Format::Subtitles { vtt: true }),
         _ => {}
     }
     let head = sniff(&bytes[..bytes.len().min(4096)]);
@@ -275,12 +285,12 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, a .csv/.tsv table of sentences, or a plain .txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, a .csv/.tsv table of sentences, .srt or .vtt subtitles, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } => decode_xml(&bytes, file_name)?,
         Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
@@ -385,6 +395,40 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 (Some(text), false)
             }
         }
+        Format::Subtitles { .. } => {
+            let cues = crate::subtitles::read(input).map_err(|e| format!("{file_name}: {e}"))?;
+            if cues.is_empty() {
+                return Err(format!("{file_name} has no cues with text in it; nothing was imported"));
+            }
+            let stem = p.proj.nfc(&stem);
+            let units: Vec<String> = cues.iter().map(|c| p.proj.nfc(&c.text)).collect();
+            if let Some(t) = same_text(p, &stem, &units)? {
+                lines.push("It matched a text already here; nothing was added.".into());
+                (Some(t), false)
+            } else {
+                let tier = session::utterance_tier(p)?;
+                let translations: Vec<String> = cues.iter().map(|c| c.translation.as_deref().map(|t| p.proj.nfc(t)).unwrap_or_default()).collect();
+                let speakers: Vec<Vec<(String, String)>> = cues.iter().map(|c| c.speaker.iter().map(|v| ("x.vtt.speaker".to_string(), p.proj.nfc(v))).collect()).collect();
+                let translated = translations.iter().filter(|t| !t.is_empty()).count();
+                let translation_tier = if translated > 0 { Some(session::translation_track(p, &tier, None)?) } else { None };
+                let rows: Vec<wugs_core::WrittenRow> =
+                    cues.iter().enumerate().map(|(i, c)| wugs_core::WrittenRow { text: &units[i], translation: &translations[i], extras: speakers[i].clone(), span: c.span }).collect();
+                let (text, _) = p.import_written_rows(&stem, &tier, translation_tier.as_deref(), &rows)?;
+                lines.push(format!("A new text with {}, one per cue.", plural(units.len(), "segment", "segments")));
+                if translated > 0 {
+                    lines.push(format!("{} from each cue's second line, as wugs writes them.", plural(translated, "translation", "translations")));
+                }
+                let untimed = cues.iter().filter(|c| c.span.is_none()).count();
+                if untimed > 0 {
+                    lines.push(format!("{} did not end after {} began, so {} untimed.", plural(untimed, "cue", "cues"), if untimed == 1 { "it" } else { "they" }, if untimed == 1 { "it came in" } else { "they came in" }));
+                }
+                if speakers.iter().any(|x| !x.is_empty()) {
+                    lines.push("Speakers named in the cues are stored with each sentence, not yet shown in wugs.".into());
+                }
+                lines.push("Pick the recording in the Timeline (or the Media panel) to hear it.".into());
+                (Some(text), false)
+            }
+        }
         Format::GlossedExamples => {
             let tier = session::utterance_tier(p)?;
             let translation = if wugs_legacy::igt_text::has_translations(input) { Some(session::translation_track(p, &tier, None)?) } else { None };
@@ -438,15 +482,17 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             for t in p.proj.entities_of_kind("text")? {
                 by_title.entry(p.proj.field_str(&t, "title")?.unwrap_or_default()).or_default().push(t);
             }
-            let (mut made, mut matched, mut segments, mut translations, mut first) = (0usize, 0usize, 0usize, 0usize, None);
+            let (mut made, mut matched, mut segments, mut translations, mut timed, mut first) = (0usize, 0usize, 0usize, 0usize, 0usize, None);
             for (title, rows) in &table.documents {
                 let title = p.proj.nfc(title.as_deref().unwrap_or(&stem));
-                let rows: Vec<(String, String, Vec<(String, String)>)> = rows
+                // (sentence, translation, kept cells, span), all in NFC.
+                type Prepared = (String, String, Vec<(String, String)>, Option<(f64, f64)>);
+                let rows: Vec<Prepared> = rows
                     .iter()
                     .filter(|r| !r.text.trim().is_empty())
-                    .map(|r| (p.proj.nfc(r.text.trim()), p.proj.nfc(r.translation.trim()), r.extras.iter().map(|(n, v)| (n.clone(), p.proj.nfc(v))).collect()))
+                    .map(|r| (p.proj.nfc(r.text.trim()), p.proj.nfc(r.translation.trim()), r.extras.iter().map(|(n, v)| (n.clone(), p.proj.nfc(v))).collect(), r.span))
                     .collect();
-                let units: Vec<String> = rows.iter().map(|(t, _, _)| t.clone()).collect();
+                let units: Vec<String> = rows.iter().map(|(t, _, _, _)| t.clone()).collect();
                 let candidates = by_title.get(&title).cloned().unwrap_or_default();
                 let text = match same_text_among(p, &candidates, &units)? {
                     Some(t) => {
@@ -454,12 +500,13 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                         t
                     }
                     None => {
-                        let refs: Vec<wugs_core::WrittenRow> = rows.iter().map(|(t, tr, x)| wugs_core::WrittenRow { text: t, translation: tr, extras: x.clone() }).collect();
+                        let refs: Vec<wugs_core::WrittenRow> = rows.iter().map(|(t, tr, x, span)| wugs_core::WrittenRow { text: t, translation: tr, extras: x.clone(), span: *span }).collect();
                         made += 1;
                         segments += refs.len();
-                        translations += rows.iter().filter(|(_, tr, _)| !tr.is_empty()).count();
+                        translations += rows.iter().filter(|(_, tr, _, _)| !tr.is_empty()).count();
+                        timed += rows.iter().filter(|r| r.3.is_some()).count();
                         // The track is found or made once, and only when a new text carries a translation.
-                        if translation_tier.is_none() && rows.iter().any(|(_, tr, _)| !tr.is_empty()) {
+                        if translation_tier.is_none() && rows.iter().any(|(_, tr, _, _)| !tr.is_empty()) {
                             let column = table.translation_column.as_deref().unwrap_or_default();
                             translation_tier = Some(session::translation_track(p, &tier, crate::table_text::specific_translation(column))?);
                         }
@@ -479,6 +526,9 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             lines.push(format!("{} with {} from the column «{}»{}, cells separated by {sep}.", plural(made, "new text", "new texts"), plural(segments, "segment", "segments"), table.text_column, table.group_column.as_ref().map(|g| format!(", one text per «{g}»")).unwrap_or_default()));
             if let (Some(column), true) = (&table.translation_column, translations > 0) {
                 lines.push(format!("{} from the column «{column}», each paired with its sentence on a translation track.", plural(translations, "translation", "translations")));
+            }
+            if timed > 0 {
+                lines.push(format!("{} timed from the start and end columns.", plural(timed, "segment", "segments")));
             }
             if table.ungrouped > 0 {
                 lines.push(format!("{} had no «{}» and went into «{stem}».", plural(table.ungrouped, "row", "rows"), table.group_column.clone().unwrap_or_default()));
@@ -703,6 +753,17 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             crate::table_text::export(p, &segments)?
         }
         Format::GlossedExamples => return Err("use Glossed examples for, which writes them for Word, LaTeX or plain text".into()),
+        Format::Subtitles { vtt } => {
+            let segments = one_track(p, text_id, &mut notes, "Subtitles")?;
+            let (out, left_out) = crate::subtitles::export(p, &segments, vtt)?;
+            if left_out == segments.len() {
+                return Err("This text has no timed sentences, so there is nothing to show as subtitles.".into());
+            }
+            if left_out > 0 {
+                notes.push(format!("{} with no time or no text {} left out.", plural(left_out, "sentence", "sentences"), if left_out == 1 { "was" } else { "were" }));
+            }
+            out
+        }
         Format::Elan => wugs_elan::export_eaf(p, text_id)?,
         Format::FlexText => wugs_flex::export_flextext(p, text_id)?,
         Format::TextGrid => {
@@ -1189,6 +1250,44 @@ mod tests {
         assert!(again.lines.iter().any(|l| l.contains("matched")), "{:?}", again.lines);
         assert_eq!(session::list_texts(&mut s).unwrap().len(), 1);
         drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn subtitles_go_out_and_come_back_timed() {
+        let dir = std::env::temp_dir().join(format!("wugs-subtitles-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let text = session::list_texts(&mut s).unwrap().into_iter().next().unwrap().id;
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let srt = export_text(&mut s, &text, Format::Subtitles { vtt: false }, &out).unwrap();
+        assert!(srt.path.ends_with(".srt"), "{}", srt.path);
+        let written = fs::read_to_string(&srt.path).unwrap();
+        assert!(written.starts_with("1\n00:00:0"), "{written}");
+        assert!(written.contains(" --> ") && written.contains("wʌn tuː θɹiː\n"), "{written}");
+        let vtt = export_text(&mut s, &text, Format::Subtitles { vtt: true }, &out).unwrap();
+        let written = fs::read_to_string(&vtt.path).unwrap();
+        assert!(written.starts_with("WEBVTT\n\nNOTE wugs:"), "the translations ride on the second line: {written}");
+        // A spreadsheet of the same text carries its times and reads back timed.
+        let table = export_text(&mut s, &text, Format::Table { tabs: false }, &out).unwrap();
+        drop(s);
+        let mut t: Session = None;
+        session::create_project(&mut t, dir.join("q").to_str().unwrap(), "prs_Ben").unwrap();
+        for (file, wanted) in [(&vtt.path, "subtitles"), (&table.path, "table")] {
+            let r = import_file(&mut t, file).unwrap();
+            assert!(r.format.contains(wanted), "{}", r.format);
+            let shown = session::get_text(&mut t, &r.text.unwrap()).unwrap();
+            let first = shown.segments.iter().find(|x| x.content == "wʌn tuː θɹiː").unwrap_or_else(|| panic!("{:?}", r.lines));
+            assert!(first.start_ms.is_some() && first.end_ms > first.start_ms, "{file}: {first:?}");
+            assert!(shown.segments.iter().any(|x| x.parent.as_deref() == Some(first.id.as_str())), "{file}: its translation came back paired: {:?}", r.lines);
+        }
+        // A text with no times has nothing to subtitle.
+        let plain = dir.join("words.txt");
+        fs::write(&plain, "kesi\ntoru\n").unwrap();
+        let untimed = import_file(&mut t, plain.to_str().unwrap()).unwrap().text.unwrap();
+        assert!(export_text(&mut t, &untimed, Format::Subtitles { vtt: false }, &out).is_err());
+        drop(t);
         fs::remove_dir_all(dir).ok();
     }
 

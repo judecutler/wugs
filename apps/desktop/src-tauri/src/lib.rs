@@ -35,6 +35,7 @@ pub mod people;
 pub mod plaintext;
 pub mod replace;
 pub mod website;
+pub mod subtitles;
 pub mod table_text;
 pub mod listen;
 pub mod praat;
