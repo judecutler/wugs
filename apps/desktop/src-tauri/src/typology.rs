@@ -4,7 +4,11 @@
 //! feature by feature, how the coded languages of its family (or, for a
 //! family with too few, its macroarea) answer. A language Grambank has not
 //! coded gets the same list as a questionnaire, with its relatives' answers
-//! beside each question. Nothing is sent anywhere and nothing is written.
+//! beside each question. Nothing is sent anywhere. The project's own answers
+//! for its language are project settings, one per feature
+//! (`typology:<dataset>:<feature>` for the value, `typology-note:…` for a
+//! note), so they sync and two people answering different questions never
+//! conflict.
 //! A value is one character per feature: the code, `?` for not known, `.`
 //! for not coded.
 
@@ -14,6 +18,7 @@ use std::sync::OnceLock;
 use serde::Serialize;
 
 use crate::glottolog;
+use crate::session::{self, Session};
 
 /// A dataset the panel can read.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
@@ -28,6 +33,13 @@ impl Source {
         match self {
             Source::Grambank => (include_str!("../../../../datasets/grambank/features.tsv"), include_str!("../../../../datasets/grambank/values.tsv")),
             Source::Wals => (include_str!("../../../../datasets/wals/features.tsv"), include_str!("../../../../datasets/wals/values.tsv")),
+        }
+    }
+
+    fn key(self) -> &'static str {
+        match self {
+            Source::Grambank => "grambank",
+            Source::Wals => "wals",
         }
     }
 
@@ -127,6 +139,15 @@ pub struct Answer {
     pub others: Vec<Share>,
     /// Compared languages with an answer to this question.
     pub others_coded: usize,
+    /// Every answer the question allows, in the dataset's order.
+    pub codes: Vec<Code>,
+}
+
+/// One answer a question allows.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Code {
+    pub value: String,
+    pub label: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -201,6 +222,7 @@ pub fn profile(glottocode: &str, source: Source) -> Result<Profile, String> {
                 value: value.map(|c| c.to_string()),
                 others: shares,
                 others_coded,
+                codes: f.codes.iter().map(|(k, l)| Code { value: k.to_string(), label: l.to_string() }).collect(),
             }
         })
         .collect();
@@ -217,9 +239,91 @@ pub fn profile(glottocode: &str, source: Source) -> Result<Profile, String> {
     })
 }
 
+/// The project's own answer to one feature.
+#[derive(Debug, Serialize, PartialEq)]
+pub struct Ours {
+    pub id: String,
+    /// A code the question allows, or `?` for asked but not known.
+    pub value: String,
+    pub note: String,
+}
+
+/// The longest note kept (in characters).
+const MAX_NOTE: usize = 1000;
+
+fn value_key(source: Source, id: &str) -> String {
+    format!("typology:{}:{id}", source.key())
+}
+
+fn note_key(source: Source, id: &str) -> String {
+    format!("typology-note:{}:{id}", source.key())
+}
+
+/// The project's answers for `source`, in the dataset's feature order; a
+/// feature with neither a value nor a note is left out.
+pub fn answers(session: &mut Session, source: Source) -> Result<Vec<Ours>, String> {
+    let p = session::project(session)?;
+    let mut out = Vec::new();
+    for f in &data(source).features {
+        let value = p.setting(&value_key(source, f.id))?.unwrap_or_default();
+        let note = p.setting(&note_key(source, f.id))?.unwrap_or_default();
+        if !value.is_empty() || !note.is_empty() {
+            out.push(Ours { id: f.id.to_string(), value, note });
+        }
+    }
+    Ok(out)
+}
+
+/// Write the project's answer to feature `id`: `value` is one of its codes,
+/// `?`, or empty to clear; the note is trimmed, its spaces collapsed, NFC.
+/// A part that already says that is not written.
+pub fn set_answer(session: &mut Session, source: Source, id: &str, value: &str, note: &str) -> Result<Ours, String> {
+    let f = data(source).features.iter().find(|f| f.id == id).ok_or_else(|| format!("{} has no feature «{id}».", source.edition()))?;
+    let value = value.trim();
+    if !(value.is_empty() || value == "?" || f.codes.iter().any(|(k, _)| k.to_string() == value)) {
+        return Err(format!("«{value}» is not an answer to {id}."));
+    }
+    let p = session::project(session)?;
+    let note = p.proj.nfc(&note.split_whitespace().collect::<Vec<_>>().join(" "));
+    if note.chars().count() > MAX_NOTE {
+        return Err(format!("A note is at most {MAX_NOTE} characters."));
+    }
+    for (k, v) in [(value_key(source, id), value), (note_key(source, id), note.as_str())] {
+        if p.setting(&k)?.unwrap_or_default() != v {
+            p.set_setting(&k, v)?;
+        }
+    }
+    Ok(Ours { id: id.to_string(), value: value.to_string(), note })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_projects_answers_are_kept_checked_and_cleared() {
+        let dir = std::env::temp_dir().join(format!("wugs-typology-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir, "tester").unwrap();
+        assert_eq!(answers(&mut session, Source::Grambank).unwrap(), vec![]);
+        set_answer(&mut session, Source::Grambank, "GB020", "1", "  the  word\n«ang» ").unwrap();
+        set_answer(&mut session, Source::Wals, "81A", "2", "").unwrap();
+        let ours = answers(&mut session, Source::Grambank).unwrap();
+        assert_eq!(ours, vec![Ours { id: "GB020".into(), value: "1".into(), note: "the word «ang»".into() }]);
+        assert_eq!(answers(&mut session, Source::Wals).unwrap()[0].value, "2");
+        let before = session::project(&mut session).unwrap().proj.max_hlc().unwrap();
+        set_answer(&mut session, Source::Grambank, "GB020", "1", "the word «ang»").unwrap();
+        assert_eq!(session::project(&mut session).unwrap().proj.max_hlc().unwrap(), before, "the same answer writes nothing");
+        assert!(set_answer(&mut session, Source::Grambank, "GB020", "7", "").is_err());
+        assert!(set_answer(&mut session, Source::Grambank, "GB999", "1", "").is_err());
+        set_answer(&mut session, Source::Grambank, "GB020", "?", "").unwrap();
+        assert_eq!(answers(&mut session, Source::Grambank).unwrap()[0].value, "?");
+        set_answer(&mut session, Source::Grambank, "GB020", "", "").unwrap();
+        assert_eq!(answers(&mut session, Source::Grambank).unwrap(), vec![]);
+        drop(session);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn every_language_has_a_value_per_feature_and_every_value_a_meaning() {

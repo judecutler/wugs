@@ -1249,6 +1249,10 @@ body::before {
 .ty-seg { background: var(--muted); opacity: 0.35; }
 .ty-seg.is-own { background: var(--accent); opacity: 1; }
 .ty-credit { font-size: var(--text-xs); }
+.ty-item.is-differs { border-right: 3px solid var(--accent); }
+.ty-ours { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.ty-ours-label { font-size: var(--text-xs); color: var(--accent); font-weight: 600; }
+.ty-ours input[type="text"] { flex: 1; min-width: 12em; }
 
 /* Sounds (src/panels/sounds.ts) */
 .panel-sounds { display: flex; flex-direction: column; gap: 6px; overflow: auto; }

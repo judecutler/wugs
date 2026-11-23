@@ -655,6 +655,15 @@ Many languages are in neither dataset. For these, every feature is listed as **N
 - Type another language's name or Glottocode at the top and press Enter to see its answers. **The project's language** goes back.
 - **Copy table** copies the questions and answers for a spreadsheet.
 
+For the project's own language, each feature also has a **This project** row: choose the answer your data gives (or **Not known** when you asked but could not tell) and type a note, such as an example and the page of your notebook or grammar it comes from. A choice saves at once; a note saves when you press Enter or leave the field. The answers are kept with the project and sync to its members, so a team can fill in the questionnaire together. The line under the language says how many you have answered.
+
+- A feature you answered no longer counts as **Still open**.
+- **Ours differs** lists the features where your answer differs from the dataset's. These are worth checking, and if your data is right, worth sending to the dataset's editors.
+- **Copy table** adds your answers and notes as two more columns.
+- **Copy answers as CLDF** copies your answers as a CLDF `values.csv` table (ID, Language_ID, Parameter_ID, Value, Code_ID, Comment), the shape Grambank and WALS publish theirs in. Paste it into a spreadsheet or a CLDF dataset.
+
+Grambank and WALS answers are kept apart: switching the dataset shows that dataset's answers.
+
 The data comes from Grambank 1.0 (cite Skirgård et al. 2023) and WALS Online (cite Dryer & Haspelmath 2013), both CC BY 4.0 and kept inside the app. The sources and comments behind each value are on the language's page in the dataset, named under the list.
 
 ### Describe each text
