@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chunksFor, frameMs, yFor, type Chunk } from "./analysis.ts";
+import { chunksFor, frameMs, rangesFor, yFor, type Chunk } from "./analysis.ts";
 
 test("a view asks for the 10 s chunks it overlaps, inside the recording", () => {
   assert.deepEqual(chunksFor(0, 8_000, 60_000), [0]);
@@ -28,4 +28,13 @@ test("frames sit in the middle of their step", () => {
   const c: Chunk = { index: 2, startMs: 20_000, stepMs: 10, pitch: [], intensity: [], f1: [], f2: [], f3: [] };
   assert.equal(frameMs(c, 0), 20_005);
   assert.equal(frameMs(c, 999), 29_995);
+});
+
+test("a voice's ranges are what the overlay draws", () => {
+  const low = rangesFor({ id: "low", name: "Low", pitchFloor: 50, pitchCeiling: 300, formantCeiling: 5000 });
+  assert.equal(yFor("pitch", 50, 0, 100, low), 100);
+  assert.equal(yFor("pitch", 300, 0, 100, low), 0);
+  assert.equal(yFor("pitch", 400, 0, 100, low), null);
+  assert.equal(yFor("formants", 5000, 0, 100, low), 0);
+  assert.equal(rangesFor(null).pitch.hi, 600);
 });

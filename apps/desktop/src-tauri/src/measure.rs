@@ -183,7 +183,7 @@ pub fn analyse(provider: &Provider, job: &Job, chunks: &[u32]) -> Result<Vec<Chu
     for group in chunks.chunks(MAX_CHUNKS) {
         out.extend(match provider {
             Provider::Praat(exe) => praat_analysis::analyse(exe, job, group)?,
-            Provider::VoiceAnalysis => crate::voice_analysis::analyse(&job.wav, group)?,
+            Provider::VoiceAnalysis => crate::voice_analysis::analyse(&job.wav, &job.voice, group)?,
             _ => return Err("Acoustic analysis has no provider here.".into()),
         });
     }
@@ -217,6 +217,7 @@ pub fn compute(p: &Prepared, app_data: &Path) -> Result<Computed, String> {
         Provider::Praat(exe) => crate::praat::version_of(exe).unwrap_or_else(|_| "Praat".into()),
         other => capability::provider_name(other.id()),
     };
+    let analysed_by = format!("{analysed_by}; {}", p.job.voice.describe());
     let chunks = analyse(&provider, &p.job, &chunks_for(&p.targets))?;
     let rows: Vec<(Target, Measured)> = p.targets.iter().map(|t| (t.clone(), measure(t, &chunks))).collect();
     Ok(Computed { rows, analysed_by })

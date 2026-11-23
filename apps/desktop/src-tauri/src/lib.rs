@@ -901,6 +901,17 @@ async fn acoustic_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>,
     tauri::async_runtime::spawn_blocking(move || measure::analyse(&provider, &job, &chunks)).await.map_err(|e| e.to_string())?
 }
 
+/// A recording's voice for acoustic analysis (pitch range, formant ceiling).
+#[tauri::command(async)]
+fn acoustic_voice(s: State<SessionThread>, source: String) -> Result<praat_analysis::VoiceView, String> {
+    s.run(move |s| praat_analysis::voice_view(s, &source))
+}
+
+#[tauri::command(async)]
+fn set_acoustic_voice(s: State<SessionThread>, source: String, voice: String) -> Result<praat_analysis::VoiceView, String> {
+    s.run(move |s| praat_analysis::set_voice(s, &source, &voice))
+}
+
 /// Measure every timed segment of one track of a text against `source`'s
 /// recording (duration, pitch, intensity, formants) and write the table as a
 /// CSV file into `folder`; the analysis runs off the session thread.
@@ -1783,6 +1794,8 @@ pub fn run() {
             praat_discard,
             acoustic_analysis,
             measure_track,
+            acoustic_voice,
+            set_acoustic_voice,
             measure_points,
             spectrogram,
             conflict_resolve,

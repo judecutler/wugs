@@ -69,7 +69,7 @@ fn frames_go_where_their_time_says() {
 
 #[test]
 fn the_script_names_each_chunk_and_quotes_paths() {
-    let s = analysis_script(Path::new(r#"C:\a "b"\rec"#), Path::new("/c"), &[0, 3]);
+    let s = analysis_script(Path::new(r#"C:\a "b"\rec"#), Path::new("/c"), &[0, 3], &wugs_desktop::praat_analysis::VOICES[0]);
     assert!(s.contains(r#"Open long sound file: "C:\a ""b""\rec""#), "{s}");
     assert!(s.contains("t0 = 30\n") && s.contains("3.tsv") && s.contains("0.tsv"), "{s}");
     assert!(s.contains("To Pitch: 0, 75, 600") && s.contains("To Formant (burg): 0, 5, 5500, 0.025, 50"));

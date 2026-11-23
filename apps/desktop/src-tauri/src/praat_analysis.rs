@@ -26,8 +26,79 @@ use crate::session::{self, Session};
 pub const CHUNK_MS: u32 = 10_000;
 pub const STEP_MS: u32 = 10;
 const PAD_S: f64 = 0.1;
-/// Names the settings below; a change gets a fresh cache.
-const SETTINGS: &str = "v1-p75-600-i75-f5500";
+/// The analysis settings for one speaker's voice, chosen per recording
+/// (`voice_key`): pitch range (also the intensity floor, as Praat advises)
+/// and the formant ceiling. Praat's manual: 5000 Hz for a typical adult male
+/// voice, 5500 Hz for a female one, up to 8000 Hz for a young child.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Voice {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub pitch_floor: f64,
+    pub pitch_ceiling: f64,
+    pub formant_ceiling: f64,
+}
+
+/// The choices, Praat's own defaults first.
+pub const VOICES: [Voice; 4] = [
+    Voice { id: "typical", name: "Typical (pitch 75–600 Hz, formants to 5500 Hz)", pitch_floor: 75.0, pitch_ceiling: 600.0, formant_ceiling: 5500.0 },
+    Voice { id: "low", name: "Low voice (pitch 50–300 Hz, formants to 5000 Hz)", pitch_floor: 50.0, pitch_ceiling: 300.0, formant_ceiling: 5000.0 },
+    Voice { id: "high", name: "High voice (pitch 100–600 Hz, formants to 5500 Hz)", pitch_floor: 100.0, pitch_ceiling: 600.0, formant_ceiling: 5500.0 },
+    Voice { id: "child", name: "Child (pitch 150–800 Hz, formants to 8000 Hz)", pitch_floor: 150.0, pitch_ceiling: 800.0, formant_ceiling: 8000.0 },
+];
+
+impl Voice {
+    /// By id; anything unknown reads as Praat's defaults.
+    pub fn of(id: &str) -> Voice {
+        VOICES.iter().copied().find(|v| v.id == id).unwrap_or(VOICES[0])
+    }
+
+    /// Names the settings; a change gets a fresh cache (the typical voice
+    /// keeps the folder the first version wrote).
+    pub fn key(&self) -> String {
+        format!("v1-p{}-{}-i{}-f{}", self.pitch_floor, self.pitch_ceiling, self.pitch_floor, self.formant_ceiling)
+    }
+
+    /// For tables and notes: "pitch 75–600 Hz, formants to 5500 Hz".
+    pub fn describe(&self) -> String {
+        format!("pitch {}–{} Hz, formants to {} Hz", self.pitch_floor, self.pitch_ceiling, self.formant_ceiling)
+    }
+}
+
+/// The project setting that holds a recording's voice.
+pub fn voice_key(source: &str) -> String {
+    format!("acoustic-voice:{source}")
+}
+
+pub fn voice_of(project: &wugs_core::Project, source: &str) -> Result<Voice, String> {
+    Ok(project.setting(&voice_key(source))?.map(|v| Voice::of(&v)).unwrap_or(VOICES[0]))
+}
+
+/// A recording's voice and the choices, for the Timeline's picker.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VoiceView {
+    pub voice: &'static str,
+    pub voices: Vec<Voice>,
+}
+
+pub fn voice_view(session: &mut Session, source: &str) -> Result<VoiceView, String> {
+    let p = session::project(session)?;
+    Ok(VoiceView { voice: voice_of(p, source)?.id, voices: VOICES.to_vec() })
+}
+
+/// Choose a recording's voice: a synced project setting, written only when it changes.
+pub fn set_voice(session: &mut Session, source: &str, id: &str) -> Result<VoiceView, String> {
+    if !VOICES.iter().any(|v| v.id == id) {
+        return Err(format!("{id:?} is not a voice wugs knows"));
+    }
+    let p = session::project(session)?;
+    if voice_of(p, source)?.id != id {
+        p.set_setting(&voice_key(source), id)?;
+    }
+    voice_view(session, source)
+}
 /// At most this many chunks per request (a minute of audio).
 pub const MAX_CHUNKS: usize = 6;
 const DEADLINE: Duration = Duration::from_secs(180);
@@ -52,6 +123,7 @@ pub struct Chunk {
 /// Where a request's audio and cache are, found on the session thread.
 pub struct Job {
     pub(crate) wav: PathBuf,
+    pub(crate) voice: Voice,
     dir: PathBuf,
 }
 
@@ -63,7 +135,8 @@ pub fn job(session: &mut Session, source: &str) -> Result<Job, String> {
     if !wav.is_file() {
         return Err("The recording's audio file is missing from this project folder.".into());
     }
-    Ok(Job { wav, dir: p.root.join("cache").join("praat-analysis").join(hex).join(SETTINGS) })
+    let voice = voice_of(p, source)?;
+    Ok(Job { wav, voice, dir: p.root.join("cache").join("praat-analysis").join(hex).join(voice.key()) })
 }
 
 fn chunk_file(dir: &Path, index: u32) -> PathBuf {
@@ -71,7 +144,7 @@ fn chunk_file(dir: &Path, index: u32) -> PathBuf {
 }
 
 /// The script that analyses `chunks` of `wav` into `dir`.
-pub fn analysis_script(wav: &Path, dir: &Path, chunks: &[u32]) -> String {
+pub fn analysis_script(wav: &Path, dir: &Path, chunks: &[u32], voice: &Voice) -> String {
     let mut s = String::from("# Written by wugs: pitch, intensity and formants for the Timeline.\n");
     s.push_str(&format!("long = Open long sound file: {}\ndur = Get total duration\n", praat_string(&wav.to_string_lossy())));
     for &n in chunks {
@@ -85,11 +158,11 @@ pub fn analysis_script(wav: &Path, dir: &Path, chunks: &[u32]) -> String {
              if t1 - t0 > 0.1\n\
              \x20   selectObject: long\n\
              \x20   part = Extract part: max (0, t0 - {PAD_S}), min (dur, t1 + {PAD_S}), \"yes\"\n\
-             \x20   pitch = To Pitch: 0, 75, 600\n\
+             \x20   pitch = To Pitch: 0, {floor}, {ceiling}\n\
              \x20   selectObject: part\n\
-             \x20   intensity = To Intensity: 75, 0, \"yes\"\n\
+             \x20   intensity = To Intensity: {floor}, 0, \"yes\"\n\
              \x20   selectObject: part\n\
-             \x20   formant = To Formant (burg): 0, 5, 5500, 0.025, 50\n\
+             \x20   formant = To Formant (burg): 0, 5, {formants}, 0.025, 50\n\
              \x20   t = t0 + {half}\n\
              \x20   while t < t1\n\
              \x20       selectObject: pitch\n\
@@ -106,6 +179,9 @@ pub fn analysis_script(wav: &Path, dir: &Path, chunks: &[u32]) -> String {
              \x20   removeObject: part, pitch, intensity, formant\n\
              endif\n\
              writeFile: {out}, out$\n",
+            floor = voice.pitch_floor,
+            ceiling = voice.pitch_ceiling,
+            formants = voice.formant_ceiling,
             half = f64::from(STEP_MS) / 2000.0,
             step = f64::from(STEP_MS) / 1000.0,
         ));
@@ -175,7 +251,7 @@ pub fn analyse(praat: &Path, job: &Job, chunks: &[u32]) -> Result<Vec<Chunk>, St
         let scratch = job.dir.join(format!("run-{}", wugs_model::ulid()));
         fs::create_dir_all(&scratch).map_err(|e| e.to_string())?;
         let script = scratch.join("analyse.praat");
-        let ran = write_atomic(&script, analysis_script(&job.wav, &scratch, &missing).as_bytes())
+        let ran = write_atomic(&script, analysis_script(&job.wav, &scratch, &missing, &job.voice).as_bytes())
             .and_then(|()| run_quietly(Command::new(praat).arg("--run").arg(&script), DEADLINE).map_err(|e| format!("Praat could not analyse the recording: {e}")));
         // writeFile writes a chunk's file once, whole, so every file there is
         // complete even when a later chunk failed: keep them.
@@ -196,4 +272,36 @@ pub fn analyse(praat: &Path, job: &Job, chunks: &[u32]) -> Result<Vec<Chunk>, St
             Ok(parse_chunk(n, &text))
         })
         .collect()
+}
+
+#[cfg(test)]
+mod voice_tests {
+    use super::*;
+
+    #[test]
+    fn voices_name_their_cache_and_script() {
+        // The typical voice keeps the cache folder the first version wrote.
+        assert_eq!(Voice::of("typical").key(), "v1-p75-600-i75-f5500");
+        assert_eq!(Voice::of("nonsense"), VOICES[0]);
+        let low = Voice::of("low");
+        assert_eq!(low.key(), "v1-p50-300-i50-f5000");
+        let script = analysis_script(Path::new("/tmp/a.wav"), Path::new("/tmp/out"), &[0], &low);
+        assert!(script.contains("To Pitch: 0, 50, 300") && script.contains("To Intensity: 50, 0") && script.contains("To Formant (burg): 0, 5, 5000, 0.025, 50"), "{script}");
+        assert_eq!(low.describe(), "pitch 50–300 Hz, formants to 5000 Hz");
+    }
+
+    #[test]
+    fn a_recordings_voice_is_a_project_setting() {
+        let dir = std::env::temp_dir().join(format!("wugs-voice-setting-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        let source = session::list_texts(&mut s).unwrap().remove(0).recording.unwrap();
+        assert_eq!(voice_view(&mut s, &source).unwrap().voice, "typical");
+        assert_eq!(set_voice(&mut s, &source, "low").unwrap().voice, "low");
+        assert!(set_voice(&mut s, &source, "robot").is_err());
+        let job = job(&mut s, &source).unwrap();
+        assert_eq!(job.voice.id, "low");
+        assert!(job.dir.ends_with("v1-p50-300-i50-f5000"));
+        std::fs::remove_dir_all(dir).ok();
+    }
 }

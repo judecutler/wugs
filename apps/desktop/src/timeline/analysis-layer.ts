@@ -5,7 +5,7 @@
 import { token } from "../theme/tokens";
 import { THEME_EVENT } from "../theme/theme";
 import { errorText, acousticAnalysis } from "../api";
-import { chunksFor, frameMs, RANGES, yFor, type Chunk, type Kind } from "../praat/analysis";
+import { chunksFor, frameMs, rangesFor, yFor, type Chunk, type Kind, type Voice } from "../praat/analysis";
 import type { Viewport } from "./viewport";
 
 /** About ten minutes of analysis kept in memory. */
@@ -42,6 +42,23 @@ export class AnalysisLayer {
   /** Bumped on every source change, so a late answer for the old one is dropped. */
   private generation = 0;
   private width = 0;
+  private voiceId: string | null = null;
+  private ranges = rangesFor(null);
+
+  /** The recording's voice: a change drops what was analysed with the old one. */
+  setVoice(voice: Voice): void {
+    this.ranges = rangesFor(voice);
+    if (voice.id === this.voiceId) return;
+    const first = this.voiceId === null;
+    this.voiceId = voice.id;
+    if (first) return;
+    this.chunks.clear();
+    this.inflight = false;
+    this.problem = null;
+    this.generation++;
+    clearTimeout(this.timer);
+    this.pendingKey = "";
+  }
 
   setSource(source: string | null): void {
     if (source === this.source) return;
@@ -148,7 +165,7 @@ export class AnalysisLayer {
       if (x < -r || x > this.width + r) continue;
       const col = Math.round(x);
       if (col === lastCol) continue;
-      const y = yFor(kind, val, top, height);
+      const y = yFor(kind, val, top, height, this.ranges);
       if (y === null) continue;
       lastCol = col;
       ctx.fillRect(x - r / 2, y - r / 2, r, r);
@@ -162,7 +179,7 @@ export class AnalysisLayer {
     let pen = false;
     for (let i = 0; i < values.length; i++) {
       const val = values[i];
-      const y = val === null || val === undefined ? null : yFor(kind, Math.min(Math.max(val, RANGES[kind].lo), RANGES[kind].hi), top, height);
+      const y = val === null || val === undefined ? null : yFor(kind, Math.min(Math.max(val, this.ranges[kind].lo), this.ranges[kind].hi), top, height, this.ranges);
       if (y === null) {
         pen = false;
         continue;
@@ -185,7 +202,7 @@ export class AnalysisLayer {
     let row = 0;
     for (const kind of ["pitch", "intensity", "formants"] as Kind[]) {
       if (!this.on.has(kind)) continue;
-      const { lo, hi, unit } = RANGES[kind];
+      const { lo, hi, unit } = this.ranges[kind];
       ctx.fillStyle = color(kind);
       ctx.fillText(`${hi} ${unit}`, v.widthPx - 4, top + 10 + row * 11);
       ctx.fillText(`${lo} ${unit}`, v.widthPx - 4, top + height - 3 - row * 11);

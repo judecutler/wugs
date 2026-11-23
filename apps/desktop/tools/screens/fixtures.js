@@ -584,6 +584,13 @@
       hits: [{ textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, len: 1, breakdown: null, glosses: null }],
     }),
     // A synthetic speaker's vowels: five qualities, six tokens each, spread deterministically.
+    acoustic_voice: () => ({
+      voice: "typical",
+      voices: [
+        { id: "typical", name: "Typical (pitch 75–600 Hz, formants to 5500 Hz)", pitchFloor: 75, pitchCeiling: 600, formantCeiling: 5500 },
+        { id: "low", name: "Low voice (pitch 50–300 Hz, formants to 5000 Hz)", pitchFloor: 50, pitchCeiling: 300, formantCeiling: 5000 },
+      ],
+    }),
     measure_points: () => {
       const means = { i: [300, 2300], e: [450, 2000], a: [750, 1300], o: [480, 900], u: [320, 800] };
       const points = [];
