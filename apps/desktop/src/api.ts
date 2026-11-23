@@ -604,14 +604,16 @@ export const sealProject = (args: { folder: string; date: string }) => invoke<Se
 export const textMetadata = (args: { textId: string }) => invoke<import("./metadata/logic").MetaView>("text_metadata", args);
 /** Set one key of a text's metadata; an empty value clears it. */
 export const setTextMetadata = (args: { textId: string; key: string; value: string }) => invoke<import("./metadata/logic").MetaView>("set_text_metadata", args);
-/** Tagging and parsing (src-tauri/src/morphosyntax.rs): UDPipe's program and model and spaCy's Python and pipeline on this computer, and whether the project allows the web service. */
+/** Tagging and parsing (src-tauri/src/morphosyntax.rs): UDPipe's program and model spaCy's Python and pipeline and Stanza's Python and language on this computer, and whether the project allows the web service. */
 export type SpacySetup = { python: string | null; pipeline: string | null; about: string | null };
-export type MorphosyntaxSetup = { local: { program: string | null; model: string | null }; spacy: SpacySetup; webOk: boolean };
+export type MorphosyntaxSetup = { local: { program: string | null; model: string | null }; spacy: SpacySetup; stanza: SpacySetup; webOk: boolean };
 export type Tagged = { annotated: number; tokenized: number; kept: number; differ: number; words: number; by: string };
 export const morphosyntaxSetup = () => invoke<MorphosyntaxSetup>("morphosyntax_setup");
 export const morphosyntaxChoose = (args: { program: string | null; model: string | null }) => invoke<void>("morphosyntax_choose", args);
 /** Choose spaCy's Python (null: python3 or python on PATH) and pipeline; the pipeline is loaded once to check it. */
 export const morphosyntaxChooseSpacy = (args: { python: string | null; pipeline: string | null }) => invoke<SpacySetup>("morphosyntax_choose_spacy", args);
+/** Choose Stanza's Python and language (en, de, grc…); its models are loaded once to check they are downloaded. */
+export const morphosyntaxChooseStanza = (args: { python: string | null; language: string | null }) => invoke<SpacySetup>("morphosyntax_choose_stanza", args);
 export const morphosyntaxAllowWeb = (args: { allow: boolean }) => invoke<void>("morphosyntax_allow_web", args);
 export const morphosyntaxRun = (args: { textId: string; model: string }) => invoke<Tagged>("morphosyntax_run", args);
 /** Every detail's values across the project, for picking texts by one. */

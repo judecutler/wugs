@@ -2,19 +2,21 @@
 // `morphosyntax` capability's chooser), what it still needs, and one button
 // that tags the text's untagged sentences.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { capabilityChoose, errorText, morphosyntaxAllowWeb, morphosyntaxChoose, morphosyntaxChooseSpacy, morphosyntaxRun, morphosyntaxSetup, type CapabilityView, type MorphosyntaxSetup } from "../api";
+import { capabilityChoose, errorText, morphosyntaxAllowWeb, morphosyntaxChoose, morphosyntaxChooseSpacy, morphosyntaxChooseStanza, morphosyntaxRun, morphosyntaxSetup, type CapabilityView, type MorphosyntaxSetup } from "../api";
 import { choiceOptions, statusLine } from "../capability/logic";
 import { h } from "../dom";
 import { capability, getState, refreshAll, refreshCapabilities, showToast } from "../store";
-import { setupFor, spacyNote, taggedLines, WEB_NOTE } from "./logic";
+import { setupFor, spacyNote, stanzaNote, taggedLines, WEB_NOTE } from "./logic";
 
 let setup: { project: string; value: MorphosyntaxSetup } | null = null;
 let loading = false;
 let running: string | null = null;
 let model = "";
-/** The spaCy pipeline field's text while it is typed (null: show the chosen one). */
-let pipelineDraft: string | null = null;
-let checking = false;
+type PyTool = "spacy" | "stanza";
+const EMPTY = { python: null, pipeline: null, about: null };
+/** Each Python tagger's model field while it is typed (null: show the chosen one). */
+const pipelineDraft: Record<PyTool, string | null> = { spacy: null, stanza: null };
+let checking: PyTool | null = null;
 let open = false;
 let redraw: () => void = () => {};
 
@@ -24,7 +26,7 @@ async function loadSetup(project: string, force = false) {
   try {
     setup = { project, value: await morphosyntaxSetup() };
   } catch {
-    setup = { project, value: { local: { program: null, model: null }, spacy: { python: null, pipeline: null, about: null }, webOk: false } };
+    setup = { project, value: { local: { program: null, model: null }, spacy: EMPTY, stanza: EMPTY, webOk: false } };
   }
   loading = false;
   redraw();
@@ -50,31 +52,37 @@ async function choose(project: string, what: "program" | "model") {
   await act(project, () => morphosyntaxChoose(what === "program" ? { program: path, model: now.model } : { program: now.program, model: path }));
 }
 
-async function chooseSpacy(project: string, python: string | null, pipeline: string | null) {
-  checking = true;
+const TOOL = {
+  spacy: { name: "spaCy", field: "spaCy pipeline", placeholder: "Pipeline, such as en_core_web_sm", check: "Load the pipeline once to check it, then use it", note: spacyNote },
+  stanza: { name: "Stanza", field: "Stanza language", placeholder: "Language code, such as de or grc", check: "Load the language's models once to check they are downloaded, then use them", note: stanzaNote },
+} as const;
+
+async function choosePy(project: string, tool: PyTool, python: string | null, model: string | null) {
+  checking = tool;
   redraw();
   await act(project, async () => {
-    await morphosyntaxChooseSpacy({ python, pipeline });
-    pipelineDraft = null;
+    await (tool === "spacy" ? morphosyntaxChooseSpacy({ python, pipeline: model }) : morphosyntaxChooseStanza({ python, language: model }));
+    pipelineDraft[tool] = null;
   });
-  checking = false;
+  checking = null;
   redraw();
 }
 
-async function pickPython(project: string) {
-  const path = await pickFile({ title: "Choose the Python that has spaCy (a virtual environment's python works too)" });
+async function pickPython(project: string, tool: PyTool) {
+  const path = await pickFile({ title: `Choose the Python that has ${TOOL[tool].name} (a virtual environment's python works too)` });
   if (typeof path !== "string") return;
-  const now = setup?.value.spacy ?? { python: null, pipeline: null, about: null };
-  await chooseSpacy(project, path, now.pipeline);
+  const now = setup?.value[tool] ?? EMPTY;
+  await choosePy(project, tool, path, now.pipeline);
 }
 
-/** spaCy's rows: its Python, the pipeline's name with Use, and what the check found. */
-function spacyRows(project: string): HTMLElement[] {
-  const sp = setup?.project === project ? setup.value.spacy : null;
-  const field = h("input", { value: pipelineDraft ?? sp?.pipeline ?? "", placeholder: "Pipeline, such as en_core_web_sm", spellcheck: false, size: 30, disabled: checking });
-  field.setAttribute("aria-label", "spaCy pipeline");
-  field.oninput = () => (pipelineDraft = field.value);
-  const use = () => void chooseSpacy(project, sp?.python ?? null, field.value.trim() === "" ? null : field.value.trim());
+/** A Python tagger's rows: its Python, the model's name with Use, and what the check found. */
+function pyRows(project: string, tool: PyTool): HTMLElement[] {
+  const sp = setup?.project === project ? setup.value[tool] : null;
+  const busy = checking !== null;
+  const field = h("input", { value: pipelineDraft[tool] ?? sp?.pipeline ?? "", placeholder: TOOL[tool].placeholder, spellcheck: false, size: 30, disabled: busy });
+  field.setAttribute("aria-label", TOOL[tool].field);
+  field.oninput = () => (pipelineDraft[tool] = field.value);
+  const use = () => void choosePy(project, tool, sp?.python ?? null, field.value.trim() === "" ? null : field.value.trim());
   field.onkeydown = (e) => {
     if (e.key === "Enter" && !e.isComposing) use();
   };
@@ -82,11 +90,11 @@ function spacyRows(project: string): HTMLElement[] {
     h(
       "div",
       { className: "st-tag-row" },
-      h("button", { type: "button", textContent: sp?.python ? "Python…" : "Choose Python…", title: sp?.python ?? "python3 or python on PATH when not chosen", disabled: checking, onclick: () => void pickPython(project) }),
+      h("button", { type: "button", textContent: sp?.python ? `${TOOL[tool].name}'s Python…` : `Choose Python for ${TOOL[tool].name}…`, title: sp?.python ?? "python3 or python on PATH when not chosen", disabled: busy, onclick: () => void pickPython(project, tool) }),
       field,
-      h("button", { type: "button", textContent: checking ? "Checking…" : "Use", title: "Load the pipeline once to check it, then use it", disabled: checking, onclick: use }),
+      h("button", { type: "button", textContent: checking === tool ? "Checking…" : "Use", title: TOOL[tool].check, disabled: busy, onclick: use }),
     ),
-    h("p", { className: "note", textContent: spacyNote(sp) }),
+    h("p", { className: "note", textContent: TOOL[tool].note(sp) }),
   ];
 }
 
@@ -126,7 +134,7 @@ export function tagBar(text: { id: string; title: string }, draw: () => void): H
   if (v !== null && (open || v.effective === null)) {
     const picker = h(
       "select",
-      { disabled: v.pin !== null || running !== null, title: v.pin !== null ? "This project is pinned to a tagger." : "Automatic uses UDPipe on this computer when it is set up, else spaCy; the web service runs only when chosen." },
+      { disabled: v.pin !== null || running !== null, title: v.pin !== null ? "This project is pinned to a tagger." : "Automatic uses UDPipe on this computer when it is set up, else spaCy, else Stanza; the web service runs only when chosen." },
       ...choiceOptions(v).map((o) => h("option", { value: o.value, textContent: o.label, selected: o.value === v.machine })),
     );
     picker.setAttribute("aria-label", "Tagger");
@@ -144,7 +152,8 @@ export function tagBar(text: { id: string; title: string }, draw: () => void): H
         ),
       );
     }
-    if (rows === "spacy" || rows === "local") parts.push(...spacyRows(project));
+    if (rows === "spacy" || rows === "local") parts.push(...pyRows(project, "spacy"));
+    if (rows === "stanza" || rows === "local") parts.push(...pyRows(project, "stanza"));
     if (rows === "web") {
       const webOk = setup?.project === project && setup.value.webOk;
       const allow = h("input", { type: "checkbox", checked: webOk, onchange: () => void act(project, () => morphosyntaxAllowWeb({ allow: allow.checked })) });

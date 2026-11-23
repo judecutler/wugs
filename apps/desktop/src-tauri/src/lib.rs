@@ -1054,13 +1054,14 @@ async fn speech_spans(s: State<'_, SessionThread>, dir: State<'_, AppData>, sour
 struct MorphosyntaxSetup {
     local: morphosyntax::LocalSettings,
     spacy: morphosyntax::SpacySettings,
+    stanza: morphosyntax::SpacySettings,
     web_ok: bool,
 }
 
 #[tauri::command(async)]
 fn morphosyntax_setup(s: State<SessionThread>, dir: State<AppData>) -> Result<MorphosyntaxSetup, String> {
     let web_ok = s.run(|s| Ok(session::project(s).ok().map(|p| p.setting(morphosyntax::WEB_OK)).transpose()?.flatten().as_deref() == Some("yes")))?;
-    Ok(MorphosyntaxSetup { local: morphosyntax::local_settings(&dir.0), spacy: morphosyntax::spacy_settings(&dir.0), web_ok })
+    Ok(MorphosyntaxSetup { local: morphosyntax::local_settings(&dir.0), spacy: morphosyntax::spacy_settings(&dir.0), stanza: morphosyntax::py_settings(&dir.0, morphosyntax::PyTool::Stanza), web_ok })
 }
 
 /// Choose spaCy's Python (None: python3 or python on PATH) and pipeline on
@@ -1069,6 +1070,14 @@ fn morphosyntax_setup(s: State<SessionThread>, dir: State<AppData>) -> Result<Mo
 async fn morphosyntax_choose_spacy(dir: State<'_, AppData>, python: Option<String>, pipeline: Option<String>) -> Result<morphosyntax::SpacySettings, String> {
     let app = dir.0.clone();
     tauri::async_runtime::spawn_blocking(move || morphosyntax::choose_spacy(&app, python, pipeline)).await.map_err(|e| e.to_string())?
+}
+
+/// Choose Stanza's Python and language on this computer; the models are
+/// loaded once to check they are downloaded (an empty language clears it).
+#[tauri::command]
+async fn morphosyntax_choose_stanza(dir: State<'_, AppData>, python: Option<String>, language: Option<String>) -> Result<morphosyntax::SpacySettings, String> {
+    let app = dir.0.clone();
+    tauri::async_runtime::spawn_blocking(move || morphosyntax::choose_py(&app, morphosyntax::PyTool::Stanza, python, language)).await.map_err(|e| e.to_string())?
 }
 
 /// Choose UDPipe's program and model on this computer (None keeps the PATH lookup or clears the model).
@@ -1103,7 +1112,7 @@ async fn morphosyntax_run(s: State<'_, SessionThread>, dir: State<'_, AppData>, 
     }
     let tagger = match (provider, web_model) {
         (capability::Provider::Udpipe(l), _) => morphosyntax::Tagger::Local(l),
-        (capability::Provider::Spacy(sp), _) => morphosyntax::Tagger::Spacy(sp),
+        (capability::Provider::Python(sp), _) => morphosyntax::Tagger::Spacy(sp),
         (capability::Provider::UdpipeLindat, Some(model)) => morphosyntax::Tagger::Lindat { endpoint: morphosyntax::LINDAT.to_string(), model },
         _ => return Err("Nothing here can tag and parse.".into()),
     };
@@ -1777,6 +1786,7 @@ pub fn run() {
             morphosyntax_setup,
             morphosyntax_choose,
             morphosyntax_choose_spacy,
+            morphosyntax_choose_stanza,
             morphosyntax_allow_web,
             morphosyntax_run,
             sentence_get,

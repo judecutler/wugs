@@ -89,6 +89,9 @@ pub const UDPIPE_LINDAT: &str = "udpipe-lindat";
 /// spaCy in the person's own Python, with a pipeline they installed:
 /// nothing leaves the computer.
 pub const SPACY: &str = "spacy";
+/// Stanza in the person's own Python, with a language's models they
+/// downloaded: nothing leaves the computer.
+pub const STANZA: &str = "stanza";
 
 /// In catalogue order, which is Automatic's last tie-break. wav2vec2 stays
 /// first until ZIPA has been checked on real speech by hand: downloading
@@ -161,7 +164,7 @@ pub fn known(cap: Capability) -> Vec<String> {
     match cap {
         Capability::AcousticAnalysis => ids.extend([PRAAT.to_string(), VOICE_ANALYSIS.to_string()]),
         Capability::Segmentation => ids.push(VOICE_ACTIVITY.into()),
-        Capability::Morphosyntax => ids.extend([UDPIPE.to_string(), SPACY.to_string(), UDPIPE_LINDAT.to_string()]),
+        Capability::Morphosyntax => ids.extend([UDPIPE.to_string(), SPACY.to_string(), STANZA.to_string(), UDPIPE_LINDAT.to_string()]),
         Capability::PhoneTranscription => {}
     }
     ids
@@ -197,6 +200,8 @@ pub struct Here {
     /// spaCy and its pipeline, or why not (looked up only for morphosyntax;
     /// Python is not run, so a missing spaCy shows when the pipeline is chosen or run).
     pub spacy: Result<crate::morphosyntax::Spacy, String>,
+    /// Stanza and its language, or why not (looked up the same way).
+    pub stanza: Result<crate::morphosyntax::Spacy, String>,
 }
 
 impl Here {
@@ -206,6 +211,7 @@ impl Here {
             praat: if cap == Capability::AcousticAnalysis { crate::praat::praat(app_data) } else { Err("not needed".into()) },
             udpipe: if cap == Capability::Morphosyntax { crate::morphosyntax::local(app_data) } else { Err("not needed".into()) },
             spacy: if cap == Capability::Morphosyntax { crate::morphosyntax::spacy(app_data) } else { Err("not needed".into()) },
+            stanza: if cap == Capability::Morphosyntax { crate::morphosyntax::py_tagger(app_data, crate::morphosyntax::PyTool::Stanza) } else { Err("not needed".into()) },
         }
     }
 }
@@ -263,6 +269,11 @@ pub fn options(cap: Capability, here: &Here) -> Vec<ProviderRow> {
             Err(e) => (false, e.clone()),
         };
         out.push(ProviderRow { id: SPACY.into(), name: "spaCy on this computer".into(), kind: "program", ready, note, score: None });
+        let (ready, note) = match &here.stanza {
+            Ok(st) => (true, format!("Runs here with Stanza's «{}» models; nothing leaves this computer.", st.pipeline)),
+            Err(e) => (false, e.clone()),
+        };
+        out.push(ProviderRow { id: STANZA.into(), name: "Stanza on this computer".into(), kind: "program", ready, note, score: None });
         out.push(ProviderRow {
             id: UDPIPE_LINDAT.into(),
             name: "UDPipe 2 (LINDAT web service)".into(),
@@ -297,7 +308,8 @@ pub enum Provider {
     VoiceAnalysis,
     Udpipe(crate::morphosyntax::Local),
     UdpipeLindat,
-    Spacy(crate::morphosyntax::Spacy),
+    /// spaCy or Stanza: which one is the value's `tool`.
+    Python(crate::morphosyntax::Spacy),
 }
 
 impl Provider {
@@ -309,7 +321,7 @@ impl Provider {
             Provider::VoiceAnalysis => VOICE_ANALYSIS,
             Provider::Udpipe(_) => UDPIPE,
             Provider::UdpipeLindat => UDPIPE_LINDAT,
-            Provider::Spacy(_) => SPACY,
+            Provider::Python(t) => t.tool.id(),
         }
     }
 }
@@ -351,7 +363,7 @@ pub fn effective(cap: Capability, pin: Option<&str>, machine: &Choice, options: 
             Capability::Morphosyntax => options
                 .iter()
                 .find(|o| o.id == UDPIPE)
-                .map(|o| format!("{} Or set up spaCy, or choose the UDPipe 2 web service.", o.note))
+                .map(|o| format!("{} Or set up spaCy or Stanza, or choose the UDPipe 2 web service.", o.note))
                 .unwrap_or_else(|| "Nothing on this computer can tag and parse.".into()),
         }),
     }
@@ -377,7 +389,10 @@ pub fn resolve(cap: Capability, pin: Option<&str>, app_data: &Path) -> Result<Pr
         return Ok(Provider::UdpipeLindat);
     }
     if id == SPACY {
-        return here.spacy.map(Provider::Spacy);
+        return here.spacy.map(Provider::Python);
+    }
+    if id == STANZA {
+        return here.stanza.map(Provider::Python);
     }
     manifest(&id).map(Provider::Model).ok_or_else(|| format!("no package {id:?}"))
 }
@@ -426,6 +441,7 @@ pub fn provider_name(id: &str) -> String {
         UDPIPE => "UDPipe on this computer".into(),
         UDPIPE_LINDAT => "UDPipe 2 (LINDAT web service)".into(),
         SPACY => "spaCy on this computer".into(),
+        STANZA => "Stanza on this computer".into(),
         "automatic" => "Automatic".into(),
         _ => manifest(id).map(|m| m.name.clone()).unwrap_or_else(|| id.to_string()),
     }
@@ -506,35 +522,41 @@ mod tests {
 
     #[test]
     fn praat_powers_acoustic_analysis_when_found_and_the_built_in_one_otherwise() {
-        let here = Here { installed: vec![], praat: Err("Praat was not found.".into()), udpipe: Err("not needed".into()), spacy: Err("not needed".into()) };
+        let here = Here { installed: vec![], praat: Err("Praat was not found.".into()), udpipe: Err("not needed".into()), spacy: Err("not needed".into()), stanza: Err("not needed".into()) };
         let os = options(Capability::AcousticAnalysis, &here);
         assert_eq!(os.iter().map(|o| (o.id.as_str(), o.ready)).collect::<Vec<_>>(), [(PRAAT, false), (VOICE_ANALYSIS, true)]);
         assert_eq!(effective(Capability::AcousticAnalysis, None, &Choice::Automatic, &os).unwrap(), VOICE_ANALYSIS);
         let err = effective(Capability::AcousticAnalysis, None, &Choice::Pick(PRAAT.into()), &os).unwrap_err();
         assert!(err.contains("Praat was not found."), "{err}");
-        let here = Here { installed: vec![], praat: Ok(PathBuf::from("/usr/bin/praat")), udpipe: Err("not needed".into()), spacy: Err("not needed".into()) };
+        let here = Here { installed: vec![], praat: Ok(PathBuf::from("/usr/bin/praat")), udpipe: Err("not needed".into()), spacy: Err("not needed".into()), stanza: Err("not needed".into()) };
         assert_eq!(effective(Capability::AcousticAnalysis, None, &Choice::Automatic, &options(Capability::AcousticAnalysis, &here)).unwrap(), PRAAT);
         assert!(options(Capability::PhoneTranscription, &here).iter().all(|o| o.kind == "model"));
     }
 
     #[test]
     fn the_web_tagger_runs_only_when_chosen() {
-        let missing = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Err("UDPipe is not installed.".into()), spacy: Err("Python is not installed.".into()) };
+        let missing = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Err("UDPipe is not installed.".into()), spacy: Err("Python is not installed.".into()), stanza: Err("Python is not installed.".into()) };
         let os = options(Capability::Morphosyntax, &missing);
-        assert_eq!(os.iter().map(|o| o.id.as_str()).collect::<Vec<_>>(), [UDPIPE, SPACY, UDPIPE_LINDAT]);
+        assert_eq!(os.iter().map(|o| o.id.as_str()).collect::<Vec<_>>(), [UDPIPE, SPACY, STANZA, UDPIPE_LINDAT]);
         let auto = effective(Capability::Morphosyntax, None, &Choice::Automatic, &os).unwrap_err();
         assert!(auto.starts_with("UDPipe is not installed.") && auto.contains("web service"), "Automatic never sends text away: {auto}");
         assert_eq!(effective(Capability::Morphosyntax, None, &Choice::Pick(UDPIPE_LINDAT.into()), &os).unwrap(), UDPIPE_LINDAT);
-        let here = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Ok(crate::morphosyntax::Local { program: "/usr/bin/udpipe".into(), model: "/m/english.udpipe".into() }), spacy: Err("not needed".into()) };
+        let here = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Ok(crate::morphosyntax::Local { program: "/usr/bin/udpipe".into(), model: "/m/english.udpipe".into() }), spacy: Err("not needed".into()), stanza: Err("not needed".into()) };
         assert_eq!(effective(Capability::Morphosyntax, None, &Choice::Automatic, &options(Capability::Morphosyntax, &here)).unwrap(), UDPIPE);
         assert!(known(Capability::Morphosyntax).contains(&UDPIPE_LINDAT.to_string()));
         // spaCy is Automatic's pick when UDPipe is not set up, and UDPipe stays first when both are.
-        let sp = crate::morphosyntax::Spacy { python: "/usr/bin/python3".into(), pipeline: "en_core_web_sm".into() };
-        let only_spacy = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Err("UDPipe is not installed.".into()), spacy: Ok(sp.clone()) };
+        let sp = crate::morphosyntax::Spacy { tool: crate::morphosyntax::PyTool::Spacy, python: "/usr/bin/python3".into(), pipeline: "en_core_web_sm".into() };
+        let only_spacy = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Err("UDPipe is not installed.".into()), spacy: Ok(sp.clone()), stanza: Err("not needed".into()) };
         assert_eq!(effective(Capability::Morphosyntax, None, &Choice::Automatic, &options(Capability::Morphosyntax, &only_spacy)).unwrap(), SPACY);
         let both = Here { spacy: Ok(sp), ..here };
         assert_eq!(effective(Capability::Morphosyntax, None, &Choice::Automatic, &options(Capability::Morphosyntax, &both)).unwrap(), UDPIPE);
         assert!(known(Capability::Morphosyntax).contains(&SPACY.to_string()));
         assert_eq!(provider_name(SPACY), "spaCy on this computer");
+        // Stanza alone is Automatic's pick too, and is listed after spaCy.
+        let st = crate::morphosyntax::Spacy { tool: crate::morphosyntax::PyTool::Stanza, python: "/usr/bin/python3".into(), pipeline: "de".into() };
+        let only_stanza = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Err("UDPipe is not installed.".into()), spacy: Err("not set up".into()), stanza: Ok(st) };
+        assert_eq!(effective(Capability::Morphosyntax, None, &Choice::Automatic, &options(Capability::Morphosyntax, &only_stanza)).unwrap(), STANZA);
+        assert!(known(Capability::Morphosyntax).contains(&STANZA.to_string()));
+        assert_eq!(provider_name(STANZA), "Stanza on this computer");
     }
 }

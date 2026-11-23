@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { setupFor, spacyNote, taggedLines } from "./logic.ts";
+import { setupFor, spacyNote, stanzaNote, taggedLines } from "./logic.ts";
 
 test("a run says what was tagged, kept and left alone", () => {
   const lines = taggedLines({ annotated: 3, tokenized: 1, kept: 2, differ: 1, words: 17, by: "udpipe english.udpipe" }, "Story");
@@ -23,4 +23,9 @@ test("the setup rows follow what was chosen, and Automatic what it found", () =>
   assert.equal(setupFor({ machine: "automatic", pin: null, effective: null }), "local");
   assert.match(spacyNote({ pipeline: "en_core_web_sm", about: "spaCy 3.8, en_core_web_sm 3.8.0 (parser)" }), /^Checked: spaCy 3\.8/u);
   assert.match(spacyNote(null), /pip install spacy/u);
+  assert.equal(setupFor({ machine: "stanza", pin: null, effective: null }), "stanza", "an unready choice still shows its rows");
+  assert.equal(setupFor({ machine: "automatic", pin: null, effective: "stanza" }), "stanza");
+  assert.equal(setupFor({ machine: "automatic", pin: null, effective: null }), "local", "nothing found: every local tagger's rows");
+  assert.match(stanzaNote(null), /pip install stanza/u);
+  assert.match(stanzaNote({ pipeline: "de", about: "Stanza 1.10.1, de (tokenize, pos)" }), /^Checked: Stanza 1\.10\.1, de/u);
 });
