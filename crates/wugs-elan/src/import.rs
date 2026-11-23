@@ -49,6 +49,9 @@ pub struct ImportReport {
     pub tiers_skipped: usize,
     pub segments_created: usize,
     pub segments_skipped: usize,
+    /// Words, morphs and glosses tiers a wugs export wrote from its own
+    /// glossing: read as already here, so they make no tiers or segments.
+    pub analysis_tiers_skipped: usize,
     pub commits: usize,
     pub findings: usize,
 }
@@ -57,6 +60,7 @@ struct EafDoc {
     key: String,
     title: Option<String>,
     tiers: Vec<TierIn>,
+    analysis_tiers: usize,
 }
 
 struct TierIn {
@@ -113,6 +117,7 @@ pub fn import_eaf(
         }
     };
     report.text = text.clone();
+    report.analysis_tiers_skipped = doc.analysis_tiers;
 
     let mut tier_ids = origin_map(project, "x.elan.text", &text, "tier")?;
     let mut seg_ids = origin_map(project, "text", &text, "segment")?;
@@ -287,9 +292,14 @@ fn parse_eaf(input: &str) -> Result<EafDoc, ImportError> {
     };
 
     let mut tiers = Vec::new();
+    let mut analysis_tiers = 0;
     for (order, t) in root.children_named("TIER").enumerate() {
         let id = req(t, "TIER_ID")?.to_string();
         let lt_ref = t.attr("LINGUISTIC_TYPE_REF");
+        if lt_ref.is_some_and(|r| r.starts_with(ANALYSIS_TYPE_PREFIX)) {
+            analysis_tiers += 1;
+            continue;
+        }
         let (alignable, constraints) = lt_ref
             .and_then(|r| types.get(r).copied())
             .unwrap_or((true, None));
@@ -361,6 +371,7 @@ fn parse_eaf(input: &str) -> Result<EafDoc, ImportError> {
         key,
         title: prop(PROP_TITLE),
         tiers: parents_first(tiers)?,
+        analysis_tiers,
     })
 }
 
