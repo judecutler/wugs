@@ -25,16 +25,18 @@ pub enum Capability {
     PhoneTranscription,
     AcousticAnalysis,
     Segmentation,
+    Morphosyntax,
 }
 
 impl Capability {
-    pub const ALL: [Capability; 3] = [Capability::PhoneTranscription, Capability::AcousticAnalysis, Capability::Segmentation];
+    pub const ALL: [Capability; 4] = [Capability::PhoneTranscription, Capability::AcousticAnalysis, Capability::Segmentation, Capability::Morphosyntax];
 
     pub fn id(self) -> &'static str {
         match self {
             Capability::PhoneTranscription => "phone-transcription",
             Capability::AcousticAnalysis => "acoustic-analysis",
             Capability::Segmentation => "segmentation",
+            Capability::Morphosyntax => "morphosyntax",
         }
     }
 
@@ -43,6 +45,7 @@ impl Capability {
             Capability::PhoneTranscription => "Phone transcription",
             Capability::AcousticAnalysis => "Acoustic analysis",
             Capability::Segmentation => "Segmentation",
+            Capability::Morphosyntax => "Tagging and parsing",
         }
     }
 
@@ -68,6 +71,15 @@ pub const PRAAT: &str = "praat";
 /// noise floor. Not a package and always ready; segmentation models can
 /// join it as packages later.
 pub const VOICE_ACTIVITY: &str = "voice-activity";
+
+/// UDPipe 1 on this computer, with a model the person chose: the person's
+/// own program, nothing leaves the computer.
+pub const UDPIPE: &str = "udpipe";
+
+/// UDPipe 2 at ÚFAL's LINDAT service: a web service, so never Automatic's
+/// pick (text would leave the computer without anyone choosing it), and a
+/// project must allow it before anything is sent (`morphosyntax::WEB_OK`).
+pub const UDPIPE_LINDAT: &str = "udpipe-lindat";
 
 /// In catalogue order, which is Automatic's last tie-break. wav2vec2 stays
 /// first until ZIPA has been checked on real speech by hand: downloading
@@ -140,6 +152,7 @@ pub fn known(cap: Capability) -> Vec<String> {
     match cap {
         Capability::AcousticAnalysis => ids.push(PRAAT.into()),
         Capability::Segmentation => ids.push(VOICE_ACTIVITY.into()),
+        Capability::Morphosyntax => ids.extend([UDPIPE.to_string(), UDPIPE_LINDAT.to_string()]),
         Capability::PhoneTranscription => {}
     }
     ids
@@ -153,7 +166,7 @@ pub fn known(cap: Capability) -> Vec<String> {
 pub struct ProviderRow {
     pub id: String,
     pub name: String,
-    /// "model", "program" or "built-in".
+    /// "model", "program", "built-in" or "web service".
     pub kind: &'static str,
     /// Ready to run here now.
     pub ready: bool,
@@ -170,6 +183,8 @@ pub struct Here {
     /// Praat's path, or why there is none (looked up only for acoustic
     /// analysis: it runs `praat --version`).
     pub praat: Result<PathBuf, String>,
+    /// UDPipe and its model, or why not (looked up only for morphosyntax).
+    pub udpipe: Result<crate::morphosyntax::Local, String>,
 }
 
 impl Here {
@@ -177,6 +192,7 @@ impl Here {
         Here {
             installed: catalogue().iter().filter(|m| m.model.capability == cap.id() && crate::assist::installed(app_data, m).is_some()).map(|m| m.id.clone()).collect(),
             praat: if cap == Capability::AcousticAnalysis { crate::praat::praat(app_data) } else { Err("not needed".into()) },
+            udpipe: if cap == Capability::Morphosyntax { crate::morphosyntax::local(app_data) } else { Err("not needed".into()) },
         }
     }
 }
@@ -215,6 +231,21 @@ pub fn options(cap: Capability, here: &Here) -> Vec<ProviderRow> {
             score: None,
         });
     }
+    if cap == Capability::Morphosyntax {
+        let (ready, note) = match &here.udpipe {
+            Ok(l) => (true, format!("Runs here with {}; nothing leaves this computer.", l.model.file_name().and_then(|n| n.to_str()).unwrap_or("its model"))),
+            Err(e) => (false, e.clone()),
+        };
+        out.push(ProviderRow { id: UDPIPE.into(), name: "UDPipe on this computer".into(), kind: "program", ready, note, score: None });
+        out.push(ProviderRow {
+            id: UDPIPE_LINDAT.into(),
+            name: "UDPipe 2 (LINDAT web service)".into(),
+            kind: "web service",
+            ready: true,
+            note: "Sends the text to ÚFAL in Prague, who may keep it; models are CC BY-NC-SA. Each project must allow it, and texts that are not open are never sent.".into(),
+            score: None,
+        });
+    }
     out
 }
 
@@ -222,7 +253,8 @@ pub fn options(cap: Capability, here: &Here) -> Vec<ProviderRow> {
 /// unscored ones (until the evaluation harness scores the catalogue, an
 /// unscored model is still better than none), then catalogue order.
 fn automatic(options: &[ProviderRow]) -> Option<&ProviderRow> {
-    options.iter().filter(|o| o.ready).min_by(|a, b| match (a.score, b.score) {
+    // A web service is used only when someone chose it.
+    options.iter().filter(|o| o.ready && o.kind != "web service").min_by(|a, b| match (a.score, b.score) {
         (Some(x), Some(y)) => x.total_cmp(&y),
         (Some(_), None) => std::cmp::Ordering::Less,
         (None, Some(_)) => std::cmp::Ordering::Greater,
@@ -236,6 +268,8 @@ pub enum Provider {
     Model(&'static Manifest),
     Praat(PathBuf),
     VoiceActivity,
+    Udpipe(crate::morphosyntax::Local),
+    UdpipeLindat,
 }
 
 impl Provider {
@@ -244,6 +278,8 @@ impl Provider {
             Provider::Model(m) => &m.id,
             Provider::Praat(_) => PRAAT,
             Provider::VoiceActivity => VOICE_ACTIVITY,
+            Provider::Udpipe(_) => UDPIPE,
+            Provider::UdpipeLindat => UDPIPE_LINDAT,
         }
     }
 }
@@ -266,6 +302,7 @@ pub fn effective(cap: Capability, pin: Option<&str>, machine: &Choice, options: 
                 match o.kind {
                     "model" => "(a model)",
                     "program" => "(a program)",
+                    "web service" => "(a web service)",
                     _ => "(built in)",
                 },
                 cap.title().to_lowercase(),
@@ -281,6 +318,11 @@ pub fn effective(cap: Capability, pin: Option<&str>, machine: &Choice, options: 
             Capability::PhoneTranscription => "No phone transcription model is downloaded yet; Speech assist lists the ones you can download.".to_string(),
             Capability::AcousticAnalysis => options.iter().find(|o| o.id == PRAAT).map(|o| o.note.clone()).unwrap_or_else(|| "Nothing on this computer can analyse audio.".into()),
             Capability::Segmentation => "Nothing here can segment a recording.".to_string(),
+            Capability::Morphosyntax => options
+                .iter()
+                .find(|o| o.id == UDPIPE)
+                .map(|o| format!("{} Or choose the UDPipe 2 web service.", o.note))
+                .unwrap_or_else(|| "Nothing on this computer can tag and parse.".into()),
         }),
     }
 }
@@ -294,6 +336,12 @@ pub fn resolve(cap: Capability, pin: Option<&str>, app_data: &Path) -> Result<Pr
     }
     if id == VOICE_ACTIVITY {
         return Ok(Provider::VoiceActivity);
+    }
+    if id == UDPIPE {
+        return here.udpipe.map(Provider::Udpipe);
+    }
+    if id == UDPIPE_LINDAT {
+        return Ok(Provider::UdpipeLindat);
     }
     manifest(&id).map(Provider::Model).ok_or_else(|| format!("no package {id:?}"))
 }
@@ -338,6 +386,8 @@ pub fn provider_name(id: &str) -> String {
         "" => "not pinned".into(),
         PRAAT => "Praat".into(),
         VOICE_ACTIVITY => "Voice activity (built in)".into(),
+        UDPIPE => "UDPipe on this computer".into(),
+        UDPIPE_LINDAT => "UDPipe 2 (LINDAT web service)".into(),
         "automatic" => "Automatic".into(),
         _ => manifest(id).map(|m| m.name.clone()).unwrap_or_else(|| id.to_string()),
     }
@@ -418,12 +468,25 @@ mod tests {
 
     #[test]
     fn praat_powers_acoustic_analysis_only_when_found() {
-        let here = Here { installed: vec![], praat: Err("Praat was not found.".into()) };
+        let here = Here { installed: vec![], praat: Err("Praat was not found.".into()), udpipe: Err("not needed".into()) };
         let os = options(Capability::AcousticAnalysis, &here);
         assert_eq!(os.iter().map(|o| o.id.as_str()).collect::<Vec<_>>(), [PRAAT]);
         assert_eq!(effective(Capability::AcousticAnalysis, None, &Choice::Automatic, &os).unwrap_err(), "Praat was not found.");
-        let here = Here { installed: vec![], praat: Ok(PathBuf::from("/usr/bin/praat")) };
+        let here = Here { installed: vec![], praat: Ok(PathBuf::from("/usr/bin/praat")), udpipe: Err("not needed".into()) };
         assert_eq!(effective(Capability::AcousticAnalysis, None, &Choice::Automatic, &options(Capability::AcousticAnalysis, &here)).unwrap(), PRAAT);
         assert!(options(Capability::PhoneTranscription, &here).iter().all(|o| o.kind == "model"));
+    }
+
+    #[test]
+    fn the_web_tagger_runs_only_when_chosen() {
+        let missing = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Err("UDPipe is not installed.".into()) };
+        let os = options(Capability::Morphosyntax, &missing);
+        assert_eq!(os.iter().map(|o| o.id.as_str()).collect::<Vec<_>>(), [UDPIPE, UDPIPE_LINDAT]);
+        let auto = effective(Capability::Morphosyntax, None, &Choice::Automatic, &os).unwrap_err();
+        assert!(auto.starts_with("UDPipe is not installed.") && auto.contains("web service"), "Automatic never sends text away: {auto}");
+        assert_eq!(effective(Capability::Morphosyntax, None, &Choice::Pick(UDPIPE_LINDAT.into()), &os).unwrap(), UDPIPE_LINDAT);
+        let here = Here { installed: vec![], praat: Err("not needed".into()), udpipe: Ok(crate::morphosyntax::Local { program: "/usr/bin/udpipe".into(), model: "/m/english.udpipe".into() }) };
+        assert_eq!(effective(Capability::Morphosyntax, None, &Choice::Automatic, &options(Capability::Morphosyntax, &here)).unwrap(), UDPIPE);
+        assert!(known(Capability::Morphosyntax).contains(&UDPIPE_LINDAT.to_string()));
     }
 }

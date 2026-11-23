@@ -21,6 +21,7 @@ pub mod layout;
 pub mod lexicon;
 pub mod media_bin;
 pub mod metadata;
+pub mod morphosyntax;
 pub mod people;
 pub mod plaintext;
 pub mod table_text;
@@ -849,6 +850,61 @@ async fn speech_spans(s: State<'_, SessionThread>, dir: State<'_, AppData>, sour
     Ok(segmentation_spans(&s, &dir, source, &granularity).await?.into_iter().map(|(a, b)| [a, b]).collect())
 }
 
+/// What tagging needs from this computer and this project: UDPipe's
+/// program and model as chosen, and whether the project allows the web service.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct MorphosyntaxSetup {
+    local: morphosyntax::LocalSettings,
+    web_ok: bool,
+}
+
+#[tauri::command(async)]
+fn morphosyntax_setup(s: State<SessionThread>, dir: State<AppData>) -> Result<MorphosyntaxSetup, String> {
+    let web_ok = s.run(|s| Ok(session::project(s).ok().map(|p| p.setting(morphosyntax::WEB_OK)).transpose()?.flatten().as_deref() == Some("yes")))?;
+    Ok(MorphosyntaxSetup { local: morphosyntax::local_settings(&dir.0), web_ok })
+}
+
+/// Choose UDPipe's program and model on this computer (None keeps the PATH lookup or clears the model).
+#[tauri::command(async)]
+fn morphosyntax_choose(dir: State<AppData>, program: Option<String>, model: Option<String>) -> Result<(), String> {
+    morphosyntax::set_local_settings(&dir.0, &morphosyntax::LocalSettings { program, model })
+}
+
+/// Allow (or stop allowing) this project's open texts to go to the UDPipe web service.
+#[tauri::command(async)]
+fn morphosyntax_allow_web(s: State<SessionThread>, allow: bool) -> Result<(), String> {
+    s.run(move |s| session::project(s)?.set_setting(morphosyntax::WEB_OK, if allow { "yes" } else { "" }).map(|_| ()))
+}
+
+/// Tag and parse a text's untagged sentences with the provider the
+/// `morphosyntax` capability resolves to; `model` names the web service's
+/// model or language (else the project's language).
+#[tauri::command]
+async fn morphosyntax_run(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, model: String) -> Result<morphosyntax::Tagged, String> {
+    let cap = capability::Capability::Morphosyntax;
+    let pin = s.run(move |s| capability::project_pin(session::project(s)?, cap))?;
+    let provider = capability::resolve(cap, pin.as_deref(), &dir.0)?;
+    let web = matches!(provider, capability::Provider::UdpipeLindat);
+    let id = text_id.clone();
+    let (gathered, web_model) = s.run(move |s| {
+        let g = morphosyntax::gather(s, &id, web)?;
+        let m = if web { Some(morphosyntax::web_model(s, &model)?) } else { None };
+        Ok((g, m))
+    })?;
+    if gathered.segments.is_empty() {
+        return Ok(morphosyntax::Tagged { kept: gathered.kept, ..Default::default() });
+    }
+    let tagger = match (provider, web_model) {
+        (capability::Provider::Udpipe(l), _) => morphosyntax::Tagger::Local(l),
+        (capability::Provider::UdpipeLindat, Some(model)) => morphosyntax::Tagger::Lindat { endpoint: morphosyntax::LINDAT.to_string(), model },
+        _ => return Err("Nothing here can tag and parse.".into()),
+    };
+    let lines: Vec<String> = gathered.segments.iter().map(|(_, l)| l.clone()).collect();
+    let (sentences, by) = tauri::async_runtime::spawn_blocking(move || morphosyntax::tag(&tagger, &lines)).await.map_err(|e| e.to_string())??;
+    s.run(move |s| morphosyntax::write(s, &gathered, sentences, &by))
+}
+
 /// One machine segment per stretch of speech (per utterance or per word, by
 /// `granularity`) in `source`'s recording on `tier` (the utterance tier
 /// when None), skipping what is already covered.
@@ -1492,6 +1548,10 @@ pub fn run() {
             set_text_metadata,
             import_metadata,
             metadata_values,
+            morphosyntax_setup,
+            morphosyntax_choose,
+            morphosyntax_allow_web,
+            morphosyntax_run,
             sentence_get,
             sentence_set,
             list_texts,

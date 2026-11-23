@@ -1113,3 +1113,10 @@ body::before {
 .meta-remove:hover { color: var(--error); }
 .meta-add input:first-child { flex: 0 0 8.5em; min-width: 0; }
 .meta-note { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+
+/* Sentence: the Tag and parse bar (the morphosyntax capability). */
+.st-tag { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.st-tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.st-tag-allow { display: block; max-width: 60em; }
+.st-tag .note { margin: 0; }
+.st-tag select { max-width: 30em; }
