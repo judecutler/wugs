@@ -132,3 +132,24 @@ export function treesLine(total: number, annotated: number, shown: number): stri
 /** The toast after Add from the texts. */
 export const examplesAddedLine = (n: number): string =>
   n === 0 ? "No sentence was added." : `Added ${n === 1 ? "an example sentence" : `${n} example sentences`} from the texts, each with its translation where it has one. Edit them in the Lexicon.`;
+
+/** What the consent records say about a text (src-tauri/src/people.rs `consent_gaps`). */
+export type TextConsent = { textId: string; title: string; records: number; no: string[]; communityOnly: boolean };
+export type ConsentGaps = { texts: TextConsent[]; total: number; records: number };
+
+/** The line over the texts: records inform, they never block. */
+export function consentLine(g: ConsentGaps): string {
+  if (g.total === 0) return "";
+  const none = g.texts.filter((t) => t.records === 0).length;
+  if (g.records === 0) return `No consent records yet. The People panel keeps who agreed to what for each recording or text; nothing in wugs waits on them.`;
+  if (g.texts.length === 0) return `Every text is covered by a consent record that limits nothing.`;
+  const parts = [none > 0 ? n(none, "text has no consent record covering it", "texts have no consent record covering them") : "", g.texts.length - none > 0 ? n(g.texts.length - none, "text is covered by a record that limits it", "texts are covered by records that limit them") : ""].filter((x) => x !== "");
+  return `${parts.join("; ")}. Records inform what you share; they never block your work.`;
+}
+
+/** One text's card note, the terms in words through `termLabel`. */
+export function consentNote(t: TextConsent, termLabel: (term: string) => string): string {
+  if (t.records === 0) return "No consent record covers this text, its recording or the whole project.";
+  const limits = [...t.no.map((x) => `no to «${termLabel(x)}»`), ...(t.communityOnly ? ["shared within the community only"] : [])];
+  return `${t.records === 1 ? "A record" : "Its records"}: ${limits.join(", ")}.`;
+}

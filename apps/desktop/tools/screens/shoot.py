@@ -574,6 +574,11 @@ def main():
             run.shot("state-checks-unlike", run.page.locator(".panel-checks"))
             if "Use «river» in the texts" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not offer the lexicon's gloss")
+            consent = run.page.locator(".panel-checks .ck-title", has_text="Consent records")
+            consent.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
+            run.shot("state-checks-consent", run.page.locator(".panel-checks"))
+            if "no to «Publish online»" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not say what a consent record limits")
             trees = run.page.locator(".panel-checks .ck-title", has_text="Dependency trees")
             trees.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
             run.shot("state-checks-trees", run.page.locator(".panel-checks"))

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addedLine, driftSummary, settledLine, exampleGapsLine, examplesAddedLine, treesLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
+import { addedLine, consentLine, consentNote, driftSummary, settledLine, exampleGapsLine, examplesAddedLine, treesLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
 
 const v = (gloss: string, count: number) => ({ gloss, count, textId: "t", textTitle: "T", tierId: "u", segmentId: "s" });
 const ka: Inconsistent = { surface: "ka", kind: "suffix", key: "ka", total: 3, variants: [v("PL", 2), v("pl.", 1)], slip: true };
@@ -68,4 +68,18 @@ test("glosses unlike their sense", () => {
   assert.equal(driftSummary([{ ...d, count: 1 }]), "1 linked word is glossed in the texts unlike the lexicon sense it links to (1 gloss). Keep one of the two for each.");
   assert.equal(settledLine(3, true, "one"), "3 words now read «one», as in the lexicon.");
   assert.equal(settledLine(1, false, "uno"), "The lexicon now glosses this sense «uno».");
+});
+
+test("consent records, in words", () => {
+  const label = (t: string) => ({ "web-ok": "Publish online" })[t] ?? t;
+  assert.equal(consentLine({ texts: [], total: 0, records: 0 }), "");
+  assert.match(consentLine({ texts: [{ textId: "a", title: "A", records: 0, no: [], communityOnly: false }], total: 1, records: 0 }), /^No consent records yet/);
+  assert.equal(consentLine({ texts: [], total: 3, records: 2 }), "Every text is covered by a consent record that limits nothing.");
+  const two = [
+    { textId: "a", title: "A", records: 0, no: [], communityOnly: false },
+    { textId: "b", title: "B", records: 1, no: ["web-ok"], communityOnly: true },
+  ];
+  assert.equal(consentLine({ texts: two, total: 4, records: 3 }), "1 text has no consent record covering it; 1 text is covered by a record that limits it. Records inform what you share; they never block your work.");
+  assert.equal(consentNote(two[0]!, label), "No consent record covers this text, its recording or the whole project.");
+  assert.equal(consentNote(two[1]!, label), "A record: no to «Publish online», shared within the community only.");
 });

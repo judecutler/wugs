@@ -155,3 +155,87 @@ pub fn delete_consent(s: &mut Session, consent: &str) -> Result<PeopleView, Stri
     project(s)?.delete_consent(consent)?;
     view(s)
 }
+
+/// What the consent records say about one text (the Checks panel): records
+/// inform and never block, so this only points out what is missing.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextConsent {
+    pub text_id: String,
+    pub title: String,
+    /// Live records covering the project, the text or its recording.
+    pub records: usize,
+    /// Terms some covering record answers no (community-only aside).
+    pub no: Vec<String>,
+    /// Some covering record limits it to the community.
+    pub community_only: bool,
+}
+
+#[derive(Debug, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ConsentGaps {
+    /// Texts with no covering record first, then texts a record limits, by title.
+    pub texts: Vec<TextConsent>,
+    /// Live texts.
+    pub total: usize,
+    /// Live consent records of live people.
+    pub records: usize,
+}
+
+pub fn consent_gaps(s: &mut Session) -> Result<ConsentGaps, String> {
+    let p = project(s)?;
+    let people = p.people()?;
+    let records: Vec<_> = people.iter().filter(|x| !x.deleted).flat_map(|x| x.consents.iter()).collect();
+    let mut out = ConsentGaps { records: records.len(), ..ConsentGaps::default() };
+    let mut texts = p.proj.entities_of_kind("text")?;
+    texts.sort();
+    for text in texts {
+        out.total += 1;
+        let source = p.proj.field_str(&text, "source")?.filter(|x| !x.is_empty());
+        let covering: Vec<_> = records.iter().filter(|r| r.covers == p.project_id || r.covers == text || Some(&r.covers) == source.as_ref()).collect();
+        let mut no: Vec<String> = covering.iter().flat_map(|r| r.terms.iter()).filter(|(t, b)| !b && t != "community-only").map(|(t, _)| t.clone()).collect();
+        no.sort();
+        no.dedup();
+        let community_only = covering.iter().any(|r| r.terms.iter().any(|(t, b)| t == "community-only" && *b));
+        if covering.is_empty() || !no.is_empty() || community_only {
+            out.texts.push(TextConsent { title: p.proj.field_str(&text, "title")?.unwrap_or_default(), text_id: text, records: covering.len(), no, community_only });
+        }
+    }
+    out.texts.sort_by_cached_key(|t| (t.records > 0, wugs_model::fold_key(&t.title), t.text_id.clone()));
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn texts_without_consent_or_with_limits_are_listed() {
+        let dir = std::env::temp_dir().join(format!("wugs-consent-gaps-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::session::create_project(&mut s, dir.to_str().unwrap(), "prs_Ana").unwrap();
+        let p = project(&mut s).unwrap();
+        let a = p.create_text("Alpha").unwrap();
+        let b = p.create_text("beta").unwrap();
+        let c = p.create_text("Gamma").unwrap();
+        let g = consent_gaps(&mut s).unwrap();
+        assert_eq!((g.total, g.records, g.texts.len()), (3, 0, 3), "nothing recorded: every text listed");
+        add_person(&mut s, "Ana", "speaker").unwrap();
+        let ana = view(&mut s).unwrap().people[0].id.clone();
+        add_consent(&mut s, &ana, &a, "2026-11-23").unwrap();
+        let rec = view(&mut s).unwrap().people[0].consents[0].id.clone();
+        set_term(&mut s, &rec, "web-ok", Some(false)).unwrap();
+        add_consent(&mut s, &ana, &b, "2026-11-23").unwrap();
+        let g = consent_gaps(&mut s).unwrap();
+        assert_eq!(g.records, 2);
+        let rows: Vec<_> = g.texts.iter().map(|t| (t.title.as_str(), t.records, t.no.clone())).collect();
+        assert_eq!(rows, [("Gamma", 0, vec![]), ("Alpha", 1, vec!["web-ok".to_string()])], "beta is covered and unlimited; uncovered first");
+        // A record for the whole project covers Gamma too.
+        let p = project(&mut s).unwrap();
+        let pid = p.project_id.clone();
+        add_consent(&mut s, &ana, &pid, "2026-11-23").unwrap();
+        assert!(consent_gaps(&mut s).unwrap().texts.iter().all(|t| t.text_id != c));
+        drop(s);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+}
