@@ -20,6 +20,10 @@ pub enum Format {
     TextGrid,
     Lift,
     Toolbox,
+    /// A Toolbox interlinear text (`\ref`, `\tx`, `\mb`, `\ge`, `\ft`).
+    /// Read through `Toolbox` (a file with `\tx` lines is a text), written by
+    /// choosing it for a text.
+    ToolboxText,
     /// A `.txt` that is not Toolbox or Praat: a written text, a segment per
     /// sentence in, a segment per line out (`plaintext`).
     PlainText,
@@ -44,6 +48,7 @@ impl Format {
             "textgrid" => Format::TextGrid,
             "lift" => Format::Lift,
             "toolbox" => Format::Toolbox,
+            "toolboxtext" => Format::ToolboxText,
             "plaintext" => Format::PlainText,
             "conllu" => Format::Conllu,
             "tei" => Format::Tei,
@@ -59,7 +64,7 @@ impl Format {
             Format::FlexText => "flextext",
             Format::TextGrid => "TextGrid",
             Format::Lift => "lift",
-            Format::Toolbox | Format::PlainText => "txt",
+            Format::Toolbox | Format::ToolboxText | Format::PlainText => "txt",
             Format::Table { tabs: true } => "tsv",
             Format::Table { tabs: false } => "csv",
             Format::Conllu => "conllu",
@@ -76,6 +81,7 @@ impl Format {
             Format::TextGrid => "Praat TextGrid",
             Format::Lift => "LIFT lexicon",
             Format::Toolbox => "Toolbox lexicon",
+            Format::ToolboxText => "Toolbox interlinear text",
             Format::PlainText => "plain text",
             Format::Table { .. } => "table of sentences",
             Format::Conllu => "CoNLL-U",
@@ -270,7 +276,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
         Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
-        Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
+        Format::TextGrid | Format::Toolbox | Format::ToolboxText => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
         Format::Table { .. } => windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes),
     };
     let input = input.trim_start_matches('\u{feff}');
@@ -473,6 +479,46 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             (r.texts.first().or(r.matched.first()).cloned(), false)
         }
         Format::Vertical | Format::AntConc => unreachable!("refused above"),
+        Format::Toolbox | Format::ToolboxText if wugs_legacy::toolbox_text::is_interlinear(input) => {
+            let tier = session::utterance_tier(p)?;
+            // A translation track only when the file has free translations.
+            let translation = if wugs_legacy::toolbox_text::has_free_translation(input) { Some(session::translation_track(p, &tier, None)?) } else { None };
+            let r = wugs_legacy::import_toolbox_text(p, input, &stem, &tier, translation.as_deref()).map_err(|e| format!("{file_name}: {e}"))?;
+            if !r.texts.is_empty() {
+                lines.push(format!(
+                    "{} with {}, {} and {}.",
+                    plural(r.texts.len(), "new text", "new texts"),
+                    plural(r.sentences, "sentence", "sentences"),
+                    plural(r.words, "word", "words"),
+                    plural(r.morphs, "glossed morph", "glossed morphs")
+                ));
+            }
+            let mut extra = Vec::new();
+            if r.translations > 0 {
+                extra.push(plural(r.translations, "free translation", "free translations"));
+            }
+            if r.notes > 0 {
+                extra.push(plural(r.notes, "note", "notes"));
+            }
+            if r.timed > 0 {
+                extra.push(format!("times for {}", plural(r.timed, "sentence", "sentences")));
+            }
+            if !extra.is_empty() {
+                lines.push(format!("Also brought in: {}.", extra.join(", ")));
+            }
+            if r.linked > 0 {
+                lines.push(format!("{} linked to the lexicon entry with the same form and gloss.", plural(r.linked, "root was", "roots were")));
+            }
+            if r.not_carried.total() > 0 {
+                let markers: Vec<String> = r.not_carried.0.keys().map(|m| format!("\\{m}")).collect();
+                lines.push(format!("Not brought in: {} ({}).", plural(r.not_carried.total(), "line", "lines"), markers.join(", ")));
+            }
+            if !r.matched.is_empty() {
+                lines.push(format!("{} matched a text already here; nothing was added for them.", plural(r.matched.len(), "text", "texts")));
+            }
+            (r.texts.first().or(r.matched.first()).cloned(), false)
+        }
+        Format::ToolboxText => return Err(format!("{file_name} has no \\tx lines, so it is not a Toolbox interlinear text")),
         Format::Toolbox => {
             let r = wugs_legacy::import_toolbox(p, input).map_err(|e| e.to_string())?;
             lines.push(format!(
@@ -496,6 +542,8 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             (None, true)
         }
     };
+    // A Toolbox file holding texts reads as one, whatever its extension said.
+    let format = if format == Format::Toolbox && !lexicon { Format::ToolboxText } else { format };
     Ok(Imported { format: format.name().into(), text, lexicon, lines })
 }
 
@@ -622,6 +670,11 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             let out = if format == Format::Vertical { wugs_conllu::vertical(p, &title, text_id, &sentences)? } else { wugs_conllu::tagged_text(p, &title, &sentences)? };
             notes.extend(out.notes);
             out.conllu
+        }
+        Format::ToolboxText => {
+            let segments = one_track(p, text_id, &mut notes, format.name())?;
+            let sentences = segments.into_iter().map(|s| Ok((translations_of(p, &s)?.into_iter().map(|t| t.1).next(), s))).map(|r: Result<_, String>| r.map(|(t, s)| (s, t))).collect::<Result<Vec<_>, String>>()?;
+            wugs_legacy::toolbox_text::export_toolbox_text(p, &title, &sentences)?
         }
         Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
     };
@@ -1009,6 +1062,34 @@ mod tests {
         let le: Vec<u8> = [0xFF, 0xFE].into_iter().chain("<a/>".encode_utf16().flat_map(|u| u.to_le_bytes())).collect();
         assert_eq!(decode_xml(&le, "x").unwrap(), "<a/>");
         assert!(decode_xml(b"<a>\xE9</a>", "x.eaf").unwrap_err().contains("x.eaf"));
+    }
+
+    #[test]
+    fn a_toolbox_text_comes_in_glossed_and_goes_back_out() {
+        let dir = std::env::temp_dir().join(format!("wugs-tbx-text-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("stories.txt");
+        fs::write(&file, include_str!("../../../../crates/wugs-legacy/tests/fixtures/sample-text.txt")).unwrap();
+        let r = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert_eq!(r.format, "Toolbox interlinear text");
+        assert!(!r.lexicon && r.text.is_some(), "{:?}", r.lines);
+        assert!(r.lines[0].starts_with("2 new texts with 3 sentences, 7 words and 9 glossed morphs"), "{:?}", r.lines);
+        assert!(r.lines.iter().any(|l| l.contains("2 free translations, 1 note, times for 1 sentence")), "{:?}", r.lines);
+        assert!(r.lines.iter().any(|l| l.contains("\\ps")), "{:?}", r.lines);
+        // The free translations sit on a translation track the Gloss panel shows.
+        let text = r.text.unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let e = export_text(&mut s, &text, Format::ToolboxText, &out).unwrap();
+        let written = fs::read_to_string(&e.path).unwrap();
+        assert!(e.path.ends_with("Counting.txt") && written.contains("\\ge 1SG- count one\n\\ft I count one.\n"), "{written}");
+        // A lexicon file is still a lexicon.
+        let lex = dir.join("lexicon.db");
+        fs::write(&lex, "\\_sh v3.0  400  MDF 4.0\n\n\\lx kani\n\\ge count\n").unwrap();
+        assert_eq!(import_file(&mut s, lex.to_str().unwrap()).unwrap().format, "Toolbox lexicon");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
     }
 
     #[test]

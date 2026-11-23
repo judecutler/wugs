@@ -1,0 +1,28 @@
+\_sh v3.0  400  Text
+\_DateStampHasFourDigitYear
+
+\id Counting
+\ref Counting.001
+\ELANBegin 00:00:01.250
+\ELANEnd 00:00:03.900
+\tx nikani      ŋai
+\mb ni-   kani  ŋai
+\ge 1SG-  count one
+\ps pro-  v     num
+\ft I count one.
+\nt Speaker counts on her fingers.
+
+\ref Counting.002
+\tx kanima    toru
+\mb kani =ma  toru
+\ge count =FOC two
+\tx kesi
+\mb kesi
+\ge three
+\ft Counting: two, three.
+
+\id Market
+\ref Market.001
+\tx tela  heko
+\mb tela  heko
+\ge river go
