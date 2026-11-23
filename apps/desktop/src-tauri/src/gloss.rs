@@ -13,6 +13,23 @@ use crate::session::{project, Session};
 /// Suggestions shown per unanalysed word.
 const SUGGESTIONS_PER_WORD: usize = 3;
 
+thread_local! {
+    /// The project's known morphs (`Project::morph_inventory`), kept while
+    /// nothing has been written: keyed by project folder and newest op.
+    static INVENTORY: std::cell::RefCell<Option<(std::path::PathBuf, Option<String>, std::rc::Rc<wugs_core::parse::Inventory>)>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The known-morph inventory for guesses, built once per change to the project.
+fn inventory(p: &Project) -> Result<std::rc::Rc<wugs_core::parse::Inventory>, String> {
+    let newest = p.proj.max_hlc()?;
+    if let Some(inv) = INVENTORY.with(|c| c.borrow().as_ref().filter(|(root, hlc, _)| *root == p.root && *hlc == newest).map(|(_, _, inv)| inv.clone())) {
+        return Ok(inv);
+    }
+    let inv = std::rc::Rc::new(p.morph_inventory()?);
+    INVENTORY.with(|c| *c.borrow_mut() = Some((p.root.clone(), newest, inv.clone())));
+    Ok(inv)
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MorphSpecView {
@@ -51,7 +68,10 @@ pub struct MorphView {
 #[serde(rename_all = "camelCase")]
 pub struct SuggestionView {
     pub morphs: Vec<MorphSpecView>,
+    /// How many tokens carry it; 0 for a guess from known morphs (`guessed`).
     pub count: usize,
+    /// Read from morphs and entries the project knows, not from this form's earlier analyses.
+    pub guessed: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -223,7 +243,10 @@ fn view(p: &Project, segment_id: &str) -> Result<GlossView, String> {
             morphs.push(MorphView { id, spec, sense_label });
         }
         let suggestions = if morphs.is_empty() {
-            p.analysis_suggestions(&form)?.into_iter().take(SUGGESTIONS_PER_WORD).map(|s: Suggestion| SuggestionView { morphs: s.morphs.into_iter().map(Into::into).collect(), count: s.count }).collect()
+            let earlier = p.analysis_suggestions(&form)?;
+            // No earlier analysis of this form: guess one from the morphs the project knows.
+            let (list, guessed) = if earlier.is_empty() { (p.guess_analysis(&*inventory(p)?, &form), true) } else { (earlier, false) };
+            list.into_iter().take(SUGGESTIONS_PER_WORD).map(|s: Suggestion| SuggestionView { morphs: s.morphs.into_iter().map(Into::into).collect(), count: s.count, guessed }).collect()
         } else {
             Vec::new()
         };
@@ -388,6 +411,34 @@ pub fn gloss_lexicon(session: &mut Session, surface: &str) -> Result<Vec<Lexicon
 mod tests {
     use super::*;
     use crate::session;
+
+    #[test]
+    fn a_new_word_gets_a_guess_from_known_morphs() {
+        let dir = std::env::temp_dir().join(format!("wugs-gloss-guess-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        crate::sample::add_morphology(&mut s).unwrap();
+        let text = session::list_texts(&mut s).unwrap()[0].id.clone();
+        let seg = session::add_segment(&mut s, &text, None, Some(20_000.0), Some(21_000.0), "nitekama kanima").unwrap().id;
+        let forms: Vec<String> = ["nitekama", "kanima"].iter().map(|f| f.to_string()).collect();
+        let view = gloss_tokenize(&mut s, &text, &seg, &forms).unwrap().view;
+        let line = |v: &SuggestionView| v.morphs.iter().map(|m| format!("{}:{}", m.surface, m.gloss.as_deref().unwrap_or("?"))).collect::<Vec<_>>().join(" ");
+        let first = &view.words[0].suggestions[0];
+        assert!(first.guessed && first.count == 0);
+        assert_eq!(line(first), "ni:1SG teka:ten ma:FOC");
+        let second = &view.words[1].suggestions[0];
+        assert_eq!(line(second), "kani:count ma:FOC");
+        // The root's guess keeps its lexicon link.
+        assert!(second.morphs[0].sense.is_some());
+        // Accepting one is an ordinary analysis; the next word spelled so gets it as an earlier analysis.
+        gloss_apply(&mut s, &text, &seg, &view.words[1].id, second.morphs.clone()).unwrap();
+        let again = session::add_segment(&mut s, &text, None, Some(22_000.0), Some(23_000.0), "kanima").unwrap().id;
+        let v = gloss_tokenize(&mut s, &text, &again, &["kanima".to_string()]).unwrap().view;
+        assert!(!v.words[0].suggestions[0].guessed);
+        assert_eq!(v.words[0].suggestions[0].count, 1);
+        drop(s);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_ud_sentence_reads_as_written_and_its_punctuation_takes_no_gloss() {

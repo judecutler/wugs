@@ -26,6 +26,7 @@ pub mod language;
 pub mod metadata;
 mod lexicon;
 pub mod paradigms;
+pub mod parse;
 pub mod people;
 mod segments;
 pub mod settings;
