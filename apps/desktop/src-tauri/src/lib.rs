@@ -292,9 +292,9 @@ fn export_corpus(s: State<SessionThread>, folder: String, date: String, include_
 
 /// Publish the lexicon and glossed sentences as a CLDF dataset in a new folder inside `folder`.
 #[tauri::command(async)]
-fn export_cldf(app: AppHandle, s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<interchange::Published, String> {
+fn export_cldf(app: AppHandle, s: State<SessionThread>, folder: String, date: String, include_restricted: bool, audio: Option<bool>) -> Result<interchange::Published, String> {
     let generator = format!("wugs {}", app.package_info().version);
-    s.run(move |s| interchange::export_cldf(s, std::path::Path::new(&folder), &date, include_restricted, &generator))
+    s.run(move |s| interchange::export_cldf(s, std::path::Path::new(&folder), &date, include_restricted, audio.unwrap_or(false), &generator))
 }
 
 /// Save a document the frontend built (interlinear examples) into `folder`.

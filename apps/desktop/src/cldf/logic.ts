@@ -2,7 +2,7 @@
 
 export type Language = { name: string; glottocode: string; iso: string };
 
-export type Published = { path: string; entries: number; senses: number; examples: number; restrictedLeftOut: number; notes: string[] };
+export type Published = { path: string; entries: number; senses: number; examples: number; clips?: number; restrictedLeftOut: number; notes: string[] };
 
 /** A problem with a typed code, in words, or null. Empty is fine: the codes are optional. */
 export function glottocodeProblem(code: string): string | null {
@@ -44,6 +44,7 @@ export function publishedLines(r: Published): string[] {
   return [
     `Saved a CLDF dataset in ${r.path}.`,
     `${plural(r.entries, "entry", "entries")}, ${plural(r.senses, "sense", "senses")} and ${plural(r.examples, "glossed sentence", "glossed sentences")}, ready for pycldf, Zenodo or a CLLD site. Add a licence before you publish it.`,
+    ...((r.clips ?? 0) > 0 ? [`${plural(r.clips ?? 0, "sentence comes", "sentences come")} with ${(r.clips ?? 0) === 1 ? "its" : "their"} sound clip, cut from the recording, in the audio folder.`] : []),
     ...r.notes,
   ];
 }

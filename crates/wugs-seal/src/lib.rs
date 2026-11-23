@@ -181,7 +181,7 @@ fn write_bag(project: &Project, staging: &Path, opts: &SealOptions) -> Result<Se
     let (translation_tiers, transcription_tiers) = wugs_cldf::corpus_tiers(project)?;
     let cldf = wugs_cldf::export(
         project,
-        &wugs_cldf::Options { title: "Dictionary", generator: "wugs-seal", transcription_tiers: &transcription_tiers, translation_tiers: &translation_tiers, include_restricted: true },
+        &wugs_cldf::Options { title: "Dictionary", generator: "wugs-seal", transcription_tiers: &transcription_tiers, translation_tiers: &translation_tiers, include_restricted: true, audio: None },
     )?;
     if cldf.entries + cldf.examples > 0 {
         for (name, contents) in &cldf.files {

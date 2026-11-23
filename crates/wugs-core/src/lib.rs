@@ -1609,6 +1609,35 @@ impl Project {
         Ok(id)
     }
 
+    /// The audio blob behind a source: its first audio track's blob (lowest
+    /// track id, so every device picks the same one), else the source's own.
+    pub fn audio_blob(&self, source: &str) -> Result<String, String> {
+        if self.proj.entity_kind(source)?.as_deref() != Some("source") || self.proj.is_tombstoned(source)? {
+            return Err(format!("no source {source}"));
+        }
+        let mut tracks = self.proj.children_by_ref("source", source, "media-track")?;
+        tracks.sort();
+        for track in tracks {
+            if self.proj.field_str(&track, "kind")?.as_deref() == Some("audio") {
+                if let Some(blob) = self.proj.field_str(&track, "blob")? {
+                    return Ok(blob);
+                }
+            }
+        }
+        self.proj.field_str(source, "blob")?.ok_or_else(|| "this source has no audio file attached".to_string())
+    }
+
+    /// The recording a text was transcribed from (its `source`), when that is
+    /// a live source with audio: `(source, its audio blob)`. A cleared link,
+    /// a deleted source or one without audio is none.
+    pub fn text_recording(&self, text: &str) -> Result<Option<(String, String)>, String> {
+        let Some(src) = self.proj.field_str(text, "source")? else { return Ok(None) };
+        if self.proj.entity_kind(&src)?.as_deref() != Some("source") || self.proj.is_tombstoned(&src)? {
+            return Ok(None);
+        }
+        Ok(self.audio_blob(&src).ok().map(|blob| (src, blob)))
+    }
+
     /// The orthography sandbox (PRD §7): test a charset against everything
     /// already written in this writing system, and report each field whose
     /// characters fall outside it, without writing anything. An entity

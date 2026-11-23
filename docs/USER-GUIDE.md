@@ -524,6 +524,7 @@ Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cld
 - `senses.csv`: one row per sense, with its glosses in each language, definition, usage, semantic domains, the Concepticon concept you elicited it for, and the examples that use it
 - `examples.csv`: every glossed sentence in Leipzig form (words, morpheme glosses, free translation), with its text and time span
 - `languages.csv`: the project's language and the languages of its translations
+- `media.csv` and an `audio` folder, when **With sound clips** is ticked (it is unless you untick it): for each glossed sentence with times, a WAV clip of it cut from its text's recording, at the recording's own quality. A CLLD site plays it beside the example. A sentence gets no clip when its text has no recording picked on the Timeline, when the recording's audio is not on this computer, or when the recording is not open; the message says how many.
 
 Sentences from texts that are not open (restricted or community-only) are left out unless you tick **Include texts that are not open**. Tick it only if the speakers agreed to publication. Before you publish the dataset, add a licence and check it with `cldf validate Dictionary-metadata.json` (from `pip install pycldf`).
 

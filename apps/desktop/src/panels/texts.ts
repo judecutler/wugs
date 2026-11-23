@@ -44,6 +44,15 @@ let busy: string | null = null;
 let language: { project: string; value: Language } | null = null;
 let languageFor: string | null = null;
 let includeRestricted = false;
+/** Whether a CLDF dataset carries a sound clip per timed example (remembered on this computer). */
+const AUDIO_KEY = "wugs.cldf.audio";
+let cldfAudio = ((): boolean => {
+  try {
+    return localStorage.getItem(AUDIO_KEY) !== "off";
+  } catch {
+    return true;
+  }
+})();
 // What is typed but not saved yet, so a redraw while typing keeps it.
 const drafts: Partial<Language> = {};
 let exampleFormat: ExampleFormat = "expex";
@@ -219,7 +228,7 @@ async function publishCldf() {
   const folder = await chooseFolder("Choose where the CLDF dataset goes");
   if (folder === null) return;
   await work("cldf", async () => {
-    const r = await exportCldf({ folder, date: localDay(new Date()), includeRestricted });
+    const r = await exportCldf({ folder, date: localDay(new Date()), includeRestricted, audio: cldfAudio });
     showToast({ tone: r.notes.length > 0 ? "warn" : "info", lines: publishedLines(r) });
   });
 }
@@ -400,6 +409,23 @@ export const textsPanel: PanelDef = {
             disabled: busy !== null,
             onclick: () => void publishCldf(),
           }),
+          h(
+            "label",
+            { className: "share-label", title: "A WAV clip of each timed example, cut from its text's recording at the recording's own quality, listed in the dataset's media table" },
+            h("input", {
+              type: "checkbox",
+              checked: cldfAudio,
+              onchange: (ev: Event) => {
+                cldfAudio = (ev.target as HTMLInputElement).checked;
+                try {
+                  localStorage.setItem(AUDIO_KEY, cldfAudio ? "on" : "off");
+                } catch {
+                  /* not remembered */
+                }
+              },
+            }),
+            " With sound clips",
+          ),
           h("button", {
             type: "button",
             textContent: busy === "cwb" ? "Exporting…" : "Corpus for CQPweb…",

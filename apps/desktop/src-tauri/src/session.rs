@@ -333,11 +333,7 @@ pub fn list_texts(session: &mut Session) -> Result<Vec<TextRow>, String> {
 /// the blob store; a cleared link (null), a deleted source or one without
 /// media is none.
 fn linked_recording(p: &Project, text: &str) -> Result<Option<String>, String> {
-    let Some(src) = p.proj.field_str(text, "source")? else { return Ok(None) };
-    if p.proj.entity_kind(&src)?.as_deref() != Some("source") || p.proj.is_tombstoned(&src)? {
-        return Ok(None);
-    }
-    Ok(audio_blob(p, &src).ok().map(|_| src))
+    Ok(p.text_recording(text)?.map(|(src, _)| src))
 }
 
 /// Remember (or forget) which recording a text was transcribed from. Writes
@@ -844,21 +840,7 @@ fn import_wav(open: &mut OpenProject, file: &Path, label: &str) -> Result<Source
 /// The audio blob behind a source: its first audio track's blob (lowest
 /// track id, so every device picks the same one), else the source's own.
 pub(crate) fn audio_blob(p: &Project, source_id: &str) -> Result<String, String> {
-    if p.proj.entity_kind(source_id)?.as_deref() != Some("source") || p.proj.is_tombstoned(source_id)? {
-        return Err(format!("no source {source_id}"));
-    }
-    let mut tracks = p.proj.children_by_ref("source", source_id, "media-track")?;
-    tracks.sort();
-    for track in tracks {
-        if p.proj.field_str(&track, "kind")?.as_deref() == Some("audio") {
-            if let Some(blob) = p.proj.field_str(&track, "blob")? {
-                return Ok(blob);
-            }
-        }
-    }
-    p.proj
-        .field_str(source_id, "blob")?
-        .ok_or_else(|| "this source has no audio file attached".to_string())
+    p.audio_blob(source_id)
 }
 
 /// The pyramid for a source's audio, from the session cache, the `.wpk`
