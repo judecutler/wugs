@@ -53,6 +53,8 @@ pub struct Hit {
     pub words: Vec<String>,
     /// Which word holds the match.
     pub at: usize,
+    /// How many words the match covers from `at` (a phrase or a CQP query; else 1).
+    pub len: usize,
     /// For a morph or gloss match: the word's morphs and their glosses, as the Gloss panel writes them.
     pub breakdown: Option<String>,
     pub glosses: Option<String>,
@@ -105,7 +107,7 @@ pub(crate) fn bare(surface: &str) -> &str {
 const MARK: [(&str, &str, &str); 5] = [("prefix", "", "-"), ("suffix", "-", ""), ("infix", "<", ">"), ("clitic", "=", ""), ("reduplication", "", "~")];
 
 /// Morphs joined at their markers, as the Leipzig word line writes them.
-fn joined(parts: &[(String, String)]) -> String {
+pub(crate) fn joined(parts: &[(String, String)]) -> String {
     let mut out = String::new();
     for (text, kind) in parts {
         let (before, after) = MARK.iter().find(|m| m.0 == kind).map(|m| (m.1, m.2)).unwrap_or(("", ""));
@@ -351,6 +353,7 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
                     end_ms: p.proj.field_num(&seg.id, "end")?,
                     words: seg.words.clone(),
                     at,
+                    len: if phrase.is_empty() { 1 } else { phrase.len() },
                     breakdown,
                     glosses,
                 });

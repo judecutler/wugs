@@ -77,6 +77,8 @@ export const collocates = (args: { node: string; kind: "word" | "translation"; l
   invoke<import("./collocates/logic").Collocates>("collocates", args);
 export const keywords = (args: { kind: "word" | "translation"; textId: string; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
 export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null }) => invoke<ConcordanceResult>("concordance", args);
+/** A CQP-style query over tokens and their annotation (src-tauri/src/cqp.rs); a query that does not parse is refused with what and where. */
+export const concordanceQuery = (args: { query: string; textId?: string | null }) => invoke<ConcordanceResult>("concordance_query", args);
 /** The sample project (roadmap 68), built the first time in this computer's app data. */
 export const openSample = (args: { researcher: string }) => invoke<ProjectInfo>("open_sample", args);
 export const listTexts = () => invoke<TextRow[]>("list_texts");
