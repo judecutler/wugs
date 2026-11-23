@@ -452,7 +452,7 @@ wugs works with your own installed copy of Praat, version 6 or newer. It finds P
 
 Click **Pitch**, **Intensity**, or **Formants** in the Timeline toolbar. Your Praat analyses the recording, and wugs draws the curves over the waveform.
 
-Without Praat, **Pitch** and **Intensity** still work: wugs analyses the recording itself with Praat's own method and settings, so the curves match Praat's closely. **Formants** need Praat, so that button stays off until wugs finds it.
+Without Praat, all three still work: wugs analyses the recording itself with Praat's own methods and settings, so the curves match Praat's closely. Where a vowel's formants are hard to tell apart, the two can differ by a frame or two.
 
 The analysis covers at most one minute of view at a time. If more is on screen, zoom in. wugs keeps the results, so a part you already viewed shows at once next time.
 
@@ -460,7 +460,7 @@ The analysis uses Praat's standard speech settings. Pitch is tracked between 75 
 
 ### Show a spectrogram
 
-Click **Spectrogram** in the Timeline toolbar to see the recording's spectrogram under the waveform: frequency from 0 at the bottom to 5000 Hz at the top, darker where louder, the way Praat draws it. Formants show as dark bands, fricatives as noise high up, and stop closures as gaps. wugs makes the spectrogram itself, so it works without Praat. Turn on **Formants** too, and Praat's formant dots sit on the bands.
+Click **Spectrogram** in the Timeline toolbar to see the recording's spectrogram under the waveform: frequency from 0 at the bottom to 5000 Hz at the top, darker where louder, the way Praat draws it. Formants show as dark bands, fricatives as noise high up, and stop closures as gaps. wugs makes the spectrogram itself, so it works without Praat. Turn on **Formants** too, and the formant dots sit on the bands.
 
 Like Praat's analysis, the spectrogram shows at most one minute of view at a time. Zoom in to see it. Click **Spectrogram** again to hide it.
 

@@ -72,9 +72,9 @@ pub const PRAAT: &str = "praat";
 /// join it as packages later.
 pub const VOICE_ACTIVITY: &str = "voice-activity";
 
-/// Built-in pitch and intensity (`voice_analysis`), as a provider id: for a
-/// computer without Praat. Always ready; Praat comes first when found,
-/// since it also draws formants.
+/// Built-in pitch, intensity and formants (`voice_analysis`), as a provider
+/// id: for a computer without Praat. Always ready; Praat comes first when
+/// found, since it is the reference the built-in one follows.
 pub const VOICE_ANALYSIS: &str = "voice-analysis";
 
 /// UDPipe 1 on this computer, with a model the person chose: the person's
@@ -235,10 +235,10 @@ pub fn options(cap: Capability, here: &Here) -> Vec<ProviderRow> {
         out.push(ProviderRow { id: PRAAT.into(), name: "Praat".into(), kind: "program", ready, note, score: None });
         out.push(ProviderRow {
             id: VOICE_ANALYSIS.into(),
-            name: "Pitch and intensity (built in)".into(),
+            name: "Acoustic analysis (built in)".into(),
             kind: "built-in",
             ready: true,
-            note: "Built in: pitch and intensity by Praat's methods, offline; formants need Praat.".into(),
+            note: "Built in: pitch, intensity and formants by Praat's methods, offline.".into(),
             score: None,
         });
     }
@@ -422,7 +422,7 @@ pub fn provider_name(id: &str) -> String {
         "" => "not pinned".into(),
         PRAAT => "Praat".into(),
         VOICE_ACTIVITY => "Voice activity (built in)".into(),
-        VOICE_ANALYSIS => "Pitch and intensity (built in)".into(),
+        VOICE_ANALYSIS => "Acoustic analysis (built in)".into(),
         UDPIPE => "UDPipe on this computer".into(),
         UDPIPE_LINDAT => "UDPipe 2 (LINDAT web service)".into(),
         SPACY => "spaCy on this computer".into(),

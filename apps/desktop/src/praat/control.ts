@@ -150,25 +150,23 @@ export function praatControls(
       return;
     }
     const praatFound = status !== null && status.path !== null && status.problem === null;
-    // Without Praat, pitch and intensity come from wugs's own analysis
-    // (the acoustic-analysis capability's built-in provider); formants need Praat.
+    // Without Praat, the curves come from wugs's own analysis (the
+    // acoustic-analysis capability's built-in provider).
     const layer = overlays();
     const toggles =
       layer === null || ctx.sourceId === null || status === null
         ? []
-        : KINDS.map((kind) => {
-            const needsPraat = kind === "formants" && !praatFound;
-            return h("button", {
-              className: layer.enabled(kind) && !needsPraat ? "active" : "",
+        : KINDS.map((kind) =>
+            h("button", {
+              className: layer.enabled(kind) ? "active" : "",
               textContent: KIND_LABEL[kind],
-              disabled: needsPraat,
               title: overlayTitle(kind, praatFound),
               onclick: () => {
                 layer.toggle(kind);
                 draw();
               },
-            });
-          });
+            }),
+          );
     if (!praatFound) {
       const why = status?.problem ?? "Looking for Praat…";
       element.replaceChildren(

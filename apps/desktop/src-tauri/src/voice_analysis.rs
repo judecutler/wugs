@@ -1,4 +1,4 @@
-//! Pitch and intensity built in: the `acoustic-analysis` capability's
+//! Pitch, intensity and formants built in: the `acoustic-analysis` capability's
 //! `voice-analysis` provider, for a computer without Praat. It follows
 //! Praat's own methods and defaults so the curves read the same:
 //!
@@ -11,15 +11,19 @@
 //! - **Intensity**: mean square in a window of 3.2 periods of 75 Hz, the
 //!   mean taken off, in dB re 2·10⁻⁵ Pa (samples as Pa), as Praat's To
 //!   Intensity does.
+//! - **Formants**: To Formant (burg) with 5 formants up to 5500 Hz: the
+//!   sound resampled to 11 kHz (here by FFT), pre-emphasis from 50 Hz, a
+//!   Gaussian window of 50 ms (25 ms effective), Burg's LPC of order 10,
+//!   the polynomial's roots moved into the unit circle, and the first three
+//!   frequencies between 50 Hz and 50 Hz below the Nyquist.
 //!
-//! Formants are not computed here: with this provider they stay empty and
-//! the toolbar says Praat draws them. Chunks match `praat_analysis` (10 s,
-//! a frame every 10 ms) and are not cached on disk: a chunk takes tens of
-//! milliseconds.
+//! Chunks match `praat_analysis` (10 s, a frame every 10 ms) and are not
+//! cached on disk: a chunk takes about 0.1 s (release build, 44.1 kHz).
 
 use std::fs::File;
 use std::path::Path;
 
+use realfft::num_complex::Complex;
 use realfft::RealFftPlanner;
 
 use crate::praat_analysis::{Chunk, CHUNK_MS, MAX_CHUNKS, STEP_MS};
@@ -184,7 +188,180 @@ fn intensity(samples: &[f64], rate: f64, centres: &[usize]) -> Vec<Option<f64>> 
         .collect()
 }
 
-/// One chunk's pitch and intensity.
+const FORMANT_CEILING: f64 = 5500.0;
+const POLES: usize = 10;
+const FORMANT_WINDOW: f64 = 0.025;
+const PRE_EMPHASIS_FROM: f64 = 50.0;
+const SAFETY_HZ: f64 = 50.0;
+
+/// `samples` at `rate` resampled to `to` by the FFT: the band above the
+/// lower Nyquist dropped, as a band-limited resampling does.
+fn resample(samples: &[f64], rate: f64, to: f64) -> Vec<f64> {
+    let n = samples.len();
+    let m = ((n as f64) * to / rate).round() as usize;
+    if n < 2 || m < 2 {
+        return vec![0.0; m];
+    }
+    let mut planner = RealFftPlanner::<f64>::new();
+    let forward = planner.plan_fft_forward(n);
+    let inverse = planner.plan_fft_inverse(m);
+    let mut input = samples.to_vec();
+    let mut spectrum = forward.make_output_vec();
+    forward.process(&mut input, &mut spectrum).expect("sizes from the plan");
+    let mut out_spec = inverse.make_input_vec();
+    let keep = out_spec.len().min(spectrum.len());
+    out_spec[..keep].copy_from_slice(&spectrum[..keep]);
+    // The inverse wants real values at 0 Hz and, for an even length, at the Nyquist.
+    out_spec[0].im = 0.0;
+    if m % 2 == 0 {
+        let last = out_spec.len() - 1;
+        out_spec[last].im = 0.0;
+    }
+    let mut out = inverse.make_output_vec();
+    inverse.process(&mut out_spec, &mut out).expect("sizes from the plan");
+    let scale = 1.0 / n as f64;
+    out.iter_mut().for_each(|v| *v *= scale);
+    out
+}
+
+/// Burg's linear prediction coefficients of order `m` (Praat's `VECburg`),
+/// or None for a frame with no signal.
+fn burg(x: &[f64], m: usize) -> Option<Vec<f64>> {
+    let n = x.len();
+    if n <= m + 1 {
+        return None;
+    }
+    let mut a = vec![0.0; m + 1];
+    let mut aa = vec![0.0; m + 1];
+    let p: f64 = x.iter().map(|v| v * v).sum();
+    if p <= 0.0 {
+        return None;
+    }
+    // One-based like the description, so the indices read the same.
+    let mut b1 = vec![0.0; n + 1];
+    let mut b2 = vec![0.0; n + 1];
+    b1[1] = x[0];
+    b2[n - 1] = x[n - 1];
+    for j in 2..n {
+        b1[j] = x[j - 1];
+        b2[j - 1] = x[j - 1];
+    }
+    for i in 1..=m {
+        let (mut num, mut den) = (0.0, 0.0);
+        for j in 1..=n - i {
+            num += b1[j] * b2[j];
+            den += b1[j] * b1[j] + b2[j] * b2[j];
+        }
+        if den <= 0.0 {
+            return None;
+        }
+        a[i] = 2.0 * num / den;
+        for j in 1..i {
+            a[j] = aa[j] - a[i] * aa[i - j];
+        }
+        if i < m {
+            aa[1..=i].copy_from_slice(&a[1..=i]);
+            for j in 1..n - i {
+                b1[j] -= aa[i] * b2[j];
+                b2[j] = b2[j + 1] - aa[i] * b1[j + 1];
+            }
+        }
+    }
+    Some(a)
+}
+
+/// The roots of the polynomial with `coef` (lowest power first, the last
+/// one 1), by Aberth–Ehrlich iteration.
+fn roots(coef: &[f64]) -> Vec<Complex<f64>> {
+    let deg = coef.len() - 1;
+    let eval = |z: Complex<f64>| {
+        let (mut p, mut d) = (Complex::new(0.0, 0.0), Complex::new(0.0, 0.0));
+        for &c in coef.iter().rev() {
+            d = d * z + p;
+            p = p * z + c;
+        }
+        (p, d)
+    };
+    // Start on a circle of the roots' typical size, off the real axis.
+    let radius = coef[..deg].iter().map(|c| c.abs()).fold(0.0f64, f64::max).powf(1.0 / deg as f64).max(0.5);
+    let mut z: Vec<Complex<f64>> = (0..deg).map(|k| Complex::from_polar(radius, std::f64::consts::TAU * (k as f64 + 0.25) / deg as f64)).collect();
+    for _ in 0..500 {
+        let mut moved = 0.0f64;
+        for k in 0..deg {
+            let (p, d) = eval(z[k]);
+            if p.norm() == 0.0 {
+                continue;
+            }
+            let ratio = p / d;
+            let repulsion: Complex<f64> = (0..deg).filter(|&j| j != k).map(|j| Complex::new(1.0, 0.0) / (z[k] - z[j])).sum();
+            let step = ratio / (Complex::new(1.0, 0.0) - ratio * repulsion);
+            if step.is_finite() {
+                z[k] -= step;
+                moved = moved.max(step.norm());
+            }
+        }
+        if moved < 1e-14 {
+            break;
+        }
+    }
+    z
+}
+
+/// Each frame's first three formants (Hz), as Praat's To Formant (burg)
+/// finds them; `times` are seconds into `samples`.
+fn formants(samples: &[f64], rate: f64, times: &[f64]) -> Vec<[Option<f64>; 3]> {
+    let to = 2.0 * FORMANT_CEILING;
+    let mut x = resample(samples, rate, to);
+    let factor = (-std::f64::consts::TAU * PRE_EMPHASIS_FROM / to).exp();
+    for i in (1..x.len()).rev() {
+        x[i] -= factor * x[i - 1];
+    }
+    let half = ((2.0 * FORMANT_WINDOW * to).floor() as usize) / 2;
+    let n = 2 * half;
+    let edge = (-12.0f64).exp();
+    let window: Vec<f64> = (1..=n)
+        .map(|i| {
+            let mid = 0.5 * (n as f64 + 1.0);
+            let d = i as f64 - mid;
+            ((-48.0 * d * d / ((n as f64 + 1.0) * (n as f64 + 1.0))).exp() - edge) / (1.0 - edge)
+        })
+        .collect();
+    let nyquist = to / 2.0;
+    let mut frame = vec![0.0; n];
+    times
+        .iter()
+        .map(|&t| {
+            // Praat puts sample i at (i + 0.5) / rate, so its "low index" of t is this.
+            let left = (t * to - 0.5).floor() as i64;
+            let start = left + 1 - half as i64;
+            for (j, v) in frame.iter_mut().enumerate() {
+                let k = start + j as i64;
+                *v = if k >= 0 && (k as usize) < x.len() { x[k as usize] * window[j] } else { 0.0 };
+            }
+            let mut out = [None; 3];
+            let Some(a) = burg(&frame, POLES) else { return out };
+            let mut coef: Vec<f64> = (1..=POLES).map(|i| -a[POLES - i + 1]).collect();
+            coef.push(1.0);
+            let mut found: Vec<f64> = roots(&coef)
+                .into_iter()
+                .filter(|r| r.im >= 0.0)
+                .map(|r| {
+                    // Into the unit circle, as Praat's Roots_fixIntoUnitCircle.
+                    let r = if r.norm() > 1.0 { Complex::new(1.0, 0.0) / r.conj() } else { r };
+                    r.im.atan2(r.re).abs() * nyquist / std::f64::consts::PI
+                })
+                .filter(|f| *f >= SAFETY_HZ && *f <= nyquist - SAFETY_HZ)
+                .collect();
+            found.sort_by(f64::total_cmp);
+            for (slot, f) in out.iter_mut().zip(found) {
+                *slot = Some(f);
+            }
+            out
+        })
+        .collect()
+}
+
+/// One chunk's pitch, intensity and formants.
 pub fn chunk(wav: &Path, index: u32) -> Result<Chunk, String> {
     let start_ms = f64::from(index) * f64::from(CHUNK_MS);
     let pad_ms = 3.2 / MIN_PITCH * 1000.0;
@@ -194,15 +371,18 @@ pub fn chunk(wav: &Path, index: u32) -> Result<Chunk, String> {
     let centres: Vec<usize> = (0..frames).map(|i| ((pad_ms + (i as f64 + 0.5) * step) / 1000.0 * rate).round() as usize).collect();
     let pitch = best_path(&candidates(&samples, rate, &centres));
     let db = intensity(&samples, rate, &centres);
+    let times: Vec<f64> = (0..frames).map(|i| (pad_ms + (i as f64 + 0.5) * step) / 1000.0).collect();
+    let formant = formants(&samples, rate, &times);
+    let f = |k: usize| formant.iter().map(|v| v[k].map(|x| x as f32)).collect();
     Ok(Chunk {
         index,
         start_ms,
         step_ms: step,
         pitch: pitch.into_iter().map(|v| v.map(|x| x as f32)).collect(),
         intensity: db.into_iter().map(|v| v.map(|x| x as f32)).collect(),
-        f1: vec![None; frames],
-        f2: vec![None; frames],
-        f3: vec![None; frames],
+        f1: f(0),
+        f2: f(1),
+        f3: f(2),
     })
 }
 
@@ -275,7 +455,6 @@ mod tests {
             let db = |s: f64| c.intensity[(s * 100.0) as usize];
             assert!(db(0.5).unwrap() > 70.0, "{:?}", db(0.5));
             assert_eq!(db(2.5), None);
-            assert!(c.f1.iter().all(Option::is_none), "formants are Praat's");
         }
         std::fs::remove_dir_all(dir).ok();
     }
@@ -361,5 +540,75 @@ mod tests {
         assert!(voicing * 100 < frames * 4, "{voicing} of {frames} frames voiced differently");
         assert!(pct(&mut db, 0.5) < 0.2 && pct(&mut db, 0.95) < 1.0, "intensity {:?}", (pct(&mut db, 0.5), pct(&mut db, 0.95)));
     }
-}
+    /// A vowel made by a source–filter synthesizer (a 120 Hz pulse train,
+    /// a glottal roll-off of two 100 Hz low-passes, resonators at 700, 1220,
+    /// 2600, 3300 and 4200 Hz) comes back with its first three formants, at
+    /// 16 and 44.1 kHz. (Praat gives 707/1214/2634 and 710/1218/2613 for the
+    /// same signal; without the roll-off or the upper resonators both find
+    /// a spare pole between F2 and F3.)
+    #[test]
+    fn formants_of_a_synthetic_vowel() {
+        for rate in [16_000.0f64, 44_100.0] {
+            let n = (rate * 0.5) as usize;
+            let mut x: Vec<f64> = (0..n).map(|i| if i % (rate / 120.0).round() as usize == 0 { 1.0 } else { 0.0 }).collect();
+            let pole = (-std::f64::consts::TAU * 100.0 / rate).exp();
+            for _ in 0..2 {
+                let mut y = 0.0;
+                for v in x.iter_mut() {
+                    y = *v + pole * y;
+                    *v = y;
+                }
+            }
+            for (f, bw) in [(700.0, 80.0), (1220.0, 90.0), (2600.0, 120.0), (3300.0, 200.0), (4200.0, 250.0)] {
+                // A two-pole resonator (Klatt's).
+                let c = -(-2.0 * std::f64::consts::PI * bw / rate).exp();
+                let b = 2.0 * (-std::f64::consts::PI * bw / rate).exp() * (std::f64::consts::TAU * f / rate).cos();
+                let a = 1.0 - b - c;
+                let (mut y1, mut y2) = (0.0, 0.0);
+                for v in x.iter_mut() {
+                    let y = a * *v + b * y1 + c * y2;
+                    y2 = y1;
+                    y1 = y;
+                    *v = y;
+                }
+            }
+            let peak = x.iter().fold(0f64, |m, v| m.max(v.abs()));
+            x.iter_mut().for_each(|v| *v *= 0.5 / peak);
+            let got = formants(&x, rate, &[0.25]);
+            for (k, want) in [700.0, 1220.0, 2600.0].into_iter().enumerate() {
+                let f = got[0][k].unwrap_or_else(|| panic!("{rate}: no F{}", k + 1));
+                assert!((f - want).abs() < want * 0.03, "{rate}: F{} {f} against {want}", k + 1);
+            }
+        }
+    }
 
+    /// Formants against Praat's To Formant (burg) at Praat's own frame
+    /// times, on the tutorial recording's frames within 30 dB of its
+    /// loudest (when parselmouth is installed). Measured 2026-11-23: within
+    /// 0.1% at the median and about 1.2% at the 90th percentile for F1–F3;
+    /// the rest are frames where a nearly real pair of roots falls one way
+    /// here and the other in Praat (a broad 100 Hz "formant" or none),
+    /// which the resampling method alone can tip.
+    #[test]
+    fn formants_match_praat_on_a_real_voice() {
+        let wav = Path::new(env!("CARGO_MANIFEST_DIR")).join("tutorial/counting-to-six.wav");
+        let script = "import sys, math, parselmouth\ns = parselmouth.Sound(sys.argv[1])\nf = s.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=5500, window_length=0.025, pre_emphasis_from=50)\ni = s.to_intensity(minimum_pitch=75)\ntop = max(v for v in i.values[0] if not math.isnan(v))\nfor k in range(1, f.get_number_of_frames() + 1):\n    t = f.get_time_from_frame_number(k)\n    if t > 0.1 and t < s.duration - 0.1 and i.get_value(t) > top - 30:\n        print(t, *(f.get_value_at_time(n, t) for n in (1, 2, 3)))\n";
+        let Ok(out) = std::process::Command::new("python3").arg("-c").arg(script).arg(&wav).output() else { return };
+        if !out.status.success() {
+            eprintln!("parselmouth is not installed; skipped");
+            return;
+        }
+        let rows: Vec<Vec<f64>> = String::from_utf8_lossy(&out.stdout).lines().map(|l| l.split(' ').map(|x| x.parse().unwrap_or(f64::NAN)).collect()).collect();
+        let times: Vec<f64> = rows.iter().map(|r| r[0]).collect();
+        let (samples, rate, _) = read(&wav, 0.0, 6000.0).unwrap();
+        let ours = formants(&samples, rate, &times);
+        assert!(rows.len() > 200, "{} loud frames", rows.len());
+        for k in 0..3 {
+            let mut err: Vec<f64> = rows.iter().zip(&ours).filter_map(|(r, o)| Some((o[k]? - r[k + 1]).abs() / r[k + 1]).filter(|e| e.is_finite())).collect();
+            err.sort_by(f64::total_cmp);
+            let q = |p: f64| err[((err.len() - 1) as f64 * p) as usize];
+            assert!(err.len() * 10 > rows.len() * 9, "F{}: {} of {} frames", k + 1, err.len(), rows.len());
+            assert!(q(0.5) < 0.005 && q(0.9) < 0.03, "F{}: median {} p90 {}", k + 1, q(0.5), q(0.9));
+        }
+    }
+}
