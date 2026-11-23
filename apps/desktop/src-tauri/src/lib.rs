@@ -719,6 +719,16 @@ fn lexicon_set_sense_text(s: State<SessionThread>, sense_id: String, field: Stri
 }
 
 #[tauri::command(async)]
+fn lexicon_add_allomorph(s: State<SessionThread>, id: String, form: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_add_allomorph(s, &id, &form))
+}
+
+#[tauri::command(async)]
+fn lexicon_delete_allomorph(s: State<SessionThread>, id: String, form_id: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_delete_allomorph(s, &id, &form_id))
+}
+
+#[tauri::command(async)]
 fn lexicon_delete_sense(s: State<SessionThread>, sense_id: String) -> Result<lexicon::EntryEdit, String> {
     s.run(move |s| lexicon::lexicon_delete_sense(s, &sense_id))
 }
@@ -1654,6 +1664,8 @@ pub fn run() {
             lexicon_set_sense_gloss,
             lexicon_set_sense_text,
             lexicon_delete_sense,
+            lexicon_add_allomorph,
+            lexicon_delete_allomorph,
             lexicon_assign_domain,
             lexicon_unassign_domain,
             lexicon_paradigm,

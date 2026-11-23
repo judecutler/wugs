@@ -64,6 +64,8 @@ pub struct EntryView {
     pub senses: Vec<SenseView>,
     /// Other live entries with exactly this lemma: (id, homograph).
     pub same_lemma: Vec<(String, Option<u32>)>,
+    /// Other spellings of the entry (allomorphs): (form id, surface).
+    pub allomorphs: Vec<(String, String)>,
 }
 
 #[derive(Debug, Serialize)]
@@ -189,6 +191,7 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
         homograph: homograph(p, id)?,
         senses: sense_views,
         same_lemma,
+        allomorphs: p.allomorphs(id)?,
         lemma,
     })
 }
@@ -253,6 +256,24 @@ pub fn lexicon_set_homograph(session: &mut Session, id: &str, number: Option<u32
 pub fn lexicon_number_homographs(session: &mut Session, id: &str) -> Result<EntryEdit, String> {
     let p = project(session)?;
     let res = p.number_homographs(id)?;
+    edit(p, id, &res)
+}
+
+/// Another spelling of the entry (an allomorph), found by glossing lookups and guesses like the lemma.
+pub fn lexicon_add_allomorph(session: &mut Session, id: &str, form: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    require(p, id, "lexeme")?;
+    let (_, res) = p.add_allomorph(id, form)?;
+    edit(p, id, &res)
+}
+
+/// Remove one of the entry's allomorphs (a tombstone).
+pub fn lexicon_delete_allomorph(session: &mut Session, id: &str, form: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    if !p.allomorphs(id)?.iter().any(|(f, _)| f == form) {
+        return Err("that form is not one of this entry's".into());
+    }
+    let res = p.delete_form(form)?;
     edit(p, id, &res)
 }
 

@@ -104,6 +104,43 @@ impl Project {
         Ok((id, res))
     }
 
+    /// A new allomorph (another spelling the entry takes, such as `-lar` for
+    /// `-ler`) of `lexeme`: a `form` of kind `allomorph`, which glossing
+    /// lookups and guessed analyses find like the lemma. `(form id, findings)`.
+    pub fn add_allomorph(&mut self, lexeme: &str, surface: &str) -> Result<(String, CommitResult), String> {
+        self.require(lexeme, "lexeme")?;
+        let surface = surface.trim();
+        if surface.is_empty() {
+            return Err("a form needs a surface".into());
+        }
+        if self.allomorphs(lexeme)?.iter().any(|(_, f)| f == surface) {
+            return Err(format!("«{surface}» is already a form of this entry"));
+        }
+        let mut t = self.intent("add-form");
+        let id = t.create(
+            "form",
+            "frm",
+            SCOPE_LEXICON,
+            vec![("lexeme", Value::str(lexeme)), ("kind", Value::str("allomorph")), ("form", Value::str(surface))],
+        );
+        let res = t.commit()?;
+        Ok((id, res))
+    }
+
+    /// The lexeme's live allomorphs as `(form id, surface)`, by surface then id.
+    pub fn allomorphs(&self, lexeme: &str) -> Result<Vec<(String, String)>, String> {
+        let mut out = Vec::new();
+        for id in self.proj.children_by_ref("lexeme", lexeme, "form")? {
+            if self.proj.field_str(&id, "kind")?.as_deref() != Some("allomorph") {
+                continue;
+            }
+            let form = self.proj.field_str(&id, "form")?.unwrap_or_default();
+            out.push((id, form));
+        }
+        out.sort_by(|a, b| a.1.cmp(&b.1).then(a.0.cmp(&b.0)));
+        Ok(out)
+    }
+
     /// Retype a form's surface. An empty surface is refused (delete the form instead).
     pub fn set_form_surface(&mut self, form: &str, surface: &str) -> Result<CommitResult, String> {
         self.require(form, "form")?;
@@ -284,6 +321,28 @@ mod tests {
         let huge = Dimension { feature: "person".into(), values: (0..257).map(|i| i.to_string()).collect() };
         assert!(p.paradigm(&lex, &[huge]).unwrap_err().contains("256"), "an absurd grid is refused unbuilt");
         assert_eq!(p.log.read_all().unwrap().ops.len(), before);
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn an_allomorph_is_found_like_the_lemma_and_can_be_deleted() {
+        let (root, mut p) = project("prs_Ana");
+        let ((lex, sen), _) = p.add_lexeme("-ler", "PL").unwrap();
+        let (frm, _) = p.add_allomorph(&lex, " -lar ").unwrap();
+        assert_eq!(p.allomorphs(&lex).unwrap(), vec![(frm.clone(), "-lar".to_string())]);
+        assert!(p.add_allomorph(&lex, "-lar").is_err(), "the same form twice");
+        assert!(p.add_allomorph(&lex, "  ").is_err());
+        assert!(p.lexicon_lookup("lar").unwrap().iter().any(|m| m.sense == sen));
+        // An allomorph is no inflected form.
+        assert!(p.inflected_forms(&lex).unwrap().is_empty());
+        // The guesser reads it with the entry's sense: ev-lar 'house-PL'.
+        p.add_lexeme("ev", "house").unwrap();
+        let inv = p.morph_inventory().unwrap();
+        let g = p.guess_analysis(&inv, "evlar");
+        assert_eq!(g[0].morphs.iter().map(|m| (m.surface.as_str(), m.morph_type.as_str())).collect::<Vec<_>>(), [("ev", "root"), ("lar", "suffix")]);
+        assert_eq!(g[0].morphs[1].sense.as_deref(), Some(sen.as_str()));
+        p.delete_form(&frm).unwrap();
+        assert!(p.allomorphs(&lex).unwrap().is_empty());
         std::fs::remove_dir_all(root).ok();
     }
 
