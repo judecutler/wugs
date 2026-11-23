@@ -30,6 +30,19 @@ pub struct Dictionary {
     /// Each entry in the page's order, for a site's search.
     #[serde(skip)]
     pub headwords: Vec<Headword>,
+    /// With clips asked for: each ▶ on the page and the span it plays.
+    #[serde(skip)]
+    pub clips: Vec<Clip>,
+}
+
+/// A headword's recording on a site's dictionary page: the file the ▶ plays,
+/// cut from `blob` between `start` and `end` (ms).
+#[derive(Debug, Clone)]
+pub struct Clip {
+    pub file: String,
+    pub blob: String,
+    pub start: f64,
+    pub end: f64,
 }
 
 /// An entry as a site's search lists it: its anchor, headword, homograph number and glosses.
@@ -120,17 +133,24 @@ h1 { font-size: 22pt; margin: 0 0 .2em; } .front { margin-bottom: 2em; color: #4
 h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; margin: 1.2em 0 .5em; break-after: avoid; }
 .entry { margin: 0 0 .6em; break-inside: avoid; text-indent: -1.2em; padding-left: 1.2em; }
 .hw { font-weight: bold; } .hn { font-size: 70%; vertical-align: sub; font-weight: normal; }
-.ps { font-style: italic; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
+.ps { font-style: italic; } .pr { font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
 .gl2 { color: #333; } .ex { font-style: italic; } .tr { }
 .reversal p { margin: 0 0 .25em; } h2 { break-after: avoid; }
 .entry:target { background: #fff3c4; }
 @media print { body { margin: 0; max-width: none; } a { color: inherit; text-decoration: none; } }
 ";
 
-fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>) -> String {
+fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Option<&str>) -> String {
     let mut out = format!("<p class=\"entry\" id=\"{}\"><span class=\"hw\">{}</span>", esc(&e.id), esc(&e.lemma));
     if let Some(n) = e.homograph {
         out.push_str(&format!("<span class=\"hn\">{n}</span>"));
+    }
+    if let Some(file) = clip {
+        out.push_str(&format!(" <button class=\"play\" data-src=\"{}\" aria-label=\"Hear {}\">▶</button>", esc(file), esc(&e.lemma)));
+    }
+    let said: Vec<String> = e.pronunciations.iter().map(|x| x.form.trim()).filter(|f| !f.is_empty()).map(esc).collect();
+    if !said.is_empty() {
+        out.push_str(&format!(" <span class=\"pr\">{}</span>", said.join(", ")));
     }
     if !e.citation.is_empty() && e.citation != e.lemma {
         out.push_str(&format!(" ({})", esc(&e.citation)));
@@ -177,14 +197,32 @@ pub fn export_dictionary(s: &mut Session, folder: &Path, date: &str, include_res
     }
     crate::interchange::outside_project(s, folder)?;
     let p = session::project(s)?;
-    let (title, html, mut d) = document(p, date, include_restricted)?;
+    let (title, html, mut d) = document(p, date, include_restricted, false)?;
     let path = crate::interchange::write_new(folder, &crate::interchange::file_stem(&title, "dictionary"), "html", html.as_bytes())?;
     d.path = path.display().to_string();
     Ok(d)
 }
 
-/// The dictionary as one HTML page: its title, the page, and what it holds (`path` empty).
-pub(crate) fn document(p: &Project, date: &str, include_restricted: bool) -> Result<(String, String, Dictionary), String> {
+/// Where a headword is heard, for a ▶ on a site: its first pronunciation
+/// with a recording that is on this computer and may be shown.
+fn headword_clip(p: &Project, e: &EntryView, include_restricted: bool) -> Result<Option<(String, f64, f64)>, String> {
+    for x in &e.pronunciations {
+        let Some(a) = &x.audio else { continue };
+        if !include_restricted && p.proj.field_str(&a.source_id, "access")?.is_some_and(|l| l != "open") {
+            continue;
+        }
+        let Ok(blob) = p.audio_blob(&a.source_id) else { continue };
+        if wugs_blob::parse_ref(&blob).is_some_and(|hex| p.root.join("blobs").join(hex.to_string()).is_file()) {
+            return Ok(Some((blob, a.start_ms, a.end_ms)));
+        }
+    }
+    Ok(None)
+}
+
+/// The dictionary as one HTML page: its title, the page, and what it holds
+/// (`path` empty). With `clips`, a headword heard in an open recording gets
+/// a ▶ whose clip the caller cuts (`Dictionary::clips`).
+pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips: bool) -> Result<(String, String, Dictionary), String> {
     let units = alphabet(p)?;
     let mut entries: Vec<EntryView> = p.proj.entities_of_kind("lexeme")?.iter().map(|id| entry_view(p, id)).collect::<Result<_, _>>()?;
     entries.retain(|e| !e.lemma.trim().is_empty());
@@ -222,6 +260,7 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool) -> Res
     let senses: usize = entries.iter().map(|e| e.senses.len()).sum();
     let mut body = String::new();
     let mut current = String::new();
+    let mut cut: Vec<Clip> = Vec::new();
     body.push_str("<div class=\"entries\">\n");
     for e in &entries {
         let l = letter(&units, &p.proj.nfc(&e.lemma));
@@ -229,7 +268,15 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool) -> Res
             body.push_str(&format!("<h2 class=\"letter\">{}</h2>\n", esc(&l)));
             current = l;
         }
-        body.push_str(&entry_html(e, &examples));
+        let clip = match clips.then(|| headword_clip(p, e, include_restricted)).transpose()?.flatten() {
+            Some((blob, start, end)) => {
+                let file = format!("audio/w-{}.wav", cut.len() + 1);
+                cut.push(Clip { file: file.clone(), blob, start, end });
+                Some(file)
+            }
+            None => None,
+        };
+        body.push_str(&entry_html(e, &examples, clip.as_deref()));
     }
     body.push_str("</div>\n");
     // Reversal index: each primary gloss, case-blind, with the headwords that carry it.
@@ -278,7 +325,7 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool) -> Res
             glosses: e.senses.iter().map(|s| s.gloss.trim()).filter(|g| !g.is_empty()).collect::<Vec<_>>().join("; "),
         })
         .collect();
-    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords };
+    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords, clips: cut };
     Ok((title, html, d))
 }
 

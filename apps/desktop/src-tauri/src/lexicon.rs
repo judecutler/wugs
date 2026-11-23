@@ -114,6 +114,40 @@ pub struct EntryView {
     pub same_lemma: Vec<(String, Option<u32>)>,
     /// Other spellings of the entry (allomorphs): (form id, surface).
     pub allomorphs: Vec<(String, String)>,
+    /// How the entry is said, each with where to hear it.
+    pub pronunciations: Vec<PronunciationView>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PronunciationView {
+    pub id: String,
+    pub form: String,
+    /// The recording and span it is heard in, while that recording is live.
+    pub audio: Option<HeardView>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HeardView {
+    pub source_id: String,
+    pub label: String,
+    pub start_ms: f64,
+    pub end_ms: f64,
+}
+
+fn pronunciation_views(p: &Project, lexeme: &str) -> Result<Vec<PronunciationView>, String> {
+    let mut out = Vec::new();
+    for x in p.pronunciations(lexeme)? {
+        let audio = match x.audio {
+            Some(h) if p.proj.entity_kind(&h.source)?.as_deref() == Some("source") && !p.proj.is_tombstoned(&h.source)? => {
+                Some(HeardView { label: str_field(p, &h.source, "label")?, source_id: h.source, start_ms: h.start, end_ms: h.end })
+            }
+            _ => None,
+        };
+        out.push(PronunciationView { id: x.id, form: x.form, audio });
+    }
+    Ok(out)
 }
 
 #[derive(Debug, Serialize)]
@@ -241,6 +275,7 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
         senses: sense_views,
         same_lemma,
         allomorphs: p.allomorphs(id)?,
+        pronunciations: pronunciation_views(p, id)?,
         lemma,
     })
 }
@@ -313,6 +348,78 @@ pub fn lexicon_add_allomorph(session: &mut Session, id: &str, form: &str) -> Res
     let p = project(session)?;
     require(p, id, "lexeme")?;
     let (_, res) = p.add_allomorph(id, form)?;
+    edit(p, id, &res)
+}
+
+/// Where a timed segment is heard: its text's recording and its span.
+fn heard_in(p: &Project, segment: &str) -> Result<(wugs_core::pronunciations::Heard, String), String> {
+    require(p, segment, "segment")?;
+    let text = str_field(p, segment, "text")?;
+    let (start, end) = match (p.proj.field_num(segment, "start")?, p.proj.field_num(segment, "end")?) {
+        (Some(a), Some(b)) if b > a => (a, b),
+        _ => return Err("This segment has no times, so there is nothing to hear in it.".into()),
+    };
+    let Some((source, _)) = p.text_recording(&text)? else {
+        return Err("This segment's text has no recording yet: pick one for it on the Timeline.".into());
+    };
+    let content = str_field(p, segment, "content")?;
+    Ok((wugs_core::pronunciations::Heard { source, start, end }, content))
+}
+
+/// A pronunciation of the entry: typed, heard in a timed segment, or both.
+/// Taken from a segment with no form typed, a one-word transcription is its form.
+pub fn lexicon_add_pronunciation(session: &mut Session, id: &str, form: &str, segment: Option<&str>) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    require(p, id, "lexeme")?;
+    let heard = segment.map(|g| heard_in(p, g)).transpose()?;
+    let form = match &heard {
+        Some((_, content)) if form.trim().is_empty() && content.split_whitespace().count() == 1 => content.trim().to_string(),
+        _ => form.to_string(),
+    };
+    let (_, res) = p.add_pronunciation(id, &form, heard.as_ref().map(|(h, _)| h))?;
+    edit(p, id, &res)
+}
+
+fn own_pronunciation(p: &Project, id: &str, pronunciation: &str) -> Result<(), String> {
+    if !p.pronunciations(id)?.iter().any(|x| x.id == pronunciation) {
+        return Err("that pronunciation is not one of this entry's".into());
+    }
+    Ok(())
+}
+
+fn edit_maybe(p: &Project, id: &str, res: Option<CommitResult>) -> Result<EntryEdit, String> {
+    match res {
+        Some(res) => edit(p, id, &res),
+        None => Ok(EntryEdit { entry: Some(entry_view(p, id)?), notes: Vec::new() }),
+    }
+}
+
+/// Retype a pronunciation; emptied, it is deleted unless it has a recording.
+pub fn lexicon_set_pronunciation(session: &mut Session, id: &str, pronunciation: &str, form: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    own_pronunciation(p, id, pronunciation)?;
+    let heard = p.pronunciations(id)?.into_iter().find(|x| x.id == pronunciation).and_then(|x| x.audio);
+    if form.trim().is_empty() && heard.is_none() {
+        let res = p.delete_pronunciation(pronunciation)?;
+        return edit(p, id, &res);
+    }
+    let res = p.set_pronunciation_form(pronunciation, form)?;
+    edit_maybe(p, id, res)
+}
+
+/// Hear a pronunciation in a timed segment, or (None) in nothing.
+pub fn lexicon_pronunciation_audio(session: &mut Session, id: &str, pronunciation: &str, segment: Option<&str>) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    own_pronunciation(p, id, pronunciation)?;
+    let heard = segment.map(|g| heard_in(p, g)).transpose()?;
+    let res = p.set_pronunciation_audio(pronunciation, heard.as_ref().map(|(h, _)| h))?;
+    edit_maybe(p, id, res)
+}
+
+pub fn lexicon_delete_pronunciation(session: &mut Session, id: &str, pronunciation: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    own_pronunciation(p, id, pronunciation)?;
+    let res = p.delete_pronunciation(pronunciation)?;
     edit(p, id, &res)
 }
 

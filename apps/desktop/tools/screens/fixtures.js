@@ -254,6 +254,10 @@
         homograph: null,
         sameLemma,
         allomorphs: [["frm-kan", "kan"], ["frm-hani", "hani"]],
+        pronunciations: [
+          { id: "prn-1", form: "ˈka.ni", audio: { sourceId: "src-1", label: "elicitation 1", startMs: 1200, endMs: 1850 } },
+          { id: "prn-2", form: "ˈkaːni", audio: null },
+        ],
         senses: [
           {
             id: "sense-kani-1",
@@ -286,6 +290,7 @@
       homograph: row.homograph,
       sameLemma,
       allomorphs: [],
+      pronunciations: [],
       senses: row.glosses.map((g, i) => ({ id: `sense-${row.id}-${i}`, gloss: g, glossesByLang: {}, definition: "", usage: "", domains: row.posOfSpeech === "num" ? [domainRef("dom-8.1.1.1")] : [], occurrences: i === 0 ? 2 : 0, examples: [] })),
     };
   }

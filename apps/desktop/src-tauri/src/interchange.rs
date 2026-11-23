@@ -336,6 +336,16 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 plural(r.senses_created, "sense", "senses"),
                 plural(r.entries_skipped, "entry was", "entries were")
             ));
+            if r.pronunciations_created > 0 || r.examples_created > 0 {
+                let parts: Vec<String> = [
+                    (r.pronunciations_created > 0).then(|| plural(r.pronunciations_created, "pronunciation", "pronunciations")),
+                    (r.examples_created > 0).then(|| plural(r.examples_created, "example sentence", "example sentences")),
+                ]
+                .into_iter()
+                .flatten()
+                .collect();
+                lines.push(format!("With them came {}.", parts.join(" and ")));
+            }
             lines.extend(not_carried(&r.not_carried.0));
             (None, true)
         }

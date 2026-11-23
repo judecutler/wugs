@@ -67,6 +67,7 @@ struct CanonEntry {
     citation: Multi,
     senses: Vec<(Vec<(String, String)>, Option<String>, Multi, Multi, Vec<CanonExample>)>,
     variants: Vec<(Vec<(String, String)>, Multi)>,
+    pronunciations: Vec<(Vec<(String, String)>, Multi, Vec<Vec<(String, String)>>)>,
 }
 
 /// An example: attributes, its forms, and each translation's type and forms.
@@ -99,6 +100,7 @@ fn canon_lift(s: &str) -> Vec<CanonEntry> {
                 })
                 .collect(),
             variants: e.children_named("variant").map(|v| (attrs(v), forms(Some(v)))).collect(),
+            pronunciations: e.children_named("pronunciation").map(|x| (attrs(x), forms(Some(x)), x.children_named("media").map(attrs).collect())).collect(),
         })
         .collect();
     v.sort_by(|a, b| a.id.cmp(&b.id));
@@ -211,7 +213,7 @@ fn fixtures_read_as_intended() {
 fn lift_round_trip_is_semantically_identical() {
     let (root, mut p) = temp_project();
     let r = import_lift(&mut p, LIFT).unwrap();
-    assert_eq!((r.entries_created, r.senses_created, r.variants_created, r.examples_created), (6, 7, 1, 2), "everything imported once");
+    assert_eq!((r.entries_created, r.senses_created, r.variants_created, r.examples_created, r.pronunciations_created), (6, 7, 1, 2, 2), "everything imported once");
     assert_eq!(canon_lift(&export_lift(&p).unwrap()), canon_lift(LIFT), "exported LIFT matches the original");
     // Examples arrive as the sense's examples, editable like any.
     let exm = p.proj.entities_of_kind("example").unwrap();
@@ -225,6 +227,19 @@ fn lift_round_trip_is_semantically_identical() {
     assert_eq!(kopek[0].2, vec![(Some("Free translation".to_string()), vec![("en".to_string(), "The dog was barking.".to_string()), ("de".to_string(), "Der Hund bellte.".to_string())])], "the edit replaces the first translation, the others stay");
     assert_eq!(kopek[2].1, vec![("tr".to_string(), "Köpek koştu.".to_string())], "a new example is written in the entry's language");
     assert_eq!(kopek[2].2, vec![(None, vec![("en".to_string(), "The dog ran.".to_string())])]);
+    // Pronunciations arrive as the entry's, their media file names kept for the way back.
+    let lex = p.proj.field_str(&sense, "lexeme").unwrap().unwrap();
+    let said = p.pronunciations(&lex).unwrap();
+    assert_eq!(said.iter().map(|x| x.form.as_str()).collect::<Vec<_>>(), ["cœˈpec", ""]);
+    p.set_pronunciation_form(&said[1].id, "cœˈpek").unwrap();
+    let gel = p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "lemma").unwrap().as_deref() == Some("gel")).unwrap();
+    p.add_pronunciation(&gel, "ɟel", None).unwrap();
+    let out = canon_lift(&export_lift(&p).unwrap());
+    let kopek = &out.iter().find(|e| e.id == "köpek_6f1a").unwrap().pronunciations;
+    assert_eq!(kopek[1].1, vec![("tr-fonipa".to_string(), "cœˈpek".to_string())], "a form typed into a media-only pronunciation");
+    assert_eq!(kopek[1].2, vec![vec![("href".to_string(), "köpek-2.wav".to_string())]], "its media kept");
+    let gel = &out.iter().find(|e| e.id == "gel_8c3d").unwrap().pronunciations;
+    assert_eq!(gel[0].1, vec![("tr-fonipa".to_string(), "ɟel".to_string())]);
     fs::remove_dir_all(root).ok();
 }
 

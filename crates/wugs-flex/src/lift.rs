@@ -1,8 +1,9 @@
 //! LIFT 0.13 lexicons (FLEx's lexicon interchange format).
 //!
-//! Carried: entries (lexical-unit, citation, homograph `order`), senses
-//! (gloss, definition, grammatical-info, examples with their translations)
-//! and variants, in every writing system, plus every attribute of entries,
+//! Carried: entries (lexical-unit, citation, homograph `order`,
+//! pronunciations with their media file names), senses (gloss, definition,
+//! grammatical-info, examples with their translations) and variants, in
+//! every writing system, plus every attribute of entries, pronunciations,
 //! senses, examples and variants. Everything else is counted in
 //! `ImportReport::not_carried`.
 
@@ -26,6 +27,9 @@ const F_TRANSLATIONS: &str = "x.lift.translations";
 /// All attributes of the source element (dates, order, ref…), re-emitted on
 /// export under the ones wugs derives.
 const F_ATTRS: &str = "x.lift.attrs";
+/// A pronunciation's `<media>` elements, each its attributes (`href`…), kept
+/// for export: wugs hears a pronunciation in a project recording instead.
+const F_MEDIA: &str = "x.lift.media";
 
 #[derive(Debug, Default)]
 pub struct ImportReport {
@@ -34,6 +38,7 @@ pub struct ImportReport {
     pub senses_created: usize,
     pub variants_created: usize,
     pub examples_created: usize,
+    pub pronunciations_created: usize,
     /// `<span>` runs flattened into plain text (their text is kept in order;
     /// the markup is not).
     pub spans_flattened: usize,
@@ -52,6 +57,8 @@ struct Entry {
     citation: MultiText,
     senses: Vec<Sense>,
     variants: Vec<(MultiText, Value)>,
+    /// Each `<pronunciation>`: its attributes, forms and `<media>` attributes.
+    pronunciations: Vec<(Value, MultiText, Vec<Value>)>,
 }
 
 struct Sense {
@@ -166,6 +173,22 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
                 report.examples_created += 1;
             }
         }
+        for (i, (attrs, forms, media)) in e.pronunciations.iter().enumerate() {
+            let mut fields = vec![
+                ("lexeme", Value::str(&lex)),
+                ("pos", Value::str(&pos_seq(i))),
+                (F_FORMS, multi_value(forms)),
+                (F_ATTRS, attrs.clone()),
+            ];
+            if let Some((_, f)) = forms.first().filter(|(_, f)| !f.is_empty()) {
+                fields.push(("form", Value::str(f)));
+            }
+            if !media.is_empty() {
+                fields.push((F_MEDIA, Value::Arr(media.clone())));
+            }
+            t.create("pronunciation", "prn", SCOPE_LEXICON, fields);
+            report.pronunciations_created += 1;
+        }
         for (i, (v, attrs)) in e.variants.iter().enumerate() {
             t.create(
                 "form",
@@ -249,6 +272,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
         citation: Vec::new(),
         senses: Vec::new(),
         variants: Vec::new(),
+        pronunciations: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -263,6 +287,22 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
                 for vc in c.children.iter().filter(|vc| vc.name != "form") {
                     report.not_carried.add(&format!("variant/{}", vc.name));
                 }
+            }
+            "pronunciation" => {
+                let mut media = Vec::new();
+                for pc in &c.children {
+                    match pc.name.as_str() {
+                        "form" => {}
+                        "media" => {
+                            media.push(attrs_value(pc));
+                            for mc in &pc.children {
+                                report.not_carried.add(&format!("media/{}", mc.name));
+                            }
+                        }
+                        other => report.not_carried.add(&format!("pronunciation/{other}")),
+                    }
+                }
+                e.pronunciations.push((attrs_value(c), read_multi(c, report), media));
             }
             other => report.not_carried.add(&format!("entry/{other}")),
         }
@@ -388,6 +428,17 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
         let cit = with_primary(field_multi(project, lex, F_CITATION)?, p.field_str(lex, "citation")?, &lang);
         if !cit.is_empty() {
             entry.children.push(multi_node("citation", &cit));
+        }
+        for prn in ordered_children(project, "lexeme", lex, "pronunciation")? {
+            // A pronunciation typed in wugs is written in the entry's language, as an IPA form.
+            let forms = with_primary(field_multi(project, &prn, F_FORMS)?, p.field_str(&prn, "form")?.filter(|f| !f.is_empty()), &format!("{lang}-fonipa"));
+            let mut x = with_attrs(multi_node("pronunciation", &forms), field_value(project, &prn, F_ATTRS)?, &[]);
+            if let Some(Value::Arr(media)) = field_value(project, &prn, F_MEDIA)? {
+                for m in media {
+                    x.children.push(with_attrs(XmlNode::new("media"), Some(m), &[]));
+                }
+            }
+            entry.children.push(x);
         }
         for sen in ordered_children(project, "lexeme", lex, "sense")? {
             let mut sense = with_attrs(

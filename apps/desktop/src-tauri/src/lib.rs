@@ -802,6 +802,26 @@ fn lexicon_delete_allomorph(s: State<SessionThread>, id: String, form_id: String
 }
 
 #[tauri::command(async)]
+fn lexicon_add_pronunciation(s: State<SessionThread>, id: String, form: String, segment_id: Option<String>) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_add_pronunciation(s, &id, &form, segment_id.as_deref()))
+}
+
+#[tauri::command(async)]
+fn lexicon_set_pronunciation(s: State<SessionThread>, id: String, pronunciation_id: String, form: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_set_pronunciation(s, &id, &pronunciation_id, &form))
+}
+
+#[tauri::command(async)]
+fn lexicon_pronunciation_audio(s: State<SessionThread>, id: String, pronunciation_id: String, segment_id: Option<String>) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_pronunciation_audio(s, &id, &pronunciation_id, segment_id.as_deref()))
+}
+
+#[tauri::command(async)]
+fn lexicon_delete_pronunciation(s: State<SessionThread>, id: String, pronunciation_id: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_delete_pronunciation(s, &id, &pronunciation_id))
+}
+
+#[tauri::command(async)]
 fn lexicon_delete_sense(s: State<SessionThread>, sense_id: String) -> Result<lexicon::EntryEdit, String> {
     s.run(move |s| lexicon::lexicon_delete_sense(s, &sense_id))
 }
@@ -1824,6 +1844,10 @@ pub fn run() {
             lexicon_set_example,
             lexicon_delete_example,
             lexicon_delete_allomorph,
+            lexicon_add_pronunciation,
+            lexicon_set_pronunciation,
+            lexicon_pronunciation_audio,
+            lexicon_delete_pronunciation,
             lexicon_assign_domain,
             lexicon_unassign_domain,
             lexicon_paradigm,
