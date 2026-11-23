@@ -359,6 +359,39 @@ mod tests {
     }
 
     #[test]
+    fn a_lexicon_table_comes_in_once_and_adds_to_what_is_there() {
+        let (root, mut p) = project();
+        let ((dog, _), _) = p.add_lexeme("ati", "dog").unwrap();
+        let row = |lemma: &str, gloss: &str| LexiconRow { lemma: lemma.into(), gloss: gloss.into(), ..LexiconRow::default() };
+        let rows = vec![
+            LexiconRow { category: "n".into(), glosses: vec![("fr".into(), "chien".into())], ..row("Ati", "dog") },
+            row("ati", "hound"),
+            LexiconRow { category: "v".into(), definition: "to  move fast".into(), ..row("lari", "run") },
+            row("lari", "flee"),
+            row("  ", "nothing"),
+        ];
+        let (report, res) = p.import_lexicon_rows(&rows).unwrap();
+        assert!(res.is_some());
+        assert_eq!((report.entries, report.senses, report.unchanged), (1, 3, 1), "dog is there already; hound joins ati; lari is new with two senses");
+        assert_eq!(p.proj.field_str(&dog, "pos-of-speech").unwrap().as_deref(), Some("n"), "a missing category is filled");
+        assert_eq!(p.proj.ordered_children("lexeme", &dog, "sense").unwrap().len(), 2);
+        let lari = p.proj.by_lookup_key("lexeme", "lari").unwrap();
+        assert_eq!(lari.len(), 1);
+        let senses = p.proj.ordered_children("lexeme", &lari[0], "sense").unwrap();
+        assert_eq!(senses.iter().map(|s| p.proj.field_str(s, "gloss").unwrap().unwrap()).collect::<Vec<_>>(), vec!["run", "flee"]);
+        assert_eq!(p.proj.field_str(&senses[0], "definition").unwrap().as_deref(), Some("to move fast"));
+        let (again, res) = p.import_lexicon_rows(&rows).unwrap();
+        assert!(res.is_none(), "the same table twice writes nothing");
+        assert_eq!((again.entries, again.senses, again.unchanged), (0, 0, 4));
+        // Two entries share a lemma: a row without a homograph number cannot pick one.
+        p.add_lexeme("lari", "river").unwrap();
+        let (amb, _) = p.import_lexicon_rows(&[row("lari", "stream")]).unwrap();
+        assert_eq!(amb.ambiguous, vec!["lari".to_string()]);
+        drop(p);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn domain_ids_are_ulid_shaped_and_stable() {
         let a = domain_id("dc1a2c6f-1b32-4631-8823-36dacc8cb7bb").unwrap();
         assert_eq!(a, domain_id("DC1A2C6F-1B32-4631-8823-36DACC8CB7BB").unwrap());
@@ -500,5 +533,162 @@ mod tests {
         assert_eq!(a.proj.count("conflicts").unwrap(), 0);
         std::fs::remove_dir_all(ra).ok();
         std::fs::remove_dir_all(rb).ok();
+    }
+}
+
+/// One row of a lexicon table (a spreadsheet of entries): an entry's lemma
+/// and one of its senses. Rows with the same lemma and homograph number are
+/// one entry with a sense per row.
+#[derive(Debug, Clone, Default)]
+pub struct LexiconRow {
+    pub lemma: String,
+    pub homograph: Option<u32>,
+    pub category: String,
+    pub citation: String,
+    pub gloss: String,
+    /// Glosses in other languages, by language tag (`gloss:<tag>`).
+    pub glosses: Vec<(String, String)>,
+    pub definition: String,
+    pub usage: String,
+}
+
+/// What [`Project::import_lexicon_rows`] did.
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct LexiconImport {
+    pub entries: usize,
+    pub senses: usize,
+    /// Rows whose entry already has a sense with that gloss.
+    pub unchanged: usize,
+    /// Rows naming a lemma several entries share, with no homograph number to tell them apart.
+    pub ambiguous: Vec<String>,
+}
+
+/// Where a planned sense goes: an entry already in the project, or the
+/// n-th entry this import makes.
+enum Owner {
+    Existing(String),
+    New(usize),
+}
+
+impl Project {
+    /// Bring a lexicon table in, in one plain txn: a row whose lemma (and
+    /// homograph number, when given) names one existing entry adds its sense
+    /// there unless the entry already has a sense with that gloss (compared
+    /// trimmed and case-blind), and fills the entry's category or citation
+    /// only where it has none; any other row makes an entry, later rows of
+    /// the same lemma adding senses to it. So the same table twice writes
+    /// nothing. Text is NFC with spaces collapsed. The whole plan is worked
+    /// out before the txn opens.
+    pub fn import_lexicon_rows(&mut self, rows: &[LexiconRow]) -> Result<(LexiconImport, Option<CommitResult>), String> {
+        let tidy = |p: &Project, s: &str| p.proj.nfc(&s.split_whitespace().collect::<Vec<_>>().join(" "));
+        struct Entry {
+            owner_existing: Option<String>,
+            new_index: usize,
+            glosses: Vec<String>,
+            last_pos: String,
+        }
+        let mut report = LexiconImport::default();
+        let mut entries: std::collections::HashMap<(String, Option<u32>), Entry> = std::collections::HashMap::new();
+        let mut sets: Vec<(String, &'static str, String)> = Vec::new();
+        let mut new_entries: Vec<Vec<(&'static str, Value)>> = Vec::new();
+        let mut senses: Vec<(Owner, Vec<(String, Value)>)> = Vec::new();
+        for row in rows {
+            let lemma = tidy(self, &row.lemma);
+            if lemma.is_empty() {
+                continue;
+            }
+            let gloss = tidy(self, &row.gloss);
+            let key = (wugs_model::lexicon_key(&lemma), row.homograph);
+            if !entries.contains_key(&key) {
+                let mut found = Vec::new();
+                for id in self.proj.by_lookup_key("lexeme", &key.0)? {
+                    if row.homograph.is_none() || self.proj.field_num(&id, "homograph")? == row.homograph.map(f64::from) {
+                        found.push(id);
+                    }
+                }
+                if found.len() > 1 {
+                    if !report.ambiguous.contains(&lemma) {
+                        report.ambiguous.push(lemma.clone());
+                    }
+                    continue;
+                }
+                let entry = if let Some(id) = found.into_iter().next() {
+                    let mut glosses = Vec::new();
+                    let mut last_pos = String::new();
+                    for sense in self.proj.ordered_children("lexeme", &id, "sense")? {
+                        glosses.push(self.proj.field_str(&sense, "gloss")?.unwrap_or_default().trim().to_lowercase());
+                        last_pos = last_pos.max(self.proj.field_str(&sense, "pos")?.unwrap_or_default());
+                    }
+                    for (field, value) in [("pos-of-speech", &row.category), ("citation", &row.citation)] {
+                        let value = tidy(self, value);
+                        if !value.is_empty() && self.proj.field_str(&id, field)?.unwrap_or_default().trim().is_empty() {
+                            sets.push((id.clone(), field, value));
+                        }
+                    }
+                    Entry { owner_existing: Some(id), new_index: 0, glosses, last_pos }
+                } else {
+                    let mut fields = vec![("lemma", Value::str(&lemma))];
+                    for (field, value) in [("pos-of-speech", &row.category), ("citation", &row.citation)] {
+                        let value = tidy(self, value);
+                        if !value.is_empty() {
+                            fields.push((field, Value::str(&value)));
+                        }
+                    }
+                    if let Some(n) = row.homograph.filter(|n| *n > 0) {
+                        fields.push(("homograph", Value::Num(f64::from(n))));
+                    }
+                    new_entries.push(fields);
+                    Entry { owner_existing: None, new_index: new_entries.len() - 1, glosses: Vec::new(), last_pos: String::new() }
+                };
+                entries.insert(key.clone(), entry);
+            }
+            let entry = entries.get_mut(&key).expect("inserted above");
+            let folded = gloss.to_lowercase();
+            if entry.glosses.contains(&folded) {
+                report.unchanged += 1;
+                continue;
+            }
+            let pos = after(&entry.last_pos);
+            let mut fields = vec![("gloss".to_string(), Value::str(&gloss)), ("pos".to_string(), Value::str(&pos))];
+            for (tag, value) in &row.glosses {
+                let value = tidy(self, value);
+                if !value.is_empty() {
+                    fields.push((gloss_field(Some(tag))?, Value::str(&value)));
+                }
+            }
+            for (field, value) in [("definition", &row.definition), ("usage", &row.usage)] {
+                let value = tidy(self, value);
+                if !value.is_empty() {
+                    fields.push((field.to_string(), Value::str(&value)));
+                }
+            }
+            let owner = match &entry.owner_existing {
+                Some(id) => Owner::Existing(id.clone()),
+                None => Owner::New(entry.new_index),
+            };
+            senses.push((owner, fields));
+            entry.glosses.push(folded);
+            entry.last_pos = pos;
+        }
+        report.entries = new_entries.len();
+        report.senses = senses.len();
+        if sets.is_empty() && new_entries.is_empty() && senses.is_empty() {
+            return Ok((report, None));
+        }
+        let mut t = self.intent("import-lexicon");
+        for (id, field, value) in &sets {
+            t.set("lexeme", id, SCOPE_LEXICON, field, Value::str(value))?;
+        }
+        let made: Vec<String> = new_entries.into_iter().map(|fields| t.create("lexeme", "lex", SCOPE_LEXICON, fields)).collect();
+        for (owner, fields) in senses {
+            let lexeme = match owner {
+                Owner::Existing(id) => id,
+                Owner::New(i) => made[i].clone(),
+            };
+            let mut all = vec![("lexeme", Value::str(&lexeme))];
+            all.extend(fields.iter().map(|(f, v)| (f.as_str(), v.clone())));
+            t.create("sense", "sen", SCOPE_LEXICON, all);
+        }
+        Ok((report, Some(t.commit()?)))
     }
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName, LIST_SHOWS, showLabel, shows } from "./logic.ts";
+import { domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName, LIST_SHOWS, showLabel, shows, tableImportLines } from "./logic.ts";
 
 test("a numbered homograph shows a subscript", () => {
   assert.equal(headword("yüz", null), "yüz");
@@ -79,4 +79,16 @@ test("the entry list can show only the entries with work left", () => {
   assert.deepEqual(rows.map((r) => shows(r, "unused")), [false, true, false, true]);
   assert.ok(rows.every((r) => shows(r, "all")));
   assert.equal(showLabel(rows, LIST_SHOWS[1]!), "Needs a gloss (3)");
+});
+
+test("a lexicon table import is reported in words", () => {
+  const r = { entries: 2, senses: 3, unchanged: 1, ambiguous: ["lari"], noLemma: 1, columns: ["Headword → lemma", "English → gloss"], ignored: ["Colour"] };
+  assert.deepEqual(tableImportLines(r), [
+    "Added 2 entries and 3 senses; 1 row was there already.",
+    "Read Headword → lemma, English → gloss.",
+    "Left out the column «Colour».",
+    "Not added: «lari» names several entries; give those rows a homograph column.",
+    "1 row has no word and was skipped.",
+  ]);
+  assert.equal(tableImportLines({ ...r, entries: 0, senses: 0, ambiguous: [], noLemma: 0, ignored: [] })[0], "Nothing new: every row is in the lexicon already.");
 });

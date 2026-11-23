@@ -121,3 +121,24 @@ export function shows(r: ListRow, show: ListShow): boolean {
 export function showLabel(rows: readonly ListRow[], s: { id: ListShow; label: string }): string {
   return `${s.label} (${rows.filter((r) => shows(r, s.id)).length.toLocaleString("en")})`;
 }
+
+/** What a lexicon table import did (`lexicon_table::import`). */
+export type TableImport = { entries: number; senses: number; unchanged: number; ambiguous: string[]; noLemma: number; columns: string[]; ignored: string[] };
+
+/** The toast after a lexicon table import, in words. */
+export function tableImportLines(r: TableImport): string[] {
+  const n = (x: number, one: string, many: string) => `${x.toLocaleString("en")} ${x === 1 ? one : many}`;
+  const lines = [
+    r.entries === 0 && r.senses === 0
+      ? "Nothing new: every row is in the lexicon already."
+      : `Added ${n(r.entries, "entry", "entries")} and ${n(r.senses, "sense", "senses")}${r.unchanged > 0 ? `; ${n(r.unchanged, "row was", "rows were")} there already` : ""}.`,
+    `Read ${r.columns.join(", ")}.`,
+  ];
+  if (r.ignored.length > 0) lines.push(`Left out ${r.ignored.length === 1 ? "the column" : "the columns"} ${r.ignored.map((c) => `«${c}»`).join(", ")}.`);
+  if (r.ambiguous.length > 0) {
+    const shown = r.ambiguous.slice(0, 5).map((l) => `«${l}»`).join(", ");
+    lines.push(`Not added: ${shown}${r.ambiguous.length > 5 ? " and others" : ""} ${r.ambiguous.length === 1 ? "names" : "name"} several entries; give those rows a homograph column.`);
+  }
+  if (r.noLemma > 0) lines.push(`${n(r.noLemma, "row has", "rows have")} no word and ${r.noLemma === 1 ? "was" : "were"} skipped.`);
+  return lines;
+}
