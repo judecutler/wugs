@@ -6,11 +6,13 @@ import { capabilityChoose, errorText, morphosyntaxAllowWeb, morphosyntaxChoose, 
 import { choiceOptions, statusLine } from "../capability/logic";
 import { h } from "../dom";
 import { capability, getState, refreshAll, refreshCapabilities, showToast } from "../store";
-import { setupFor, spacyNote, stanzaNote, taggedLines, WEB_NOTE } from "./logic";
+import { addTagged, NO_TAGS, projectTaggedLines, setupFor, shouldStop, spacyNote, stanzaNote, taggedLines, WEB_NOTE, type ProjectRun } from "./logic";
 
 let setup: { project: string; value: MorphosyntaxSetup } | null = null;
 let loading = false;
 let running: string | null = null;
+/** A run over every text: how far it is, and whether Stop was pressed. */
+let whole: { done: number; texts: number; stop: boolean } | null = null;
 let model = "";
 type PyTool = "spacy" | "stanza";
 const EMPTY = { python: null, pipeline: null, about: null };
@@ -113,6 +115,47 @@ async function run(textId: string, title: string) {
   redraw();
 }
 
+/** Tag every text of the project in turn, one text a call, so each text's
+ * sentences are written as soon as they are tagged and Stop loses nothing. */
+async function runAll(project: string) {
+  const s = getState();
+  if (running !== null || s.kind !== "open" || s.info.projectId !== project) return;
+  const texts = s.texts.filter((t) => t.segments > 0);
+  const run: ProjectRun = { texts: texts.length, done: 0, total: NO_TAGS, failed: [], stopped: null };
+  whole = { done: 0, texts: texts.length, stop: false };
+  running = "*";
+  redraw();
+  let previous: string | null = null;
+  for (const t of texts) {
+    if (whole.stop) {
+      run.stopped = "asked";
+      break;
+    }
+    const now = getState();
+    if (now.kind !== "open" || now.info.projectId !== project) break;
+    let error: string | null = null;
+    try {
+      run.total = addTagged(run.total, await morphosyntaxRun({ textId: t.id, model }));
+    } catch (e) {
+      error = errorText(e);
+      run.failed.push({ title: t.title, error });
+    }
+    run.done += 1;
+    whole.done = run.done;
+    redraw();
+    if (shouldStop(previous, error)) {
+      run.stopped = "repeated";
+      break;
+    }
+    previous = error;
+  }
+  running = null;
+  whole = null;
+  showToast({ tone: run.failed.length > 0 || run.total.differ > 0 ? "warn" : "info", lines: projectTaggedLines(run) });
+  await refreshAll();
+  redraw();
+}
+
 /** The bar for the text on screen; `draw` is called again when its data arrives. */
 export function tagBar(text: { id: string; title: string }, draw: () => void): HTMLElement {
   redraw = draw;
@@ -129,8 +172,18 @@ export function tagBar(text: { id: string; title: string }, draw: () => void): H
     disabled: running !== null || v === null || v.effective === null,
     onclick: () => void run(text.id, text.title),
   });
+  const all =
+    whole !== null
+      ? h("button", { type: "button", textContent: whole.stop ? "Stopping…" : `Stop (${whole.done} of ${whole.texts})`, title: "Stop after the text being tagged; texts tagged so far keep their tags", disabled: whole.stop, onclick: () => whole && ((whole.stop = true), draw()) })
+      : h("button", {
+          type: "button",
+          textContent: "Every text",
+          title: "Tag and parse every text of the project, one after another, with the same tagger. Sentences with tags already, and words you glossed, are kept.",
+          disabled: running !== null || v === null || v.effective === null || s.texts.length < 2,
+          onclick: () => void runAll(project),
+        });
   const toggle = h("button", { type: "button", className: "st-tag-toggle", textContent: open ? "Hide tagger" : "Tagger…", title: "Which tagger runs, and what it needs", onclick: () => ((open = !open), draw()) });
-  const parts: HTMLElement[] = [h("div", { className: "st-tag-row" }, button, toggle)];
+  const parts: HTMLElement[] = [h("div", { className: "st-tag-row" }, button, all, toggle)];
   if (v !== null && (open || v.effective === null)) {
     const picker = h(
       "select",

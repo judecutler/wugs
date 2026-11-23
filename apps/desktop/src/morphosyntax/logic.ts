@@ -44,3 +44,37 @@ export function spacyNote(s: { pipeline: string | null; about: string | null } |
   if (s?.pipeline && s.about) return `Checked: ${s.about}.`;
   return "spaCy runs in your own Python: install it with `python -m pip install spacy`, a pipeline for the language with `python -m spacy download en_core_web_sm` (or another from spacy.io/models), then type the pipeline's name and press Use.";
 }
+
+/** What a run over every text did: each text's result added up, the texts
+ * that failed with why, and whether it stopped early. */
+export type ProjectRun = { texts: number; done: number; total: Tagged; failed: { title: string; error: string }[]; stopped: "asked" | "repeated" | null };
+
+/** Add one text's result to the run's total. */
+export function addTagged(total: Tagged, r: Tagged): Tagged {
+  return { annotated: total.annotated + r.annotated, tokenized: total.tokenized + r.tokenized, kept: total.kept + r.kept, differ: total.differ + r.differ, words: total.words + r.words, by: r.annotated > 0 ? r.by : total.by };
+}
+
+export const NO_TAGS: Tagged = { annotated: 0, tokenized: 0, kept: 0, differ: 0, words: 0, by: "" };
+
+/** Stop a run when two texts in a row fail the same way: the tagger is not
+ * working (not installed, the service down), so the rest would fail too. */
+export function shouldStop(previous: string | null, error: string | null): boolean {
+  return error !== null && error === previous;
+}
+
+/** The toast after tagging every text. */
+export function projectTaggedLines(run: ProjectRun): string[] {
+  const t = run.total;
+  const lines: string[] = [];
+  if (run.stopped === "asked") lines.push(`Stopped after ${n(run.done, "text", "texts")} of ${run.texts}.`);
+  if (run.stopped === "repeated") lines.push(`Stopped after ${n(run.done, "text", "texts")} of ${run.texts}: the last two failed the same way.`);
+  if (t.annotated > 0) lines.push(`Tagged and parsed ${n(t.annotated, "sentence", "sentences")} (${n(t.words, "word", "words")}) in ${n(run.done - run.failed.length, "text", "texts")} with ${t.by}.`);
+  else if (run.failed.length < run.done) lines.push(t.kept > 0 ? "Every sentence has tags already; nothing was sent." : "No transcribed sentences needed tags.");
+  if (t.tokenized > 0) lines.push(`${n(t.tokenized, "sentence was", "sentences were")} broken into words the tagger's way.`);
+  if (t.kept > 0 && t.annotated > 0) lines.push(`${n(t.kept, "sentence keeps its", "sentences keep their")} own tags.`);
+  if (t.differ > 0) lines.push(`${n(t.differ, "sentence was", "sentences were")} left alone: split into words differently from the tagger's. Retokenize in the Gloss panel to tag ${t.differ === 1 ? "it" : "them"}.`);
+  for (const f of run.failed.slice(0, 3)) lines.push(`«${f.title}»: ${f.error}`);
+  if (run.failed.length > 3) lines.push(`${run.failed.length - 3} more ${run.failed.length - 3 === 1 ? "text" : "texts"} could not be tagged.`);
+  if (t.annotated > 0) lines.push("Check them in the Sentence panel: a tagger's guess is a start, not an answer.");
+  return lines;
+}
