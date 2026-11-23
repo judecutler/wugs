@@ -73,3 +73,27 @@ export function usageLabel(n: number): string {
   if (n === 0) return "not used in any text yet";
   return n === 1 ? "used in 1 word" : `used in ${n} words`;
 }
+
+/** The relation types the Lexicon offers, each as the dictionary names it. */
+export const RELATIONS: { id: string; label: string }[] = [
+  { id: "synonym", label: "Synonym" },
+  { id: "antonym", label: "Antonym" },
+  { id: "compare", label: "See also" },
+  { id: "part", label: "Part of" },
+  { id: "whole", label: "Has part" },
+];
+
+/** A relation's type in words, read from the entry it is shown under; a
+ * type another file brought is shown as written. */
+export function relationLabel(relation: string): string {
+  const known = RELATIONS.find((r) => r.id === relation);
+  if (known) return known.label;
+  return relation.charAt(0).toUpperCase() + relation.slice(1);
+}
+
+/** The other end of a relation as a reader names it: its headword, and its
+ * sense number when the relation points at one sense. */
+export function relatedName(r: { otherLemma: string; otherHomograph: number | null; otherSense: number | null }): string {
+  const hw = headword(r.otherLemma, r.otherHomograph);
+  return r.otherSense === null ? hw : `${hw} (sense ${r.otherSense})`;
+}

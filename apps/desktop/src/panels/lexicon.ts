@@ -9,12 +9,12 @@ import {
   concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
   lexiconDeleteForm, lexiconFillCell, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
-  lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation,
+  lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
   type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
 import { normalizeLangTag } from "../gloss/lang";
-import { filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel } from "../lexicon/logic";
+import { filterDomains, glossLine, headword, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, layout, otherFormLine, TEMPLATES, templateById, type Features, type Template } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
@@ -63,6 +63,8 @@ export const lexiconPanel: PanelDef = {
     let uses: { senseId: string; hits: Hit[] | null; total: number } | null = null;
     /** An armed destructive button: its key; a second click carries it out. */
     let armed: string | null = null;
+    /** The relation type the Related row adds next. */
+    let relationKind = "synonym";
     let listSeq = 0;
     /** True while the panel replaces its own nodes: the blur a removed input
      * fires then is not the user leaving the field, so it must not save. */
@@ -381,6 +383,7 @@ export const lexiconPanel: PanelDef = {
             }),
           ),
         ),
+        row("Related", relationsBlock(e)),
         row("Homograph", homograph),
         note === null
           ? null
@@ -411,6 +414,38 @@ export const lexiconPanel: PanelDef = {
         confirmButton(`del:${e.id}`, "Delete entry", () => void run(() => lexiconDelete({ id: e.id }), true)),
       );
       editor.replaceChildren(head, ...senses, paradigmBlock(e), foot);
+    }
+
+    /** Synonyms, antonyms and the like: each a chip that opens the other
+     * entry, and a type and a headword to add one. */
+    function relationsBlock(e: EntryView) {
+      const chips = e.relations.map((r) =>
+        h(
+          "span",
+          { className: "lx-chip lx-rel" },
+          h("span", { className: "lx-code", textContent: `${relationLabel(r.relation)}${r.hereSense === null ? "" : ` (${r.hereSense})`}` }),
+          " ",
+          h("button", { type: "button", className: "link-button", textContent: relatedName(r), title: "Open this entry", onclick: () => void loadEntry(r.otherId) }),
+          " ",
+          h("button", {
+            type: "button",
+            className: "lx-x",
+            ariaLabel: `Remove the relation to ${relatedName(r)}`,
+            textContent: "×",
+            onclick: () => void run(() => lexiconDeleteRelation({ id: e.id, relationId: r.id })),
+          }),
+        ),
+      );
+      const kind = h("select", { ariaLabel: "Relation type" }, ...RELATIONS.map((r) => h("option", { value: r.id, textContent: r.label, selected: r.id === relationKind })));
+      kind.dataset.key = `relkind:${e.id}`;
+      kind.onchange = () => {
+        relationKind = kind.value;
+      };
+      const target = cell(`rel:${e.id}`, "", "Related headword", (v) => (v.trim() === "" ? Promise.resolve() : run(() => lexiconAddRelation({ id: e.id, relation: kind.value, target: v }), true)), {
+        placeholder: "headword, e.g. tela2",
+        size: 14,
+      });
+      return h("div", { className: "lx-forms" }, ...chips, kind, target);
     }
 
     /** How the entry is said: each pronunciation a field, its ▶ when it is

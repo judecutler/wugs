@@ -33,6 +33,7 @@
     <sense id="gel_s1" guid="8c3d0003-0000-4000-8000-0000000000a1">
       <grammatical-info value="Verb"/>
       <gloss lang="en"><text>come</text></gloss>
+      <relation type="Calendar" ref="köpek_6f1a"/>
     </sense>
   </entry>
   <entry id="-di_9d4e" guid="9d4e0004-0000-4000-8000-000000000004">
@@ -44,11 +45,13 @@
   <entry id="yüz_1" guid="ae5f0005-0000-4000-8000-000000000005" order="1">
     <lexical-unit><form lang="tr"><text>yüz</text></form></lexical-unit>
     <sense id="yüz1_s1"><gloss lang="en"><text>face</text></gloss></sense>
+    <relation type="Compare" ref="yüz_2" order="1"/>
   </entry>
   <entry id="yüz_2" guid="bf600006-0000-4000-8000-000000000006" order="2">
     <lexical-unit><form lang="tr"><text>yüz</text></form></lexical-unit>
     <sense id="yüz2_s1"><gloss lang="en"><text>hundred</text></gloss></sense>
     <sense id="yüz2_s2"><gloss lang="en"><text>swim</text></gloss></sense>
+    <relation type="Compare" ref="yüz_1"/>
     <note><form lang="en"><text>homograph of yüz 'face'</text></form></note>
   </entry>
 </lift>

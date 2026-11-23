@@ -116,6 +116,50 @@ pub struct EntryView {
     pub allomorphs: Vec<(String, String)>,
     /// How the entry is said, each with where to hear it.
     pub pronunciations: Vec<PronunciationView>,
+    /// Synonyms, antonyms and the like, read from this entry's side.
+    pub relations: Vec<RelationView>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelationView {
+    pub id: String,
+    /// Its type from this entry's side (`synonym`, `whole`, or as a file wrote it).
+    pub relation: String,
+    /// The sense of this entry it is attached to (1-based), when not the entry.
+    pub here_sense: Option<usize>,
+    pub other_id: String,
+    pub other_lemma: String,
+    pub other_homograph: Option<u32>,
+    pub other_sense: Option<usize>,
+}
+
+/// Where a lexeme-or-sense sits: its entry, and its sense number when it is a sense.
+fn entry_and_sense(p: &Project, id: &str) -> Result<(String, Option<usize>), String> {
+    if p.proj.entity_kind(id)?.as_deref() == Some("sense") {
+        let lex = str_field(p, id, "lexeme")?;
+        let n = p.proj.ordered_children("lexeme", &lex, "sense")?.iter().position(|x| x == id).map(|i| i + 1);
+        return Ok((lex, n));
+    }
+    Ok((id.to_string(), None))
+}
+
+fn relation_views(p: &Project, lexeme: &str) -> Result<Vec<RelationView>, String> {
+    let mut out = Vec::new();
+    for r in p.relations(lexeme)? {
+        let (_, here_sense) = entry_and_sense(p, &r.here)?;
+        let (other, other_sense) = entry_and_sense(p, &r.other)?;
+        out.push(RelationView {
+            id: r.id,
+            relation: r.relation,
+            here_sense,
+            other_lemma: str_field(p, &other, "lemma")?,
+            other_homograph: homograph(p, &other)?,
+            other_id: other,
+            other_sense,
+        });
+    }
+    Ok(out)
 }
 
 #[derive(Debug, Serialize)]
@@ -276,6 +320,7 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
         same_lemma,
         allomorphs: p.allomorphs(id)?,
         pronunciations: pronunciation_views(p, id)?,
+        relations: relation_views(p, id)?,
         lemma,
     })
 }
@@ -420,6 +465,57 @@ pub fn lexicon_delete_pronunciation(session: &mut Session, id: &str, pronunciati
     let p = project(session)?;
     own_pronunciation(p, id, pronunciation)?;
     let res = p.delete_pronunciation(pronunciation)?;
+    edit(p, id, &res)
+}
+
+/// The live entry a typed headword names: its lemma, with a homograph
+/// number after it (`tela2`, `tela 2`, `tela₂`) when several share it.
+fn entry_named(p: &Project, typed: &str) -> Result<String, String> {
+    let typed = p.proj.nfc(typed.trim());
+    let sub = |c: char| ('₀'..='₉').contains(&c);
+    let digits: String = typed.chars().rev().take_while(|c| c.is_ascii_digit() || sub(*c)).collect::<Vec<_>>().into_iter().rev().collect();
+    let wanted: Option<u32> = (!digits.is_empty())
+        .then(|| digits.chars().map(|c| if sub(c) { char::from(b'0' + (c as u32 - '₀' as u32) as u8) } else { c }).collect::<String>().parse().ok())
+        .flatten();
+    let bare = typed[..typed.len() - digits.len()].trim_end().to_string();
+    let mut found = Vec::new();
+    for name in [typed.clone(), bare.clone()] {
+        if name.is_empty() {
+            continue;
+        }
+        for lex in p.proj.by_lookup_key("lexeme", &wugs_model::lexicon_key(&name))? {
+            if !p.proj.is_tombstoned(&lex)? && p.proj.nfc(&str_field(p, &lex, "lemma")?) == name && !found.iter().any(|(l, _, _)| *l == lex) {
+                found.push((lex.clone(), homograph(p, &lex)?, name == bare && name != typed));
+            }
+        }
+        if !found.is_empty() {
+            break;
+        }
+    }
+    let numbered: Vec<&(String, Option<u32>, bool)> = found.iter().filter(|(_, h, by_number)| !by_number || *h == wanted).collect();
+    match numbered.as_slice() {
+        [] if found.is_empty() => Err(format!("No entry is spelled «{typed}». Add it first, or check the spelling.")),
+        [] => Err(format!("No «{bare}» has homograph number {}.", wanted.unwrap_or(0))),
+        [(lex, _, _)] => Ok(lex.clone()),
+        _ => Err(format!("Several entries are spelled «{bare}»: add the homograph number, such as «{bare}2».")),
+    }
+}
+
+/// Relate the entry to another, named by its headword.
+pub fn lexicon_add_relation(session: &mut Session, id: &str, relation: &str, target: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    require(p, id, "lexeme")?;
+    let other = entry_named(p, target)?;
+    let (_, res) = p.add_relation(id, relation, &other)?;
+    edit(p, id, &res)
+}
+
+pub fn lexicon_delete_relation(session: &mut Session, id: &str, relation: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    if !p.relations(id)?.iter().any(|r| r.id == relation) {
+        return Err("that relation is not one of this entry's".into());
+    }
+    let res = p.delete_relation(relation)?;
     edit(p, id, &res)
 }
 

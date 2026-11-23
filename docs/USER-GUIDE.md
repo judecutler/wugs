@@ -402,6 +402,12 @@ The **Pronunciation** row under an entry's category holds how the word is said, 
 
 Empty a pronunciation's field to delete it, or click × and then **Delete?**. Pronunciations print after the headword in **Dictionary to print…**, and on a published website the dictionary plays each headword heard in a recording that is open. LIFT files carry them both ways (`<pronunciation>`, with its media file name kept as written).
 
+### Relate entries to each other
+
+The **Related** row links an entry to its synonyms, antonyms and other words a reader should see. Pick a type (**Synonym**, **Antonym**, **See also**, **Part of**, **Has part**), type the other entry's headword and press **Enter**. When several entries share a headword, add the homograph number: `tela2`.
+
+A relation shows on both entries: a synonym is a synonym from either side, and «finger» **Part of** «hand» shows on «hand» as **Has part** «finger». Click the other headword to open it, or × to remove the relation. The printed dictionary lists them after the senses (**Syn:**, **Ant:**, **See also:**) as links, and LIFT files carry them both ways, including the types FLEx names that wugs has no word for.
+
 ### Add example sentences
 
 Each sense can have example sentences with their translations, as a printed dictionary shows under a meaning.
