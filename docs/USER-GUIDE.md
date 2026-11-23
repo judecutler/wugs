@@ -925,6 +925,8 @@ The **Frequencies** panel lists the words of the project with how often each occ
 2. Count in the **Whole project** or pick one text.
 3. Sort by count, alphabetically, or by how many texts a word is in, and type in **Filter the list** to find one.
 
+**By ending (reverse list)** sorts words from their last letter backwards, as a reverse dictionary does, and lines them up on the right. Words that share a suffix sit together (every word ending in `-lar`, then `-ler`), so you can spot inflectional endings, rhymes, and spellings of one ending that differ. A letter keeps its accents and other marks.
+
 **Per 1000** is how often it occurs in every thousand. Capital letters count together (Kesi and kesi are one word, shown as the spelling used most); diacritics do not (ŋa and na are two). A morph or gloss counts once per word that has it, so a word with PL twice counts once. Click a row to see its occurrences in the Concordance, looked up exactly (a `?` in a word is a letter there, not a wildcard) and in the chosen text: the number of lines matches the count. The list counts again when the project syncs or texts change; after glossing or typing, click **Recount**. Up to 5,000 items are listed and the first 500 drawn; filter to find the rest. The **#** column is each item's frequency rank, whatever the order shown. **Copy table** copies the list to paste into a spreadsheet.
 
 ### Find the words your dictionary still lacks

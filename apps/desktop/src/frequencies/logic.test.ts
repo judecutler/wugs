@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asTsv, filterRows, lexiconCell, lexiconNote, notInLexicon, perThousand, ranked, sortRows, summary } from "./logic.ts";
+import { asTsv, filterRows, lexiconCell, lexiconNote, notInLexicon, perThousand, ranked, reversed, sortRows, summary } from "./logic.ts";
 
 const rows = [
   { item: "kesi", count: 5, texts: 1 },
@@ -65,4 +65,14 @@ test("a word list says what the lexicon lacks", () => {
   assert.equal(lexiconCell("analysed"), "Glossed only");
   assert.equal(asTsv(words, 10).split("\n")[0], "rank\titem\tcount\tper 1000 words\ttexts\tin lexicon");
   assert.equal(asTsv(words, 10).split("\n")[2], "2\ttolo\t3\t300\t1\tNo");
+});
+
+test("a reverse list sorts words by their endings, marks staying on their letters", () => {
+  assert.equal(reversed("kitaplar"), "ralpatik");
+  assert.equal(reversed("tõ\u0301ka"), "akõ\u0301t".normalize("NFC"), "a letter keeps its marks");
+  const rows = ["evler", "kitaplar", "ev", "kalem", "kitap", "adamlar"].map((item, i) => ({ item, count: 10 - i, texts: 1 }));
+  assert.deepEqual(
+    sortRows(rows, "ending").map((r) => r.item),
+    ["kalem", "kitap", "adamlar", "kitaplar", "evler", "ev"],
+  );
 });

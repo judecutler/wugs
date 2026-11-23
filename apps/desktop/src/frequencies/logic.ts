@@ -31,20 +31,35 @@ export function unlabelledNote(f: Frequencies, kind: "lemma" | "tag"): string {
   return ` ${n.toLocaleString("en")} ${n === 1 ? "word has" : "words have"} no ${what} yet: tag and parse its text in the Sentence panel, or ${how}.`;
 }
 
-export type FreqSort = "count" | "alpha" | "texts";
+export type FreqSort = "count" | "alpha" | "ending" | "texts";
 
 export const FREQ_SORTS: { id: FreqSort; label: string }[] = [
   { id: "count", label: "Most frequent first" },
   { id: "alpha", label: "Alphabetical" },
+  { id: "ending", label: "By ending (reverse list)" },
   { id: "texts", label: "In most texts first" },
 ];
 
 const collator = new Intl.Collator(undefined, { sensitivity: "accent", numeric: true });
+const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+/** The item read from its end: its letters (each with its marks) in reverse,
+ * so words sharing an ending sort together, as a retrograde dictionary
+ * lists them: `kitaplar` beside `adamlar`, and every `-lar` together. */
+export function reversed(item: string): string {
+  return Array.from(graphemes.segment(item.normalize("NFC")), (g) => g.segment)
+    .reverse()
+    .join("");
+}
 
 /** Sorted copy; ties keep the backend's order (most frequent, then first met). */
 export function sortRows<R extends FrequencyRow>(rows: readonly R[], by: FreqSort): R[] {
   if (by === "count") return [...rows];
   if (by === "texts") return [...rows].sort((a, b) => b.texts - a.texts || b.count - a.count);
+  if (by === "ending") {
+    const keyed = rows.map((r) => ({ r, k: reversed(r.item) }));
+    return keyed.sort((a, b) => collator.compare(a.k, b.k) || collator.compare(a.r.item, b.r.item)).map((x) => x.r);
+  }
   return [...rows].sort((a, b) => collator.compare(a.item, b.item));
 }
 
