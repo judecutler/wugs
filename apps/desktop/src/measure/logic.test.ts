@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { measuredLines, trackToMeasure } from "./logic.ts";
+import { clipsLines, measuredLines, trackToMeasure } from "./logic.ts";
 
 const tiers = [
   { id: "t1", name: "words" },
@@ -27,4 +27,9 @@ test("the report says what was measured and what was left out", () => {
   assert.equal(lines.length, 3);
   assert.match(lines[1], /1 segment has no voiced frame/);
   assert.match(lines[2], /2 segments have no times and were left out/);
+});
+
+test("the clips toast names the folder and what was left out", () => {
+  assert.deepEqual(clipsLines("utterance", { path: "/x/T utterance clips", clips: 1, untimed: 0 }), ["Saved 1 clip of «utterance», each named after its transcription, with clips.csv listing them: /x/T utterance clips."]);
+  assert.equal(clipsLines("u", { path: "p", clips: 3, untimed: 2 })[1], "2 segments have no times and were left out.");
 });

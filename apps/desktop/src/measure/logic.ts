@@ -25,3 +25,12 @@ export function measuredLines(track: string, r: MeasureReport): string[] {
   if (r.untimed > 0) lines.push(`${plural(r.untimed, "segment has", "segments have")} no times and ${r.untimed === 1 ? "was" : "were"} left out.`);
   return lines;
 }
+
+export type ClipsReport = { path: string; clips: number; untimed: number };
+
+/** The toast after saving a track's segments as sound files. */
+export function clipsLines(track: string, r: ClipsReport): string[] {
+  const lines = [`Saved ${plural(r.clips, "clip", "clips")} of «${track}», each named after its transcription, with clips.csv listing them: ${r.path}.`];
+  if (r.untimed > 0) lines.push(`${plural(r.untimed, "segment has", "segments have")} no times and ${r.untimed === 1 ? "was" : "were"} left out.`);
+  return lines;
+}
