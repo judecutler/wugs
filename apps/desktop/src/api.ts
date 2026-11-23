@@ -560,6 +560,8 @@ export const conceptListLoad = (args: { source: string }) => invoke<ListSummary>
 export const conceptListImport = (args: { path: string }) => invoke<{ summary: ListSummary; created: number; already: number; withConcepticon: number }>("concept_list_import", args);
 export const conceptLists = () => invoke<ListSummary[]>("concept_lists");
 export const conceptListView = (args: { listId: string }) => invoke<ListView>("concept_list_view", args);
+/** Another language's word list read from a table, for the Compare word lists panel (src-tauri/src/compare.rs); nothing is written. */
+export const compareRead = (args: { path: string }) => invoke<import("./compare/logic").OtherList>("compare_read", args);
 export const elicitAnswer = (args: { conceptId: string; form: string; gloss: string; segmentId: string | null }) => invoke<ConceptEdit>("elicit_answer", args);
 export const elicitLink = (args: { conceptId: string; senseId: string; segmentId: string | null }) => invoke<ConceptEdit>("elicit_link", args);
 export const elicitUnlink = (args: { conceptId: string; senseId: string }) => invoke<ConceptEdit>("elicit_unlink", args);

@@ -1038,6 +1038,15 @@ const LEXICON = [
       { source: "Tadmor-2009-100", name: "Leipzig-Jakarta (100)", citation: "Tadmor 2009, via Concepticon", count: 100, listId: null },
     ],
     concept_lists: () => [listSummary],
+    compare_read: ({ path }) => ({
+      name: path.split("/").pop(),
+      columns: ["DOCULECT", "CONCEPT", "FORM"],
+      skipped: 1,
+      forms: [
+        ["Kelani", "one", "ŋaːi"], ["Kelani", "two", "tolu"], ["Kelani", "I", "nii"], ["Kelani", "water", "wai"], ["Kelani", "hand", "lima"], ["Kelani", "fish", "sela"],
+        ["Moru", "one", "isa"], ["Moru", "two", "doru"], ["Moru", "water", "tela"], ["Moru", "hand", "kamay"], ["Moru", "fish", "ikan"],
+      ].map(([language, concept, form]) => ({ language, concept, form })),
+    }),
     concept_list_view: () => ({ summary: listSummary, concepts }),
     domain_questions: ({ domainId }) => {
       const d = DOMAINS.find((x) => x.id === domainId) ?? DOMAINS[2];

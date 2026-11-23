@@ -1087,6 +1087,13 @@ body::before {
 .pg-chart .curve { fill: none; stroke: var(--accent); stroke-width: 2; }
 .pg-chart .tick, .pg-chart .axis { font-size: 10px; fill: var(--muted); }
 .panel-soundchanges .sca-top { display: flex; gap: 12px; flex-wrap: wrap; }
+.panel-compare { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.panel-compare .cmp-rows { overflow: auto; min-height: 0; flex: 1 1 auto; }
+.panel-compare .cmp-table td { vertical-align: top; }
+.panel-compare .cmp-form { display: inline-block; margin-right: 8px; white-space: nowrap; }
+.panel-compare .cmp-form small { color: var(--muted); font-family: var(--font-ui); }
+.panel-compare .cmp-close { font-weight: 600; border-bottom: 2px solid var(--accent-bright); }
+.panel-compare .cmp-ours { font-weight: 600; }
 .panel-soundchanges .sca-col { flex: 1 1 260px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .panel-soundchanges textarea { font-family: var(--font-ipa); font-size: var(--text-base); width: 100%; box-sizing: border-box; resize: vertical; }
 .panel-soundchanges .sca-problems { margin: 0; padding-left: 1.2em; color: var(--error); font-size: var(--text-sm); }

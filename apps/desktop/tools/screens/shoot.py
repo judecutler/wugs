@@ -50,6 +50,7 @@ PANELS = [
     ("notes", "Notes"),
     ("wordsketch", "Word sketch"),
     ("soundchanges", "Sound changes"),
+    ("compare", "Compare word lists"),
     ("orthography", "Orthography"),
     ("assist", "Speech assist"),
     ("people", "People"),
@@ -636,6 +637,20 @@ def main():
                 failures.append("Sound changes did not run the example rules")
             if run.page.locator(".panel-soundchanges .sca-table tbody tr").count() == 0:
                 failures.append("Sound changes listed no changed word")
+            # Compare word lists: another language's list beside the answers.
+            run.front("compare", "Compare word lists")
+            run.page.evaluate("window.__WUGS_PICK__ = ['/tmp/kelani-moru.tsv']")
+            run.page.locator(".panel-compare button", has_text="Load a word list").click()
+            run.page.locator(".panel-compare .cmp-close").first.wait_for()
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            if "11 forms of 2 languages" not in " ".join(run.toasts()):
+                failures.append("Compare word lists did not report what it read")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.shot("state-compare", run.page.locator(".panel-compare"))
+            if "Kelani" not in run.page.locator(".panel-compare thead").inner_text():
+                failures.append("Compare word lists did not add a column for the loaded language")
+            if "look alike" not in run.page.locator(".panel-compare .cmp-line").inner_text():
+                failures.append("Compare word lists did not say how alike the lists are")
             # Notes: every note in one list, questions only.
             run.front("notes", "Notes")
             run.page.locator(".panel-notes .nt-item").first.wait_for()

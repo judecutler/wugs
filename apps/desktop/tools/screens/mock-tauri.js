@@ -53,7 +53,8 @@
       return null;
     },
     // A dialog cancelled: the shell treats null as "nothing picked".
-    "plugin:dialog|open": () => null,
+    // A probe may set window.__WUGS_PICK__ to the path(s) a picker returns.
+    "plugin:dialog|open": () => window.__WUGS_PICK__ ?? null,
     "plugin:dialog|save": () => null,
     "plugin:app|version": () => "0.1.0",
     // Copy example: what the app put on the clipboard, for probes to read.
