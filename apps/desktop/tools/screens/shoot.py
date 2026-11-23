@@ -469,6 +469,15 @@ def main():
             run.page.wait_for_timeout(600)
             if run.page.locator(".panel-concordance .cc-query").input_value() != '[lemma="kani"]':
                 failures.append("a lemma row did not open the Concordance on its CQP query")
+            # A tagged line can show each word's tag beside it.
+            tags = run.page.locator(".panel-concordance button", has_text="Tags")
+            tags.wait_for()
+            tags.click()
+            run.page.wait_for_timeout(200)
+            run.shot("state-concordance-tags", run.page.locator(".panel-concordance"))
+            if "nikani_VERB" not in run.page.locator(".panel-concordance .cc-rows").inner_text():
+                failures.append("Tags did not show each word's tag")
+            tags.click()
             # Collocates (Scrolls): a word's company, a row opens its Concordance.
             run.front("collocates", "Collocates")
             run.page.locator(".panel-collocates .co-node").fill("nikani")

@@ -20,6 +20,8 @@ export type Hit = {
   len?: number;
   breakdown: string | null;
   glosses: string | null;
+  /** For a CQP query: each word's tag (UPOS, else XPOS; "" for none). */
+  tags?: string[];
 };
 
 export const KINDS: { id: ConcordanceKind; label: string; hint: string }[] = [
@@ -106,6 +108,15 @@ export function countLine(shown: number, total: number, texts: number): string {
 export function asTsv(hits: readonly Hit[]): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
   return ["left\tkeyword\tright\ttext", ...hits.map((h) => [left(h), keyword(h), right(h), h.textTitle].map(clean).join("\t"))].join("\n");
+}
+
+/** Whether any line carries a word's tag (a CQP query over a tagged corpus). */
+export const hasTags = (hits: readonly Hit[]): boolean => hits.some((h) => h.tags?.some((t) => t !== "") ?? false);
+
+/** The line with each word written word_TAG, as AntConc shows a tagged corpus; a word with no tag stays as it is. */
+export function withTags(h: Hit): Hit {
+  if (h.tags === undefined) return h;
+  return { ...h, words: h.words.map((w, i) => (h.tags![i] ? `${w}_${h.tags![i]}` : w)) };
 }
 
 /** Right-to-left scripts (Hebrew, Arabic, Syriac, Thaana, N'Ko …): the row is laid out from the right. */

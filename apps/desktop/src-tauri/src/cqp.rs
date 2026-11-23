@@ -591,6 +591,7 @@ pub fn run(session: &mut Session, query: &str, only_text: Option<&str>) -> Resul
                         len,
                         breakdown: None,
                         glosses: None,
+                        tags: Some(toks.iter().map(|t| if t.upos.is_empty() { t.xpos.clone() } else { t.upos.clone() }).collect()),
                     });
                 }
             }
@@ -669,6 +670,9 @@ mod tests {
         let playa = wugs_conllu::import_conllu(p, ud, "playa", &tier).unwrap().texts[0].clone();
         p.set_text_metadata(&playa, "Genre", "beach talk").unwrap();
         let r = run(&mut s, "[upos=\"ADP\"] [upos=\"DET\"] [upos=\"NOUN\"]", None).unwrap();
+        let tags = r.hits[0].tags.as_ref().expect("a CQP hit carries its words' tags");
+        assert_eq!(tags.len(), r.hits[0].words.len());
+        assert_eq!(&tags[r.hits[0].at..r.hits[0].at + 3], ["ADP", "DET", "NOUN"]);
         assert_eq!(r.total, 1);
         let h = &r.hits[0];
         assert_eq!(&h.words[h.at..h.at + h.len], ["a", "el", "mar"]);

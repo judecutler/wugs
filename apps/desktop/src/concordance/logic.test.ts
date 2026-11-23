@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { asTsv, clip, countLine, isRtl, keyword, left, right, sortHits, type Hit } from "./logic.ts";
+import { asTsv, clip, countLine, hasTags, isRtl, withTags, keyword, left, right, sortHits, type Hit } from "./logic.ts";
 
 const hit = (words: string[], at: number, title = "T"): Hit => ({ textId: title, textTitle: title, segmentId: words.join("_"), tierId: "u", startMs: 0, endMs: 1, words, at, breakdown: null, glosses: null });
 
@@ -62,4 +62,15 @@ test("the CQP chip is the Concordance's own; Frequencies keeps the four kinds", 
   const { KINDS, PANEL_KINDS } = await import("./logic.ts");
   assert.equal(KINDS.length, 4);
   assert.equal(PANEL_KINDS.at(-1)?.id, "query");
+});
+
+test("a tagged line reads word_TAG", () => {
+  const h = { textId: "t", textTitle: "T", segmentId: "s", tierId: "u", startMs: null, endMs: null, words: ["a", "el", "mar", "."], at: 0, len: 3, breakdown: null, glosses: null, tags: ["ADP", "DET", "NOUN", ""] };
+  assert.equal(hasTags([h]), true);
+  assert.equal(hasTags([{ ...h, tags: undefined }]), false);
+  assert.equal(hasTags([{ ...h, tags: ["", "", "", ""] }]), false);
+  const t = withTags(h);
+  assert.equal(keyword(t), "a_ADP el_DET mar_NOUN");
+  assert.equal(right(t), ".");
+  assert.equal(withTags({ ...h, tags: undefined }).words[0], "a");
 });
