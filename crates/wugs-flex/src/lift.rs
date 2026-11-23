@@ -1,9 +1,10 @@
 //! LIFT 0.13 lexicons (FLEx's lexicon interchange format).
 //!
 //! Carried: entries (lexical-unit, citation, homograph `order`), senses
-//! (gloss, definition, grammatical-info) and variants, in every writing
-//! system, plus every attribute of entries, senses and variants. Everything
-//! else is counted in `ImportReport::not_carried`.
+//! (gloss, definition, grammatical-info, examples with their translations)
+//! and variants, in every writing system, plus every attribute of entries,
+//! senses, examples and variants. Everything else is counted in
+//! `ImportReport::not_carried`.
 
 use wugs_core::{Project, SCOPE_LEXICON};
 use wugs_model::{pos_seq, Value};
@@ -19,6 +20,9 @@ const F_GLOSS: &str = "x.lift.gloss";
 const F_DEFINITION: &str = "x.lift.definition";
 const F_GRAMMATICAL_INFO: &str = "x.lift.grammatical_info";
 const F_FORMS: &str = "x.lift.forms";
+/// An example's `<translation>`s: `[{type?, forms}]`, the first one's first
+/// form being the example's `translation`.
+const F_TRANSLATIONS: &str = "x.lift.translations";
 /// All attributes of the source element (dates, order, ref…), re-emitted on
 /// export under the ones wugs derives.
 const F_ATTRS: &str = "x.lift.attrs";
@@ -29,6 +33,7 @@ pub struct ImportReport {
     pub entries_skipped: usize,
     pub senses_created: usize,
     pub variants_created: usize,
+    pub examples_created: usize,
     /// `<span>` runs flattened into plain text (their text is kept in order;
     /// the markup is not).
     pub spans_flattened: usize,
@@ -56,7 +61,38 @@ struct Sense {
     gloss: MultiText,
     definition: MultiText,
     grammatical_info: Option<String>,
+    examples: Vec<Example>,
     attrs: Value,
+}
+
+struct Example {
+    attrs: Value,
+    forms: MultiText,
+    translations: Vec<(Option<String>, MultiText)>,
+}
+
+fn translations_value(ts: &[(Option<String>, MultiText)]) -> Value {
+    Value::Arr(
+        ts.iter()
+            .map(|(kind, forms)| {
+                let mut o = vec![("forms", multi_value(forms))];
+                if let Some(k) = kind {
+                    o.push(("type", Value::str(k)));
+                }
+                Value::obj(o)
+            })
+            .collect(),
+    )
+}
+
+fn translations_from(v: Option<Value>) -> Vec<(Option<String>, MultiText)> {
+    match v {
+        Some(Value::Arr(items)) => items
+            .iter()
+            .map(|t| (t.get_str("type").map(str::to_string), t.get("forms").and_then(multi_from).unwrap_or_default()))
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 /// Import a whole LIFT lexicon. One txn per entry, all in the lexicon scope.
@@ -109,8 +145,26 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
             push_opt(&mut fields, F_GRAMMATICAL_INFO, &s.grammatical_info);
             push_opt(&mut fields, F_ID, &s.id);
             push_opt(&mut fields, F_GUID, &s.guid);
-            t.create("sense", "sen", SCOPE_LEXICON, fields);
+            let sen = t.create("sense", "sen", SCOPE_LEXICON, fields);
             report.senses_created += 1;
+            for (j, x) in s.examples.iter().enumerate() {
+                let mut fields = vec![
+                    ("sense", Value::str(&sen)),
+                    ("pos", Value::str(&pos_seq(j))),
+                    ("sentence", Value::str(x.forms.first().map(|(_, t)| t.as_str()).unwrap_or(""))),
+                    (F_FORMS, multi_value(&x.forms)),
+                    (F_TRANSLATIONS, translations_value(&x.translations)),
+                    (F_ATTRS, x.attrs.clone()),
+                ];
+                if let Some((_, tr)) = x.translations.first().and_then(|(_, f)| f.first()) {
+                    fields.push(("translation", Value::str(tr)));
+                }
+                if let Some(src) = x.attrs.get_str("source") {
+                    fields.push(("reference", Value::str(src)));
+                }
+                t.create("example", "exm", SCOPE_LEXICON, fields);
+                report.examples_created += 1;
+            }
         }
         for (i, (v, attrs)) in e.variants.iter().enumerate() {
             t.create(
@@ -233,6 +287,7 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
         gloss: Vec::new(),
         definition: Vec::new(),
         grammatical_info: None,
+        examples: Vec::new(),
         attrs: attrs_value(node),
     };
     for c in &node.children {
@@ -254,10 +309,29 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
                     report.not_carried.add(&format!("grammatical-info/{}", gc.name));
                 }
             }
+            "example" => s.examples.push(parse_example(c, report)),
             other => report.not_carried.add(&format!("sense/{other}")),
         }
     }
     Ok(s)
+}
+
+/// `<example source><form>…</form><translation type><form>…</form></translation></example>`
+fn parse_example(node: &XmlNode, report: &mut ImportReport) -> Example {
+    let mut translations = Vec::new();
+    for c in &node.children {
+        match c.name.as_str() {
+            "form" => {}
+            "translation" => {
+                for tc in c.children.iter().filter(|tc| tc.name != "form") {
+                    report.not_carried.add(&format!("translation/{}", tc.name));
+                }
+                translations.push((c.attr("type").map(str::to_string), read_multi(c, report)));
+            }
+            other => report.not_carried.add(&format!("example/{other}")),
+        }
+    }
+    Example { attrs: attrs_value(node), forms: read_multi(node, report), translations }
 }
 
 /// `<x><form lang><text>…</text></form>…</x>`
@@ -338,6 +412,26 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
             let def = with_primary(field_multi(project, &sen, F_DEFINITION)?, p.field_str(&sen, "definition")?, "en");
             if !def.is_empty() {
                 sense.children.push(multi_node("definition", &def));
+            }
+            for exm in ordered_children(project, "sense", &sen, "example")? {
+                let forms = with_primary(field_multi(project, &exm, F_FORMS)?, p.field_str(&exm, "sentence")?, &lang);
+                let mut x = with_attrs(multi_node("example", &forms), field_value(project, &exm, F_ATTRS)?, &[("source", p.field_str(&exm, "reference")?.filter(|r| !r.is_empty()))]);
+                let mut translations = translations_from(field_value(project, &exm, F_TRANSLATIONS)?);
+                let first = translations.first().map(|(_, f)| f.clone());
+                let now = with_primary(first, p.field_str(&exm, "translation")?, "en");
+                match translations.first_mut() {
+                    Some(t) => t.1 = now,
+                    None if !now.is_empty() => translations.push((None, now)),
+                    None => {}
+                }
+                for (kind, forms) in translations.iter().filter(|(_, f)| !f.is_empty()) {
+                    let mut tr = multi_node("translation", forms);
+                    if let Some(k) = kind {
+                        tr = tr.with_attr("type", k);
+                    }
+                    x.children.push(tr);
+                }
+                sense.children.push(x);
             }
             entry.children.push(sense);
         }

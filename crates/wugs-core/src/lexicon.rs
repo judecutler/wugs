@@ -324,7 +324,7 @@ impl Project {
 
 /// A position after `last` in `pos_seq` order (eight hex digits), or the
 /// first position when there is none.
-fn after(last: &str) -> String {
+pub(crate) fn after(last: &str) -> String {
     match u64::from_str_radix(last, 16) {
         Ok(n) if last.len() == 8 => wugs_model::pos_seq(n as usize + 1),
         _ if last.is_empty() => wugs_model::pos_seq(0),

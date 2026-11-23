@@ -956,7 +956,7 @@ impl SearchScope {
         match self {
             SearchScope::All => &[],
             SearchScope::Texts => &["text", "segment", "annotation"],
-            SearchScope::Lexicon => &["lexeme", "sense"],
+            SearchScope::Lexicon => &["lexeme", "sense", "example"],
         }
     }
 }
@@ -972,6 +972,17 @@ pub fn search(session: &mut Session, query: &str, scope: SearchScope) -> Result<
                     hit.target = seg;
                     hit.kind = "segment".into();
                     hit.field = "note".into();
+                }
+                _ => continue,
+            }
+        }
+        // An example sentence is found as its sense, its field `example`.
+        if hit.kind == "example" {
+            match p.proj.field_str(&hit.target, "sense")? {
+                Some(sense) if p.proj.entity_kind(&sense)?.as_deref() == Some("sense") && !p.proj.is_tombstoned(&sense)? => {
+                    hit.target = sense;
+                    hit.kind = "sense".into();
+                    hit.field = if hit.field == "translation" { "example translation".into() } else { "example".into() };
                 }
                 _ => continue,
             }

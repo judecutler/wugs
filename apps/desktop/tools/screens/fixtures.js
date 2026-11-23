@@ -263,8 +263,18 @@
             usage: "With ni- when the speaker counts aloud: nikani ŋai toɾu.",
             domains: [domainRef("dom-8.1.1"), domainRef("dom-8.1.1.1")],
             occurrences: 3,
+            examples: [
+              {
+                id: "exm-1",
+                sentence: "nikani ŋai toɾu",
+                translation: "I count three",
+                reference: "",
+                from: { textId: "text-1", textTitle: "Counting to five", tierId: "tier-utt", segmentId: "seg-3", startMs: 3000, endMs: 4200 },
+              },
+              { id: "exm-2", sentence: "kani ta haru", translation: "count the stones", reference: "Notebook 2, p. 14", from: null },
+            ],
           },
-          { id: "sense-kani-2", gloss: "reckon", glossesByLang: {}, definition: "To think something likely.", usage: "", domains: [], occurrences: 1 },
+          { id: "sense-kani-2", gloss: "reckon", glossesByLang: {}, definition: "To think something likely.", usage: "", domains: [], occurrences: 1, examples: [] },
         ],
       };
     }
@@ -276,7 +286,7 @@
       homograph: row.homograph,
       sameLemma,
       allomorphs: [],
-      senses: row.glosses.map((g, i) => ({ id: `sense-${row.id}-${i}`, gloss: g, glossesByLang: {}, definition: "", usage: "", domains: row.posOfSpeech === "num" ? [domainRef("dom-8.1.1.1")] : [], occurrences: i === 0 ? 2 : 0 })),
+      senses: row.glosses.map((g, i) => ({ id: `sense-${row.id}-${i}`, gloss: g, glossesByLang: {}, definition: "", usage: "", domains: row.posOfSpeech === "num" ? [domainRef("dom-8.1.1.1")] : [], occurrences: i === 0 ? 2 : 0, examples: [] })),
     };
   }
 

@@ -382,6 +382,19 @@ The editor shows how many words in your texts use the entry.
 
 To delete a sense or an entry, click **Delete sense** or **Delete entry**, then click again to confirm.
 
+### Add example sentences
+
+Each sense can have example sentences with their translations, as a printed dictionary shows under a meaning.
+
+- To type one, fill in **Add an example sentence** and **Its translation** under the sense, then press **Enter**.
+- To take one from your texts, click **used in N words** under the sense, then **Use as example** beside an occurrence. The sentence and its first translation are copied in, with a link back: **from «text»** opens the sentence, and ▶ plays it.
+
+Each example's sentence and translation are fields you can edit like any other. Editing an example does not change the text it came from. Click × and then **Delete?** to remove one.
+
+The lexicon is shared with everyone the project reaches. A sentence from a text that is not open to everyone cannot be copied in, so type an example that may be shared instead.
+
+Examples go out with the lexicon: in LIFT files (FLEx's `<example>` with its translation and source), in the printed dictionary (in place of the sense's first use in a text), and in Search, which finds them under **Lexicon**. Examples in a LIFT file you import come in the same way.
+
 ### Give entries semantic domains
 
 1. If the project has no domains yet, click **Load SIL Semantic Domains**.
@@ -581,7 +594,7 @@ Sentences from texts that are not open (restricted or community-only) are left o
 
 ### Print the dictionary
 
-Press **Dictionary to print…** beside the lexicon export. wugs writes one HTML file. Entries are in the order of your alphabet (the writing system's sort order, if the project has one), under letter headings. Each entry shows its part of speech and numbered senses, each sense with its glosses, definition, usage and semantic domains. Each sense also gets one example from your texts, with its translation. An index of glosses closes the file. Open it in a browser and print it to PDF, or open it in Word or Google Docs to edit it. Examples from texts that are not open are left out unless you tick **Include texts that are not open**.
+Press **Dictionary to print…** beside the lexicon export. wugs writes one HTML file. Entries are in the order of your alphabet (the writing system's sort order, if the project has one), under letter headings. Each entry shows its part of speech and numbered senses, each sense with its glosses, definition, usage and semantic domains. Each sense also gets its example sentences from the lexicon, or, when it has none, its first use in your texts, with its translation. An index of glosses closes the file. Open it in a browser and print it to PDF, or open it in Word or Google Docs to edit it. Examples from texts that are not open are left out unless you tick **Include texts that are not open**.
 
 ### Load the corpus into CQPweb or Sketch Engine
 

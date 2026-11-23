@@ -446,6 +446,19 @@ form.inline input { flex: 1; min-width: 0; }
 .lx-uses { list-style: none; margin: 4px 0 0; padding: 0; font-size: var(--text-sm); }
 .lx-uses li { display: flex; align-items: center; gap: 6px; padding: 1px 0; }
 .lx-use { color: var(--ink); }
+.lx-use-example { margin-left: auto; font-size: var(--text-sm); white-space: nowrap; }
+.lx-examples { margin: 6px 0; }
+.lx-ex-label { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: 2px; }
+.lx-example-list { list-style: none; margin: 0; padding: 0; }
+.lx-example { display: flex; align-items: flex-start; gap: 6px; padding: 3px 0; }
+.lx-ex-n { min-width: 1.4em; color: var(--muted); padding-top: 4px; font-size: var(--text-sm); }
+.lx-ex-body { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lx-ex-body input { width: 100%; }
+.lx-ex-body input:first-child { font-family: var(--font-ipa); }
+.lx-ex-from { font-size: var(--text-sm); }
+.lx-ex-new { display: flex; flex-wrap: wrap; gap: 4px; }
+.lx-ex-new input { flex: 1 1 12em; min-width: 0; }
+.lx-ex-new input:first-child { font-family: var(--font-ipa); }
 .tx-row { display: flex; gap: 10px; align-items: center; padding: 6px 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); cursor: default; }
 .tx-row.selected { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent-bright); }
 .tx-time { flex: none; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }

@@ -25,7 +25,7 @@ pub use text::{Normalizer, TextMerger};
 /// for search (DATA-MODEL §8). Kit extension fields (`x.*`) stay out.
 pub const LANGUAGE_FIELDS: &[&str] = &[
     "content", "title", "lemma", "citation", "gloss", "definition", "usage", "form", "surface",
-    "notes", "body", "name",
+    "notes", "body", "name", "sentence", "translation",
 ];
 
 /// Prefix of the per-language gloss fields (`gloss:es`): `gloss` itself is the

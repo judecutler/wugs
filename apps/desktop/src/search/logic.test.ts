@@ -49,4 +49,5 @@ test("a segment hit is labelled with time and tier, others are not", () => {
   assert.equal(whereLabel(row({ kind: "segment", tierName: "Gloss" })), "Gloss");
   assert.equal(whereLabel(lex("l")), "");
   assert.equal(whereLabel(row({ kind: "segment", tierName: "Utterance", startMs: 5000, field: "note" })), "0:05 · Utterance · note", "a hit in a sentence's note");
+  assert.equal(whereLabel(row({ kind: "sense", field: "example translation" })), "example translation", "a hit in an example sentence");
 });

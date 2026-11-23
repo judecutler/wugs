@@ -408,6 +408,15 @@ export type SenseView = {
   usage: string;
   domains: DomainRef[];
   occurrences: number;
+  examples: ExampleView[];
+};
+/** An example sentence of a sense; `from` is the sentence it was taken from, while it is there. */
+export type ExampleView = {
+  id: string;
+  sentence: string;
+  translation: string;
+  reference: string;
+  from: { textId: string; textTitle: string; tierId: string; segmentId: string; startMs: number | null; endMs: number | null } | null;
 };
 export type EntryView = {
   id: string;
@@ -440,6 +449,10 @@ export const lexiconSetSenseText = (args: { senseId: string; field: "definition"
   invoke<EntryEdit>("lexicon_set_sense_text", args);
 export const lexiconAddAllomorph = (args: { id: string; form: string }) => invoke<EntryEdit>("lexicon_add_allomorph", args);
 export const lexiconDeleteAllomorph = (args: { id: string; formId: string }) => invoke<EntryEdit>("lexicon_delete_allomorph", args);
+export const lexiconAddExample = (args: { senseId: string; sentence: string; translation: string }) => invoke<EntryEdit>("lexicon_add_example", args);
+export const lexiconExampleFrom = (args: { senseId: string; segmentId: string }) => invoke<EntryEdit>("lexicon_example_from", args);
+export const lexiconSetExample = (args: { exampleId: string; field: "sentence" | "translation"; text: string }) => invoke<EntryEdit>("lexicon_set_example", args);
+export const lexiconDeleteExample = (args: { exampleId: string }) => invoke<EntryEdit>("lexicon_delete_example", args);
 export const lexiconDeleteSense = (args: { senseId: string }) => invoke<EntryEdit>("lexicon_delete_sense", args);
 export const lexiconAssignDomain = (args: { senseId: string; domainId: string }) => invoke<EntryEdit>("lexicon_assign_domain", args);
 export const lexiconUnassignDomain = (args: { senseId: string; domainId: string }) => invoke<EntryEdit>("lexicon_unassign_domain", args);

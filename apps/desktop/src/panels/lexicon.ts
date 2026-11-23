@@ -8,8 +8,8 @@
 import {
   concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
   lexiconDeleteForm, lexiconFillCell, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
-  lexiconSetSenseText, lexiconUnassignDomain,
-  type DomainItem, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
+  lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
+  type DomainItem, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
 import { normalizeLangTag } from "../gloss/lang";
@@ -529,6 +529,7 @@ export const lexiconPanel: PanelDef = {
         others.length === 0 ? null : h("p", { className: "note", textContent: others.map(([t, g]) => `${t}: ${g}`).join(" · ") }),
         h("div", { className: "lx-def" }, area(`def:${s.id}`, s.definition, "Definition", (v) => run(() => lexiconSetSenseText({ senseId: s.id, field: "definition", text: v })))),
         h("div", { className: "lx-def" }, area(`use:${s.id}`, s.usage, "Usage note", (v) => run(() => lexiconSetSenseText({ senseId: s.id, field: "usage", text: v })))),
+        examplesBlock(s),
         h(
           "div",
           { className: "lx-domains" },
@@ -556,6 +557,80 @@ export const lexiconPanel: PanelDef = {
         ),
         uses?.senseId === s.id ? usesBlock(uses) : null,
       );
+    }
+
+    /** The sense's example sentences, each sentence and translation a field,
+     * and a last pair of fields that adds one on Enter. */
+    function examplesBlock(s: SenseView) {
+      const one = (x: ExampleView, i: number) => {
+        const from = x.from;
+        return h(
+          "li",
+          { className: "lx-example" },
+          h("span", { className: "lx-ex-n", textContent: `${i + 1}.` }),
+          h(
+            "div",
+            { className: "lx-ex-body" },
+            cell(`exs:${x.id}`, x.sentence, `Example ${i + 1}`, (v) => run(() => lexiconSetExample({ exampleId: x.id, field: "sentence", text: v })), { placeholder: "Example sentence" }),
+            cell(`ext:${x.id}`, x.translation, `Translation of example ${i + 1}`, (v) => run(() => lexiconSetExample({ exampleId: x.id, field: "translation", text: v })), { placeholder: "Translation" }),
+            from === null && x.reference === ""
+              ? null
+              : h(
+                  "span",
+                  { className: "note lx-ex-from" },
+                  from === null
+                    ? null
+                    : h("button", { type: "button", className: "link-button", title: "Open the sentence it was taken from", textContent: `from «${from.textTitle || "Untitled text"}»`, onclick: () => void openSentence(from) }),
+                  from !== null && x.reference !== "" ? " · " : "",
+                  x.reference,
+                ),
+          ),
+          from !== null && from.startMs !== null && from.endMs !== null
+            ? playButton(`Play the sentence this example was taken from`, () => void hear({ textId: from.textId, tierId: from.tierId, segmentId: from.segmentId, startMs: from.startMs, endMs: from.endMs }))
+            : null,
+          confirmButton(`delx:${x.id}`, "×", () => void run(() => lexiconDeleteExample({ exampleId: x.id })), { armedText: "Delete?", title: "Delete this example" }),
+        );
+      };
+      const sentence = h("input", { placeholder: s.examples.length === 0 ? "Add an example sentence" : "Another example", ariaLabel: "New example sentence" });
+      const translation = h("input", { placeholder: "Its translation", ariaLabel: "Translation of the new example" });
+      sentence.dataset.key = `newx:${s.id}`;
+      translation.dataset.key = `newxt:${s.id}`;
+      sentence.dataset.saved = "";
+      translation.dataset.saved = "";
+      const add = (refocus: boolean) => {
+        if (drawing || sentence.value.trim() === "") return;
+        const [sv, tv] = [sentence.value, translation.value];
+        sentence.value = "";
+        translation.value = "";
+        if (refocus) sentence.focus();
+        void run(() => lexiconAddExample({ senseId: s.id, sentence: sv, translation: tv }));
+      };
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key !== "Enter" || ev.isComposing) return;
+        ev.preventDefault();
+        add(true);
+      };
+      // Leaving the pair keeps what was typed as an example, like every other field here.
+      const onBlur = (ev: FocusEvent) => {
+        if (ev.relatedTarget !== sentence && ev.relatedTarget !== translation) add(false);
+      };
+      sentence.onkeydown = onKey;
+      translation.onkeydown = onKey;
+      sentence.onblur = onBlur;
+      translation.onblur = onBlur;
+      return h(
+        "div",
+        { className: "lx-examples" },
+        h("span", { className: "lx-ex-label", textContent: "Examples" }),
+        s.examples.length === 0 ? null : h("ol", { className: "lx-example-list" }, ...s.examples.map(one)),
+        h("div", { className: "lx-ex-new" }, sentence, translation),
+      );
+    }
+
+    async function openSentence(from: NonNullable<ExampleView["from"]>) {
+      await selectText(from.textId);
+      const st = getState();
+      if (st.kind === "open" && st.text?.id === from.textId) selectSegment({ textId: from.textId, tierId: from.tierId, segmentId: from.segmentId });
     }
 
     /** "used in 3 words" opens the list of those words, each one to hear. */
@@ -590,7 +665,7 @@ export const lexiconPanel: PanelDef = {
       drawEditor();
     }
 
-    function usesBlock(u: { hits: Hit[] | null; total: number }) {
+    function usesBlock(u: { senseId: string; hits: Hit[] | null; total: number }) {
       if (u.hits === null) return h("div", { className: "lx-uses note", textContent: "Finding where it is used…" });
       const shown = u.hits.slice(0, USES_SHOWN);
       return h(
@@ -607,6 +682,13 @@ export const lexiconPanel: PanelDef = {
               title: "Open this segment",
               onclick: () => void openHit(hit),
             }, h("strong", { textContent: keyword(hit) }), hit.breakdown !== null && hit.breakdown !== keyword(hit) ? ` ${hit.breakdown}` : "", h("span", { className: "note", textContent: ` · ${hit.textTitle}` })),
+            h("button", {
+              type: "button",
+              className: "link-button lx-use-example",
+              textContent: "Use as example",
+              title: "Copy this sentence and its translation into the sense's examples",
+              onclick: () => void run(() => lexiconExampleFrom({ senseId: u.senseId, segmentId: hit.segmentId })),
+            }),
           ),
         ),
         u.total > shown.length ? h("li", { className: "note", textContent: `and ${u.total - shown.length} more (Concordance lists them all)` }) : null,

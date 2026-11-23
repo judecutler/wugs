@@ -83,6 +83,7 @@ Field types: `str`, `int`, `real`, `bool`, `ms` (milliseconds), `ref:<kind>`, `e
 | --- | --- |
 | **Lexeme** `lex` | lemma `str` · citation `str` · ws `ref` · language `ref` · pos-of-speech `str` · homograph `int?` |
 | **Sense** `sen` | lexeme `ref` · pos `pos` · gloss `str` (primary analysis language) · `gloss:<bcp47>` `str` (further languages, as on Morph) · definition `text` · usage `text` |
+| **Example** `exm` (kind `example`, lexicon scope) | sense `ref` · pos `pos` · sentence `text` · translation `text` (primary analysis language) · source `ref:seg?` (the sentence it was taken from) · reference `str?` (where it comes from, as written: a LIFT `source`, a notebook page) — an illustrative sentence a dictionary prints under the sense; it is lexicon data, so it is copied rather than linked, and a sentence of a text that is not open is not copied into it |
 | **Form** `frm` | lexeme `ref` · kind `enum(allomorph,variant,inflected)` · form `str` · environment `str` · ws `ref` |
 | **SemanticDomain** `dom` (kind `domain`, project-config scope) | parent `ref:dom?` · pos `pos` · label `str` · code `str` · description `str?` · origin `str?` (e.g. `semdom:v4:<GUID>`) (tree via parent+pos; acyclicity is a validator, §7) |
 | **SenseDomain** `sdm` (kind `sense-domain`, lexicon scope) | sense `ref` · domain `ref` — one live link per pair; unassigning tombstones every live link of the pair |
