@@ -556,6 +556,13 @@ pub fn lexicon_delete(session: &mut Session, id: &str) -> Result<EntryEdit, Stri
     Ok(EntryEdit { entry: None, notes: lines(&res) })
 }
 
+/// Merge entry `other` into `keep` (`Project::merge_lexemes`); `keep`'s view back.
+pub fn lexicon_merge(session: &mut Session, keep: &str, other: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    let res = p.merge_lexemes(keep, other)?;
+    edit(p, keep, &res)
+}
+
 /// The live lexeme a sense belongs to.
 fn owner(p: &Project, sense: &str) -> Result<String, String> {
     require(p, sense, "sense")?;

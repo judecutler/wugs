@@ -182,6 +182,62 @@ impl Project {
         t.commit()
     }
 
+    /// Merge `other` into `keep`, as one resolving txn: `other`'s senses
+    /// follow `keep`'s in their order (their glosses, examples, domains,
+    /// concept links and every morph linked to them come along, since those
+    /// point at the senses), its forms and pronunciations move over, a
+    /// relation naming it names `keep` instead (one between the two is
+    /// deleted), `keep`'s empty citation and category take `other`'s, and
+    /// `other` is deleted. Nothing is lost: the log has every value.
+    pub fn merge_lexemes(&mut self, keep: &str, other: &str) -> Result<CommitResult, String> {
+        self.require(keep, "lexeme")?;
+        self.require(other, "lexeme")?;
+        if keep == other {
+            return Err("an entry cannot be merged into itself".into());
+        }
+        let mut last = String::new();
+        for sense in self.proj.ordered_children("lexeme", keep, "sense")? {
+            last = last.max(self.proj.field_str(&sense, "pos")?.unwrap_or_default());
+        }
+        let mut moves: Vec<(&'static str, String, &'static str, Value)> = Vec::new();
+        for sense in self.proj.ordered_children("lexeme", other, "sense")? {
+            last = after(&last);
+            moves.push(("sense", sense.clone(), "lexeme", Value::str(keep)));
+            moves.push(("sense", sense, "pos", Value::str(&last)));
+        }
+        for kind in ["form", "pronunciation"] {
+            for id in self.proj.children_by_ref("lexeme", other, kind)? {
+                moves.push((kind, id, "lexeme", Value::str(keep)));
+            }
+        }
+        let mut drop_relations = Vec::new();
+        for (field, other_end) in [("from", "to"), ("to", "from")] {
+            for id in self.proj.children_by_ref(field, other, "lexical-relation")? {
+                if self.proj.field_str(&id, other_end)?.as_deref() == Some(keep) {
+                    drop_relations.push(id);
+                } else {
+                    moves.push(("lexical-relation", id, field, Value::str(keep)));
+                }
+            }
+        }
+        for field in ["citation", "pos-of-speech"] {
+            let mine = self.proj.field_str(keep, field)?.unwrap_or_default();
+            let theirs = self.proj.field_str(other, field)?.unwrap_or_default();
+            if mine.trim().is_empty() && !theirs.trim().is_empty() {
+                moves.push(("lexeme", keep.to_string(), field, Value::str(&theirs)));
+            }
+        }
+        let mut t = self.intent("merge-lexemes").resolving();
+        for (kind, id, field, value) in moves {
+            t.set(kind, &id, SCOPE_LEXICON, field, value)?;
+        }
+        for id in drop_relations {
+            t.delete("lexical-relation", &id, SCOPE_LEXICON);
+        }
+        t.delete("lexeme", other, SCOPE_LEXICON);
+        t.commit()
+    }
+
     /// A new sense after the entry's last one.
     pub fn add_sense(&mut self, lexeme: &str, gloss: &str) -> Result<(String, CommitResult), String> {
         self.require(lexeme, "lexeme")?;
@@ -356,6 +412,28 @@ mod tests {
             row("1.1.1", "DC1A2C6F-1B32-4631-8823-36DACC8CB7BB", "Sun"),
             row("1.2", "B47D2604-8B23-41E9-9158-01526DD83894", "World"),
         ]
+    }
+
+    #[test]
+    fn merging_an_entry_keeps_its_senses_forms_and_links() {
+        let (root, mut p) = project();
+        let ((keep, run), _) = p.add_lexeme("lari", "run").unwrap();
+        let ((other, flee), _) = p.add_lexeme("lari", "flee").unwrap();
+        p.set_lexeme_field(&other, "pos-of-speech", "v").unwrap();
+        p.add_allomorph(&other, "lai").unwrap();
+        p.add_relation(&keep, "synonym", &other).unwrap();
+        let ((third, _), _) = p.add_lexeme("kuma", "bear").unwrap();
+        p.add_relation(&third, "compare", &other).unwrap();
+        p.merge_lexemes(&keep, &other).unwrap();
+        assert!(p.proj.is_tombstoned(&other).unwrap());
+        assert_eq!(p.proj.ordered_children("lexeme", &keep, "sense").unwrap(), vec![run, flee], "the other's senses follow, in order");
+        assert_eq!(p.proj.field_str(&keep, "pos-of-speech").unwrap().as_deref(), Some("v"), "an empty category is filled");
+        assert_eq!(p.allomorphs(&keep).unwrap().len(), 1, "forms move over");
+        let rel = p.relations(&keep).unwrap();
+        assert_eq!(rel.len(), 1, "the synonym between the two is gone; the compare now names the kept entry: {rel:?}");
+        assert!(p.merge_lexemes(&keep, &keep).is_err());
+        drop(p);
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
