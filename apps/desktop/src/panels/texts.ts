@@ -1,4 +1,9 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { lexiconList, orthographyGet, projectProgress, soundWords, typologyAnswers, typologyProfile } from "../api";
+import { featuresOf, grammarSketch, graphemesOf, morphemesOf, type Feature } from "../grammar/sketch";
+import { defaultTrack } from "../sounds/ipa";
+import { toGrid } from "../orthography/logic";
+import { SOURCES } from "../typology/logic";
 import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
@@ -323,6 +328,54 @@ async function publishSite() {
   });
 }
 
+/** A grammar sketch to start from: what the project knows about its sounds,
+ * spelling, morphemes, typology and texts, with places to write. */
+async function exportSketch() {
+  const folder = await chooseFolder("Choose where the grammar sketch goes");
+  if (folder === null) return;
+  await work("sketch", async () => {
+    const [language, progress, entries, ortho] = await Promise.all([projectLanguage(), projectProgress(), lexiconList({ query: "" }), orthographyGet()]);
+    const first = await soundWords({ tierId: null, textId: null });
+    const track = defaultTrack(first.tracks);
+    const words = track === null ? first : await soundWords({ tierId: track, textId: null });
+    let features: Feature[] = [];
+    let featureSource = "";
+    if (language.glottocode !== "") {
+      for (const [source] of SOURCES) {
+        const ours = await typologyAnswers({ source });
+        if (ours.length === 0) continue;
+        const profile = await typologyProfile({ glottocode: language.glottocode, source });
+        const found = featuresOf(profile.features, ours);
+        if (found.length > features.length) {
+          features = found;
+          featureSource = profile.edition;
+        }
+      }
+    }
+    const morphemes = morphemesOf(entries);
+    const graphemes = graphemesOf(toGrid(ortho.profile));
+    const html = grammarSketch({
+      language,
+      words: track === null ? [] : words.words,
+      soundTrack: first.tracks.find((t) => t.id === track)?.name ?? "",
+      graphemes,
+      morphemes,
+      entries: progress.entries,
+      features,
+      featureSource,
+      texts: progress.texts.map((t) => ({ title: t.title, sentences: t.sentences, words: t.words, glossed: t.glossedWords })),
+      date: localDay(new Date()),
+      generator: "wugs",
+    });
+    const r = await saveDocument({ folder, title: `${language.name.trim() || "Language"} grammar sketch`, extension: "html", contents: html });
+    const missing = [track === null && "sounds (no transcriptions)", graphemes.length === 0 && "an orthography (no profile kept)", morphemes.length === 0 && "affixes (no entries written like -ler or ni-)", features.length === 0 && "typology (no answers in the Typology panel)"].filter((x): x is string => typeof x === "string");
+    showToast({
+      tone: "info",
+      lines: [`Saved a grammar sketch in ${r.path}. Open it in Word or LibreOffice and write in the bracketed places.`, ...(missing.length > 0 ? [`Still to fill: ${missing.join(", ")}.`] : [])],
+    });
+  });
+}
+
 /** The text's glossed sentences as numbered examples, read through the Gloss panel's own view. */
 async function examplesOf(text: TextDetail): Promise<{ examples: Example[]; skipped: number }> {
   const sentences = text.tiers.find((t) => t.utterance)?.id ?? text.segments.find((s) => !s.parent)?.tier ?? "";
@@ -494,6 +547,13 @@ export const textsPanel: PanelDef = {
             title: "The lexicon as a dictionary in the alphabet's order: senses, glosses, domains and an example from the texts for each sense, with an index of glosses. One HTML file to print to PDF or open in Word",
             disabled: busy !== null,
             onclick: () => void exportDict(),
+          }),
+          h("button", {
+            type: "button",
+            textContent: busy === "sketch" ? "Making…" : "Grammar sketch…",
+            title: "A grammar to start writing: the sound inventory from the transcriptions, the orthography profile, the lexicon's affixes and clitics, your typology answers and the texts, under a grammar's usual headings with places to write. One HTML file for Word or LibreOffice",
+            disabled: busy !== null,
+            onclick: () => void exportSketch(),
           }),
         ),
         h(

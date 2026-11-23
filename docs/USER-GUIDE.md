@@ -754,6 +754,19 @@ Sentences from texts that are not open (restricted or community-only) are left o
 
 Press **Dictionary to print…** beside the lexicon export. wugs writes one HTML file. Entries are in the order of your alphabet (the writing system's sort order, if the project has one), under letter headings. Each entry shows its part of speech and numbered senses, each sense with its glosses, definition, usage and semantic domains. Each sense also gets its example sentences from the lexicon, or, when it has none, its first use in your texts, with its translation. An index of glosses closes the file. Open it in a browser and print it to PDF, or open it in Word or Google Docs to edit it. Examples from texts that are not open are left out unless you tick **Include texts that are not open**.
 
+### Start a grammar sketch
+
+Press **Grammar sketch…** beside **Dictionary to print…**. wugs writes one HTML file with a grammar's usual chapters, filled with what the project already knows, for you to open in Word or LibreOffice and go on writing:
+
+- **Introduction**: the language's name and codes, and how many texts, words and entries the sketch draws on.
+- **Phonology**: the consonants in a chart by place and manner and the vowels, read from your IPA track (or your fullest track) as the Sounds panel reads them, with a table of how often each sound occurs and an example word, then the commonest word shapes (CV, CVCV…) and the consonants never found at the start or end of a word. These are the sounds as written, not yet phonemes: say which contrast.
+- **Orthography**: your orthography profile's letters beside their IPA, when the Orthography panel keeps one.
+- **Morphology**: the lexicon's prefixes, suffixes, infixes and clitics (entries written like `ni-`, `-ok`, `<um>` or `=ma`) with their glosses.
+- **Typological profile**: your own answers in the Typology panel, for Grambank or WALS, whichever has more.
+- **Texts**: each text with its sentences, words and glossed words.
+
+Bracketed passages in brown mark the places only you can write (word order, allophones, syllables and the like). The file is a starting point; wugs does not keep it in step with the project, so make a new one when the data has grown.
+
 ### Publish a website for the community
 
 Press **Publish as a website…** to make a folder of web pages from your texts and dictionary, for the people whose language it is. It needs no server and nothing to install: open `index.html` in any browser, copy the folder to a USB stick or a phone, or put it on any web host.
