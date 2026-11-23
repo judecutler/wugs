@@ -763,6 +763,15 @@
     morphosyntax_choose_stanza: ({ python, language }) => ({ python, pipeline: language, about: language ? `Stanza 1.10.1, ${language} (tokenize, pos, lemma, depparse)` : null }),
     morphosyntax_choose_spacy: ({ python, pipeline }) => ({ python, pipeline, about: pipeline ? `spaCy 3.8.18, ${pipeline} 3.8.0 (tok2vec, tagger, parser, attribute_ruler, lemmatizer, ner)` : null }),
     project_language: () => ({ name: "Kanu", glottocode: "abcd1234", iso: "" }),
+    set_project_language: ({ language }) => ({ name: language.name.trim(), glottocode: language.glottocode.trim().toLowerCase(), iso: language.iso.trim().toLowerCase() }),
+    glottolog_find: ({ query }) =>
+      query.toLowerCase().startsWith("tur")
+        ? [
+            { glottocode: "nucl1301", iso: "tur", name: "Turkish", dialect: false, family: "Turkic", macroarea: "Eurasia", language: "" },
+            { glottocode: "turk1304", iso: "tuk", name: "Turkmen", dialect: false, family: "Turkic", macroarea: "Eurasia", language: "" },
+            { glottocode: "cypr1248", iso: "", name: "Cypriot Turkish", dialect: true, family: "Turkic", macroarea: "Eurasia", language: "Turkish" },
+          ]
+        : [],
     metadata_values: () => [
       { key: "genre", values: [["narrative", 2], ["procedural", 1]] },
       { key: "speaker", values: [["A. Speaker (synthetic)", 3]] },

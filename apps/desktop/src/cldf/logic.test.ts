@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { glottocodeProblem, isoProblem, publishedLines, corpusLines, dictionaryLines, siteLines } from "./logic.ts";
+import { languoidLine, pickedLanguage, worthLooking } from "./logic.ts";
 
 test("codes are optional, and checked when typed", () => {
   assert.equal(glottocodeProblem(""), null);
@@ -44,4 +45,21 @@ test("a dictionary export says how to print it", () => {
   const lines = dictionaryLines({ path: "/x/Kanu dictionary.html", entries: 120, senses: 150, examples: 1, restrictedLeftOut: 2 });
   assert.equal(lines[0], "Saved the dictionary as /x/Kanu dictionary.html: 120 entries, 150 senses, 1 example from the texts.");
   assert.equal(lines[2], "2 examples were left out because their texts are not open.");
+});
+
+test("a Glottolog match reads as what and where it is", () => {
+  const tr = { glottocode: "nucl1301", iso: "tur", name: "Turkish", dialect: false, family: "Turkic", macroarea: "Eurasia", language: "" };
+  assert.equal(languoidLine(tr), "Turkish — tur · nucl1301; Turkic, Eurasia");
+  assert.equal(languoidLine({ ...tr, name: "Ainu", glottocode: "ainu1240", iso: "", family: "isolate" }), "Ainu — ainu1240; an isolate, Eurasia");
+  assert.equal(languoidLine({ ...tr, name: "Cypriot Turkish", glottocode: "cypr1248", iso: "", dialect: true, language: "Turkish" }), "Cypriot Turkish — cypr1248; a dialect of Turkish, Eurasia");
+  assert.equal(languoidLine({ ...tr, macroarea: "Africa;Eurasia" }), "Turkish — tur · nucl1301; Turkic, Africa, Eurasia");
+  assert.equal(worthLooking("t"), false);
+  assert.equal(worthLooking(" tu "), true);
+});
+
+test("picking a match keeps a name the person gave", () => {
+  const tr = { glottocode: "nucl1301", iso: "tur", name: "Turkish", dialect: false, family: "Turkic", macroarea: "Eurasia", language: "" };
+  assert.deepEqual(pickedLanguage({ name: "", glottocode: "", iso: "" }, tr, "turk"), { name: "Turkish", glottocode: "nucl1301", iso: "tur" });
+  assert.deepEqual(pickedLanguage({ name: "Türkçe", glottocode: "", iso: "" }, tr, ""), { name: "Türkçe", glottocode: "nucl1301", iso: "tur" }, "found from the code field");
+  assert.deepEqual(pickedLanguage({ name: "Türkçe", glottocode: "", iso: "" }, tr, "turkish"), { name: "Turkish", glottocode: "nucl1301", iso: "tur" }, "typed in the name field: the match's name");
 });

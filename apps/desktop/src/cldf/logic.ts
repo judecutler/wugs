@@ -67,3 +67,27 @@ export function publishedLines(r: Published): string[] {
     ...r.notes,
   ];
 }
+
+/** A language or dialect in Glottolog. */
+export type Languoid = { glottocode: string; iso: string; name: string; dialect: boolean; family: string; macroarea: string; language: string };
+
+/** Whether a typed name is worth looking up: two letters, or a code. */
+export function worthLooking(typed: string): boolean {
+  return typed.trim().length >= 2;
+}
+
+/** A Glottolog match in words, for its button: what it is and where. */
+export function languoidLine(l: Languoid): string {
+  const kind = l.dialect ? (l.language !== "" ? `a dialect of ${l.language}` : "a dialect") : l.family === "isolate" ? "an isolate" : l.family !== "" ? l.family : "unclassified";
+  const area = l.macroarea.split(";").filter((a) => a !== "").join(", ");
+  const codes = [l.iso, l.glottocode].filter((c) => c !== "").join(" · ");
+  return `${l.name} — ${codes}; ${kind}${area !== "" ? `, ${area}` : ""}`;
+}
+
+/** What picking a match writes: Glottolog's codes, and its name unless the
+ * person already named the language themselves (their own name stays, such
+ * as a name the community uses). */
+export function pickedLanguage(now: Language, l: Languoid, typed: string): Language {
+  const ownName = now.name.trim() !== "" && typed.trim() === "";
+  return { name: ownName ? now.name : l.name, glottocode: l.glottocode, iso: l.iso };
+}

@@ -357,6 +357,18 @@ def main():
                     failures.append("turning Pitch on showed no voice picker")
                 run.page.locator(".panel-timeline .praat-bar button", has_text="Pitch").click()
 
+            # The Language row offers Glottolog's matches as a name is typed.
+            run.front("texts", "Texts")
+            run.page.locator(".panel-texts input[aria-label='Language: Name']").fill("tur")
+            run.page.locator(".panel-texts .glotto-match").first.wait_for()
+            run.shot("state-glottolog", run.page.locator(".panel-texts"))
+            if run.page.locator(".panel-texts .glotto-match").count() != 3:
+                failures.append("typing a language name offered no Glottolog matches")
+            run.page.locator(".panel-texts .glotto-match").first.click()
+            run.page.wait_for_timeout(300)
+            if run.page.locator(".panel-texts .glotto-match").count() != 0:
+                failures.append("picking a Glottolog match left the list open")
+
             # Find and replace in the Search panel: a live preview with the change marked.
             run.front("search", "Search")
             run.page.locator(".panel-search .rp-toggle").click()

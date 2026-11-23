@@ -1,6 +1,6 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, publishedLines, siteLines, type Language } from "../cldf/logic";
+import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportText, glossGet, glottologFind, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
@@ -154,6 +154,8 @@ async function loadLanguage(project: string) {
   if (languageFor === project) return;
   languageFor = project;
   includeRestricted = false;
+  lookup += 1;
+  matchesBox.replaceChildren();
   for (const k of Object.keys(drafts) as (keyof Language)[]) delete drafts[k];
   try {
     language = { project, value: await projectLanguage() };
@@ -180,13 +182,62 @@ async function saveLanguage(project: string, next: Language) {
   redrawAll();
 }
 
-/** Name, Glottocode and ISO 639-3, each saved on Enter or when focus leaves it. */
+/** The Glottolog matches under the Language row, filled in place as the
+ * person types (never by a redraw, so the field keeps its focus). */
+let lookup = 0;
+const matchesBox = h("div", { className: "glotto-matches" });
+matchesBox.setAttribute("role", "list");
+matchesBox.setAttribute("aria-label", "Glottolog matches");
+
+function showMatches(project: string, hits: Languoid[], typedName: string) {
+  matchesBox.replaceChildren(
+    ...hits.map((l) => {
+      const b = h("button", { type: "button", className: "glotto-match", textContent: languoidLine(l), title: "Use this language's Glottocode and ISO code" });
+      b.setAttribute("role", "listitem");
+      // Picking with the mouse keeps focus in the field, so its half-typed
+      // text is not saved as the name first.
+      b.onmousedown = (ev) => ev.preventDefault();
+      b.onclick = () => {
+        const now = language?.project === project ? language.value : { name: "", glottocode: "", iso: "" };
+        for (const k of Object.keys(drafts) as (keyof Language)[]) delete drafts[k];
+        matchesBox.replaceChildren();
+        void saveLanguage(project, pickedLanguage(now, l, typedName));
+      };
+      return b;
+    }),
+    ...(hits.length > 0 ? [h("p", { className: "note", textContent: "From Glottolog 5.4 (CC BY 4.0), kept in the app: nothing is sent." })] : []),
+  );
+}
+
+/** Look a typed name or code up in Glottolog, a moment after typing stops. */
+function lookUp(project: string, typed: string, fromName: boolean) {
+  const mine = ++lookup;
+  if (!worthLooking(typed)) {
+    matchesBox.replaceChildren();
+    return;
+  }
+  window.setTimeout(async () => {
+    if (mine !== lookup) return;
+    try {
+      const hits = await glottologFind({ query: typed });
+      if (mine === lookup) showMatches(project, hits, fromName ? typed : "");
+    } catch {
+      matchesBox.replaceChildren();
+    }
+  }, 150);
+}
+
+/** Name, Glottocode and ISO 639-3, each saved on Enter or when focus leaves
+ * it; typing a name or a code offers Glottolog's matches under the row. */
 function languageRow(project: string): HTMLElement {
   const v = language?.project === project ? language.value : { name: "", glottocode: "", iso: "" };
   const field = (key: keyof Language, placeholder: string, title: string, size: number) => {
     const input = h("input", { value: drafts[key] ?? v[key], placeholder, title, size, spellcheck: false });
     input.setAttribute("aria-label", `Language: ${placeholder}`);
-    input.oninput = () => (drafts[key] = input.value);
+    input.oninput = () => {
+      drafts[key] = input.value;
+      if (key !== "iso") lookUp(project, input.value, key === "name");
+    };
     const commit = () => {
       delete drafts[key];
       void saveLanguage(project, { ...v, [key]: input.value });
@@ -194,16 +245,22 @@ function languageRow(project: string): HTMLElement {
     input.onchange = commit;
     input.onkeydown = (ev: KeyboardEvent) => {
       if (ev.key === "Enter" && !ev.isComposing) commit();
+      if (ev.key === "Escape") matchesBox.replaceChildren();
     };
     return input;
   };
   return h(
     "div",
-    { className: "share-row" },
-    h("span", { className: "share-label", textContent: "Language" }),
-    field("name", "Name", "The language this project documents, as you call it", 14),
-    field("glottocode", "Glottocode", "From glottolog.org, like stan1293: lets the data join other datasets", 9),
-    field("iso", "ISO 639-3", "Three letters, like tur: archives use it in their catalogue", 9),
+    { className: "glotto" },
+    h(
+      "div",
+      { className: "share-row" },
+      h("span", { className: "share-label", textContent: "Language" }),
+      field("name", "Name", "The language this project documents, as you call it; typing it offers Glottolog's matches", 14),
+      field("glottocode", "Glottocode", "From glottolog.org, like stan1293: lets the data join other datasets. Typing a name or code here offers matches too", 9),
+      field("iso", "ISO 639-3", "Three letters, like tur: archives use it in their catalogue", 9),
+    ),
+    matchesBox,
   );
 }
 
