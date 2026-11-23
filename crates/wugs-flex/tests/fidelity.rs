@@ -664,3 +664,51 @@ fn illustrations_wait_for_their_picture_and_go_back_out() {
     assert!(!out.contains("fox.jpg") && out.contains("den.png"), "{out}");
     fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn lift_semantic_domain_traits_become_links_and_go_back_out() {
+    let (root, mut p) = temp_project();
+    let row = |code: &str, guid: &str, label: &str| wugs_core::DomainRow { code: code.into(), guid: guid.into(), label: label.into(), description: String::new() };
+    p.import_semantic_domains(
+        "semdom:v4",
+        &[row("1", "63403699-07C1-43F3-A47C-069D6E4316E5", "Universe, creation"), row("1.1", "999581C4-1611-4ACB-AE1B-5E6C1DFE6F0C", "Sky")],
+    )
+    .unwrap();
+    let lift = r#"<?xml version="1.0" encoding="UTF-8"?>
+<lift version="0.13">
+  <entry id="gok_1" guid="11110000-0000-4000-8000-000000000001">
+    <lexical-unit><form lang="tr"><text>gök</text></form></lexical-unit>
+    <trait name="morph-type" value="stem"/>
+    <sense id="gok_s1">
+      <gloss lang="en"><text>sky</text></gloss>
+      <trait name="semantic-domain-ddp4" value="1.1 Sky"/>
+      <trait name="semantic-domain-ddp4" value="9.9.9 Nowhere"/>
+      <trait name="usage-type" value="archaic"/>
+    </sense>
+  </entry>
+</lift>"#;
+    let r = import_lift(&mut p, lift).unwrap();
+    assert_eq!((r.domains_linked, r.domains_unmatched), (1, 1));
+    assert_eq!(r.not_carried.total(), 0, "{:?}", r.not_carried.0);
+    let lex = p.proj.entities_of_kind("lexeme").unwrap()[0].clone();
+    let sense = p.proj.ordered_children("lexeme", &lex, "sense").unwrap()[0].clone();
+    let doms = p.sense_domains(&sense).unwrap();
+    assert_eq!(doms.len(), 1);
+    assert_eq!(p.proj.field_str(&doms[0].1, "code").unwrap().as_deref(), Some("1.1"));
+
+    let flat = |x: &str| x.lines().map(str::trim).collect::<String>();
+    let out = flat(&export_lift(&p).unwrap());
+    assert!(out.contains(r#"<trait name="morph-type" value="stem"/>"#), "{out}");
+    assert!(out.contains(r#"<trait name="usage-type" value="archaic"/>"#), "{out}");
+    assert!(out.contains(r#"<trait name="semantic-domain-ddp4" value="9.9.9 Nowhere"/>"#), "an unmatched one stays as written: {out}");
+    assert!(out.contains(r#"<trait name="semantic-domain-ddp4" value="1.1 Sky"/>"#), "{out}");
+
+    // A domain assigned in wugs goes out too; one taken off does not.
+    let universe = p.proj.entities_of_kind("domain").unwrap().into_iter().find(|d| p.proj.field_str(d, "code").unwrap().as_deref() == Some("1")).unwrap();
+    p.assign_domain(&sense, &universe).unwrap();
+    p.unassign_domain(&sense, &doms[0].1).unwrap();
+    let out = flat(&export_lift(&p).unwrap());
+    assert!(out.contains(r#"value="1 Universe, creation""#), "{out}");
+    assert!(!out.contains(r#"value="1.1 Sky""#), "{out}");
+    fs::remove_dir_all(root).ok();
+}
