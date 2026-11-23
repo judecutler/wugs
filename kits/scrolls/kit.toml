@@ -30,6 +30,7 @@ enabled = [
   "keywords",                      # which words set a text apart from the others
   "search",
   "gloss",                         # morph analysis of one sentence
+  "sentence",                      # one sentence's tags and dependency tree, to correct
   "lexicon",                       # the corpus vocabulary
   "transcribe",                    # read and correct the text sentence by sentence
 ]
@@ -45,6 +46,7 @@ panels = [
   { panel = "lexicon", place = "tab", of = "search" },
   { panel = "transcribe", place = "below", of = "concordance", height = 280 },
   { panel = "gloss", place = "right", of = "transcribe", width = 460 },
+  { panel = "sentence", place = "tab", of = "gloss" },
 ]
 active = ["texts", "concordance", "frequencies"]
 

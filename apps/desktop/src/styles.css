@@ -1075,3 +1075,29 @@ body::before {
 @keyframes menu-landed { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
 .menu-landed { animation: menu-landed 420ms ease-out; }
 @media (prefers-reduced-motion: reduce) { .menu-landed { animation: none; } }
+
+/* Sentence (Scrolls): a dependency tree over the words, and the table to correct it. */
+.panel-sentence { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.panel-sentence > * { flex: none; }
+.st-content { margin: 0; font-family: var(--font-ipa); color: var(--ink); }
+.st-tree-box { overflow-x: auto; padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
+.st-tree { display: block; }
+.st-arc { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+.st-arc.st-picked { stroke: var(--accent-bright); stroke-width: 2.4; }
+.st-root { stroke-dasharray: 3 3; }
+.st-arrow { fill: none; stroke: var(--accent); stroke-width: 1.4; }
+.st-rel { font-size: var(--text-xs); fill: var(--muted); font-family: var(--font-ui); paint-order: stroke; stroke: var(--surface-raised); stroke-width: 3px; stroke-linejoin: round; }
+.st-form { font-family: var(--font-ipa); fill: var(--ink); font-size: 15px; }
+.st-upos { font-family: var(--font-mono); fill: var(--muted); font-size: var(--text-xs); }
+.st-word { cursor: pointer; }
+.st-word:focus { outline: none; }
+.st-word:focus .st-form, .st-word.st-picked .st-form { fill: var(--accent); font-weight: 650; }
+.st-problem { color: var(--warn); }
+.panel-sentence > .st-table-box { flex: 1 0 auto; overflow-x: auto; }
+.st-table th, .st-table th:nth-child(n+3) { text-align: left; }
+.st-table input, .st-table select { width: 100%; min-width: 4.5em; font: inherit; }
+.st-table input.st-wide { min-width: 12em; }
+.st-table select { min-width: 7em; }
+.st-table .st-num { color: var(--muted); text-align: right; }
+.st-table .st-form-cell { font-family: var(--font-ipa); white-space: nowrap; }
+.st-table tr.st-picked td { background: var(--highlight); }

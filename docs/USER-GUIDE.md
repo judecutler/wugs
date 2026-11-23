@@ -515,6 +515,21 @@ The attributes are `word`, `lemma`, `upos` (also `pos`), `xpos`, `feats` and `gl
 
 Lemmas and tags come from CoNLL-U files. For words you glossed in wugs, the lemma is the root's lexicon entry, and its part of speech is the tag. Punctuation counts as a token in a query, so `[upos!="PUNCT"]` skips it. A match never runs from one sentence into the next. If a query has a mistake, the panel says what is wrong and where.
 
+## Correct a sentence's tags and tree
+
+The **Sentence** panel shows the selected sentence's dependency tree: each word with its part of speech, and an arc from each word's head to it, labelled with the relation. It is a tab beside Gloss in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Sentence**.
+
+Under the tree, a table lists every word with its lemma, UPOS, XPOS, features, head and relation. Change a cell and the tree redraws:
+
+- **UPOS** is one of the Universal Dependencies tags.
+- **Head** is the word it depends on, by number, or 0 for the root.
+- **Relation** suggests UD's relations; type a subtype after a colon, such as `obl:tmod`.
+- **Features** are written as UD writes them: `Number=Plur|Case=Nom`.
+
+Click a word in the tree to find its row. If the tree has a problem (no root, two roots, words that are each other's heads, or a head that is no longer in the sentence), a line under the tree says so. You can still save it while you work.
+
+Sentences imported from CoNLL-U or TEI arrive with their tags and tree. A sentence typed in wugs gets them the first time you correct a cell. Every correction comes back out in a CoNLL-U or TEI export.
+
 ## Count words, morphs and glosses
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.

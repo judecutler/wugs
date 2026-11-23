@@ -28,6 +28,7 @@ pub mod praat;
 pub mod praat_analysis;
 pub mod sample;
 pub mod segmentation;
+pub mod sentence;
 pub mod session;
 pub mod updater;
 
@@ -144,6 +145,18 @@ fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, 
 #[tauri::command(async)]
 fn concordance_query(s: State<SessionThread>, query: String, text_id: Option<String>) -> Result<concordance::Concordance, String> {
     s.run(move |s| cqp::run(s, &query, text_id.as_deref()))
+}
+
+/// One sentence's words, tags and tree, for the Sentence panel.
+#[tauri::command(async)]
+fn sentence_get(s: State<SessionThread>, text_id: String, segment_id: String) -> Result<sentence::SentenceView, String> {
+    s.run(move |s| sentence::sentence_get(s, &text_id, &segment_id))
+}
+
+/// Correct one cell of a sentence's annotation (one resolving write).
+#[tauri::command(async)]
+fn sentence_set(s: State<SessionThread>, text_id: String, segment_id: String, token_id: String, column: String, value: String) -> Result<sentence::SentenceView, String> {
+    s.run(move |s| sentence::sentence_set(s, &text_id, &segment_id, &token_id, &column, &value))
 }
 
 /// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
@@ -1426,6 +1439,8 @@ pub fn run() {
             open_sample,
             concordance,
             concordance_query,
+            sentence_get,
+            sentence_set,
             list_texts,
             link_recording,
             media_overview,

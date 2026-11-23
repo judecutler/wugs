@@ -17,6 +17,7 @@
 //! sentence plus one per token (design §2, "Scale first").
 
 pub mod format;
+pub mod tree;
 
 use std::collections::{BTreeMap, HashMap};
 

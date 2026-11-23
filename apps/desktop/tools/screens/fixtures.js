@@ -612,6 +612,21 @@
     praat_pending: () => false,
     update_check: () => ({ currentVersion: "0.0.1", available: null }),
     gloss_get: ({ segmentId }) => glossView(segmentId),
+    // A tagged sentence for the Sentence panel: ni-kani ŋai toɾu-ma kesi, "I count one, two, three".
+    sentence_get: ({ segmentId }) => ({
+      segmentId,
+      content: "nikani ŋai toɾuma kesi.",
+      annotated: true,
+      emptyNodes: 0,
+      problems: [],
+      words: [
+        { token: "w1", form: "nikani", lemma: "kani", upos: "VERB", xpos: "v", feats: "Person=1|Number=Sing", head: 0, deprel: "root" },
+        { token: "w2", form: "ŋai", lemma: "ŋai", upos: "NUM", xpos: "num", feats: "NumType=Card", head: 1, deprel: "obj" },
+        { token: "w3", form: "toɾuma", lemma: "toɾu", upos: "NUM", xpos: "num", feats: "NumType=Card", head: 2, deprel: "conj" },
+        { token: "w4", form: "kesi", lemma: "kesi", upos: "NUM", xpos: "num", feats: "NumType=Card", head: 2, deprel: "conj" },
+        { token: "w5", form: ".", lemma: ".", upos: "PUNCT", xpos: "", feats: "", head: 1, deprel: "punct" },
+      ],
+    }),
     gloss_tokenize: glossEdit,
     gloss_retokenize: glossEdit,
     gloss_apply: glossEdit,

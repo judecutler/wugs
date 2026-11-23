@@ -173,3 +173,54 @@ fn vertical_and_tagged_text_carry_the_tags() {
     assert_eq!(t.lines().next(), Some("Vamos_VERB nos_PRON a_ADP el_DET mar_NOUN ._PUNCT"));
     std::fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn a_correction_is_one_write_and_shows_in_the_export() {
+    let (root, mut p) = temp_project();
+    let tier = tier(&mut p);
+    let texts = import_conllu(&mut p, SAMPLE, "sample", &tier).unwrap().texts;
+    let seg = sentences(&p, &texts[1], &tier)[0].segment.clone();
+    let before = wugs_conllu::tree::rows(&p, &seg).unwrap();
+    assert!(before.annotated && before.problems.is_empty());
+    assert_eq!(before.rows[0].head, Some(2), "La depends on ciudad");
+    let la = before.rows[0].token.clone();
+    // La's head moved to the verb, its UPOS retyped in lower case.
+    wugs_conllu::tree::set_cell(&mut p, &texts[1], &seg, &la, "head", "3").unwrap();
+    wugs_conllu::tree::set_cell(&mut p, &texts[1], &seg, &la, "upos", "pron").unwrap();
+    let out = export(&p, "ciudad", &sentences(&p, &texts[1], &tier)).unwrap().conllu;
+    let w: Vec<format::Cols> = format::parse(&out).unwrap()[0].words().map(|(_, c)| c.clone()).collect();
+    assert_eq!((w[0][format::HEAD].as_str(), w[0][format::UPOS].as_str()), ("3", "PRON"));
+    // Bad values are refused before anything is written.
+    assert!(wugs_conllu::tree::set_cell(&mut p, &texts[1], &seg, &la, "upos", "NOUNY").unwrap_err().contains("not a UD"));
+    assert!(wugs_conllu::tree::set_cell(&mut p, &texts[1], &seg, &la, "feats", "Plural").unwrap_err().contains("Name=Value"));
+    assert!(wugs_conllu::tree::set_cell(&mut p, &texts[1], &seg, &la, "head", "1").unwrap_err().contains("own head"));
+    assert!(wugs_conllu::tree::set_cell(&mut p, &texts[1], &seg, &la, "head", "9").unwrap_err().contains("no word 9"));
+    // A second root is reported, not refused.
+    wugs_conllu::tree::set_cell(&mut p, &texts[1], &seg, &la, "head", "0").unwrap();
+    assert!(wugs_conllu::tree::rows(&p, &seg).unwrap().problems.iter().any(|m| m.contains("2 words are the root")));
+    // The sentence with an empty node keeps it through a correction.
+    let seg2 = sentences(&p, &texts[0], &tier)[1].segment.clone();
+    let maria = wugs_conllu::tree::rows(&p, &seg2).unwrap().rows[0].token.clone();
+    wugs_conllu::tree::set_cell(&mut p, &texts[0], &seg2, &maria, "lemma", "María José").unwrap();
+    let back = export(&p, "playa", &sentences(&p, &texts[0], &tier)).unwrap().conllu;
+    assert!(back.contains("2.1\tnada\tnadar"), "{back}");
+    assert!(back.contains("1\tMaría\tMaría José\tPROPN"), "{back}");
+    std::fs::remove_dir_all(root).ok();
+}
+
+#[test]
+fn a_sentence_with_no_analysis_gets_one_at_its_first_correction() {
+    let (root, mut p) = temp_project();
+    let tier = tier(&mut p);
+    let text = p.create_text("Notes").unwrap();
+    let (seg, _) = p.add_segment(&text, &tier, 0, None, None, "dogs bark").unwrap();
+    let (toks, _) = p.tokenize(&text, &seg, &["dogs", "bark"]).unwrap();
+    assert!(!wugs_conllu::tree::rows(&p, &seg).unwrap().annotated);
+    wugs_conllu::tree::set_cell(&mut p, &text, &seg, &toks[1], "head", "0").unwrap();
+    wugs_conllu::tree::set_cell(&mut p, &text, &seg, &toks[0], "head", "2").unwrap();
+    wugs_conllu::tree::set_cell(&mut p, &text, &seg, &toks[0], "deprel", "nsubj").unwrap();
+    let r = wugs_conllu::tree::rows(&p, &seg).unwrap();
+    assert!(r.annotated && r.problems.is_empty(), "{:?}", r.problems);
+    assert_eq!((r.rows[0].head, r.rows[0].deprel.as_str()), (Some(2), "nsubj"));
+    std::fs::remove_dir_all(root).ok();
+}
