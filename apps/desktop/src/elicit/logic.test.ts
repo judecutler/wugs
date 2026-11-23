@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { exactMatches, filterConcepts, isDone, nextTodo, progressLabel, progressShare } from "./logic.ts";
+import { exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment } from "./logic.ts";
 
 const c = (id: string, answered: boolean, skipped = false) => ({ id, skipped, answers: answered ? [{}] : [] });
 const list = [c("a", true), c("b", false), c("c", false, true), c("d", false)];
@@ -32,4 +32,19 @@ test("only exact lemmas are offered, case and NFC folded", () => {
   assert.deepEqual(exactMatches(rows, " SU "), [{ lemma: "Su" }, { lemma: "su" }]);
   assert.deepEqual(exactMatches(rows, ""), []);
   assert.deepEqual(exactMatches([{ lemma: "köpek" }], "köpek").length, 1);
+});
+
+test("answers take their sound from the selected segment, then the next on its track", () => {
+  const seg = (id: string, tier: string, startMs: number | null, content = "") => ({ id, tier, startMs, endMs: startMs === null ? null : startMs + 500, content });
+  const segments = [seg("a", "words", 0, "ateş"), seg("b", "words", 1000), seg("t", "notes", 500), seg("c", "words", 2000), seg("u", "words", null)];
+  const text = { id: "txt", segments };
+  assert.equal(soundSegment({ textId: "txt", segmentId: "a" }, text)?.id, "a");
+  assert.equal(soundSegment({ textId: "other", segmentId: "a" }, text), null, "another text's selection");
+  assert.equal(soundSegment({ textId: "txt", segmentId: "u" }, text), null, "no times, nothing to hear");
+  assert.equal(soundSegment(null, text), null);
+  assert.equal(nextOnTrack(segments, segments[0]!)?.id, "b", "the notes track is not this track");
+  assert.equal(nextOnTrack(segments, segments[3]!), null, "the last one");
+  const clock = (ms: number) => `${ms / 1000}s`;
+  assert.equal(soundLine(segments[0]!, clock), "The next answer takes its sound from 0s–0.5s «ateş».");
+  assert.match(soundLine(null, clock), /^Select a segment on the Timeline/u);
 });

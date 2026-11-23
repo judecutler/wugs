@@ -447,6 +447,17 @@ The progress bar counts answered concepts. Use **To do**, **Done**, and **All** 
 - If a concept does not apply to the language, click **N/A**. Any text in the gloss field is kept as the reason.
 - Press **Enter** on an empty word field to skip ahead without answering.
 
+#### Keep the speaker's voice with each answer
+
+If you recorded the session, each answer can keep the word as the speaker said it.
+
+1. Load the recording in the Timeline and press **Auto-segment** with **by word**, so each word said is its own segment.
+2. Select the first word's segment.
+3. In **Elicit**, tick **Sound from the Timeline**. The line under it says which segment the next answer will be heard in.
+4. Type each answer as before. When you press **Enter**, the answer is heard in the selected segment, and the next segment on that track is selected and played, so you hear the next word as you type it.
+
+An answer heard this way has a ▶ on its chip. In the Lexicon its entry has the sound under **Pronunciation**, and a published website plays it beside the headword. If the speaker said a word twice, or a segment holds something else, click on the Timeline to select the right segment before you press Enter.
+
 The concept lists come from Concepticon. Each answer stays linked to its Concepticon concept, so the list can later be compared across languages.
 
 ### Collect words by meaning
@@ -884,7 +895,7 @@ wugs is young. These limits are known and stated so that you can plan around the
 - The Speech assist models take no language hint and no phone set for your language.
 - The Praat overlays use fixed settings and draw no spectrogram.
 - The lexicon has no editor yet for variants, examples, or cross-references.
-- The Elicit panel has no paradigms, no session planning, no audio per answer, and no lists of your own.
+- The Elicit panel has no paradigms, no session planning, and no lists of your own. An answer takes its sound only from a segment of a recording on the Timeline; it cannot record one itself.
 - Devices appear as "this device" and "another device" in the Conflicts panel.
 
 ## How wugs keeps your work

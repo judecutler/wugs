@@ -9,14 +9,17 @@ import {
   type Answer, type BundledList, type ConceptView, type DomainItem, type DomainQuestions, type EntryRow, type ListSummary, type ListView,
 } from "../api";
 import { emptyState, h } from "../dom";
-import { exactMatches, FILTERS, filterConcepts, isDone, nextTodo, progressLabel, progressShare, type Filter } from "../elicit/logic";
+import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, type Filter } from "../elicit/logic";
+import { hear, hearSpan, playButton } from "../hear/hear";
+import { clockTime } from "../search/logic";
 import { filterDomains, headword } from "../lexicon/logic";
-import { dataGeneration, getState, lexiconRevision, showToast, touchLexicon } from "../store";
+import { dataGeneration, getSelection, getState, lexiconRevision, showToast, subscribeSelection, touchLexicon } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 const CONCEPTICON = "Concept lists from Concepticon (concepticon.clld.org) · CC BY 4.0";
 const SIL = "SIL Semantic Domains v4 · © SIL Global · CC BY-SA 4.0 · semdom.org";
 const LIST_KEY = "wugs.elicit-list";
+const SOUND_KEY = "wugs.elicit.takeSound";
 
 type Mode = "lists" | "domains";
 
@@ -56,6 +59,30 @@ export const elicitPanel: PanelDef = {
       }
     });
     let addingList = false;
+    /** Answers take their sound from the Timeline's selected segment, and
+     * the next segment on its track is selected and played (a word list
+     * recorded first, then typed in as it is heard back). */
+    let takeSound = localStorage.getItem(SOUND_KEY) === "on";
+    const soundHint = h("p", { className: "note el-sound-hint" });
+    /** The selected segment the next answer would take its sound from. */
+    const soundNow = () => {
+      const s = getState();
+      return soundSegment(getSelection(), s.kind === "open" ? s.text : null);
+    };
+    const showSoundHint = () => {
+      soundHint.textContent = takeSound ? soundLine(soundNow(), clockTime) : "";
+    };
+    const unwatchSelection = subscribeSelection(showSoundHint);
+    /** Take the selected segment for an answer, and move the Timeline on to the next one. */
+    const takeSegment = (): string | null => {
+      if (!takeSound) return null;
+      const seg = soundNow();
+      const s = getState();
+      if (seg === null || s.kind !== "open" || s.text === null) return null;
+      const next = nextOnTrack(s.text.segments, seg);
+      if (next !== null) void hear({ textId: s.text.id, tierId: next.tier, segmentId: next.id, startMs: next.startMs, endMs: next.endMs });
+      return seg.id;
+    };
 
     // domains
     let domains: DomainItem[] | null = null;
@@ -161,6 +188,7 @@ export const elicitPanel: PanelDef = {
       return h(
         "span",
         { className: "lx-chip", title: `${a.lemma} – ${a.gloss}` },
+        ...(a.sound === null ? [] : [playButton(`Hear ${a.lemma}`, () => void hearSpan(a.sound!.sourceId, a.sound!.startMs, a.sound!.endMs))]),
         h("strong", { textContent: headword(a.lemma, a.homograph) }),
         a.gloss === "" || a.gloss === c.gloss ? "" : ` ‘${a.gloss}’`,
         h("button", {
@@ -229,6 +257,7 @@ export const elicitPanel: PanelDef = {
           return;
         }
         const g = gloss.value;
+        const segmentId = takeSegment();
         drafts.delete(c.id);
         pending.add(c.id);
         // Move on now, before the save answers: the next word typed belongs to the next concept.
@@ -237,7 +266,7 @@ export const elicitPanel: PanelDef = {
         focusCurrent();
         void enqueue(async (stale) => {
           try {
-            const r = await elicitAnswer({ conceptId: c.id, form: typed, gloss: g });
+            const r = await elicitAnswer({ conceptId: c.id, form: typed, gloss: g, segmentId });
             if (stale()) return;
             replaceConcept(r.concept);
             notes(r.notes);
@@ -326,6 +355,7 @@ export const elicitPanel: PanelDef = {
             textContent: `Use ${headword(r.lemma, r.homograph)}${r.glosses[0] === undefined ? "" : ` ‘${r.glosses[0]}’`}`,
             onmousedown: (ev: MouseEvent) => ev.preventDefault(),
             onclick: () => {
+              const segmentId = takeSegment();
               drafts.delete(concept);
               pending.add(concept);
               moveTo(following(concept));
@@ -336,7 +366,7 @@ export const elicitPanel: PanelDef = {
                   const entry = await lexiconEntry({ id: r.id });
                   const sense = entry.senses[0];
                   if (sense === undefined || stale()) return;
-                  const res = await elicitLink({ conceptId: concept, senseId: sense.id });
+                  const res = await elicitLink({ conceptId: concept, senseId: sense.id, segmentId });
                   if (stale()) return;
                   replaceConcept(res.concept);
                   notes(res.notes);
@@ -420,11 +450,25 @@ export const elicitPanel: PanelDef = {
       const rows = shown.length === 0
         ? [h("li", { className: "empty", textContent: filter === "todo" ? "Every concept is answered or marked not applicable. 🎉" : "Nothing here yet." })]
         : shown.map(conceptRow);
+      const soundBox = h("input", { type: "checkbox", checked: takeSound });
+      soundBox.onchange = () => {
+        takeSound = soundBox.checked;
+        localStorage.setItem(SOUND_KEY, takeSound ? "on" : "off");
+        showSoundHint();
+      };
+      showSoundHint();
       return [
         h("div", { className: "el-bar" }, picker, h("span", { className: "note", textContent: progressLabel(s) }), h("span", { className: "gl-spacer" }), add),
         bar,
         ...(adder === null ? [] : [adder]),
-        chips,
+        h(
+          "div",
+          { className: "el-bar" },
+          chips,
+          h("span", { className: "gl-spacer" }),
+          h("label", { className: "el-sound", title: "Record or import the session first and break it into words (Auto-segment by word); then each answer you type is heard in the segment selected on the Timeline, and the next segment plays" }, soundBox, " Sound from the Timeline"),
+        ),
+        soundHint,
         h("ul", { className: "el-rows" }, ...rows),
         h("p", { className: "note lx-attr", textContent: `${s.citation} · ${CONCEPTICON}` }),
       ];
@@ -562,6 +606,7 @@ export const elicitPanel: PanelDef = {
 
     const view_: PanelView = {
       element: el,
+      dispose: () => unwatchSelection(),
       render() {
         const s = getState();
         const key = s.kind === "open" ? `${s.info.path}|${dataGeneration()}|${lexiconRevision()}` : "closed";

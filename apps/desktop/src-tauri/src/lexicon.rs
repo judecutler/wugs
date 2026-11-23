@@ -397,7 +397,7 @@ pub fn lexicon_add_allomorph(session: &mut Session, id: &str, form: &str) -> Res
 }
 
 /// Where a timed segment is heard: its text's recording and its span.
-fn heard_in(p: &Project, segment: &str) -> Result<(wugs_core::pronunciations::Heard, String), String> {
+pub(crate) fn heard_in(p: &Project, segment: &str) -> Result<(wugs_core::pronunciations::Heard, String), String> {
     require(p, segment, "segment")?;
     let text = str_field(p, segment, "text")?;
     let (start, end) = match (p.proj.field_num(segment, "start")?, p.proj.field_num(segment, "end")?) {

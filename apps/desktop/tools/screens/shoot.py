@@ -495,6 +495,14 @@ def main():
             if run.page.locator(".panel-interlinear .il-selected").count() != 1:
                 failures.append("Next to gloss selected no sentence")
             run.page.locator(".panel-interlinear .il-only input").uncheck()
+            # Elicit: answers heard in the Timeline's selected segment.
+            run.front("elicit", "Elicit")
+            run.page.locator(".panel-elicit .el-sound input").check()
+            run.page.wait_for_timeout(300)
+            run.shot("state-elicit-sound", run.page.locator(".panel-elicit"))
+            if run.page.locator(".panel-elicit .el-sound-hint").inner_text().strip() == "":
+                failures.append("Sound from the Timeline said nothing about where the sound comes from")
+            run.page.locator(".panel-elicit .el-sound input").uncheck()
             # Sentence: a tagger's analysis stays marked until checked; Checked, next moves on.
             run.front("sentence", "Sentence")
             run.page.locator(".panel-sentence .st-machine").wait_for()

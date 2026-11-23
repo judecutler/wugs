@@ -38,7 +38,7 @@ fn a_bundled_list_loads_and_tracks_answers_and_skips() {
     assert_eq!((view.concepts[0].number, view.concepts[0].gloss.as_str()), (1, "fire"));
     let fire = view.concepts[0].id.clone();
     let nose = view.concepts[1].id.clone();
-    let e = elicit::elicit_answer(&mut s, &fire, "ateş", "").unwrap();
+    let e = elicit::elicit_answer(&mut s, &fire, "ateş", "", None).unwrap();
     assert_eq!((e.concept.answers[0].lemma.as_str(), e.concept.answers[0].gloss.as_str()), ("ateş", "fire"));
     elicit::elicit_skip(&mut s, &nose, true, "only a loan").unwrap();
     let after = elicit::concept_list_view(&mut s, &loaded.id).unwrap().summary;
@@ -47,7 +47,7 @@ fn a_bundled_list_loads_and_tracks_answers_and_skips() {
     // An existing entry can answer a second concept, and be taken back.
     let water = lexicon::lexicon_add(&mut s, "su", "water").unwrap().entry.unwrap();
     let w = elicit::concept_list_view(&mut s, &loaded.id).unwrap().concepts.into_iter().find(|c| c.gloss == "water").unwrap();
-    let linked = elicit::elicit_link(&mut s, &w.id, &water.senses[0].id).unwrap();
+    let linked = elicit::elicit_link(&mut s, &w.id, &water.senses[0].id, None).unwrap();
     assert_eq!(linked.concept.answers.len(), 1);
     let unlinked = elicit::elicit_unlink(&mut s, &w.id, &water.senses[0].id).unwrap();
     assert!(unlinked.concept.answers.is_empty());
@@ -69,4 +69,36 @@ fn a_sil_domain_shows_its_questions_and_collects_words() {
     let e = elicit::domain_collect(&mut s, &moon.id, "ay", "moon").unwrap();
     assert_eq!(e.domain.words.iter().map(|w| w.lemma.as_str()).collect::<Vec<_>>(), ["ay"]);
     assert!(elicit::domain_collect(&mut s, &moon.id, " ", "").is_err());
+}
+
+#[test]
+fn an_answer_takes_its_sound_from_a_timed_segment() {
+    let dir = TempDir(std::env::temp_dir().join(format!("wugs-desktop-elicit-sound-{}", ulid())));
+    let mut s: Session = None;
+    wugs_desktop::sample::open_sample(&mut s, &dir.0.join("sample"), "prs_Ana").unwrap();
+    let text = session::list_texts(&mut s).unwrap().into_iter().find(|t| t.recording.is_some()).unwrap();
+    let segs = session::get_text(&mut s, &text.id).unwrap().segments;
+    let timed = segs.iter().find(|g| g.start_ms.is_some() && g.content.starts_with("wʌn")).unwrap();
+    let list = elicit::concept_list_load(&mut s, "concepticon:Tadmor-2009-100").unwrap();
+    let concepts = elicit::concept_list_view(&mut s, &list.id).unwrap().concepts;
+    let e = elicit::elicit_answer(&mut s, &concepts[0].id, "ateş", "", Some(&timed.id)).unwrap();
+    let sound = e.concept.answers[0].sound.as_ref().expect("the answer is heard in the segment");
+    assert_eq!((Some(sound.start_ms), Some(sound.end_ms)), (timed.start_ms, timed.end_ms));
+    assert!(e.notes.is_empty(), "{:?}", e.notes);
+    // The entry's pronunciation is the segment's span, with no form typed.
+    let entry = lexicon::lexicon_entry(&mut s, &e.concept.answers[0].lexeme_id).unwrap();
+    assert_eq!(entry.pronunciations.len(), 1);
+    // A segment with nothing to hear still saves the answer, and says why.
+    let untimed = session::add_segment(&mut s, &text.id, Some(&timed.tier), None, None, "x").unwrap().id;
+    let e = elicit::elicit_answer(&mut s, &concepts[1].id, "burun", "", Some(&untimed)).unwrap();
+    assert_eq!(e.concept.answers.len(), 1);
+    assert!(e.concept.answers[0].sound.is_none());
+    assert!(e.notes.iter().any(|n| n.contains("without a sound") && n.contains("no times")), "{:?}", e.notes);
+    // An existing entry linked to another concept takes the sound too, once.
+    let burun_sense = e.concept.answers[0].sense_id.clone();
+    let linked = elicit::elicit_link(&mut s, &concepts[2].id, &burun_sense, Some(&timed.id)).unwrap();
+    assert!(linked.concept.answers[0].sound.is_some());
+    elicit::elicit_link(&mut s, &concepts[3].id, &burun_sense, Some(&timed.id)).unwrap();
+    let burun = linked.concept.answers[0].lexeme_id.clone();
+    assert_eq!(lexicon::lexicon_entry(&mut s, &burun).unwrap().pronunciations.len(), 1, "the same span is not added twice");
 }

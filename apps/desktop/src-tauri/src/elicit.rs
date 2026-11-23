@@ -54,6 +54,28 @@ pub struct Answer {
     pub lemma: String,
     pub homograph: Option<u32>,
     pub gloss: String,
+    /// How the entry is said, heard in a recording here: its first
+    /// pronunciation with a live recording.
+    pub sound: Option<Sound>,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Sound {
+    pub source_id: String,
+    pub start_ms: f64,
+    pub end_ms: f64,
+}
+
+fn sound_of(p: &Project, lexeme: &str) -> Result<Option<Sound>, String> {
+    for pr in p.pronunciations(lexeme)? {
+        if let Some(h) = pr.audio {
+            if p.proj.entity_kind(&h.source)?.is_some() && !p.proj.is_tombstoned(&h.source)? {
+                return Ok(Some(Sound { source_id: h.source, start_ms: h.start, end_ms: h.end }));
+            }
+        }
+    }
+    Ok(None)
 }
 
 #[derive(Debug, Serialize)]
@@ -150,6 +172,7 @@ fn answer(p: &Project, sense: &str) -> Result<Answer, String> {
         lemma: str_field(p, &lexeme, "lemma")?,
         homograph: homograph(p, &lexeme)?,
         gloss: str_field(p, sense, "gloss")?,
+        sound: sound_of(p, &lexeme)?,
         lexeme_id: lexeme,
     })
 }
@@ -240,16 +263,41 @@ fn concept_edit(p: &Project, concept: &str, res: &CommitResult) -> Result<Concep
     Ok(ConceptEdit { concept: concept_view(p, concept)?, notes: lines(res) })
 }
 
-pub fn elicit_answer(session: &mut Session, concept: &str, form: &str, gloss: &str) -> Result<ConceptEdit, String> {
-    let p = project(session)?;
-    let (_, res) = p.elicit(concept, form, gloss, None)?;
-    concept_edit(p, concept, &res)
+/// Give `lexeme` the sound of a timed segment (the answer heard there), as
+/// a pronunciation. The answer stands either way: a segment that cannot be
+/// heard is a note, not a failure.
+fn take_sound(p: &mut Project, lexeme: &str, segment: Option<&str>, notes: &mut Vec<String>) -> Result<(), String> {
+    let Some(seg) = segment else { return Ok(()) };
+    match crate::lexicon::heard_in(p, seg) {
+        Ok((heard, _)) => {
+            if sound_of(p, lexeme)?.is_some_and(|s| s.source_id == heard.source && s.start_ms == heard.start && s.end_ms == heard.end) {
+                return Ok(());
+            }
+            let (_, res) = p.add_pronunciation(lexeme, "", Some(&heard))?;
+            notes.extend(lines(&res));
+        }
+        Err(e) => notes.push(format!("The answer is saved without a sound: {e}")),
+    }
+    Ok(())
 }
 
-pub fn elicit_link(session: &mut Session, concept: &str, sense: &str) -> Result<ConceptEdit, String> {
+/// A new entry answering the concept; with `segment`, the entry is also
+/// heard in that segment of a recording (the word as it was said in the session).
+pub fn elicit_answer(session: &mut Session, concept: &str, form: &str, gloss: &str, segment: Option<&str>) -> Result<ConceptEdit, String> {
+    let p = project(session)?;
+    let ((lexeme, _), res) = p.elicit(concept, form, gloss, None)?;
+    let mut notes = lines(&res);
+    take_sound(p, &lexeme, segment, &mut notes)?;
+    Ok(ConceptEdit { concept: concept_view(p, concept)?, notes })
+}
+
+pub fn elicit_link(session: &mut Session, concept: &str, sense: &str, segment: Option<&str>) -> Result<ConceptEdit, String> {
     let p = project(session)?;
     let res = p.link_concept(sense, concept)?;
-    concept_edit(p, concept, &res)
+    let mut notes = lines(&res);
+    let lexeme = str_field(p, sense, "lexeme")?;
+    take_sound(p, &lexeme, segment, &mut notes)?;
+    Ok(ConceptEdit { concept: concept_view(p, concept)?, notes })
 }
 
 pub fn elicit_unlink(session: &mut Session, concept: &str, sense: &str) -> Result<ConceptEdit, String> {

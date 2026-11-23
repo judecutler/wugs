@@ -126,6 +126,8 @@ code { font-family: var(--font-mono); font-size: 0.92em; }
 .share { margin-top: 16px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .share h3 { margin: 0 0 2px; font-family: var(--font-display); font-weight: 400; font-size: 15px; color: var(--ink); }
 .share-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.el-sound { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-sm); white-space: nowrap; }
+.el-sound-hint:empty { display: none; }
 .st-check { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
 .st-machine { background: var(--machine-unsure); border-radius: var(--radius-sm); padding: 4px 8px; font-size: var(--text-sm); }
 .glotto-matches { display: flex; flex-direction: column; align-items: stretch; gap: 2px; margin: 4px 0 0; }
