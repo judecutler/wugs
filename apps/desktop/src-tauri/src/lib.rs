@@ -36,6 +36,7 @@ pub mod sample;
 pub mod segmentation;
 pub mod sentence;
 pub mod session;
+pub mod spectrogram;
 pub mod updater;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -882,6 +883,16 @@ async fn acoustic_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>,
     // Praat can take seconds: on a blocking thread, not an async worker or
     // the session thread.
     tauri::async_runtime::spawn_blocking(move || praat_analysis::analyse(&exe, &job, &chunks)).await.map_err(|e| e.to_string())?
+}
+
+/// The spectrogram of ten seconds of `source`'s recording (chunk `index`),
+/// as raw bytes (`src/spectrogram.rs` says the layout); computed off the
+/// session thread.
+#[tauri::command]
+async fn spectrogram(s: State<'_, SessionThread>, source: String, index: u32) -> Result<tauri::ipc::Response, String> {
+    let job = s.run(move |s| praat_analysis::job(s, &source))?;
+    let bytes = tauri::async_runtime::spawn_blocking(move || spectrogram::chunk(&job.wav, index)).await.map_err(|e| e.to_string())??;
+    Ok(tauri::ipc::Response::new(bytes))
 }
 
 /// Resolve what powers segmentation here (the project's pin, else this
@@ -1731,6 +1742,7 @@ pub fn run() {
             praat_apply,
             praat_discard,
             acoustic_analysis,
+            spectrogram,
             conflict_resolve,
             list_sources,
             import_media,

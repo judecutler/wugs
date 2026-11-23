@@ -334,6 +334,13 @@ def main():
                 run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
                 tiers.nth(0).locator(".tl-track-toggle").nth(0).click()
                 tiers.nth(1).locator(".tl-track-toggle").nth(1).click()
+                # The spectrogram under the waveform, zoomed to a stretch of speech.
+                run.page.locator(".panel-timeline .tl-toolbar button", has_text="Spectrogram").click()
+                run.page.wait_for_timeout(900)
+                run.shot("state-spectrogram", run.page.locator(".panel-timeline"))
+                if "active" not in (run.page.locator(".panel-timeline .tl-toolbar button", has_text="Spectrogram").get_attribute("class") or ""):
+                    failures.append("the Spectrogram toggle did not turn on")
+                run.page.locator(".panel-timeline .tl-toolbar button", has_text="Spectrogram").click()
 
             # The kit switcher (roadmap 73): open it, then switch to Scrolls and back.
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")

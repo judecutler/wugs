@@ -7783,6 +7783,7 @@ version = "0.2.1"
 dependencies = [
  "csv",
  "keyring",
+ "realfft",
  "regex",
  "serde",
  "serde_json",

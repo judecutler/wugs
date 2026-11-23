@@ -4,6 +4,7 @@
 // allocates beyond scratch state created up front.
 import { token } from "../theme/tokens";
 import { AnalysisLayer } from "./analysis-layer";
+import { SpectrogramLayer } from "./spectrogram-layer";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   addSegment,
@@ -169,6 +170,7 @@ export class TimelineView {
   readonly element: HTMLElement;
   /** Praat's pitch, intensity and formants over the waveform. */
   readonly analysis = new AnalysisLayer();
+  readonly spectrogram = new SpectrogramLayer();
   private canvas = h("canvas", { className: "tl-canvas" });
   private editBox = h("input", { className: "tl-edit", hidden: true });
   private confirmBar = h("div", { className: "tl-confirm", hidden: true });
@@ -329,6 +331,7 @@ export class TimelineView {
 
   setMedia(info: PeaksInfo | null, sourceId: string | null): void {
     this.analysis.setSource(info !== null ? sourceId : null);
+    this.spectrogram.setSource(info !== null ? sourceId : null);
     this.info = info;
     this.strips = info !== null && sourceId !== null ? new StripCache(sourceId, info.sampleRate, info.durationMs) : null;
     // Another panel may have loaded this recording to play a segment
@@ -507,6 +510,7 @@ export class TimelineView {
     if (this.strips !== null && this.info !== null) {
       const channels = Math.min(this.info.channels, MAX_DRAWN_CHANNELS);
       for (let c = 0; c < channels; c++) this.strips.prefetch(v, c);
+      this.spectrogram.draw(this.ctx, v, RULER_H, WAVE_H);
       this.drawWave(v, channels);
       this.drawSpeech(v);
       this.analysis.draw(this.ctx, v, RULER_H, WAVE_H);
@@ -531,7 +535,7 @@ export class TimelineView {
     const msPerPx = 1000 / v.pxPerSec;
     ctx.strokeStyle = this.colors.wave;
     ctx.lineWidth = 1;
-    ctx.globalAlpha = this.analysis.showing() ? 0.3 : 1;
+    ctx.globalAlpha = this.analysis.showing() || this.spectrogram.showing() ? 0.3 : 1;
     for (let c = 0; c < channels; c++) {
       const mid = RULER_H + laneH * c + laneH / 2;
       const amp = laneH / 2 - 2;

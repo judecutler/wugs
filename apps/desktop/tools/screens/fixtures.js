@@ -119,6 +119,27 @@
     });
   }
 
+  // A synthetic spectrogram in the Rust layout (src-tauri/src/spectrogram.rs):
+  // 2500 columns of 100 rows, half-dB steps above -120 dB, with formant bands
+  // where the fixture's voice is and a noisy hiss elsewhere.
+  function spectrogram({ index }) {
+    const rows = 100, cols = 2500, out = new Uint8Array(rows * cols);
+    for (let c = 0; c < cols; c++) {
+      const t = index * 10000 + (c + 0.5) * 4;
+      const a = t < DURATION_MS ? envelope(t) : 0;
+      const voiced = a > 0.12;
+      const formants = [550 + 150 * Math.sin(t / 170), 1500 + 350 * Math.sin(t / 230), 2600 + 150 * Math.sin(t / 410)];
+      for (let r = 0; r < rows; r++) {
+        const hz = (r + 0.5) * 50;
+        let db = -95 + 6 * noise(c * 131 + r);
+        if (voiced) for (const [k, f] of formants.entries()) db = Math.max(db, -30 - 6 * k - ((hz - f) / 120) ** 2 * 6);
+        else if (a > 0.05 && hz > 3000) db = Math.max(db, -55 + 4 * noise(c + r * 7));
+        out[c * rows + r] = Math.max(0, Math.min(255, Math.round((db + 120) * 2)));
+      }
+    }
+    return out.buffer;
+  }
+
   // ------------------------------------------------------------ glossing
 
   const morph = (id, surface, type, gloss, senseLabel = null, es = null) => ({
@@ -634,6 +655,7 @@
     },
     speech_spans: () => utterances.map((u) => [u.startMs + 30, u.endMs - 40]),
     acoustic_analysis: acousticAnalysis,
+    spectrogram,
     load_layout: () => null,
     save_layout: () => null,
     kits_list: () => kitsView,

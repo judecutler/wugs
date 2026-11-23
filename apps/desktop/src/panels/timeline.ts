@@ -86,7 +86,9 @@ export const timelinePanel: PanelDef = {
     const undoButton = h("button", { textContent: "Undo", title: "Undo (Ctrl+Z)" });
     const redoButton = h("button", { textContent: "Redo", title: "Redo (Ctrl+Shift+Z or Ctrl+Y)" });
     const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, splitButton, mergeButton, undoButton, redoButton);
-    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, perfButton, praat.element);
+    const spectroButton = h("button", { textContent: "Spectrogram", title: "Show the recording's spectrogram under the waveform (0–5000 Hz, darker where louder), made by wugs itself, a minute of view at a time" });
+    spectroButton.setAttribute("aria-pressed", "false");
+    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, perfButton, praat.element);
 
     const updateEditButtons = () => {
       const stack = view?.history() ?? null;
@@ -95,6 +97,7 @@ export const timelinePanel: PanelDef = {
       undoButton.title = stack?.undoLabel() != null ? `Undo ${stack.undoLabel()} (Ctrl+Z)` : "Undo (Ctrl+Z)";
       redoButton.title = stack?.redoLabel() != null ? `Redo ${stack.redoLabel()} (Ctrl+Shift+Z or Ctrl+Y)` : "Redo (Ctrl+Shift+Z or Ctrl+Y)";
       autoButton.disabled = autoButton.dataset.busy === "1" || view === null || selectedSource === null;
+      syncSpectro();
       byPicker.disabled = autoButton.disabled;
       // The same rule as the S and M keys; the title says why when disabled.
       const rules = view?.editRules() ?? { split: "Open a text first.", merge: "Open a text first.", next: null };
@@ -199,6 +202,18 @@ export const timelinePanel: PanelDef = {
     const gutter = h("div", { className: "tl-gutter" });
     const body = h("div", { className: "tl-body" });
     const main = h("div", { className: "tl-main" }, gutter, body);
+
+    const syncSpectro = () => {
+      const on = view?.spectrogram.enabled() ?? false;
+      spectroButton.classList.toggle("active", on);
+      spectroButton.setAttribute("aria-pressed", String(on));
+      spectroButton.disabled = view === null || selectedSource === null;
+    };
+    spectroButton.onclick = () => {
+      if (view === null) return;
+      view.spectrogram.toggle();
+      syncSpectro();
+    };
 
     perfButton.onclick = () => {
       if (view !== null) {
@@ -416,6 +431,10 @@ export const timelinePanel: PanelDef = {
       if (view === null) {
         view = new TimelineView();
         view.analysis.onChange = () => praat.refresh();
+        view.spectrogram.onChange = () => {
+          syncSpectro();
+          showToast({ tone: "error", lines: ["The spectrogram could not be made; see the note on the timeline."] });
+        };
         view.onEditStateChange = updateEditButtons;
         view.onTracksChange = drawGutter;
         body.replaceChildren(view.element);
