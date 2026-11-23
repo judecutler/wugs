@@ -450,6 +450,7 @@ wugs reads these formats:
 - FLEx `.flextext` and LIFT `.lift`
 - Praat `.TextGrid`
 - Toolbox `.db`, `.sfm`, and `.lex`, and `.txt` files in Toolbox format
+- CoNLL-U `.conllu` (Universal Dependencies treebanks, and the output of UDPipe, Stanza and spaCy): each `# newdoc` becomes a text, each sentence a segment and each word a word in the Gloss panel. Lemmas, tags, features, the dependency tree, multi-word tokens (`al` = `a` + `el`), empty nodes and every comment are kept with the sentence. Punctuation is kept but not counted as a word in Concordance and Frequencies. A file with a mistake is refused whole, and the message names each problem by line. Importing the same file again adds nothing.
 - Plain text `.txt`: any other text file becomes a text named after the file, and the message says how it was cut. A file whose lines mostly end in a full stop, with no blank lines, comes in a segment per line. Otherwise blank lines separate paragraphs, a line ending in a full stop ends its sentence, and inside a line a sentence ends after `.`, `!`, `?` or the full stop of another script when the next word starts with a capital, a digit or a quote; "e.g. the" stays together, but "Dr. Smith" is cut. Thai and Lao paragraphs come in whole, and an orthography written all in lower case is cut only at line ends and blank lines. The file must be UTF-8 or UTF-16; a damaged one is refused. Importing the same file again adds nothing.
 
 A message reports what wugs imported, and the new text is selected. The import report also counts anything the format holds that wugs does not keep. For FLEx, that includes LIFT examples, notes, pronunciations, relations, and etymologies.
@@ -458,7 +459,9 @@ An imported ELAN or Praat text is not linked to its recording. Import the audio 
 
 ### Export a text or the lexicon
 
-To export a text, select it, choose ELAN (.eaf), FLEx (.flextext), Praat (.TextGrid), or plain text, and click **Export…**. Plain text writes one track a segment per line, in time order, which AntConc and most corpus tools read.
+To export a text, select it, choose ELAN (.eaf), FLEx (.flextext), Praat (.TextGrid), CoNLL-U (.conllu), or plain text, and click **Export…**. Plain text writes one track a segment per line, in time order, which AntConc and most corpus tools read.
+
+CoNLL-U gives back an imported treebank exactly as it came in, with your edits: retyped words, and a `# text` line that matches the transcription. A word you add has no tags yet; the words around it keep theirs, and the tree still points at the same words. A text made in wugs exports too. Each sentence gets `# sent_id`, `# text` and its translations (`# text_en` when the translation track has a language), and each glossed word carries its analysis in MISC the way UD treebanks do: `Gloss=` for one morpheme, `MSeg=` and `MGloss=` for several. A root linked to a lexicon entry also gives LEMMA, and the entry's part of speech goes in XPOS (and UPOS when it is a common name such as noun or verb).
 
 To export the lexicon, choose LIFT or Toolbox beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT.
 

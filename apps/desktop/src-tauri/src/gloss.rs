@@ -101,7 +101,13 @@ pub struct AlternativeView {
 #[serde(rename_all = "camelCase")]
 pub struct GlossView {
     pub segment_id: String,
+    /// The words to gloss: the segment's tokens without punctuation tokens
+    /// (FLEx and CoNLL-U keep those; they take no gloss).
     pub words: Vec<WordView>,
+    /// The words the transcription reads as, for telling whether it changed
+    /// since it was broken out: the words, with a multi-word token
+    /// (CoNLL-U's `del` = `de el`) read as the one word written.
+    pub reads_as: Vec<String>,
     pub hidden: Vec<HiddenView>,
     pub alternatives: Vec<AlternativeView>,
 }
@@ -165,8 +171,40 @@ fn sense_label(p: &Project, sense: &str) -> Result<Option<String>, String> {
     }))
 }
 
+/// The words with each CoNLL-U multi-word token's range read as its own
+/// written form (`mwt` on the segment: first and last token, and `form`).
+fn reads_as(p: &Project, segment_id: &str, words: &[WordView]) -> Result<Vec<String>, String> {
+    let mut ranges: Vec<(usize, usize, String)> = Vec::new();
+    if let Some((wugs_model::Value::Arr(rs), _)) = p.proj.field(segment_id, "mwt")? {
+        for r in rs {
+            let at = |k: &str| r.get(k).and_then(wugs_model::Value::as_str).and_then(|t| words.iter().position(|w| w.id == t));
+            if let (Some(a), Some(b), Some(form)) = (at("first"), at("last"), r.get("form").and_then(wugs_model::Value::as_str)) {
+                if a < b && ranges.last().is_none_or(|l| l.1 < a) {
+                    ranges.push((a, b, form.to_string()));
+                }
+            }
+        }
+    }
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < words.len() {
+        match ranges.iter().find(|r| r.0 == i) {
+            Some((_, b, form)) => {
+                out.push(form.clone());
+                i = b + 1;
+            }
+            None => {
+                out.push(words[i].form.clone());
+                i += 1;
+            }
+        }
+    }
+    Ok(out)
+}
+
 fn view(p: &Project, segment_id: &str) -> Result<GlossView, String> {
-    let tokens = p.proj.members(segment_id)?;
+    let mut tokens = p.proj.members(segment_id)?;
+    tokens.retain(|t| !p.proj.is_punct_token(t));
     let findings = p.token_findings(&tokens)?;
     let mut forms = Vec::with_capacity(tokens.len());
     for tok in &tokens {
@@ -217,7 +255,8 @@ fn view(p: &Project, segment_id: &str) -> Result<GlossView, String> {
             alternatives.push(alt);
         }
     }
-    Ok(GlossView { segment_id: segment_id.to_string(), words, hidden, alternatives })
+    let reads_as = reads_as(p, segment_id, &words)?;
+    Ok(GlossView { segment_id: segment_id.to_string(), words, reads_as, hidden, alternatives })
 }
 
 /// The other list of an open conflict on `parent.field`, if it still names
@@ -343,4 +382,28 @@ pub fn gloss_choose_list(session: &mut Session, text_id: &str, segment_id: &str,
 
 pub fn gloss_lexicon(session: &mut Session, surface: &str) -> Result<Vec<LexiconMatchView>, String> {
     Ok(project(session)?.lexicon_lookup(surface)?.into_iter().map(Into::into).collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::session;
+
+    #[test]
+    fn a_ud_sentence_reads_as_written_and_its_punctuation_takes_no_gloss() {
+        let dir = std::env::temp_dir().join(format!("wugs-gloss-ud-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.to_str().unwrap(), "prs_Ana").unwrap();
+        let p = project(&mut s).unwrap();
+        let tier = session::utterance_tier(p).unwrap();
+        let ud = "# text = Vámonos al mar.\n1-2\tVámonos\t_\t_\t_\t_\t_\t_\t_\t_\n1\tVamos\tir\tVERB\t_\t_\t0\troot\t_\t_\n2\tnos\tnosotros\tPRON\t_\t_\t1\tobj\t_\t_\n3-4\tal\t_\t_\t_\t_\t_\t_\t_\t_\n3\ta\ta\tADP\t_\t_\t5\tcase\t_\t_\n4\tel\tel\tDET\t_\t_\t5\tdet\t_\t_\n5\tmar\tmar\tNOUN\t_\t_\t1\tobl\t_\tSpaceAfter=No\n6\t.\t.\tPUNCT\t_\t_\t1\tpunct\t_\t_\n\n";
+        let text = wugs_conllu::import_conllu(p, ud, "playa", &tier).unwrap().texts[0].clone();
+        let seg = p.proj.ordered_children("text", &text, "segment").unwrap()[0].clone();
+        let v = gloss_get(&mut s, &text, &seg).unwrap();
+        let forms: Vec<&str> = v.words.iter().map(|w| w.form.as_str()).collect();
+        assert_eq!(forms, ["Vamos", "nos", "a", "el", "mar"], "syntactic words, no full stop");
+        assert_eq!(v.reads_as, ["Vámonos", "al", "mar"], "what the Gloss panel compares with the transcription");
+        drop(s);
+        std::fs::remove_dir_all(dir).ok();
+    }
 }

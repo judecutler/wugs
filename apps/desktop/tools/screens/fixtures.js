@@ -133,9 +133,11 @@
   const glossView = (segmentId) => {
     if (segmentId !== "u01") {
       const s = utterances.find((u) => u.id === segmentId) ?? utterances[1];
+      const forms = s.content.split(" ").filter((w) => w !== "");
       return {
         segmentId,
-        words: s.content.split(" ").filter((w) => w !== "").map((form, i) => ({ id: `${segmentId}-w${i}`, form, morphs: [], suggestions: [], othersUnanalysed: 2, findings: [] })),
+        words: forms.map((form, i) => ({ id: `${segmentId}-w${i}`, form, morphs: [], suggestions: [], othersUnanalysed: 2, findings: [] })),
+        readsAs: forms,
         hidden: [],
         alternatives: [],
       };
@@ -169,6 +171,7 @@
           findings: [],
         },
       ],
+      readsAs: ["nikani", "ŋai", "toɾuma", "kesi"],
       hidden: [],
       alternatives: [],
     };
