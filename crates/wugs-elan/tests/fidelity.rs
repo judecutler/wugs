@@ -265,3 +265,50 @@ fn invalid_eaf_is_rejected_without_writes() {
     assert_eq!(entity_counts(&p), before, "rejected input leaves the project untouched");
     fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn glossing_goes_out_as_interlinear_tiers_and_is_not_read_back_as_segments() {
+    use std::collections::BTreeMap;
+    use wugs_core::MorphSpec;
+    let (root, mut p) = temp_project();
+    let r = import_eaf(&mut p, SAMPLE, "sample").unwrap();
+    let text = r.text.clone();
+    let seg = p
+        .proj
+        .children_by_ref("text", &text, "segment")
+        .unwrap()
+        .into_iter()
+        .find(|s| p.proj.field_str(s, "content").unwrap().is_some_and(|c| c.split_whitespace().count() >= 2 && c.split_whitespace().next().unwrap().chars().count() > 2))
+        .expect("a segment of two words or more");
+    let content = p.proj.field_str(&seg, "content").unwrap().unwrap();
+    let forms: Vec<&str> = content.split_whitespace().collect();
+    let (tokens, _) = p.tokenize(&text, &seg, &forms).unwrap();
+    let first: String = forms[0].chars().take(2).collect();
+    let rest: String = forms[0].chars().skip(2).collect();
+    let spec = |surface: &str, kind: &str, gloss: &str| MorphSpec { surface: surface.into(), morph_type: kind.into(), gloss: Some(gloss.into()), glosses_by_lang: BTreeMap::new(), sense: None };
+    p.apply_analysis(&text, &tokens[0], &[spec(&first, "root", "stem"), spec(&rest, "suffix", "PL")]).unwrap();
+
+    let eaf = export_eaf(&p, &text).unwrap();
+    let doc = xml::parse(&eaf).unwrap();
+    let tiers: Vec<&XmlNode> = doc.children_named("TIER").collect();
+    let named = |suffix: &str| tiers.iter().find(|t| t.attr("TIER_ID").is_some_and(|id| id.ends_with(suffix))).copied().unwrap_or_else(|| panic!("no tier ending {suffix}: {eaf}"));
+    let values = |t: &XmlNode| -> Vec<String> { t.children_named("ANNOTATION").map(|a| a.children[0].child("ANNOTATION_VALUE").map(|v| v.text.clone()).unwrap_or_default()).collect() };
+    let words = named(" words");
+    assert_eq!(words.attr("LINGUISTIC_TYPE_REF"), Some("wugs-words"));
+    assert_eq!(values(words), forms.iter().map(|f| f.to_string()).collect::<Vec<_>>());
+    assert_eq!(values(named(" morphs")), vec![first.clone(), format!("-{rest}")]);
+    assert_eq!(values(named(" glosses")), vec!["stem".to_string(), "PL".to_string()]);
+    assert!(eaf.contains(r#"LINGUISTIC_TYPE_ID="wugs-glosses""#) && eaf.contains(r#"CONSTRAINTS="Symbolic_Association""#), "{eaf}");
+
+    // Read back, the analysis tiers make nothing: they are the glossing already here.
+    let (root2, mut fresh) = temp_project();
+    let again = import_eaf(&mut fresh, &eaf, "sample").unwrap();
+    assert_eq!(again.analysis_tiers_skipped, 3);
+    let plain = import_eaf(&mut temp_project().1, SAMPLE, "sample").unwrap();
+    assert_eq!(again.tiers_created, plain.tiers_created, "no tier made from the analysis tiers");
+    assert_eq!(again.segments_created, plain.segments_created);
+    let into_own = import_eaf(&mut p, &eaf, "sample").unwrap();
+    assert_eq!((into_own.tiers_created, into_own.segments_created), (0, 0));
+    fs::remove_dir_all(root).ok();
+    fs::remove_dir_all(root2).ok();
+}

@@ -348,6 +348,9 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
         Format::Elan => {
             let r = wugs_elan::import_eaf(p, input, &stem).map_err(|e| e.to_string())?;
             lines.push(if r.text_created { "A new text was made.".into() } else { "It matched a text already here.".into() });
+            if r.analysis_tiers_skipped > 0 {
+                lines.push("Its words, morphs and glosses tiers are ones wugs wrote from its own glossing, so they were not read in again.".into());
+            }
             lines.push(format!(
                 "{} and {} added, {} already here.",
                 plural(r.tiers_created, "tier", "tiers"),

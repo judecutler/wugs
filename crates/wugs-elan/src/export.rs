@@ -180,6 +180,80 @@ pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
         tier_nodes.push(node);
     }
 
+    // The glossing as ELAN's usual interlinear tiers under each tier whose
+    // segments hold words: words (a subdivision of the segment), morphs (a
+    // subdivision of the word) and glosses (an association of the morph).
+    let mut analysis_types = false;
+    for t in &tiers {
+        let mut words = XmlNode::new("TIER").with_attr("LINGUISTIC_TYPE_REF", TYPE_WORDS);
+        let mut morphs = XmlNode::new("TIER").with_attr("LINGUISTIC_TYPE_REF", TYPE_MORPHS);
+        let mut glosses = XmlNode::new("TIER").with_attr("LINGUISTIC_TYPE_REF", TYPE_GLOSSES);
+        let mut any_morph = false;
+        let mut any_word = false;
+        let mut fresh = |prefix: &str| loop {
+            counter += 1;
+            let candidate = format!("{prefix}{counter}");
+            if used_ann_ids.insert(candidate.clone()) {
+                break candidate;
+            }
+        };
+        for s in segs.iter().filter(|s| s.tier == t.id) {
+            let tokens: Vec<String> = p.members(&s.id)?.into_iter().filter(|tok| !p.is_punct_token(tok) && !p.is_tombstoned(tok).unwrap_or(true)).collect();
+            let mut prev_word: Option<String> = None;
+            for tok in tokens {
+                let wid = fresh("w");
+                let mut wn = XmlNode::new("REF_ANNOTATION").with_attr("ANNOTATION_ID", &wid).with_attr("ANNOTATION_REF", &ann_eaf[s.id.as_str()]);
+                if let Some(prev) = prev_word.replace(wid.clone()) {
+                    wn = wn.with_attr("PREVIOUS_ANNOTATION", &prev);
+                }
+                let form = p.field_str(&tok, "form")?.unwrap_or_default();
+                words = words.with_child(XmlNode::new("ANNOTATION").with_child(wn.with_child(XmlNode::new("ANNOTATION_VALUE").with_text(&form))));
+                any_word = true;
+                let ms: Vec<String> = p.members(&tok)?.into_iter().filter(|m| !p.is_tombstoned(m).unwrap_or(true)).collect();
+                let root_at = ms.iter().position(|m| p.field_str(m, "type").ok().flatten().as_deref() == Some("root"));
+                let mut prev_morph: Option<String> = None;
+                for (i, m) in ms.iter().enumerate() {
+                    let mid = fresh("m");
+                    let mut mn = XmlNode::new("REF_ANNOTATION").with_attr("ANNOTATION_ID", &mid).with_attr("ANNOTATION_REF", &wid);
+                    if let Some(prev) = prev_morph.replace(mid.clone()) {
+                        mn = mn.with_attr("PREVIOUS_ANNOTATION", &prev);
+                    }
+                    let surface = p.field_str(m, "surface")?.unwrap_or_default();
+                    let kind = p.field_str(m, "type")?.unwrap_or_default();
+                    let shown = marked(&surface, &kind, root_at.is_some_and(|r| i < r));
+                    morphs = morphs.with_child(XmlNode::new("ANNOTATION").with_child(mn.with_child(XmlNode::new("ANNOTATION_VALUE").with_text(&shown))));
+                    let gloss = p.field_str(m, "gloss")?.unwrap_or_default();
+                    let gid = fresh("g");
+                    let gn = XmlNode::new("REF_ANNOTATION").with_attr("ANNOTATION_ID", &gid).with_attr("ANNOTATION_REF", &mid);
+                    glosses = glosses.with_child(XmlNode::new("ANNOTATION").with_child(gn.with_child(XmlNode::new("ANNOTATION_VALUE").with_text(&gloss))));
+                    any_morph = true;
+                }
+            }
+        }
+        if !any_word {
+            continue;
+        }
+        analysis_types = true;
+        let base = &tier_eaf[t.id.as_str()];
+        let words_id = unique(&format!("{base} words"), &mut used_tier_ids);
+        words = words.with_attr("TIER_ID", &words_id).with_attr("PARENT_REF", base);
+        if let Some(pt) = &t.participant {
+            words = words.with_attr("PARTICIPANT", pt);
+        }
+        tier_nodes.push(words);
+        if any_morph {
+            let morphs_id = unique(&format!("{base} morphs"), &mut used_tier_ids);
+            tier_nodes.push(morphs.with_attr("TIER_ID", &morphs_id).with_attr("PARENT_REF", &words_id));
+            let glosses_id = unique(&format!("{base} glosses"), &mut used_tier_ids);
+            tier_nodes.push(glosses.with_attr("TIER_ID", &glosses_id).with_attr("PARENT_REF", &morphs_id));
+        }
+    }
+    if analysis_types {
+        types.insert(TYPE_WORDS.into(), (false, Some("Symbolic_Subdivision".into())));
+        types.insert(TYPE_MORPHS.into(), (false, Some("Symbolic_Subdivision".into())));
+        types.insert(TYPE_GLOSSES.into(), (false, Some("Symbolic_Association".into())));
+    }
+
     let mut header = XmlNode::new("HEADER")
         .with_attr("MEDIA_FILE", "")
         .with_attr("TIME_UNITS", "milliseconds")
@@ -220,6 +294,25 @@ pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
         );
     }
     Ok(doc.to_xml())
+}
+
+/// A morph as an interlinear line shows it: its Leipzig marker on the side
+/// that joins the root (`ni-`, `-ler`, `=ma`, `<um>`); a surface that already
+/// carries one, as FLEx writes them, is kept as it is.
+fn marked(surface: &str, kind: &str, before_root: bool) -> String {
+    if surface.starts_with(['-', '=', '~', '<']) || surface.ends_with(['-', '=', '~', '>']) {
+        return surface.to_string();
+    }
+    match kind {
+        "prefix" => format!("{surface}-"),
+        "suffix" => format!("-{surface}"),
+        "infix" => format!("<{surface}>"),
+        "clitic" if before_root => format!("{surface}="),
+        "clitic" => format!("={surface}"),
+        "reduplication" if before_root => format!("{surface}~"),
+        "reduplication" => format!("~{surface}"),
+        _ => surface.to_string(),
+    }
 }
 
 fn unique(base: &str, used: &mut HashSet<String>) -> String {

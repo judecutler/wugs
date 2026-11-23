@@ -15,6 +15,16 @@ pub const F_TIER_TEXT: &str = "x.elan.text";
 pub const PROP_TEXT: &str = "wugs.text";
 pub const PROP_TITLE: &str = "wugs.title";
 
+/// Linguistic types of the analysis tiers export writes from the glossing
+/// (words, morphs, glosses). They are derived from tokens and morphs, so
+/// import reads them as already in wugs, never as new tiers of segments.
+/// (Only these three: `wugs-association` and `wugs-subdivision` are the
+/// default types of ordinary tiers.)
+pub const TYPE_WORDS: &str = "wugs-words";
+pub const TYPE_MORPHS: &str = "wugs-morphs";
+pub const TYPE_GLOSSES: &str = "wugs-glosses";
+pub const ANALYSIS_TYPES: [&str; 3] = [TYPE_WORDS, TYPE_MORPHS, TYPE_GLOSSES];
+
 pub const KIND_ALIGNED: &str = "time-aligned";
 pub const KIND_SUBDIVISION: &str = "symbolic-subdivision";
 pub const KIND_ASSOCIATION: &str = "symbolic-association";
