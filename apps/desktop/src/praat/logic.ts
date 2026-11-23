@@ -45,3 +45,10 @@ export function notBroughtBack(reasons: [string, number][]): string[] {
     return line.charAt(0).toUpperCase() + line.slice(1);
   });
 }
+
+/** The title of an analysis toggle: who analyses it here. */
+export function overlayTitle(kind: "pitch" | "intensity" | "formants", praatFound: boolean): string {
+  if (praatFound) return `Show Praat's ${kind} over the waveform (analysed by your Praat, a minute at a time)`;
+  if (kind === "formants") return "Formants need Praat: install it, or click Praat… to say where it is";
+  return `Show the ${kind} over the waveform (wugs's built-in analysis, by Praat's method; a minute at a time)`;
+}

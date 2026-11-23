@@ -452,7 +452,9 @@ wugs works with your own installed copy of Praat, version 6 or newer. It finds P
 
 Click **Pitch**, **Intensity**, or **Formants** in the Timeline toolbar. Your Praat analyses the recording, and wugs draws the curves over the waveform.
 
-Praat analyses at most one minute of view at a time. If more is on screen, zoom in. wugs keeps the results, so a part you already viewed shows at once next time.
+Without Praat, **Pitch** and **Intensity** still work: wugs analyses the recording itself with Praat's own method and settings, so the curves match Praat's closely. **Formants** need Praat, so that button stays off until wugs finds it.
+
+The analysis covers at most one minute of view at a time. If more is on screen, zoom in. wugs keeps the results, so a part you already viewed shows at once next time.
 
 The analysis uses Praat's standard speech settings. Pitch is tracked between 75 and 600 Hz, so a voice outside that range shows no pitch.
 

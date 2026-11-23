@@ -17,7 +17,7 @@ import {
 import { h } from "../dom";
 import { refreshText, showToast } from "../store";
 import { KINDS, type Kind } from "./analysis";
-import { changeSummary, notBroughtBack, praatRange, type Range } from "./logic";
+import { changeSummary, notBroughtBack, overlayTitle, praatRange, type Range } from "./logic";
 
 export type PraatContext = {
   textId: string;
@@ -149,9 +149,30 @@ export function praatControls(
       element.replaceChildren();
       return;
     }
-    if (status === null || (status.path === null || status.problem !== null)) {
+    const praatFound = status !== null && status.path !== null && status.problem === null;
+    // Without Praat, pitch and intensity come from wugs's own analysis
+    // (the acoustic-analysis capability's built-in provider); formants need Praat.
+    const layer = overlays();
+    const toggles =
+      layer === null || ctx.sourceId === null || status === null
+        ? []
+        : KINDS.map((kind) => {
+            const needsPraat = kind === "formants" && !praatFound;
+            return h("button", {
+              className: layer.enabled(kind) && !needsPraat ? "active" : "",
+              textContent: KIND_LABEL[kind],
+              disabled: needsPraat,
+              title: overlayTitle(kind, praatFound),
+              onclick: () => {
+                layer.toggle(kind);
+                draw();
+              },
+            });
+          });
+    if (!praatFound) {
       const why = status?.problem ?? "Looking for Praat…";
       element.replaceChildren(
+        ...toggles,
         h("button", {
           textContent: "Praat…",
           title: `${why} Click to choose where Praat is.`,
@@ -164,25 +185,10 @@ export function praatControls(
     const open = h("button", {
       className: armedReopen ? "danger" : "",
       textContent: armedReopen ? "Open again: start over" : "Open in Praat",
-      title: ctx.sourceId === null ? "Pick a recording first" : `Open this text and its recording in ${status.version ?? "Praat"}, at the selected segment or what is on screen`,
+      title: ctx.sourceId === null ? "Pick a recording first" : `Open this text and its recording in ${status?.version ?? "Praat"}, at the selected segment or what is on screen`,
       disabled: busy || ctx.sourceId === null,
       onclick: () => openInPraat(),
     });
-    const layer = overlays();
-    const toggles =
-      layer === null || ctx.sourceId === null
-        ? []
-        : KINDS.map((kind) =>
-            h("button", {
-              className: layer.enabled(kind) ? "active" : "",
-              textContent: KIND_LABEL[kind],
-              title: `Show Praat's ${kind} over the waveform (analysed by your Praat, a minute at a time)`,
-              onclick: () => {
-                layer.toggle(kind);
-                draw();
-              },
-            }),
-          );
     const parts: Node[] = [...toggles, open];
     if (pendingFor === ctx.textId) {
       parts.push(
