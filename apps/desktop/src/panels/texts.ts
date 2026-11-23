@@ -1,9 +1,10 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { lexiconList, orthographyGet, projectProgress, soundWords, typologyAnswers, typologyProfile } from "../api";
+import { lexiconList, orthographyGet, projectAffixes, projectProgress, soundWords, typologyAnswers, typologyProfile } from "../api";
 import { featuresOf, grammarSketch, graphemesOf, morphemesOf, type Feature } from "../grammar/sketch";
 import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
+import { marked, slotChart, slotLabel } from "../affixes/logic";
 import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
@@ -354,6 +355,8 @@ async function exportSketch() {
       }
     }
     const morphemes = morphemesOf(entries);
+    const affixes = await projectAffixes().catch(() => null);
+    const slots = affixes === null ? [] : slotChart(affixes.affixes).map((c) => ({ label: slotLabel(c.slot), affixes: c.affixes.map((a) => `${marked(a)} ${a.gloss}`.trim()) }));
     const graphemes = graphemesOf(toGrid(ortho.profile));
     const html = grammarSketch({
       language,
@@ -361,6 +364,7 @@ async function exportSketch() {
       soundTrack: first.tracks.find((t) => t.id === track)?.name ?? "",
       graphemes,
       morphemes,
+      slots,
       entries: progress.entries,
       features,
       featureSource,

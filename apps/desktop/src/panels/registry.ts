@@ -23,6 +23,7 @@ import { timelinePanel } from "./timeline";
 import { transcribePanel } from "./transcribe";
 import { typologyPanel } from "./typology";
 import { progressPanel } from "./progress";
+import { affixesPanel } from "./affixes";
 import { orthographyPanel } from "./orthography";
 import { vowelsPanel } from "./vowels";
 
@@ -48,6 +49,7 @@ export const PANELS = {
   sounds: soundsPanel,
   typology: typologyPanel,
   progress: progressPanel,
+  affixes: affixesPanel,
   orthography: orthographyPanel,
   assist: assistPanel,
   people: peoplePanel,

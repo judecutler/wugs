@@ -30,6 +30,9 @@ export type SketchInput = {
   /** "Grambank 1.0", "WALS Online v2020.6". */
   featureSource: string;
   texts: SketchText[];
+  /** The position-class chart read from the glossed words: each slot's
+   * label and its affixes as written with their glosses (`ni- 1SG`). */
+  slots?: { label: string; affixes: string[] }[];
   /** The person's own date for the title page, `YYYY-MM-DD`. */
   date: string;
   generator: string;
@@ -165,6 +168,17 @@ export function grammarSketch(d: SketchInput): string {
     parts.push(`<h3>4.${i + 1} ${KIND_NAMES[kind]}</h3>`);
     parts.push(`<table><tr><th>Form</th><th>Gloss</th><th>Category</th></tr>${ms.map((m) => `<tr><td class="ipa">${esc(m.form)}</td><td class="gl">${esc(m.glosses.join("; "))}</td><td>${esc(m.category)}</td></tr>`).join("")}</table>`);
   });
+  const slots = d.slots ?? [];
+  if (slots.some((s) => s.affixes.length > 0)) {
+    const depth = Math.max(...slots.map((s) => s.affixes.length), 1);
+    const rows = Array.from({ length: depth }, (_, i) => `<tr>${slots.map((s) => `<td class="ipa">${s.label === "Root" && i === 0 ? "ROOT" : esc(s.affixes[i] ?? "")}</td>`).join("")}</tr>`);
+    parts.push(
+      `<h3>4.${byKind.length + 1} Position classes</h3>`,
+      `<p>Each affix and clitic in the slot it holds most often in the glossed texts, counted from the root.</p>`,
+      `<table class="chart"><tr>${slots.map((s) => `<th>${esc(s.label)}</th>`).join("")}</tr>${rows.join("")}</table>`,
+      todo("Which slots are obligatory, and what the order says about the morphology"),
+    );
+  }
   parts.push(todo("Word classes, inflection and derivation"));
 
   parts.push(`<h2>5. Syntax</h2>`, todo("Word order, the noun phrase, the clause, questions, negation, complex sentences"));

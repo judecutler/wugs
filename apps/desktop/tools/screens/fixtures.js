@@ -913,6 +913,21 @@ const LEXICON = [
       return LEXICON.filter((r) => q === "" || r.lemma.includes(q) || r.glosses.some((g) => g.includes(q)));
     },
     lexicon_entry: lexiconEntry,
+    project_affixes: () => {
+      const ex = { word: "ni-kani-ra", textId: "t-count", tierId: "tier-utt", segmentId: "seg-1" };
+      const a = (surface, kind, gloss, slot, uses, roots, positions, categories) => ({ surface, kind, gloss, uses, roots, positions, slot, categories, example: ex });
+      return {
+        words: 52,
+        withoutRoot: 1,
+        affixes: [
+          a("ni", "prefix", "1SG", -1, 14, 6, [[-1, 14]], [["verb", 14]]),
+          a("ka", "prefix", "2SG", -1, 6, 4, [[-1, 6]], [["verb", 6]]),
+          a("ra", "suffix", "PST", 1, 11, 5, [[1, 11]], [["verb", 11]]),
+          a("si", "suffix", "PL", 1, 9, 7, [[1, 9]], [["noun", 9]]),
+          a("ma", "clitic", "FOC", 2, 7, 6, [[2, 5], [1, 2]], [["verb", 4], ["noun", 3]]),
+        ],
+      };
+    },
     project_progress: () => ({
       texts: [
         { id: "t-count", title: "Counting to ten", recordingMs: 62_000, sentences: 10, transcribed: 10, transcribedMs: 41_000, words: 65, glossedWords: 52, translated: 9 },

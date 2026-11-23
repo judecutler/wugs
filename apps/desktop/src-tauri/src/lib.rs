@@ -38,6 +38,7 @@ pub mod website;
 pub mod table_text;
 pub mod listen;
 pub mod praat;
+pub mod affixes;
 pub mod progress;
 pub mod praat_analysis;
 pub mod sample;
@@ -316,6 +317,12 @@ fn import_lexicon_table(s: State<SessionThread>, path: String) -> Result<lexicon
 #[tauri::command(async)]
 fn export_lexicon_table(s: State<SessionThread>, folder: String) -> Result<String, String> {
     s.run(move |s| lexicon_table::export(s, std::path::Path::new(&folder)))
+}
+
+/// The project's affixes and clitics with their slots (`src/affixes.rs`).
+#[tauri::command(async)]
+fn project_affixes(s: State<SessionThread>) -> Result<affixes::Affixes, String> {
+    s.run(affixes::affixes)
 }
 
 /// How far the documentation has come, text by text (`src/progress.rs`).
@@ -1961,6 +1968,7 @@ pub fn run() {
             import_lexicon_table,
             export_lexicon_table,
             project_progress,
+            project_affixes,
             seal_project,
             project_language,
             set_project_language,
