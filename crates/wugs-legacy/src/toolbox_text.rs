@@ -122,26 +122,26 @@ fn under(starts: &[usize], col: usize) -> usize {
     starts.iter().rposition(|s| *s <= col).unwrap_or(0)
 }
 
-struct Morph {
-    surface: String,
-    kind: &'static str,
-    gloss: String,
+pub(crate) struct Morph {
+    pub(crate) surface: String,
+    pub(crate) kind: &'static str,
+    pub(crate) gloss: String,
     /// The one lexicon sense with this root's form and gloss, found before the txn.
-    sense: Option<String>,
+    pub(crate) sense: Option<String>,
 }
 
-struct Sentence {
-    reference: String,
-    words: Vec<(String, Vec<Morph>)>,
-    translation: String,
-    notes: Vec<String>,
-    start: Option<f64>,
-    end: Option<f64>,
+pub(crate) struct Sentence {
+    pub(crate) reference: String,
+    pub(crate) words: Vec<(String, Vec<Morph>)>,
+    pub(crate) translation: String,
+    pub(crate) notes: Vec<String>,
+    pub(crate) start: Option<f64>,
+    pub(crate) end: Option<f64>,
 }
 
-struct Text {
-    title: String,
-    sentences: Vec<Sentence>,
+pub(crate) struct Text {
+    pub(crate) title: String,
+    pub(crate) sentences: Vec<Sentence>,
 }
 
 fn morph_of(written: &str) -> (String, &'static str) {
@@ -323,6 +323,20 @@ pub fn import_toolbox_text(p: &mut Project, input: &str, fallback_title: &str, t
     if texts.is_empty() {
         return Err("the file has no \\ref records with text; nothing was imported".into());
     }
+    write_texts(p, texts, tier, translation_tier, Writing { intent: "import-toolbox-text", reference: "x.toolbox.ref" }, &mut report)?;
+    Ok(report)
+}
+
+/// How a set of parsed texts is written: the txn's intent and the field that
+/// keeps each sentence's reference.
+pub(crate) struct Writing {
+    pub(crate) intent: &'static str,
+    pub(crate) reference: &'static str,
+}
+
+/// Write parsed interlinear texts, one txn each; roots are linked to the one
+/// lexicon sense with their form and gloss, and a text already here is matched.
+pub(crate) fn write_texts(p: &mut Project, texts: Vec<Text>, tier: &str, translation_tier: Option<&str>, how: Writing, report: &mut TextReport) -> Result<(), String> {
     let senses = sense_index(p)?;
     for mut text in texts {
         for m in text.sentences.iter_mut().flat_map(|s| s.words.iter_mut()).flat_map(|w| w.1.iter_mut()) {
@@ -338,13 +352,13 @@ pub fn import_toolbox_text(p: &mut Project, input: &str, fallback_title: &str, t
             report.matched.push(t);
             continue;
         }
-        let mut t = p.intent("import-toolbox-text");
+        let mut t = p.intent(how.intent);
         let tid = t.create_scope_root("text", "txt", vec![("title", Value::str(&title))]);
         for (si, (s, content)) in text.sentences.iter().zip(&contents).enumerate() {
             let seg = new_id("seg");
             let mut fields = vec![("text", Value::str(&tid)), ("tier", Value::str(tier)), ("pos", Value::str(&pos_seq(si))), ("content", Value::str(content))];
             if !s.reference.is_empty() {
-                fields.push(("x.toolbox.ref", Value::str(&s.reference)));
+                fields.push((how.reference, Value::str(&s.reference)));
             }
             if let (Some(a), Some(b)) = (s.start, s.end) {
                 if b > a {
@@ -387,7 +401,7 @@ pub fn import_toolbox_text(p: &mut Project, input: &str, fallback_title: &str, t
         t.commit()?;
         report.texts.push(tid);
     }
-    Ok(report)
+    Ok(())
 }
 
 // ------------------------------------------------------------------ export
