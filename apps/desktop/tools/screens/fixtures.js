@@ -661,7 +661,7 @@
     ],
     gloss_unify: () => 1,
     // The character inventory: a Cyrillic «а» typed among Latin letters, and two apostrophes.
-    grambank_profile: ({ glottocode }) => {
+    typology_profile: ({ glottocode }) => {
       const f = (id, question, value, label, others) => ({ id, question, value, label, others: others.map(([v, l, count]) => ({ value: v, label: l, count })), othersCoded: others.reduce((n, o) => n + o[2], 0) });
       return {
         glottocode,
@@ -670,7 +670,8 @@
         codedName: null,
         comparedWith: "Austronesian languages",
         comparedCount: 312,
-        edition: "Grambank 1.0 (CC BY 4.0)",
+        edition: "Grambank 1.0 (CC BY 4.0): Skirgård et al. 2023, Science Advances",
+        page: `https://grambank.clld.org/languages/${glottocode}`,
         features: [
           f("GB020", "Are there definite or specific articles?", null, null, [["1", "present", 201], ["0", "absent", 98]]),
           f("GB021", "Do indefinite nominals commonly have indefinite articles?", null, null, [["0", "absent", 180], ["1", "present", 110]]),

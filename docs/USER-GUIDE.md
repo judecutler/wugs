@@ -645,9 +645,9 @@ At the top of **Import and export**, type the language's name and, if you know t
 
 ### See what typology says about the language
 
-The **Typology** panel shows what [Grambank](https://grambank.clld.org) says about the project's language: 195 questions about its grammar, such as "Are there definite or specific articles?" or "What is the order of numeral and noun in the NP?", each with Grambank's answer for the language. Beside each answer it shows how the other coded languages of the same family answer, as a share of each answer and a bar. When the family has fewer than three coded languages, it compares with the languages of the same region instead. Open the panel from Settings (Closed panels) or with **Find an action**. It needs the project's Glottocode (see above).
+The **Typology** panel shows what [Grambank](https://grambank.clld.org) or the [World Atlas of Language Structures](https://wals.info) (WALS) says about the project's language. Choose **Grambank** (195 questions such as "Are there definite or specific articles?") or **WALS** (192 features such as "Order of Subject, Object and Verb") at the top; the choice is remembered. Each feature shows the dataset's answer for the language. Beside each answer it shows how the other coded languages of the same family answer, as a share of each answer and a bar. When the family has fewer than three coded languages, it compares with the languages of the same region instead. Open the panel from Settings (Closed panels) or with **Find an action**. It needs the project's Glottocode (see above).
 
-Many languages are not in Grambank. For these, every question is listed as **Not coded**, with how related languages answer it, so the list works as a checklist of what to find out. A dialect Grambank has not coded shows the answers for the language it belongs to.
+Many languages are in neither dataset. For these, every feature is listed as **Not coded**, with how related languages answer it, so the list works as a checklist of what to find out. A dialect the dataset has not coded shows the answers for the language it belongs to.
 
 - **Still open** lists the questions without an answer for this language.
 - **Unlike its relatives** lists the answers that differ from what most related languages say, which are often worth a second look or a paragraph in the grammar.
@@ -655,7 +655,7 @@ Many languages are not in Grambank. For these, every question is listed as **Not
 - Type another language's name or Glottocode at the top and press Enter to see its answers. **The project's language** goes back.
 - **Copy table** copies the questions and answers for a spreadsheet.
 
-The data comes from Grambank 1.0, kept inside the app (CC BY 4.0; cite Skirgård et al. 2023). The sources and comments behind each value are on the language's Grambank page, named under the list.
+The data comes from Grambank 1.0 (cite Skirgård et al. 2023) and WALS Online (cite Dryer & Haspelmath 2013), both CC BY 4.0 and kept inside the app. The sources and comments behind each value are on the language's page in the dataset, named under the list.
 
 ### Describe each text
 

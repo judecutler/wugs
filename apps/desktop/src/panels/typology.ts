@@ -1,15 +1,17 @@
-// Typology: what Grambank says about the project's language (or any language
-// looked up by name or Glottocode), feature by feature, beside how its
-// relatives answer (src-tauri/src/grambank.rs). For a language Grambank has
-// not coded, the open questions are a checklist for fieldwork. Rules in
-// ../typology/logic.ts.
+// Typology: what Grambank or WALS says about the project's language (or any
+// language looked up by name or Glottocode), feature by feature, beside how
+// its relatives answer (src-tauri/src/typology.rs). For a language the
+// dataset has not coded, the open features are a checklist for fieldwork.
+// Rules in ../typology/logic.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, glottologFind, grambankProfile, projectLanguage } from "../api";
+import { errorText, glottologFind, projectLanguage, typologyProfile } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { getState, showToast } from "../store";
-import { counts, grambankPage, othersLine, ownLine, profileNote, profileTable, shown, unlike, type Profile, type Show } from "../typology/logic";
+import { counts, othersLine, ownLine, profileNote, profileTable, shown, SOURCES, unlike, type Profile, type Show, type Source } from "../typology/logic";
 import type { PanelDef, PanelView } from "./panel";
+
+const SOURCE_KEY = "wugs.typology.source";
 
 const SHOWS: [Show, string][] = [
   ["all", "Every feature"],
@@ -28,11 +30,15 @@ export const typologyPanel: PanelDef = {
     let project = "";
     let seq = 0;
     let lookup = "";
+    let source: Source = localStorage.getItem(SOURCE_KEY) === "wals" ? "wals" : "grambank";
+    /** The Glottocode on screen, so a change of dataset reads the same language. */
+    let shownCode: string | null = null;
 
     const load = async (glottocode: string) => {
       const mine = ++seq;
       try {
-        const p = await grambankProfile({ glottocode });
+        const p = await typologyProfile({ glottocode, source });
+        shownCode = glottocode;
         if (mine !== seq) return;
         profile = p;
         problem = null;
@@ -96,7 +102,21 @@ export const typologyPanel: PanelDef = {
           () => showToast({ tone: "info", lines: [`${p.features.length} features of ${p.name} copied as a table.`] }),
           (e) => showToast({ tone: "error", lines: [errorText(e)] }),
         );
-      return h("div", { className: "ty-bar" }, input, mine, copy);
+      const which = SOURCES.map(([id, label]) => {
+        const b = h("button", { type: "button", className: "ty-chip", textContent: label });
+        b.setAttribute("aria-pressed", String(source === id));
+        b.onclick = () => {
+          if (source === id) return;
+          source = id;
+          localStorage.setItem(SOURCE_KEY, id);
+          if (shownCode !== null) void load(shownCode);
+        };
+        return b;
+      });
+      const group = h("div", { className: "ty-sources" }, ...which);
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", "Dataset");
+      return h("div", { className: "ty-bar" }, group, input, mine, copy);
     };
 
     const paint = () => {
@@ -158,10 +178,10 @@ export const typologyPanel: PanelDef = {
       el.replaceChildren(
         bar(p),
         h("h3", { className: "ty-title", textContent: `${p.name} (${p.glottocode})` }),
-        h("p", { className: "note", textContent: profileNote(p) }),
+        h("p", { className: "note", textContent: profileNote(p, source) }),
         h("div", { className: "ty-bar" }, ...chips, search),
         list,
-        h("p", { className: "note ty-credit", textContent: `From ${p.edition}: Skirgård et al. 2023, Science Advances. Sources and comments for each value: ${grambankPage(p.codedAs ?? p.glottocode)}` }),
+        h("p", { className: "note ty-credit", textContent: `From ${p.edition}. Sources and comments for each value: ${p.page}` }),
       );
     };
 
@@ -176,12 +196,13 @@ export const typologyPanel: PanelDef = {
       if (s.info.projectId === project) return;
       project = s.info.projectId;
       profile = null;
+      shownCode = null;
       problem = null;
       paint();
       void loadProjectLanguage();
     };
 
-    const unprovide = provide("typology", () => [{ id: "typology:mine", title: "Show Grambank's features for the project's language", group: "Typology", words: ["grambank", "typology", "features", "grammar", "wals", "questionnaire"], run: () => void loadProjectLanguage() }]);
+    const unprovide = provide("typology", () => [{ id: "typology:mine", title: "Show typology features for the project's language", group: "Typology", words: ["grambank", "wals", "atlas", "typology", "features", "grammar", "questionnaire"], run: () => void loadProjectLanguage() }]);
     return { element: el, render: draw, dispose: unprovide };
   },
 };

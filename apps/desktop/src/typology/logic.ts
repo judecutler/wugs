@@ -1,6 +1,6 @@
-// The Typology panel's rules: which Grambank features to list and how to say
-// each in words. Pure and npm-tested; the data comes from
-// src-tauri/src/grambank.rs.
+// The Typology panel's rules: which Grambank or WALS features to list and how
+// to say each in words. Pure and npm-tested; the data comes from
+// src-tauri/src/typology.rs.
 
 export type Share = { value: string; label: string; count: number };
 export type Answer = { id: string; question: string; value: string | null; label: string | null; others: Share[]; othersCoded: number };
@@ -13,7 +13,15 @@ export type Profile = {
   comparedCount: number;
   features: Answer[];
   edition: string;
+  page: string;
 };
+
+export type Source = "grambank" | "wals";
+export const SOURCES: [Source, string][] = [
+  ["grambank", "Grambank"],
+  ["wals", "WALS"],
+];
+export const sourceName = (s: Source): string => (s === "wals" ? "WALS" : "Grambank");
 
 export type Show = "all" | "open" | "unlike";
 
@@ -53,14 +61,15 @@ export function othersLine(a: Answer): string {
 }
 
 /** The line over the list, in words. */
-export function profileNote(p: Profile): string {
+export function profileNote(p: Profile, source: Source): string {
+  const name = sourceName(source);
   const coded =
     p.codedAs === null
-      ? `Grambank has not coded ${p.name}: the questions below are a checklist, with how related languages answer each.`
+      ? `${name} has not coded ${p.name}: the features below are a checklist, with how related languages answer each.`
       : p.codedAs === p.glottocode
-        ? `Grambank's answers for ${p.name}.`
-        : `${p.name} is a dialect: these are Grambank's answers for ${p.codedName ?? p.codedAs}.`;
-  const compared = p.comparedCount === 0 ? "" : ` Compared with ${p.comparedCount.toLocaleString()} ${p.comparedWith} in Grambank.`;
+        ? `${name}'s answers for ${p.name}.`
+        : `${p.name} is a dialect: these are ${name}'s answers for ${p.codedName ?? p.codedAs}.`;
+  const compared = p.comparedCount === 0 ? "" : ` Compared with ${p.comparedCount.toLocaleString()} ${p.comparedWith} in ${name}.`;
   return coded + compared;
 }
 
@@ -75,6 +84,3 @@ export function profileTable(p: Profile): string {
   const rows = p.features.map((a) => [a.id, a.question, ownLine(a), othersLine(a)].join("\t"));
   return `${[head, ...rows].join("\n")}\n`;
 }
-
-/** Grambank's page for a language. */
-export const grambankPage = (glottocode: string): string => `https://grambank.clld.org/languages/${glottocode}`;

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { counts, grambankPage, othersLine, ownLine, profileNote, profileTable, shown, unlike, type Answer, type Profile } from "./logic.ts";
+import { counts, othersLine, ownLine, profileNote, profileTable, shown, unlike, type Answer, type Profile } from "./logic.ts";
 
 const a = (id: string, value: string | null, others: [string, number][], label: string | null = null): Answer => ({
   id,
@@ -19,6 +19,7 @@ const p: Profile = {
   comparedWith: "Austronesian languages",
   comparedCount: 300,
   edition: "Grambank 1.0 (CC BY 4.0)",
+  page: "https://grambank.clld.org/languages/abcd1234",
   features: [a("GB020", "0", [["1", 80], ["0", 20]], "absent"), a("GB021", "1", [["1", 70], ["0", 30]], "present"), a("GB022", null, [["0", 3]]), a("GB023", "?", [])],
 };
 
@@ -42,9 +43,8 @@ test("answers are said in words", () => {
   assert.equal(ownLine(p.features[3]!), "Not known");
   assert.equal(othersLine(p.features[0]!), "present 80%, absent 20% of 100");
   assert.equal(othersLine(p.features[3]!), "None of them coded");
-  assert.equal(profileNote(p), "Grambank's answers for Abcd. Compared with 300 Austronesian languages in Grambank.");
-  assert.match(profileNote({ ...p, codedAs: null }), /^Grambank has not coded Abcd: the questions below are a checklist/u);
-  assert.match(profileNote({ ...p, codedAs: "efgh1234", codedName: "Efgh" }), /dialect: these are Grambank's answers for Efgh/u);
+  assert.equal(profileNote(p, "grambank"), "Grambank's answers for Abcd. Compared with 300 Austronesian languages in Grambank.");
+  assert.match(profileNote({ ...p, codedAs: null }, "wals"), /^WALS has not coded Abcd: the features below are a checklist/u);
+  assert.match(profileNote({ ...p, codedAs: "efgh1234", codedName: "Efgh" }, "grambank"), /dialect: these are Grambank's answers for Efgh/u);
   assert.equal(profileTable(p).split("\n")[1], "GB020\tQuestion GB020?\tabsent\tpresent 80%, absent 20% of 100");
-  assert.equal(grambankPage("taga1270"), "https://grambank.clld.org/languages/taga1270");
 });
