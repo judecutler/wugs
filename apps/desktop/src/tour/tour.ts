@@ -29,7 +29,7 @@ export const STOPS: Stop[] = [
     panel: "gloss",
     target: ".panel-gloss",
     title: "Gloss as you go",
-    body: "Break a word into morphs (ni-kani) and gloss each one. wugs remembers every analysis and offers it the next time the word comes up. Copy example puts the sentence in your paper, already formatted.",
+    body: "Gloss each word, or break it into morphs (walk-ed, walk-PST) and gloss each one. wugs remembers every analysis and offers it the next time the word comes up. Copy example puts the sentence in your paper, already formatted.",
   },
   {
     panel: "lexicon",
