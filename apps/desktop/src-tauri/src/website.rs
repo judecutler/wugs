@@ -27,6 +27,8 @@ pub struct Site {
     pub restricted_left_out: usize,
     /// Timed sentences without a clip: no recording here, or it is not open.
     pub clips_missing: usize,
+    /// Of `clips`, the dictionary's headwords heard in a recording.
+    pub headword_clips: usize,
 }
 
 fn esc(s: &str) -> String {
@@ -104,6 +106,9 @@ ul.hits { list-style: none; padding: 0; } ul.hits li { margin: .45em 0; } .hits 
 #results:not(:empty) { margin-bottom: 1.5em; padding-bottom: .5em; border-bottom: 1px solid #eee6cc; }
 ";
 
+/// The ▶ beside a headword on the site's dictionary page.
+const DICTIONARY_PLAY: &str = "button.play { border: 1px solid #00718a; color: #00718a; background: none; border-radius: 50%; width: 1.6em; height: 1.6em; cursor: pointer; font-size: .75em; padding: 0; vertical-align: .1em; } button.play:hover, button.play:focus-visible { background: #d6f3f9; } @media print { button.play { display: none; } }";
+
 const SCRIPT: &str = "<script>\nlet playing = null;\nfor (const b of document.querySelectorAll('button.play')) b.addEventListener('click', () => { if (playing) playing.pause(); playing = new Audio(b.dataset.src); playing.play(); });\n</script>\n";
 
 /// The site's search, run in the reader's browser over `search-index.js`.
@@ -145,7 +150,7 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     let name = if lang.name.is_empty() { "Texts and dictionary".to_string() } else { format!("{}: texts and dictionary", lang.name) };
     let lang_attr = if lang.iso.is_empty() { String::new() } else { format!(" lang=\"{}\"", esc(&lang.iso)) };
     let footer = format!("Made with wugs on {}.", esc(&date));
-    let mut site = Site { path: String::new(), texts: 0, sentences: 0, entries: 0, clips: 0, restricted_left_out: 0, clips_missing: 0 };
+    let mut site = Site { path: String::new(), texts: 0, sentences: 0, entries: 0, clips: 0, restricted_left_out: 0, clips_missing: 0, headword_clips: 0 };
     let mut files: Vec<(String, String)> = vec![("style.css".into(), STYLE.trim_start().to_string())];
     let mut clips: Vec<Clip> = Vec::new();
 
@@ -231,12 +236,18 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     site.texts = listed.len();
 
     let mut headwords = Vec::new();
-    let dictionary = match crate::dictionary::document(p, &date, include_restricted) {
+    let dictionary = match crate::dictionary::document(p, &date, include_restricted, audio) {
         Ok((_, html, d)) => {
             site.entries = d.entries;
             headwords = d.headwords;
-            // The printable page, with a way back.
-            let html = html.replacen("<body>\n", "<body>\n<nav><a href=\"index.html\">← Home</a></nav>\n", 1);
+            site.headword_clips = d.clips.len();
+            for c in d.clips {
+                clips.push(Clip { file: c.file, blob: c.blob, start: c.start, end: c.end });
+            }
+            // The printable page, with a way back and its ▶ working.
+            let html = html
+                .replacen("<body>\n", "<body>\n<nav><a href=\"index.html\">← Home</a></nav>\n", 1)
+                .replacen("</body>", &format!("<style>{DICTIONARY_PLAY}</style>\n{SCRIPT}</body>"), 1);
             files.push(("dictionary.html".into(), html));
             true
         }
@@ -332,6 +343,11 @@ mod tests {
         // A restricted text: nothing of it goes out unless chosen.
         let text = session::list_texts(&mut s).unwrap()[0].id.clone();
         session::project(&mut s).unwrap().set_access(&text, "restricted").unwrap();
+        // A headword heard in the recording: its first word, «wʌn».
+        let seg = session::get_text(&mut s, &text).unwrap().segments.into_iter().find(|g| g.content.starts_with("wʌn")).unwrap();
+        let entry = crate::lexicon::lexicon_list(&mut s, "").unwrap().into_iter().find(|r| r.lemma == "wʌn").unwrap().id;
+        let e = crate::lexicon::lexicon_add_pronunciation(&mut s, &entry, "ˈwʌn", Some(&seg.id)).unwrap().entry.unwrap();
+        assert_eq!(e.pronunciations[0].audio.as_ref().map(|a| a.start_ms), seg.start_ms, "heard in the segment's span");
         let closed = export_website(&mut s, &out, "2026-11-23", false, true).unwrap();
         assert_eq!((closed.texts, closed.restricted_left_out), (0, 1), "{closed:?}");
         assert!(fs::read_to_string(Path::new(&closed.path).join("index.html")).unwrap().contains("dictionary.html"));
@@ -353,6 +369,10 @@ mod tests {
         assert!(found.starts_with("var WUGS_INDEX = {") && found.contains("[\"text-1.html\",1,\"wʌn tuː θɹiː\""), "{found}");
         assert!(text.contains("<li id=\"s1\">"), "each sentence is a search target");
         assert!(root.join("search.js").is_file());
+        // The dictionary page says the headword and plays it.
+        let dict = fs::read_to_string(root.join("dictionary.html")).unwrap();
+        assert!(dict.contains("<span class=\"pr\">ˈwʌn</span>") && dict.contains("data-src=\"audio/w-1.wav\" aria-label=\"Hear wʌn\""), "{dict}");
+        assert!(dict.contains("playing = new Audio") && root.join("audio/w-1.wav").is_file() && site.headword_clips == 1, "{site:?}");
         assert!(!dir.read_dir().unwrap().flatten().any(|e| e.file_name().to_string_lossy().ends_with(".partial")));
         assert!(export_website(&mut s, &dir.join("sample"), "2026-11-23", true, true).is_err(), "never inside the project");
         // WUGS_KEEP_SITE=1 keeps the site to look at by hand.

@@ -392,6 +392,16 @@ The editor shows how many words in your texts use the entry.
 
 To delete a sense or an entry, click **Delete sense** or **Delete entry**, then click again to confirm.
 
+### Add how a word is said
+
+The **Pronunciation** row under an entry's category holds how the word is said, usually in IPA. An entry can have several, for dialects, speakers, or careful and fast speech.
+
+- To type one, fill in the field at the end of the row and press **Enter**. Add slashes or brackets yourself if you want them shown.
+- To hear one, select the segment where the word is said, on the Timeline or in Transcribe, then click **From the selected segment**. Auto-segment **by word** cuts a recording of a word list into such segments. If the segment's transcription is one word, it becomes the written form. A ▶ then plays the word from its recording, whatever text is on screen.
+- To add the sound to a pronunciation you typed, select the segment and click **+ sound** beside it.
+
+Empty a pronunciation's field to delete it, or click × and then **Delete?**. Pronunciations print after the headword in **Dictionary to print…**, and on a published website the dictionary plays each headword heard in a recording that is open. LIFT files carry them both ways (`<pronunciation>`, with its media file name kept as written).
+
 ### Add example sentences
 
 Each sense can have example sentences with their translations, as a printed dictionary shows under a meaning.

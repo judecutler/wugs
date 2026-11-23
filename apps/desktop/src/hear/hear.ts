@@ -59,6 +59,29 @@ export async function hear(seg: Heard, select = true, quiet = false): Promise<vo
   playback.playRange(seg.startMs, seg.endMs);
 }
 
+// A headword's pronunciation plays on its own audio element, so hearing a
+// word never swaps the recording the Timeline has loaded.
+let spoken: HTMLAudioElement | null = null;
+let stopAt: number | null = null;
+
+/** Play a span of a recording (a pronunciation), whatever text is on screen. */
+export async function hearSpan(sourceId: string, startMs: number, endMs: number): Promise<void> {
+  try {
+    const info = await peaksInfo({ sourceId });
+    const url = convertFileSrc(info.mediaPath);
+    if (spoken === null) spoken = new Audio();
+    const a = spoken;
+    if (stopAt !== null) window.clearTimeout(stopAt);
+    a.pause();
+    if (a.getAttribute("src") !== url) a.src = url;
+    a.currentTime = startMs / 1000;
+    await a.play();
+    stopAt = window.setTimeout(() => a.pause(), endMs - startMs);
+  } catch (e) {
+    showToast({ tone: "error", lines: [`The recording did not play: ${errorText(e)}`] });
+  }
+}
+
 /** The ▶ every panel shows beside a segment. It never takes focus from a
  * field (mousedown is held back), and it does not pass its click on. */
 export function playButton(title: string, onPlay: () => void): HTMLButtonElement {

@@ -9,16 +9,19 @@ import {
   concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
   lexiconDeleteForm, lexiconFillCell, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
-  type DomainItem, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
+  lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation,
+  type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
 import { normalizeLangTag } from "../gloss/lang";
 import { filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, layout, otherFormLine, TEMPLATES, templateById, type Features, type Template } from "../lexicon/paradigms";
-import { dataGeneration, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
-import { hear, playButton } from "../hear/hear";
+import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
+import { hear, hearSpan, playButton } from "../hear/hear";
 import { keyword, type Hit } from "../concordance/logic";
 import type { PanelDef, PanelView } from "./panel";
+
+const SELECT_FIRST = "Select the segment where the word is said (on the Timeline or in Transcribe), then try again.";
 
 /** Shared with the Gloss panel: the second analysis language. */
 const LANG_KEY = "wugs.gloss-lang";
@@ -352,6 +355,7 @@ export const lexiconPanel: PanelDef = {
         row("Lemma", cell(`lemma:${e.id}`, e.lemma, "Lemma", setField("lemma"))),
         row("Citation", cell(`cit:${e.id}`, e.citation, "Citation form", setField("citation"), { placeholder: "if it differs from the lemma" })),
         row("Category", cell(`pos:${e.id}`, e.posOfSpeech, "Part of speech", setField("pos-of-speech"), { placeholder: "n, v, adj…" })),
+        row("Pronunciation", pronunciationsBlock(e)),
         row(
           "Other forms",
           h(
@@ -407,6 +411,64 @@ export const lexiconPanel: PanelDef = {
         confirmButton(`del:${e.id}`, "Delete entry", () => void run(() => lexiconDelete({ id: e.id }), true)),
       );
       editor.replaceChildren(head, ...senses, paradigmBlock(e), foot);
+    }
+
+    /** How the entry is said: each pronunciation a field, its ▶ when it is
+     * heard in a recording, and a way to hear it in the segment selected on
+     * the Timeline (a word cut out by Auto-segment by word, say). */
+    function pronunciationsBlock(e: EntryView) {
+      const selection = (): string | null => {
+        const sel = getSelection();
+        if (sel === null) showToast({ tone: "info", lines: [SELECT_FIRST] });
+        return sel?.segmentId ?? null;
+      };
+      const one = (x: PronunciationView) => {
+        const del = confirmButton(`delp:${x.id}`, "×", () => void run(() => lexiconDeletePronunciation({ id: e.id, pronunciationId: x.id })), {
+          armedText: "Delete?",
+          title: "Delete this pronunciation",
+        });
+        del.tabIndex = -1;
+        const audio = x.audio;
+        return h(
+          "span",
+          { className: "lx-pron" },
+          cell(`prn:${x.id}`, x.form, "Pronunciation", (v) => run(() => lexiconSetPronunciation({ id: e.id, pronunciationId: x.id, form: v })), {
+            placeholder: audio === null ? "" : "how it is written",
+            size: 12,
+          }),
+          audio === null
+            ? h("button", {
+                type: "button",
+                className: "link-button",
+                textContent: "+ sound",
+                title: "Hear this pronunciation in the segment selected on the Timeline",
+                onclick: () => {
+                  const seg = selection();
+                  if (seg !== null) void run(() => lexiconPronunciationAudio({ id: e.id, pronunciationId: x.id, segmentId: seg }));
+                },
+              })
+            : playButton(`Hear «${x.form || e.lemma}» (${audio.label || "recording"})`, () => void hearSpan(audio.sourceId, audio.startMs, audio.endMs)),
+          del,
+        );
+      };
+      return h(
+        "div",
+        { className: "lx-forms" },
+        ...e.pronunciations.map(one),
+        cell(`prn-new:${e.id}`, "", "Add a pronunciation", (v) => (v.trim() === "" ? Promise.resolve() : run(() => lexiconAddPronunciation({ id: e.id, form: v, segmentId: null }))), {
+          placeholder: e.pronunciations.length === 0 ? "IPA: ˈkani" : "add another",
+          size: 12,
+        }),
+        h("button", {
+          type: "button",
+          textContent: "From the selected segment",
+          title: "Add a pronunciation heard in the segment selected on the Timeline; a one-word transcription becomes its written form",
+          onclick: () => {
+            const seg = selection();
+            if (seg !== null) void run(() => lexiconAddPronunciation({ id: e.id, form: "", segmentId: seg }));
+          },
+        }),
+      );
     }
 
     function paradigmBlock(e: EntryView) {

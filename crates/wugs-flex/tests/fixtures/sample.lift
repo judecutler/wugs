@@ -9,6 +9,8 @@
       <form lang="tr-x-ipa"><text>cœˈpec</text></form>
     </lexical-unit>
     <citation><form lang="tr"><text>köpek</text></form></citation>
+    <pronunciation><form lang="tr-fonipa"><text>cœˈpec</text></form><media href="köpek.wav"/></pronunciation>
+    <pronunciation dateModified="2024-05-02T08:30:00Z"><media href="köpek-2.wav"/></pronunciation>
     <sense id="köpek_s1" guid="6f1a0001-0000-4000-8000-0000000000a1">
       <grammatical-info value="Noun"/>
       <gloss lang="en"><text>dog</text></gloss>

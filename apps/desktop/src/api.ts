@@ -431,6 +431,13 @@ export type EntryView = {
   sameLemma: [string, number | null][];
   /** Other spellings of the entry (allomorphs): [form id, surface]. */
   allomorphs: [string, string][];
+  /** How the entry is said, each with where to hear it. */
+  pronunciations: PronunciationView[];
+};
+export type PronunciationView = {
+  id: string;
+  form: string;
+  audio: { sourceId: string; label: string; startMs: number; endMs: number } | null;
 };
 export type EntryEdit = { entry: EntryView | null; notes: string[] };
 export type DomainItem = { id: string; code: string; label: string; description: string; depth: number };
@@ -451,6 +458,11 @@ export const lexiconSetSenseText = (args: { senseId: string; field: "definition"
   invoke<EntryEdit>("lexicon_set_sense_text", args);
 export const lexiconAddAllomorph = (args: { id: string; form: string }) => invoke<EntryEdit>("lexicon_add_allomorph", args);
 export const lexiconDeleteAllomorph = (args: { id: string; formId: string }) => invoke<EntryEdit>("lexicon_delete_allomorph", args);
+export const lexiconAddPronunciation = (args: { id: string; form: string; segmentId: string | null }) => invoke<EntryEdit>("lexicon_add_pronunciation", args);
+export const lexiconSetPronunciation = (args: { id: string; pronunciationId: string; form: string }) => invoke<EntryEdit>("lexicon_set_pronunciation", args);
+export const lexiconPronunciationAudio = (args: { id: string; pronunciationId: string; segmentId: string | null }) =>
+  invoke<EntryEdit>("lexicon_pronunciation_audio", args);
+export const lexiconDeletePronunciation = (args: { id: string; pronunciationId: string }) => invoke<EntryEdit>("lexicon_delete_pronunciation", args);
 export const lexiconAddExample = (args: { senseId: string; sentence: string; translation: string }) => invoke<EntryEdit>("lexicon_add_example", args);
 export const lexiconExampleFrom = (args: { senseId: string; segmentId: string }) => invoke<EntryEdit>("lexicon_example_from", args);
 export const lexiconSetExample = (args: { exampleId: string; field: "sentence" | "translation"; text: string }) => invoke<EntryEdit>("lexicon_set_example", args);
