@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, wordlistLines } from "./logic.ts";
+import { exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, ownListLine, wordlistLines } from "./logic.ts";
 
 const c = (id: string, answered: boolean, skipped = false) => ({ id, skipped, answers: answered ? [{}] : [] });
 const list = [c("a", true), c("b", false), c("c", false, true), c("d", false)];
@@ -57,4 +57,9 @@ test("the word list export is reported in words", () => {
   assert.equal(lines[2], "2 concepts are marked not applicable and have no form.");
   assert.equal(lines[3], "A note.");
   assert.match(wordlistLines({ ...r, byProfile: true, skipped: 1, notes: [] })[2]!, /^1 concept is marked not applicable and has no form\.$/);
+});
+
+test("loading a word list of one's own is reported in words", () => {
+  assert.equal(ownListLine({ summary: { name: "Body parts", total: 2 }, created: 2, already: 0, withConcepticon: 2 }), "«Body parts»: 2 concepts loaded. 2 concepts are linked to Concepticon.");
+  assert.match(ownListLine({ summary: { name: "B", total: 3 }, created: 1, already: 2, withConcepticon: 0 }), /^«B»: 1 new concept added, 2 already there\. None names/);
 });

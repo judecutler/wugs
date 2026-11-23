@@ -241,6 +241,85 @@ pub fn concept_list_load(session: &mut Session, source: &str) -> Result<ListSumm
     summary(p, &r.list, &concepts)
 }
 
+/// The most concepts one imported list may hold.
+const MAX_OWN_CONCEPTS: usize = 5000;
+
+/// A table of concepts as a word list: the concept in a column named
+/// gloss, english, concept, meaning, parameter, name, word or prompt (else
+/// the first column that is not numbers), its number from number/no/nr/#/id
+/// (else its row), its Concepticon concept set from a Concepticon_ID
+/// column (digits only) and Concepticon_Gloss when present. Each row's key
+/// is its number column's value, else its gloss, so loading the same table
+/// again (or an edited copy) adds only rows it did not have.
+pub(crate) fn own_list_rows(header: &[String], rows: &[Vec<String>]) -> Result<Vec<ConceptRow>, String> {
+    let named = |names: &[&str]| header.iter().position(|h| names.contains(&h.trim().to_lowercase().replace(['_', '-'], " ").as_str()));
+    let numeric = |i: usize| rows.iter().all(|r| r[i].trim().is_empty() || r[i].trim().trim_end_matches('.').parse::<f64>().is_ok());
+    let concepticon = named(&["concepticon id", "concepticon"]);
+    let concepticon_gloss = named(&["concepticon gloss"]);
+    let number = named(&["number", "no", "no.", "nr", "#", "id", "index", "num"]).filter(|i| Some(*i) != concepticon);
+    let gloss = named(&["gloss", "english", "concept", "meaning", "parameter", "name", "word", "prompt", "english gloss", "gloss en"])
+        .or_else(|| (0..header.len()).find(|i| Some(*i) != number && Some(*i) != concepticon && Some(*i) != concepticon_gloss && !numeric(*i)))
+        .ok_or("no column holds the concepts: name one gloss, english or concept")?;
+    let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for (i, r) in rows.iter().enumerate() {
+        let g = r[gloss].trim();
+        if g.is_empty() {
+            continue;
+        }
+        let raw_number = number.map(|n| r[n].trim().trim_end_matches('.').to_string()).unwrap_or_default();
+        let n = raw_number.parse::<f64>().ok().filter(|n| *n >= 0.0 && n.fract() == 0.0).map(|n| n as u32).unwrap_or(i as u32 + 1);
+        let mut key = if raw_number.is_empty() { g.to_lowercase() } else { raw_number.clone() };
+        if !seen.insert(key.clone()) {
+            let mut k = 2;
+            while !seen.insert(format!("{key}-{k}")) {
+                k += 1;
+            }
+            key = format!("{key}-{k}");
+        }
+        let cid = concepticon.map(|c| r[c].trim().to_string()).filter(|c| !c.is_empty() && c.chars().all(|ch| ch.is_ascii_digit())).unwrap_or_default();
+        let cgloss = if cid.is_empty() { String::new() } else { concepticon_gloss.map(|c| r[c].trim().to_string()).unwrap_or_default() };
+        out.push(ConceptRow { key, number: n, gloss: g.to_string(), concepticon: cid, concepticon_gloss: cgloss });
+        if out.len() > MAX_OWN_CONCEPTS {
+            return Err(format!("a word list holds at most {MAX_OWN_CONCEPTS} concepts"));
+        }
+    }
+    if out.is_empty() {
+        return Err("the table has no concepts: every row's concept cell is empty".into());
+    }
+    Ok(out)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OwnList {
+    pub summary: ListSummary,
+    pub created: usize,
+    pub already: usize,
+    pub with_concepticon: usize,
+}
+
+/// Load a word list of one's own from a CSV or tab-separated table; the
+/// list is named for the file.
+pub fn concept_list_import(session: &mut Session, path: &std::path::Path) -> Result<OwnList, String> {
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if bytes.len() > 5_000_000 {
+        return Err("a word list file is at most 5 MB".into());
+    }
+    let text = crate::interchange::windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes);
+    let tabs = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("tsv") || e.eq_ignore_ascii_case("tab") || e.eq_ignore_ascii_case("txt"));
+    let (header, rows, _) = crate::table_text::records(&text, tabs)?;
+    let concepts = own_list_rows(&header, &rows)?;
+    let name = path.file_stem().map(|s| s.to_string_lossy().trim().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "My word list".into());
+    let p = project(session)?;
+    let name = p.proj.nfc(&name);
+    let source = format!("user:{}", name.to_lowercase());
+    let with_concepticon = concepts.iter().filter(|c| !c.concepticon.is_empty()).count();
+    let r = p.import_concept_list(&source, &name, "Loaded from a table", &concepts)?;
+    let listed = concepts_of(p, &r.list)?;
+    Ok(OwnList { summary: summary(p, &r.list, &listed)?, created: r.created, already: r.already, with_concepticon })
+}
+
 pub fn concept_lists(session: &mut Session) -> Result<Vec<ListSummary>, String> {
     let p = project(session)?;
     let mut out = Vec::new();
@@ -375,4 +454,42 @@ pub fn domain_collect(session: &mut Session, domain: &str, form: &str, gloss: &s
     let p = project(session)?;
     let (_, res) = p.collect_for_domain(domain, form, gloss, None)?;
     Ok(DomainEdit { domain: domain_view(p, domain)?, notes: lines(&res) })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_table_of_ones_own_becomes_a_word_list_once() {
+        let header: Vec<String> = ["No.", "English", "Concepticon_ID", "Concepticon_Gloss", "Notes"].iter().map(|s| s.to_string()).collect();
+        let rows: Vec<Vec<String>> = [["1", "head", "1256", "HEAD", ""], ["2", "hair (of the head)", "1040", "HAIR", "ask twice"], ["3", "", "", "", ""], ["4", "rice paddy", "x", "", ""]]
+            .iter()
+            .map(|r| r.iter().map(|c| c.to_string()).collect())
+            .collect();
+        let got = own_list_rows(&header, &rows).unwrap();
+        assert_eq!(got.len(), 3);
+        assert_eq!((got[0].key.as_str(), got[0].number, got[0].gloss.as_str(), got[0].concepticon.as_str()), ("1", 1, "head", "1256"));
+        assert_eq!((got[2].number, got[2].concepticon.as_str(), got[2].concepticon_gloss.as_str()), (4, "", ""), "not digits: no Concepticon id");
+        // No named column: the first one that is not numbers; repeats get their own keys.
+        let bare: Vec<Vec<String>> = [["7", "water"], ["", "water"]].iter().map(|r| r.iter().map(|c| c.to_string()).collect()).collect();
+        let got = own_list_rows(&["n".into(), "Kanu prompt".into()], &bare).unwrap();
+        assert_eq!(got.iter().map(|c| c.gloss.as_str()).collect::<Vec<_>>(), vec!["water", "water"]);
+        assert!(own_list_rows(&["n".into()], &[vec!["1".into()]]).is_err());
+
+        let dir = std::env::temp_dir().join(format!("wugs-own-list-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Kanu body parts.csv");
+        std::fs::write(&file, "No.,English,Concepticon_ID\n1,head,1256\n2,hair,1040\n").unwrap();
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir.join("project"), "tester").unwrap();
+        let first = concept_list_import(&mut session, &file).unwrap();
+        assert_eq!((first.summary.name.as_str(), first.summary.total, first.created, first.with_concepticon), ("Kanu body parts", 2, 2, 2));
+        std::fs::write(&file, "No.,English,Concepticon_ID\n1,head,1256\n2,hair,1040\n3,eye,1248\n").unwrap();
+        let again = concept_list_import(&mut session, &file).unwrap();
+        assert_eq!((again.summary.id.clone(), again.created, again.already, again.summary.total), (first.summary.id.clone(), 1, 2, 3), "the same list, one new row");
+        drop(session);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

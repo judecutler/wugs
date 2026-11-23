@@ -540,6 +540,11 @@ def main():
             if run.page.locator(".panel-elicit .el-sound-hint").inner_text().strip() == "":
                 failures.append("Sound from the Timeline said nothing about where the sound comes from")
             run.page.locator(".panel-elicit .el-sound input").uncheck()
+            # Adding a word list offers a table of one's own beside the bundled lists.
+            run.page.locator(".panel-elicit button", has_text="Add a word list").click()
+            run.page.locator(".panel-elicit button", has_text="Load a table").wait_for()
+            run.shot("state-elicit-add", run.page.locator(".panel-elicit"))
+            run.page.locator(".panel-elicit button", has_text="Close").click()
             # Sentence: a tagger's analysis stays marked until checked; Checked, next moves on.
             run.front("sentence", "Sentence")
             run.page.locator(".panel-sentence .st-machine").wait_for()

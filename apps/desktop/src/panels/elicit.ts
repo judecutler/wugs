@@ -5,13 +5,13 @@
 // Keyboard first: Enter saves the answer and moves to the next concept to do.
 import {
   conceptListLoad, conceptLists, conceptListsBundled, conceptListView, domainCollect, domainQuestions, domainsList, domainsLoadSil,
-  elicitAnswer, elicitLink, elicitSkip, elicitUnlink, errorText, exportWordlist, lexiconEntry, lexiconList,
+  conceptListImport, elicitAnswer, elicitLink, elicitSkip, elicitUnlink, errorText, exportWordlist, lexiconEntry, lexiconList,
   type Answer, type BundledList, type ConceptView, type DomainItem, type DomainQuestions, type EntryRow, type ListSummary, type ListView,
 } from "../api";
 import { emptyState, h } from "../dom";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { localDay } from "../dates";
-import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, wordlistLines, type Filter } from "../elicit/logic";
+import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, ownListLine, soundLine, soundSegment, wordlistLines, type Filter } from "../elicit/logic";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { clockTime } from "../search/logic";
 import { filterDomains, headword } from "../lexicon/logic";
@@ -419,7 +419,34 @@ export const elicitPanel: PanelDef = {
         ...lists.map((l) => h("option", { value: l.id, textContent: l.name, selected: l.id === listId })),
       );
       const unloaded = bundled.filter((b) => b.listId === null);
-      const add = unloaded.length === 0 ? null : h("button", { type: "button", textContent: addingList ? "Close" : "Add a word list", onclick: () => { addingList = !addingList; draw(); } });
+      const add = h("button", { type: "button", textContent: addingList ? "Close" : "Add a word list", onclick: () => { addingList = !addingList; draw(); } });
+      const own = h("div", { className: "el-bundled" },
+        h("div", {}, h("strong", { textContent: "A list of your own" })),
+        h("p", { className: "note", textContent: "A CSV or tab-separated table with a column of concepts (headed Gloss, English or Concept), and if you have them a number column and a Concepticon_ID column. The list takes the file's name." }),
+        h("button", {
+          type: "button",
+          textContent: "Load a table…",
+          onclick: async () => {
+            const path = await pickFolder({ multiple: false, title: "Choose a word list table", filters: [{ name: "Tables", extensions: ["csv", "tsv", "txt", "tab"] }] });
+            if (typeof path !== "string") return;
+            void enqueue(async () => {
+              try {
+                const r = await conceptListImport({ path });
+                listId = r.summary.id;
+                localStorage.setItem(LIST_KEY, r.summary.id);
+                addingList = false;
+                current = null;
+                showToast({ tone: "info", lines: [ownListLine(r)] });
+                await loadLists();
+                draw();
+                focusCurrent();
+              } catch (e) {
+                showToast({ tone: "error", lines: [errorText(e)] });
+              }
+            });
+          },
+        }),
+      );
       const adder =
         !addingList && lists.length > 0
           ? null
@@ -450,6 +477,7 @@ export const elicitPanel: PanelDef = {
                   }),
                 ),
               ),
+              own,
               h("p", { className: "note lx-attr", textContent: CONCEPTICON }),
             );
       if (view === null) return [h("div", { className: "el-bar" }, add), ...(adder === null ? [] : [adder])];
