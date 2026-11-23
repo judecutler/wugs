@@ -78,6 +78,9 @@ export const collocates = (args: { node: string; kind: "word" | "translation"; l
 export const keywords = (args: { kind: "word" | "translation"; textId: string | null; within?: import("./metadata/logic").Where | null; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
 /** One sentence's words, tags and dependency tree (src-tauri/src/sentence.rs); a correction returns it whole. */
 export const sentenceGet = (args: { textId: string; segmentId: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_get", args);
+export const sentenceCheckStatus = (args: { textId: string }) => invoke<import("./sentence/logic").CheckView>("sentence_check_status", args);
+/** Mark machine tags checked without changing them; no segment ids means the whole text. */
+export const sentenceMarkChecked = (args: { textId: string; segmentIds: string[] }) => invoke<import("./sentence/logic").CheckView>("sentence_mark_checked", args);
 export const sentenceSet = (args: { textId: string; segmentId: string; tokenId: string; column: string; value: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_set", args);
 export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null; within?: import("./metadata/logic").Where | null }) => invoke<ConcordanceResult>("concordance", args);
 /** Where an item occurs, text by text, and how evenly (src-tauri/src/dispersion.rs): the Concordance's Plot. */

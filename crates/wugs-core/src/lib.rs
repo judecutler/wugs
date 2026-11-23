@@ -789,6 +789,12 @@ pub struct Txn<'a> {
 }
 
 impl<'a> Txn<'a> {
+    /// The id of the op written last, so a record can name it (a machine
+    /// write's provenance keyed by its op, as speech assist and taggers do).
+    pub fn last_op_id(&self) -> Option<&str> {
+        self.ops.last().map(|o| o.id.as_str())
+    }
+
     pub fn with_session(mut self, session: &str) -> Self {
         self.session = Some(session.to_string());
         self

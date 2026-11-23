@@ -2,10 +2,10 @@
 // sentence's dependency tree drawn as arcs over its words, and a table of
 // lemma, tags, features, head and relation to correct in place. Each change
 // is one write of the sentence's annotation (wugs_conllu::tree::set_cell).
-import { errorText, sentenceGet, sentenceSet } from "../api";
+import { errorText, sentenceCheckStatus, sentenceGet, sentenceMarkChecked, sentenceSet } from "../api";
 import { emptyState, h } from "../dom";
-import { arcs, columns, DEPRELS, headChoices, rootOf, UPOS, type SentenceView, type WordRow } from "../sentence/logic";
-import { dataGeneration, getSelection, getState, showToast, subscribeSelection } from "../store";
+import { arcs, checkLine, columns, DEPRELS, headChoices, machineNote, nextUnchecked, rootOf, UPOS, type CheckView, type SentenceView, type WordRow } from "../sentence/logic";
+import { dataGeneration, getSelection, getState, refreshAll, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 import { tagBar } from "../morphosyntax/bar";
 
@@ -75,6 +75,9 @@ export const sentencePanel: PanelDef = {
     let seq = 0;
     let picked: number | null = null;
     let queue: Promise<unknown> = Promise.resolve();
+    /** How far the text on screen's tags are checked. */
+    let status: { textId: string; value: CheckView } | null = null;
+    let armAll = false;
     const relations = h("datalist", { id: "st-deprels" }, ...DEPRELS.map((d) => h("option", { value: d })));
     /** The Tag and parse bar for the text on screen, redrawn in place when its data arrives. */
     const bar = (): HTMLElement => {
@@ -98,6 +101,14 @@ export const sentencePanel: PanelDef = {
       const mine = ++seq;
       key = `${textId}|${segmentId}`;
       generation = dataGeneration();
+      void sentenceCheckStatus({ textId }).then(
+        (c) => {
+          if (mine !== seq) return;
+          status = { textId, value: c };
+          paint();
+        },
+        () => {},
+      );
       void sentenceGet({ textId, segmentId }).then(
         (v) => {
           if (mine !== seq) return;
@@ -168,6 +179,73 @@ export const sentencePanel: PanelDef = {
       return table;
     };
 
+    /** Go to a sentence of the text on screen, as Interlinear's Next to gloss does. */
+    const goTo = (segmentId: string | null) => {
+      const s = getState();
+      if (segmentId === null || s.kind !== "open" || s.text === null) return;
+      const seg = s.text.segments.find((x) => x.id === segmentId);
+      if (seg !== undefined) selectSegment({ textId: s.text.id, tierId: seg.tier, segmentId });
+    };
+
+    /** Mark the sentence on screen, or every sentence of the text, checked. */
+    const markChecked = async (all: boolean, thenNext: boolean) => {
+      if (view === null) return;
+      const at = { textId: viewText, segmentIds: all ? [] : [view.segmentId] };
+      const current = view.segmentId;
+      try {
+        const c = await sentenceMarkChecked(at);
+        status = { textId: at.textId, value: c };
+        if (all) showToast({ tone: "info", lines: [checkLine(c)] });
+        await refreshAll();
+        if (thenNext) goTo(nextUnchecked(c, current));
+        else load(at.textId, current);
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    };
+
+    /** The checking row: the mark on this sentence and the text's progress. */
+    const checking = (v: SentenceView): HTMLElement[] => {
+      const out: HTMLElement[] = [];
+      if (v.machine !== null) {
+        out.push(
+          h(
+            "div",
+            { className: "st-check st-machine" },
+            h("span", { textContent: machineNote(v.machine) }),
+            h("button", { type: "button", textContent: "Mark checked", title: "The tags read right: keep them as they are and clear the mark", onclick: () => void markChecked(false, false) }),
+            h("button", { type: "button", className: "primary", textContent: "Checked, next", title: "Mark checked and go to the next sentence still to check", onclick: () => void markChecked(false, true) }),
+          ),
+        );
+      }
+      const c = status?.textId === viewText ? status.value : null;
+      if (c !== null && c.analysed > 0) {
+        const left = c.unchecked.length;
+        const parts: HTMLElement[] = [h("span", { className: "note", textContent: checkLine(c) })];
+        if (left > 0) {
+          parts.push(h("button", { type: "button", textContent: "Next to check", onclick: () => goTo(nextUnchecked(c, v.segmentId)) }));
+          parts.push(
+            h("button", {
+              type: "button",
+              textContent: armAll ? `Mark all ${left} checked?` : "Mark all checked",
+              title: "Keep every tagger's analysis in this text as it is, without looking at each one",
+              onclick: () => {
+                if (!armAll) {
+                  armAll = true;
+                  paint();
+                  return;
+                }
+                armAll = false;
+                void markChecked(true, false);
+              },
+            }),
+          );
+        }
+        out.push(h("div", { className: "st-check" }, ...parts));
+      }
+      return out;
+    };
+
     function paint(): void {
       if (view === null) return;
       const v = view;
@@ -182,6 +260,7 @@ export const sentencePanel: PanelDef = {
       el.replaceChildren(
         bar(),
         h("p", { className: "st-content", textContent: v.content }),
+        ...checking(v),
         h("div", { className: "st-tree-box" }, tree(v, picked, (i) => {
           picked = i;
           paint();
