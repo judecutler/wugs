@@ -27,6 +27,7 @@ pub mod praat;
 pub mod praat_analysis;
 pub mod sample;
 pub mod segmentation;
+pub mod sentence;
 pub mod session;
 pub mod updater;
 
@@ -136,6 +137,18 @@ fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>,
 fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>) -> Result<concordance::Concordance, String> {
     let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
     s.run(move |s| concordance::concordance_in(s, &query, kind, how, text_id.as_deref()))
+}
+
+/// One sentence's words, tags and tree, for the Sentence panel.
+#[tauri::command(async)]
+fn sentence_get(s: State<SessionThread>, text_id: String, segment_id: String) -> Result<sentence::SentenceView, String> {
+    s.run(move |s| sentence::sentence_get(s, &text_id, &segment_id))
+}
+
+/// Correct one cell of a sentence's annotation (one resolving write).
+#[tauri::command(async)]
+fn sentence_set(s: State<SessionThread>, text_id: String, segment_id: String, token_id: String, column: String, value: String) -> Result<sentence::SentenceView, String> {
+    s.run(move |s| sentence::sentence_set(s, &text_id, &segment_id, &token_id, &column, &value))
 }
 
 /// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
@@ -1417,6 +1430,8 @@ pub fn run() {
             create_project,
             open_sample,
             concordance,
+            sentence_get,
+            sentence_set,
             list_texts,
             link_recording,
             media_overview,

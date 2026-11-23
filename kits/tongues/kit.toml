@@ -34,6 +34,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "search",
   "concordance",                   # every occurrence in context (keyword in the middle)
   "frequencies",                   # how often each word occurs; not placed, opened from Settings or Ctrl+K
+  "sentence",                      # one sentence's tags and dependency tree; not placed, opened from Settings or Ctrl+K
   "collocates",                    # which words keep company with a word; not placed either
   "keywords",                      # which words set a text apart; not placed either
   "assist",                        # speech assist: machine phone transcription

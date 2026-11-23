@@ -76,6 +76,9 @@ export const frequencies = (args: { kind: import("./concordance/logic").Concorda
 export const collocates = (args: { node: string; kind: "word" | "translation"; left: number; right: number; minTogether: number; textId: string | null }) =>
   invoke<import("./collocates/logic").Collocates>("collocates", args);
 export const keywords = (args: { kind: "word" | "translation"; textId: string; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
+/** One sentence's words, tags and dependency tree (src-tauri/src/sentence.rs); a correction returns it whole. */
+export const sentenceGet = (args: { textId: string; segmentId: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_get", args);
+export const sentenceSet = (args: { textId: string; segmentId: string; tokenId: string; column: string; value: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_set", args);
 export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null }) => invoke<ConcordanceResult>("concordance", args);
 /** The sample project (roadmap 68), built the first time in this computer's app data. */
 export const openSample = (args: { researcher: string }) => invoke<ProjectInfo>("open_sample", args);
