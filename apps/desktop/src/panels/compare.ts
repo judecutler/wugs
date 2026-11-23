@@ -7,6 +7,7 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { compareRead, conceptLists, conceptListView, errorText, projectLanguage, type ListSummary } from "../api";
+import { correspondenceLine, correspondences, correspondenceTsv } from "../compare/correspondences";
 import { CLOSE, compareLine, compareRows, edictorTsv, languagesOf, type OtherForm, type OurConcept, type Row } from "../compare/logic";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
@@ -34,6 +35,25 @@ export const comparePanel: PanelDef = {
     const copy = h("button", { type: "button", textContent: "Copy for EDICTOR", title: "Copy every form, yours and theirs, as an EDICTOR/LingPy wordlist (ID, DOCULECT, CONCEPT, FORM, TOKENS)" });
     const line = h("p", { className: "note cmp-line" });
     const table = h("table", { className: "fq-table cmp-table" });
+    // Sound correspondences with one language at a time.
+    const corrLang = h("select", { className: "cmp-corr-lang", title: "Which language to align with the project's words" });
+    corrLang.setAttribute("aria-label", "Language");
+    const corrMin = h("select", { className: "cmp-corr-min", title: "Only pairs of words at least this alike are aligned; lower takes in more cognates and more chance resemblances" }, ...[0.3, 0.4, 0.5, 0.6, 0.7].map((v) => h("option", { value: String(v), textContent: `${Math.round(v * 100)}% alike or more`, selected: v === 0.5 })));
+    corrMin.setAttribute("aria-label", "Pairs aligned");
+    const differBox = h("input", { type: "checkbox", checked: true });
+    const differ = h("label", { title: "Leave out a sound that stays the same" }, differBox, " Only where the sounds differ");
+    const corrCopy = h("button", { type: "button", textContent: "Copy table", title: "Copy every correspondence with its count and concepts" });
+    const corrLine = h("p", { className: "note cmp-corr-line" });
+    const corrTable = h("table", { className: "fq-table cmp-corr" });
+    const corrBlock = h(
+      "section",
+      { className: "cmp-corr-block" },
+      h("h3", { textContent: "Sound correspondences" }),
+      h("p", { className: "note", textContent: "Each concept's closest pair of words, aligned sound by sound and counted: a correspondence that recurs across many concepts is evidence, one met once may be chance." }),
+      h("div", { className: "cc-bar" }, corrLang, corrMin, differ, corrCopy),
+      corrLine,
+      corrTable,
+    );
 
     const draw = () => {
       rows = compareRows(concepts, forms);
@@ -72,6 +92,41 @@ export const comparePanel: PanelDef = {
           ),
         ),
       );
+      drawCorrespondences();
+    };
+
+    const drawCorrespondences = () => {
+      const langs = languagesOf(forms);
+      corrBlock.hidden = langs.length === 0;
+      if (langs.length === 0) return;
+      const pick = langs.includes(corrLang.value) ? corrLang.value : langs[0]!;
+      corrLang.replaceChildren(...langs.map((l) => h("option", { value: l, textContent: l, selected: l === pick })));
+      const min = Number(corrMin.value);
+      const c = correspondences(rows, pick, min);
+      corrLine.textContent = correspondenceLine(c, pick, min);
+      corrCopy.onclick = () =>
+        void writeText(correspondenceTsv(c, pick)).then(
+          () => showToast({ tone: "info", lines: [`Copied ${c.list.length} correspondences with ${pick}.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      const shown = differBox.checked ? c.list.filter((x) => !x.same) : c.list;
+      corrTable.replaceChildren(
+        h("thead", {}, h("tr", {}, h("th", { scope: "col", textContent: "This project" }), h("th", { scope: "col", textContent: pick }), h("th", { scope: "col", textContent: "Count" }), h("th", { scope: "col", textContent: "Met in" }))),
+        h(
+          "tbody",
+          {},
+          ...shown.map((x) =>
+            h(
+              "tr",
+              { className: !x.same && x.count >= 2 ? "cmp-recurs" : "" },
+              h("td", { className: "ipa", textContent: x.ours }),
+              h("td", { className: "ipa", textContent: x.theirs }),
+              h("td", { className: "num", textContent: String(x.count) }),
+              h("td", { textContent: x.concepts.join(", ") }),
+            ),
+          ),
+        ),
+      );
     };
 
     const loadConcepts = async () => {
@@ -96,6 +151,9 @@ export const comparePanel: PanelDef = {
       void loadConcepts();
     };
     answeredBox.onchange = draw;
+    corrLang.onchange = drawCorrespondences;
+    corrMin.onchange = drawCorrespondences;
+    differBox.onchange = drawCorrespondences;
     clear.onclick = () => {
       forms = [];
       draw();
@@ -141,7 +199,7 @@ export const comparePanel: PanelDef = {
       if (!sameProject) {
         forms = [];
         listId = "";
-        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, h("div", { className: "cmp-rows" }, table));
+        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, h("div", { className: "cmp-rows" }, table, corrBlock));
       }
       void conceptLists().then(
         (l) => {

@@ -1094,6 +1094,10 @@ body::before {
 .panel-compare .cmp-form small { color: var(--muted); font-family: var(--font-ui); }
 .panel-compare .cmp-close { font-weight: 600; border-bottom: 2px solid var(--accent-bright); }
 .panel-compare .cmp-ours { font-weight: 600; }
+.panel-compare .cmp-corr-block { margin-top: 16px; }
+.panel-compare .cmp-corr-block h3 { margin: 0 0 4px; font-size: var(--text-base); }
+.panel-compare .cmp-corr td.ipa { font-size: 1.15em; }
+.panel-compare .cmp-corr tr.cmp-recurs td { font-weight: 600; }
 .panel-soundchanges .sca-col { flex: 1 1 260px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .panel-soundchanges textarea { font-family: var(--font-ipa); font-size: var(--text-base); width: 100%; box-sizing: border-box; resize: vertical; }
 .panel-soundchanges .sca-problems { margin: 0; padding-left: 1.2em; color: var(--error); font-size: var(--text-sm); }
