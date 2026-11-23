@@ -296,7 +296,7 @@ fn parse_eaf(input: &str) -> Result<EafDoc, ImportError> {
     for (order, t) in root.children_named("TIER").enumerate() {
         let id = req(t, "TIER_ID")?.to_string();
         let lt_ref = t.attr("LINGUISTIC_TYPE_REF");
-        if lt_ref.is_some_and(|r| r.starts_with(ANALYSIS_TYPE_PREFIX)) {
+        if lt_ref.is_some_and(|r| ANALYSIS_TYPES.contains(&r)) {
             analysis_tiers += 1;
             continue;
         }
