@@ -29,6 +29,7 @@ const TEXT_FORMATS: [TextFormat, string][] = [
   ["tei", "TEI P5 (.xml)"],
   ["vertical", "CWB vertical: CQPweb, Sketch Engine (.vert)"],
   ["antconc", "AntConc, words tagged word_TAG (.txt)"],
+  ["toolboxtext", "Toolbox interlinear text (.txt)"],
   ["plaintext", "Plain text, a line per segment (.txt)"],
 ];
 const LEXICON_FORMATS: [LexiconFormat, string][] = [

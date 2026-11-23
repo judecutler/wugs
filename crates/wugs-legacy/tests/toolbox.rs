@@ -350,3 +350,61 @@ fn allomorphs_come_in_and_go_out_as_a_lines() {
     assert!(out.contains("\\a -lır"), "{out}");
     fs::remove_dir_all(root).ok();
 }
+
+const TEXT: &str = include_str!("fixtures/sample-text.txt");
+
+#[test]
+fn interlinear_texts_come_in_word_by_word() {
+    use wugs_legacy::toolbox_text::{has_free_translation, import_toolbox_text, is_interlinear};
+    assert!(is_interlinear(TEXT) && has_free_translation(TEXT));
+    assert!(!is_interlinear(DB), "a lexicon is not a text");
+    let (root, mut p) = temp_project();
+    let (utt, _) = p.add_tier("utterance", "time-aligned", Some("transcription"), None).unwrap();
+    let (tr, _) = p.add_translation_tier("translation", &utt).unwrap();
+    // A root whose form and gloss match one sense is linked to it.
+    let ((_, count), _) = p.add_lexeme("kani", "count").unwrap();
+    let r = import_toolbox_text(&mut p, TEXT, "sample-text", &utt, Some(&tr)).unwrap();
+    assert_eq!((r.texts.len(), r.sentences, r.words, r.morphs), (2, 3, 7, 9));
+    assert_eq!((r.translations, r.notes, r.timed, r.linked), (2, 1, 1, 2));
+    assert_eq!(r.not_carried.0.get("ps"), Some(&1), "{:?}", r.not_carried.0);
+    let title = |t: &str| p.proj.field_str(t, "title").unwrap().unwrap();
+    assert_eq!((title(&r.texts[0]).as_str(), title(&r.texts[1]).as_str()), ("Counting", "Market"));
+    let segs: Vec<String> = p.proj.ordered_children("text", &r.texts[0], "segment").unwrap().into_iter().filter(|s| p.proj.field_str(s, "tier").unwrap().as_deref() == Some(utt.as_str())).collect();
+    let content = |s: &str| p.proj.field_str(s, "content").unwrap().unwrap();
+    assert_eq!(content(&segs[0]), "nikani ŋai");
+    assert_eq!(content(&segs[1]), "kanima toru kesi", "the second bundle continues the sentence");
+    assert_eq!((p.proj.field_num(&segs[0], "start").unwrap(), p.proj.field_num(&segs[0], "end").unwrap()), (Some(1250.0), Some(3900.0)));
+    assert_eq!(p.segment_notes(&segs[0]).unwrap()[0].1, "Speaker counts on her fingers.");
+    // Words and their morphs, markers turned into types.
+    let toks = p.proj.members(&segs[1]).unwrap();
+    let morphs: Vec<(String, String, String, Option<String>)> = p
+        .proj
+        .members(&toks[0])
+        .unwrap()
+        .iter()
+        .map(|m| {
+            let f = |k: &str| p.proj.field_str(m, k).unwrap().unwrap_or_default();
+            (f("surface"), f("type"), f("gloss"), p.proj.field_str(m, "sense").unwrap())
+        })
+        .collect();
+    assert_eq!(morphs, vec![("kani".into(), "root".into(), "count".into(), Some(count.clone())), ("ma".into(), "clitic".into(), "FOC".into(), None)]);
+    // The translation pairs with its sentence.
+    let tr_segs = p.proj.children_by_ref("parent", &segs[0], "segment").unwrap();
+    assert_eq!(content(&tr_segs[0]), "I count one.");
+    // Back out as Toolbox writes it, morphs and glosses under their words.
+    let sentences: Vec<(String, Option<String>)> = segs.iter().map(|s| (s.clone(), p.proj.children_by_ref("parent", s, "segment").unwrap().first().map(|t| content(t)))).collect();
+    let out = wugs_legacy::toolbox_text::export_toolbox_text(&p, "Counting", &sentences).unwrap();
+    assert!(out.contains("\\ref Counting.001\n\\ELANBegin 00:00:01.250\n\\ELANEnd 00:00:03.900\n\\tx nikani     ŋai\n\\mb ni-  kani  ŋai\n\\ge 1SG- count one\n\\ft I count one.\n\\nt Speaker counts on her fingers.\n"), "{out}");
+    assert!(out.contains("\\tx kanima     toru kesi\n\\mb kani  =ma  toru kesi\n\\ge count =FOC two  three\n"), "{out}");
+    // A fresh project reads the export back to the same words, morphs and glosses.
+    let (root2, mut q) = temp_project();
+    let (utt2, _) = q.add_tier("utterance", "time-aligned", Some("transcription"), None).unwrap();
+    let (tr2, _) = q.add_translation_tier("translation", &utt2).unwrap();
+    let back = import_toolbox_text(&mut q, &out, "x", &utt2, Some(&tr2)).unwrap();
+    assert_eq!((back.sentences, back.words, back.morphs, back.translations, back.notes, back.timed), (2, 5, 7, 2, 1, 1));
+    fs::remove_dir_all(root2).ok();
+    // The same file again adds nothing.
+    let again = import_toolbox_text(&mut p, TEXT, "sample-text", &utt, Some(&tr)).unwrap();
+    assert_eq!((again.texts.len(), again.matched.len()), (0, 2));
+    fs::remove_dir_all(root).ok();
+}

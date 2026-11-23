@@ -10,7 +10,9 @@ pub mod praat;
 pub mod sfm;
 pub mod textgrid;
 pub mod toolbox;
+pub mod toolbox_text;
 
 pub use common::{decode, Counts, ImportError};
 pub use textgrid::{export_textgrid, import_textgrid, TextGridExport, TextGridReport};
 pub use toolbox::{export_toolbox, import_toolbox, ToolboxReport};
+pub use toolbox_text::{import_toolbox_text, TextReport};
