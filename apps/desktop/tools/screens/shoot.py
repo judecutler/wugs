@@ -660,6 +660,13 @@ def main():
             if run.page.locator(".panel-lexicon .lx-pdg-template").count() != 0:
                 failures.append("the paradigm template form stayed open after Add template")
             run.page.locator(".panel-lexicon .lx-pdg-head select").select_option("person-number")
+            # The entry's forms in the texts, under the grid.
+            run.page.locator(".panel-lexicon .lx-pdg-attested button", has_text="Forms in the texts").click()
+            run.page.locator(".panel-lexicon .lx-pdg-attested li").first.wait_for()
+            run.page.locator(".panel-lexicon .lx-pdg-attested").scroll_into_view_if_needed()
+            run.shot("state-paradigm-attested", run.page.locator(".panel-lexicon .lx-paradigm"))
+            if "nikani" not in run.page.locator(".panel-lexicon .lx-pdg-attested").inner_text():
+                failures.append("Forms in the texts did not list the entry's forms")
             # Sentence: a tagger's analysis stays marked until checked; Checked, next moves on.
             run.front("sentence", "Sentence")
             run.page.locator(".panel-sentence .st-machine").wait_for()

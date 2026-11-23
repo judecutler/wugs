@@ -190,3 +190,41 @@ export function cellKey(lexeme: string, features: Features, i: number): string {
     .join(",");
   return `pdg:${lexeme}:${f}:${i}`;
 }
+
+/** One word form of the entry met in the texts: as written, how it was
+ * analysed, and how often. */
+export type Attested = { form: string; breakdown: string | null; glosses: string | null; count: number; inGrid: boolean };
+
+/** The entry's word forms in the texts, from its senses' concordance lines:
+ * grouped by form and analysis (case ignored), commonest first, each marked
+ * when the paradigm already holds that form. */
+export function attestedForms(
+  lines: readonly { words: string[]; at: number; breakdown: string | null; glosses: string | null }[],
+  paradigmForms: readonly string[],
+): Attested[] {
+  const fold = (s: string) => s.normalize("NFC").toLocaleLowerCase();
+  const held = new Set(paradigmForms.map(fold));
+  const found = new Map<string, Attested & { spellings: Map<string, number> }>();
+  for (const l of lines) {
+    const form = l.words[l.at];
+    if (form === undefined) continue;
+    const key = `${fold(form)}\u001f${l.breakdown ?? ""}\u001f${l.glosses ?? ""}`;
+    const a = found.get(key) ?? { form, breakdown: l.breakdown, glosses: l.glosses, count: 0, inGrid: held.has(fold(form)), spellings: new Map() };
+    a.count += 1;
+    a.spellings.set(form, (a.spellings.get(form) ?? 0) + 1);
+    found.set(key, a);
+  }
+  return [...found.values()]
+    .map(({ spellings, ...a }) => ({ ...a, form: [...spellings].sort((x, y) => y[1] - x[1])[0]![0] }))
+    .sort((a, b) => b.count - a.count || a.form.localeCompare(b.form));
+}
+
+/** The line above the attested forms. */
+export function attestedLine(forms: readonly Attested[], lines: number, total: number): string {
+  if (forms.length === 0) return "No word in the texts is linked to this entry yet. Gloss a few and link them to it.";
+  const missing = forms.filter((f) => !f.inGrid).length;
+  const kinds = forms.length === 1 ? "1 form" : `${forms.length} forms`;
+  const more = total > lines ? ` (from the first ${lines} of ${total} uses)` : "";
+  const gap = missing === 0 ? " Every one is in the paradigm." : missing === forms.length ? " None is in the paradigm yet." : ` ${missing} not in the paradigm yet.`;
+  return `${kinds} of this entry in the texts${more}.${gap}`;
+}

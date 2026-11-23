@@ -602,6 +602,9 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .lx-pdg-form { display: flex; align-items: center; gap: 2px; }
 .lx-pdg-form + .lx-pdg-form { margin-top: 2px; }
 .lx-pdg-others ul { margin: 0; padding-left: 18px; font-size: var(--text-sm); }
+.lx-pdg-attested { margin-top: 8px; }
+.lx-pdg-attested ul { margin: 0; padding-left: 18px; font-size: var(--text-sm); }
+.lx-pdg-held { color: var(--muted); }
 
 .panel-elicit { display: flex; flex-direction: column; gap: 6px; }
 .el-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
