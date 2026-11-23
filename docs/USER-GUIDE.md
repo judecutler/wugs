@@ -127,6 +127,8 @@ Auto-segment measures loudness only. Wind, a generator, or other people talking 
 
 The row under the Timeline toolbar works like the transport in a video editor. It has buttons to go to the start, play or pause, and go to the end. Beside them is the playhead time and the recording's length. At the right are the zoom controls: **−**, a slider, **+**, and **Fit**, which shows the whole recording.
 
+To hear fast speech word by word, choose a slower speed in the menu beside the clock: **0.5× speed** or **0.75× speed**. Speech keeps its pitch, so voices sound like themselves, only slower. The same menu is in the Transcribe toolbar; both show the one speed, which every segment, replay and play button in the window uses. wugs remembers it on this computer. Pronunciations in the Lexicon always play at normal speed.
+
 Click the ruler or the waveform to move the playhead there. While the timeline has focus, these keys also work:
 
 | Key | Action |

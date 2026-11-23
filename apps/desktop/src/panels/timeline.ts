@@ -199,7 +199,7 @@ export const timelinePanel: PanelDef = {
     const transport = h(
       "div",
       { className: "tl-transport" },
-      h("span", { className: "tl-transport-play" }, startButton, playButton, endButton, clockBox),
+      h("span", { className: "tl-transport-play" }, startButton, playButton, endButton, clockBox, playback.rateSelect()),
       h("span", { className: "tl-transport-zoom" }, zoomOut, zoomSlider, zoomIn, fitButton),
     );
     playButton.onclick = () => view?.playPause();
