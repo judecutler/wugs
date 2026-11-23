@@ -1,0 +1,29 @@
+# newdoc id = playa
+# newpar
+# sent_id = playa-1
+# text = Vámonos al mar.
+# text_en = Let's go to the sea.
+1-2	Vámonos	_	_	_	_	_	_	_	_
+1	Vamos	ir	VERB	V	Mood=Imp|Number=Plur|Person=1	0	root	0:root	_
+2	nos	nosotros	PRON	PP	Case=Acc|Number=Plur|Person=1	1	obj	1:obj	_
+3-4	al	_	_	_	_	_	_	_	_
+3	a	a	ADP	SP	_	5	case	5:case	_
+4	el	el	DET	DA	Definite=Def	5	det	5:det	_
+5	mar	mar	NOUN	NC	Number=Sing	1	obl	1:obl:a	SpaceAfter=No
+6	.	.	PUNCT	FP	_	1	punct	1:punct	_
+
+# sent_id = playa-2
+1	María	María	PROPN	NP	_	2	nsubj	2:nsubj|2.1:nsubj	_
+2	nada	nadar	VERB	V	Mood=Ind|Tense=Pres	0	root	0:root	_
+2.1	nada	nadar	VERB	V	_	_	_	0:root	CopyOf=2
+3	y	y	CCONJ	CC	_	4	cc	2.1:cc	_
+4	Juan	Juan	PROPN	NP	_	2	conj	2:conj|2.1:nsubj	SpaceAfter=No
+5	.	.	PUNCT	FP	_	2	punct	2:punct	_
+
+# newdoc id = ciudad
+# sent_id = ciudad-1
+# text = La ciudad duerme
+1	La	el	DET	DA	_	2	det	_	_
+2	ciudad	ciudad	NOUN	NC	_	3	nsubj	_	_
+3	duerme	dormir	VERB	V	_	0	root	_	_
+

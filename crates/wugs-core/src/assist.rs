@@ -323,7 +323,7 @@ impl Project {
 
     /// A text's effective access: its own level, else its linked source's,
     /// else open (DATA-MODEL §4, the rule sync's `policy_from_access` uses).
-    fn text_access(&self, text: &str) -> Result<String, String> {
+    pub fn text_access(&self, text: &str) -> Result<String, String> {
         if let Some(a) = self.proj.field_str(text, "access")? {
             return Ok(a);
         }

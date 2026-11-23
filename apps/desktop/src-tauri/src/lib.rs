@@ -2,6 +2,7 @@ pub mod assist;
 pub mod capability;
 pub mod capture;
 pub mod concordance;
+pub mod cqp;
 pub mod collocates;
 pub mod frequencies;
 pub mod keywords;
@@ -27,6 +28,7 @@ pub mod praat;
 pub mod praat_analysis;
 pub mod sample;
 pub mod segmentation;
+pub mod sentence;
 pub mod session;
 pub mod updater;
 
@@ -118,11 +120,12 @@ fn create_project(app: AppHandle, s: State<SessionThread>, reach: State<Reachabl
     Ok(info)
 }
 
-/// The sample project (roadmap 68): built in this computer's app data the
+/// The tutorial project (roadmap 68; once called the sample, whose old
+/// `sample-project` folder is left as it was): built in this computer's app data the
 /// first time, opened as it was left after that.
 #[tauri::command(async)]
 fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>, researcher: String) -> Result<ProjectInfo, String> {
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("sample-project");
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?.join("tutorial-project");
     let path = dir.to_string_lossy().to_string();
     let who = if researcher.trim().is_empty() { "me".to_string() } else { researcher };
     let info = s.run(move |s| sample::open_sample(s, &dir, &who))?;
@@ -136,6 +139,24 @@ fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>,
 fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>) -> Result<concordance::Concordance, String> {
     let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
     s.run(move |s| concordance::concordance_in(s, &query, kind, how, text_id.as_deref()))
+}
+
+/// A CQP-style query over the sentences' tokens and their annotation (`src/cqp.rs`).
+#[tauri::command(async)]
+fn concordance_query(s: State<SessionThread>, query: String, text_id: Option<String>) -> Result<concordance::Concordance, String> {
+    s.run(move |s| cqp::run(s, &query, text_id.as_deref()))
+}
+
+/// One sentence's words, tags and tree, for the Sentence panel.
+#[tauri::command(async)]
+fn sentence_get(s: State<SessionThread>, text_id: String, segment_id: String) -> Result<sentence::SentenceView, String> {
+    s.run(move |s| sentence::sentence_get(s, &text_id, &segment_id))
+}
+
+/// Correct one cell of a sentence's annotation (one resolving write).
+#[tauri::command(async)]
+fn sentence_set(s: State<SessionThread>, text_id: String, segment_id: String, token_id: String, column: String, value: String) -> Result<sentence::SentenceView, String> {
+    s.run(move |s| sentence::sentence_set(s, &text_id, &segment_id, &token_id, &column, &value))
 }
 
 /// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
@@ -195,6 +216,30 @@ fn export_text(s: State<SessionThread>, text_id: String, format: String, folder:
 fn export_lexicon(s: State<SessionThread>, format: String, folder: String) -> Result<interchange::Exported, String> {
     let format = interchange::Format::parse(&format)?;
     s.run(move |s| interchange::export_lexicon(s, format, std::path::Path::new(&folder)))
+}
+
+/// The language the project documents (name, Glottocode, ISO 639-3).
+#[tauri::command(async)]
+fn project_language(s: State<SessionThread>) -> Result<interchange::LanguageDto, String> {
+    s.run(interchange::project_language)
+}
+
+#[tauri::command(async)]
+fn set_project_language(s: State<SessionThread>, language: interchange::LanguageDto) -> Result<interchange::LanguageDto, String> {
+    s.run(move |s| interchange::set_project_language(s, &language))
+}
+
+/// Publish the lexicon and glossed sentences as a CLDF dataset in a new folder inside `folder`.
+#[tauri::command(async)]
+fn export_cldf(app: AppHandle, s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<interchange::Published, String> {
+    let generator = format!("wugs {}", app.package_info().version);
+    s.run(move |s| interchange::export_cldf(s, std::path::Path::new(&folder), &date, include_restricted, &generator))
+}
+
+/// Save a document the frontend built (interlinear examples) into `folder`.
+#[tauri::command(async)]
+fn save_document(s: State<SessionThread>, folder: String, title: String, extension: String, contents: String) -> Result<interchange::Exported, String> {
+    s.run(move |s| interchange::save_document(s, std::path::Path::new(&folder), &title, &extension, &contents))
 }
 
 /// Seal the project as an archive package in a new folder inside `folder`.
@@ -1417,6 +1462,9 @@ pub fn run() {
             create_project,
             open_sample,
             concordance,
+            concordance_query,
+            sentence_get,
+            sentence_set,
             list_texts,
             link_recording,
             media_overview,
@@ -1429,6 +1477,10 @@ pub fn run() {
             export_text,
             export_lexicon,
             seal_project,
+            project_language,
+            set_project_language,
+            export_cldf,
+            save_document,
             add_segment,
             add_translation,
             edit_segment_content,

@@ -26,6 +26,14 @@ pub enum Format {
     /// A `.csv` or `.tsv` with a header row: one text per document column
     /// value, a segment per row, other columns kept (`table_text`). Import only.
     Table { tabs: bool },
+    /// CoNLL-U (Universal Dependencies): sentences with tags and trees.
+    Conllu,
+    /// TEI P5: curated corpora (ParlaMint, historical and spoken collections).
+    Tei,
+    /// CWB vertical (export only): what CQPweb, NoSketch Engine and Sketch Engine import.
+    Vertical,
+    /// AntConc's tagged text (export only): a sentence a line, `word_TAG`.
+    AntConc,
 }
 
 impl Format {
@@ -37,6 +45,10 @@ impl Format {
             "lift" => Format::Lift,
             "toolbox" => Format::Toolbox,
             "plaintext" => Format::PlainText,
+            "conllu" => Format::Conllu,
+            "tei" => Format::Tei,
+            "vertical" => Format::Vertical,
+            "antconc" => Format::AntConc,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -50,6 +62,10 @@ impl Format {
             Format::Toolbox | Format::PlainText => "txt",
             Format::Table { tabs: true } => "tsv",
             Format::Table { tabs: false } => "csv",
+            Format::Conllu => "conllu",
+            Format::Tei => "xml",
+            Format::Vertical => "vert",
+            Format::AntConc => "txt",
         }
     }
 
@@ -62,6 +78,10 @@ impl Format {
             Format::Toolbox => "Toolbox lexicon",
             Format::PlainText => "plain text",
             Format::Table { .. } => "table of sentences",
+            Format::Conllu => "CoNLL-U",
+            Format::Tei => "TEI",
+            Format::Vertical => "CWB vertical",
+            Format::AntConc => "AntConc tagged text",
         }
     }
 }
@@ -78,6 +98,8 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "db" | "sfm" | "lex" => return Some(Format::Toolbox),
         "csv" => return Some(Format::Table { tabs: false }),
         "tsv" | "tab" => return Some(Format::Table { tabs: true }),
+        "conllu" | "conll" => return Some(Format::Conllu),
+        "tei" => return Some(Format::Tei),
         _ => {}
     }
     let head = sniff(&bytes[..bytes.len().min(4096)]);
@@ -99,6 +121,8 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         Some(Format::Toolbox)
     } else if head.starts_with("File type = \"ooTextFile\"") {
         Some(Format::TextGrid)
+    } else if ext == "xml" && (head.contains("<TEI") || head.contains("<teiCorpus")) {
+        Some(Format::Tei)
     } else if ext == "txt" && tab_table(head) {
         // Excel's "Unicode text": tab-separated columns saved as .txt.
         Some(Format::Table { tabs: true })
@@ -237,12 +261,13 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, a .csv/.tsv table of sentences, or a plain .txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, a .csv/.tsv table of sentences, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::Conllu | Format::Tei => decode_xml(&bytes, file_name)?,
+        Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
         Format::TextGrid | Format::Toolbox => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
@@ -405,6 +430,49 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             }
             (first, false)
         }
+        Format::Conllu => {
+            if input.contains('\0') {
+                return Err(format!("{file_name} is not valid UTF-8 or UTF-16 text; it may be damaged, so nothing was imported"));
+            }
+            let tier = session::utterance_tier(p)?;
+            let r = wugs_conllu::import_conllu(p, input, &stem, &tier).map_err(|e| format!("{file_name}: {e}"))?;
+            if !r.texts.is_empty() {
+                lines.push(format!(
+                    "{} with {} and {}{}.",
+                    plural(r.texts.len(), "new text", "new texts"),
+                    plural(r.sentences, "sentence", "sentences"),
+                    plural(r.words, "word", "words"),
+                    if r.texts.len() > 1 { ", one per # newdoc" } else { "" }
+                ));
+                lines.push("Lemmas, tags, features and the dependency tree are kept with each sentence and come back out in a CoNLL-U export.".into());
+            }
+            if r.ranges + r.empty_nodes > 0 {
+                lines.push(format!("{} and {} kept.", plural(r.ranges, "multi-word token", "multi-word tokens"), plural(r.empty_nodes, "empty node", "empty nodes")));
+            }
+            if !r.matched.is_empty() {
+                lines.push(format!("{} matched a text already here; nothing was added for them.", plural(r.matched.len(), "document", "documents")));
+            }
+            (r.texts.first().or(r.matched.first()).cloned(), false)
+        }
+        Format::Tei => {
+            let tier = session::utterance_tier(p)?;
+            let r = wugs_tei::import_tei(p, input, &stem, &tier).map_err(|e| format!("{file_name}: {e}"))?;
+            if !r.texts.is_empty() {
+                lines.push(format!("{} with {} and {}.", plural(r.texts.len(), "new text", "new texts"), plural(r.segments, "segment", "segments"), plural(r.words, "word", "words")));
+                if r.words > 0 {
+                    lines.push("Lemmas and tags on the words are kept and come back out in a CoNLL-U or TEI export.".into());
+                }
+                if r.blocks_as_segments > 0 {
+                    lines.push(format!("{} with no <s> inside came in a segment each.", plural(r.blocks_as_segments, "paragraph or turn", "paragraphs or turns")));
+                }
+            }
+            if !r.matched.is_empty() {
+                lines.push(format!("{} matched a text already here; nothing was added for them.", plural(r.matched.len(), "document", "documents")));
+            }
+            lines.extend(not_carried(&r.not_carried));
+            (r.texts.first().or(r.matched.first()).cloned(), false)
+        }
+        Format::Vertical | Format::AntConc => unreachable!("refused above"),
         Format::Toolbox => {
             let r = wugs_legacy::import_toolbox(p, input).map_err(|e| e.to_string())?;
             lines.push(format!(
@@ -526,43 +594,107 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             out.textgrid
         }
         Format::PlainText => {
-            // One tier, in time order: the utterance tier when it holds this
-            // text's segments, else the transcription tier with the most.
-            let (_, transcription) = crate::concordance::corpus_tiers(p)?;
-            let mut by_tier: Vec<(String, Vec<(Option<f64>, usize, String)>)> = Vec::new();
-            for (i, seg) in p.proj.ordered_children("text", text_id, "segment")?.into_iter().enumerate() {
-                let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
-                if !transcription.contains(&tier) {
-                    continue;
-                }
-                let row = (p.proj.field_num(&seg, "start")?, i, p.proj.field_str(&seg, "content")?.unwrap_or_default());
-                match by_tier.iter_mut().find(|(t, _)| *t == tier) {
-                    Some((_, rows)) => rows.push(row),
-                    None => by_tier.push((tier, vec![row])),
-                }
-            }
-            let utterance = session::find_utterance_tier(p)?;
-            let pick = by_tier.iter().position(|(t, _)| Some(t) == utterance.as_ref()).or_else(|| (0..by_tier.len()).max_by_key(|&i| by_tier[i].1.len()));
-            let mut rows = pick.map(|i| by_tier[i].1.clone()).unwrap_or_default();
-            // Timed segments by start, untimed after them in their own order.
-            rows.sort_by(|a, b| match (a.0, b.0) {
-                (Some(x), Some(y)) => x.total_cmp(&y).then(a.1.cmp(&b.1)),
-                (Some(_), None) => std::cmp::Ordering::Less,
-                (None, Some(_)) => std::cmp::Ordering::Greater,
-                (None, None) => a.1.cmp(&b.1),
-            });
-            if by_tier.len() > 1 {
-                if let Some(i) = pick {
-                    let name = p.proj.field_str(&by_tier[i].0, "name")?.unwrap_or_default();
-                    notes.push(format!("Plain text holds one track: «{name}» was written; the other transcription tracks were left out."));
-                }
-            }
-            crate::plaintext::export(&rows.into_iter().map(|r| r.2).collect::<Vec<_>>())
+            let segments = one_track(p, text_id, &mut notes, "Plain text")?;
+            let rows: Vec<String> = segments.iter().map(|s| p.proj.field_str(s, "content").map(Option::unwrap_or_default)).collect::<Result<_, _>>()?;
+            crate::plaintext::export(&rows)
+        }
+        Format::Conllu => {
+            let segments = one_track(p, text_id, &mut notes, "CoNLL-U")?;
+            let sentences = segments.into_iter().map(|segment| Ok(wugs_conllu::ExportSentence { translations: translations_of(p, &segment)?, segment })).collect::<Result<Vec<_>, String>>()?;
+            let out = wugs_conllu::export(p, &title, &sentences)?;
+            notes.extend(out.notes);
+            out.conllu
+        }
+        Format::Tei => {
+            let segments = one_track(p, text_id, &mut notes, "TEI")?;
+            let sentences = segments.into_iter().map(|segment| Ok(wugs_conllu::ExportSentence { translations: translations_of(p, &segment)?, segment })).collect::<Result<Vec<_>, String>>()?;
+            let lang = p.project_language()?;
+            let tag = tei_language_tag(&lang.iso, &lang.glottocode);
+            let name = if lang.name.is_empty() { tag.clone().unwrap_or_default() } else { lang.name.clone() };
+            let language = tag.as_deref().map(|t| (name.as_str(), t));
+            let out = wugs_tei::export_tei(p, &title, language, &sentences, concat!("wugs ", env!("CARGO_PKG_VERSION")))?;
+            notes.extend(out.notes);
+            out.tei
+        }
+        Format::Vertical | Format::AntConc => {
+            let segments = one_track(p, text_id, &mut notes, format.name())?;
+            let sentences = segments.into_iter().map(|segment| Ok(wugs_conllu::ExportSentence { translations: translations_of(p, &segment)?, segment })).collect::<Result<Vec<_>, String>>()?;
+            let out = if format == Format::Vertical { wugs_conllu::vertical(p, &title, text_id, &sentences)? } else { wugs_conllu::tagged_text(p, &title, &sentences)? };
+            notes.extend(out.notes);
+            out.conllu
         }
         Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
     };
     let path = write_new(folder, &file_stem(&title, "text"), format.extension(), contents.as_bytes())?;
     Ok(Exported { path: path.display().to_string(), notes })
+}
+
+/// The segments of one transcription track of a text, in time order: the
+/// utterance tier when it holds this text's segments, else the
+/// transcription tier with the most; untimed segments after the timed, in
+/// their own order. A note names the track when others were left out.
+fn one_track(p: &wugs_core::Project, text_id: &str, notes: &mut Vec<String>, format: &str) -> Result<Vec<String>, String> {
+    let (_, transcription) = crate::concordance::corpus_tiers(p)?;
+    let mut by_tier: Vec<(String, Vec<(Option<f64>, usize, String)>)> = Vec::new();
+    for (i, seg) in p.proj.ordered_children("text", text_id, "segment")?.into_iter().enumerate() {
+        let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
+        if !transcription.contains(&tier) {
+            continue;
+        }
+        let row = (p.proj.field_num(&seg, "start")?, i, seg);
+        match by_tier.iter_mut().find(|(t, _)| *t == tier) {
+            Some((_, rows)) => rows.push(row),
+            None => by_tier.push((tier, vec![row])),
+        }
+    }
+    let utterance = session::find_utterance_tier(p)?;
+    let pick = by_tier.iter().position(|(t, _)| Some(t) == utterance.as_ref()).or_else(|| (0..by_tier.len()).max_by_key(|&i| by_tier[i].1.len()));
+    let mut rows = pick.map(|i| by_tier[i].1.clone()).unwrap_or_default();
+    rows.sort_by(|a, b| match (a.0, b.0) {
+        (Some(x), Some(y)) => x.total_cmp(&y).then(a.1.cmp(&b.1)),
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (None, None) => a.1.cmp(&b.1),
+    });
+    if by_tier.len() > 1 {
+        if let Some(i) = pick {
+            let name = p.proj.field_str(&by_tier[i].0, "name")?.unwrap_or_default();
+            notes.push(format!("{format} holds one track: «{name}» was written; the other transcription tracks were left out."));
+        }
+    }
+    Ok(rows.into_iter().map(|r| r.2).collect())
+}
+
+/// A sentence's translations: segments naming it as `parent` on a
+/// translation track, with the track's language when it has one.
+fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<Vec<(Option<String>, String)>, String> {
+    let mut out = Vec::new();
+    for child in p.proj.children_by_ref("parent", segment, "segment")? {
+        if p.proj.is_tombstoned(&child)? {
+            continue;
+        }
+        let tier = p.proj.field_str(&child, "tier")?.unwrap_or_default();
+        if session::tier_role(p, &tier)?.as_deref() != Some("translation") {
+            continue;
+        }
+        let content = p.proj.field_str(&child, "content")?.unwrap_or_default();
+        if !content.trim().is_empty() {
+            out.push((p.proj.field_str(&tier, "language")?, content));
+        }
+    }
+    Ok(out)
+}
+
+/// Save a document the app built (a text's interlinear examples as LaTeX,
+/// HTML or plain text) as `<title>.<ext>` in `folder`, never replacing a
+/// file and never inside the project.
+pub fn save_document(s: &mut Session, folder: &Path, title: &str, extension: &str, contents: &str) -> Result<Exported, String> {
+    if !matches!(extension, "tex" | "html" | "txt") {
+        return Err(format!("wugs does not save .{extension} documents"));
+    }
+    outside_project(s, folder)?;
+    let path = write_new(folder, &file_stem(title, "examples"), extension, contents.as_bytes())?;
+    Ok(Exported { path: path.display().to_string(), notes: Vec::new() })
 }
 
 /// Export the whole lexicon as LIFT or Toolbox into `folder`.
@@ -617,9 +749,133 @@ pub fn seal_project(s: &mut Session, folder: &Path, date: &str) -> Result<Sealed
     })
 }
 
+/// The language a project documents, as the Import and export section shows it.
+#[derive(Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LanguageDto {
+    pub name: String,
+    pub glottocode: String,
+    pub iso: String,
+}
+
+/// The project's language as an `xml:lang` tag (BCP 47): its ISO 639-3
+/// code, else its Glottocode as a private-use subtag (`und-x-abcd1234`),
+/// since a Glottocode is not itself a language tag. None when neither is set.
+fn tei_language_tag(iso: &str, glottocode: &str) -> Option<String> {
+    if !iso.is_empty() {
+        Some(iso.to_string())
+    } else if !glottocode.is_empty() {
+        Some(format!("und-x-{glottocode}"))
+    } else {
+        None
+    }
+}
+
+pub fn project_language(s: &mut Session) -> Result<LanguageDto, String> {
+    let l = session::project(s)?.project_language()?;
+    Ok(LanguageDto { name: l.name, glottocode: l.glottocode, iso: l.iso })
+}
+
+pub fn set_project_language(s: &mut Session, language: &LanguageDto) -> Result<LanguageDto, String> {
+    session::project(s)?.set_project_language(&language.name, &language.glottocode, &language.iso)?;
+    project_language(s)
+}
+
+#[derive(Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct Published {
+    pub path: String,
+    pub entries: usize,
+    pub senses: usize,
+    pub examples: usize,
+    pub restricted_left_out: usize,
+    pub notes: Vec<String>,
+}
+
+/// Write the lexicon and every glossed sentence as a CLDF Dictionary dataset
+/// in a new folder `wugs-cldf-<date>` (then `-2` …) inside `folder`.
+pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricted: bool, generator: &str) -> Result<Published, String> {
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+    outside_project(s, folder)?;
+    let p = session::project(s)?;
+    let (translation_tiers, transcription_tiers) = crate::concordance::corpus_tiers(p)?;
+    let lang = p.project_language()?;
+    let title = if lang.name.is_empty() { "Dictionary".to_string() } else { format!("{} dictionary", lang.name) };
+    let ds = wugs_cldf::export(p, &wugs_cldf::Options { title: &title, generator, transcription_tiers: &transcription_tiers, translation_tiers: &translation_tiers, include_restricted })?;
+    let date = crate::corrections::date_or_today(date);
+    let mut out = folder.join(format!("wugs-cldf-{date}"));
+    let mut n = 2;
+    while out.symlink_metadata().is_ok() {
+        out = folder.join(format!("wugs-cldf-{date}-{n}"));
+        n += 1;
+    }
+    // Written whole into a scratch folder beside it, then renamed, so a failure leaves nothing half-written.
+    let scratch = folder.join(format!(".{}.partial", out.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+    let written = (|| {
+        fs::create_dir(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
+        for (name, contents) in &ds.files {
+            fs::write(scratch.join(name), contents).map_err(|e| format!("{name}: {e}"))?;
+        }
+        fs::rename(&scratch, &out).map_err(|e| format!("{}: {e}", out.display()))
+    })();
+    if let Err(e) = written {
+        fs::remove_dir_all(&scratch).ok();
+        return Err(e);
+    }
+    Ok(Published { path: out.display().to_string(), entries: ds.entries, senses: ds.senses, examples: ds.examples, restricted_left_out: ds.restricted_left_out, notes: ds.notes })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_project_publishes_as_cldf_beside_its_language() {
+        let dir = std::env::temp_dir().join(format!("wugs-cldf-desktop-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let lang = set_project_language(&mut s, &LanguageDto { name: "Kanu".into(), glottocode: "abcd1234".into(), iso: String::new() }).unwrap();
+        assert_eq!(lang.glottocode, "abcd1234");
+        assert!(set_project_language(&mut s, &LanguageDto { name: "Kanu".into(), glottocode: "nope".into(), iso: String::new() }).is_err());
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let r = export_cldf(&mut s, &out, "2026-11-23", false, "wugs test").unwrap();
+        assert!(r.path.ends_with("wugs-cldf-2026-11-23"));
+        assert!(r.examples > 0 && r.entries > 0, "{r:?}");
+        let examples = fs::read_to_string(Path::new(&r.path).join("examples.csv")).unwrap();
+        assert!(examples.lines().count() > 1);
+        let again = export_cldf(&mut s, &out, "2026-11-23", false, "wugs test").unwrap();
+        assert!(again.path.ends_with("wugs-cldf-2026-11-23-2"), "never replaces a dataset");
+        assert!(export_cldf(&mut s, &dir.join("sample"), "2026-11-23", false, "x").is_err(), "not inside the project");
+        // TEI names the same language: a Glottocode alone is a private-use tag.
+        let text = session::list_texts(&mut s).unwrap().into_iter().next().unwrap().id;
+        let tei = export_text(&mut s, &text, Format::Tei, &out).unwrap();
+        let xml = fs::read_to_string(&tei.path).unwrap();
+        assert!(xml.contains("und-x-abcd1234") && xml.contains("Kanu"), "{xml}");
+        set_project_language(&mut s, &LanguageDto { name: String::new(), glottocode: "abcd1234".into(), iso: "kan".into() }).unwrap();
+        let xml = fs::read_to_string(export_text(&mut s, &text, Format::Tei, &out).unwrap().path).unwrap();
+        assert!(xml.contains("xml:lang=\"kan\"") && !xml.contains("und-x-"), "ISO 639-3 wins: {xml}");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn documents_are_saved_beside_others_never_over_them() {
+        let dir = std::env::temp_dir().join(format!("wugs-doc-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let a = save_document(&mut s, &out, "Counting: examples", "tex", "\\documentclass{article}").unwrap();
+        let b = save_document(&mut s, &out, "Counting: examples", "tex", "x").unwrap();
+        assert!(a.path.ends_with("Counting_ examples.tex") && b.path.ends_with("Counting_ examples (2).tex"), "{a:?} {b:?}");
+        assert!(save_document(&mut s, &out, "x", "exe", "x").is_err());
+        assert!(save_document(&mut s, &dir.join("p"), "x", "txt", "x").is_err(), "not inside the project");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn stems_are_safe_file_names() {
@@ -644,6 +900,75 @@ mod tests {
     }
 
     #[test]
+    fn conllu_comes_in_and_goes_back_out_the_same() {
+        let dir = std::env::temp_dir().join(format!("wugs-conllu-desktop-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("treebank.conllu");
+        let original = "# sent_id = 1\n# text = Hello, world.\n1\tHello\thello\tINTJ\t_\t_\t0\troot\t_\tSpaceAfter=No\n2\t,\t,\tPUNCT\t_\t_\t1\tpunct\t_\t_\n3\tworld\tworld\tNOUN\t_\t_\t1\tvocative\t_\tSpaceAfter=No\n4\t.\t.\tPUNCT\t_\t_\t1\tpunct\t_\t_\n\n";
+        fs::write(&file, original).unwrap();
+        let r = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert_eq!(r.format, "CoNLL-U");
+        let text = r.text.unwrap();
+        assert_eq!(session::list_texts(&mut s).unwrap()[0].title, "treebank");
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let e = export_text(&mut s, &text, Format::Conllu, &out).unwrap();
+        assert_eq!(fs::read_to_string(&e.path).unwrap(), original);
+        assert!(e.path.ends_with("treebank.conllu"));
+        // Punctuation tokens are not words for the corpus tools.
+        let f = crate::frequencies::frequencies(&mut s, crate::concordance::Kind::Word, None).unwrap();
+        assert_eq!(f.tokens, 2, "Hello and world, not the comma and the stop");
+        // The same file again adds nothing and says so.
+        let again = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert!(again.lines.iter().any(|l| l.contains("matched")), "{:?}", again.lines);
+        assert_eq!(session::list_texts(&mut s).unwrap().len(), 1);
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_tagged_text_goes_to_cqpweb_and_antconc() {
+        let dir = std::env::temp_dir().join(format!("wugs-vert-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("dogs.conllu");
+        fs::write(&file, "1\tDogs\tdog\tNOUN\t_\t_\t2\tnsubj\t_\t_\n2\tbark\tbark\tVERB\t_\t_\t0\troot\t_\tSpaceAfter=No\n3\t.\t.\tPUNCT\t_\t_\t2\tpunct\t_\t_\n\n").unwrap();
+        let text = import_file(&mut s, file.to_str().unwrap()).unwrap().text.unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let v = export_text(&mut s, &text, Format::Vertical, &out).unwrap();
+        assert!(v.path.ends_with("dogs.vert"));
+        assert!(fs::read_to_string(&v.path).unwrap().contains("<s id=\"1\">\nDogs\tdog\tNOUN\t_\t_\nbark\tbark\tVERB\t_\t_\n<g/>\n.\t.\tPUNCT"));
+        let a = export_text(&mut s, &text, Format::AntConc, &out).unwrap();
+        assert_eq!(fs::read_to_string(&a.path).unwrap(), "Dogs_NOUN bark_VERB ._PUNCT\n");
+        assert!(import_file(&mut s, v.path.as_str()).is_err(), "a .vert is not read back");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn tei_comes_in_and_goes_out() {
+        let dir = std::env::temp_dir().join(format!("wugs-tei-desktop-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("debate.xml");
+        fs::write(&file, "<TEI xmlns=\"http://www.tei-c.org/ns/1.0\"><teiHeader><fileDesc><titleStmt><title>Debate</title></titleStmt></fileDesc></teiHeader><text><body><u who=\"#A\"><s><w lemma=\"hola\" pos=\"INTJ\" join=\"right\">Hola</w><pc>!</pc></s></u></body></text></TEI>").unwrap();
+        let r = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert_eq!(r.format, "TEI");
+        let text = r.text.unwrap();
+        assert_eq!(session::list_texts(&mut s).unwrap()[0].title, "Debate");
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let e = export_text(&mut s, &text, Format::Tei, &out).unwrap();
+        let tei = fs::read_to_string(&e.path).unwrap();
+        assert!(e.path.ends_with("Debate.xml"));
+        assert!(tei.contains("<w lemma=\"hola\" pos=\"INTJ\" join=\"right\">Hola</w>"), "{tei}");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn detects_by_extension_then_content() {
         assert_eq!(detect(Path::new("a.EAF"), b""), Some(Format::Elan));
         assert_eq!(detect(Path::new("a.TextGrid"), b""), Some(Format::TextGrid));
@@ -655,6 +980,12 @@ mod tests {
         assert_eq!(detect(Path::new("story.txt"), b"Kesi mopa toru.\tThe dog came home.\nToru mopa.\tIt ran.\n"), Some(Format::PlainText), "sentence-tab-translation lines are a story");
         assert_eq!(windows_1252("\u{93}Caf\u{e9}\u{94} \u{85} \u{80}".into(), b"\x93Caf\xe9\x94 \x85 \x80"), "\u{201c}Café\u{201d} … €");
         assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
+        assert_eq!(detect(Path::new("en_ewt-ud-train.conllu"), b""), Some(Format::Conllu));
+        assert_eq!(detect(Path::new("old.CONLL"), b""), Some(Format::Conllu));
+        assert_eq!(detect(Path::new("ParlaMint-ES.xml"), b"<?xml version=\"1.0\"?>\n<TEI xmlns=\"http://www.tei-c.org/ns/1.0\">"), Some(Format::Tei));
+        assert_eq!(detect(Path::new("corpus.xml"), b"<teiCorpus>"), Some(Format::Tei));
+        assert_eq!(detect(Path::new("other.xml"), b"<html/>"), None, "XML that is not TEI is not taken");
+        assert_eq!(detect(Path::new("x.tei"), b""), Some(Format::Tei));
         assert_eq!(detect(Path::new("dict.txt"), b"\n\\lx kanu\n\\ps n\n"), Some(Format::Toolbox), "MDF with no header");
         assert_eq!(detect(Path::new("dict.txt"), b"\\lx\n"), Some(Format::Toolbox));
         let essay = b"\\noindent The fox came to the well.\nIt looked down.\nThen it went home.\n";

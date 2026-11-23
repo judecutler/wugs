@@ -53,6 +53,8 @@ pub struct Hit {
     pub words: Vec<String>,
     /// Which word holds the match.
     pub at: usize,
+    /// How many words the match covers from `at` (a phrase or a CQP query; else 1).
+    pub len: usize,
     /// For a morph or gloss match: the word's morphs and their glosses, as the Gloss panel writes them.
     pub breakdown: Option<String>,
     pub glosses: Option<String>,
@@ -105,7 +107,7 @@ pub(crate) fn bare(surface: &str) -> &str {
 const MARK: [(&str, &str, &str); 5] = [("prefix", "", "-"), ("suffix", "-", ""), ("infix", "<", ">"), ("clitic", "=", ""), ("reduplication", "", "~")];
 
 /// Morphs joined at their markers, as the Leipzig word line writes them.
-fn joined(parts: &[(String, String)]) -> String {
+pub(crate) fn joined(parts: &[(String, String)]) -> String {
     let mut out = String::new();
     for (text, kind) in parts {
         let (before, after) = MARK.iter().find(|m| m.0 == kind).map(|m| (m.1, m.2)).unwrap_or(("", ""));
@@ -124,22 +126,7 @@ fn joined(parts: &[(String, String)]) -> String {
 /// association tier with no role. Transcription: no role or `transcription`,
 /// time-aligned or untyped. Live tiers only.
 pub(crate) fn corpus_tiers(p: &Project) -> Result<(Vec<String>, Vec<String>), String> {
-    let mut translation_tiers = Vec::new();
-    let mut transcription_tiers = Vec::new();
-    for t in p.proj.entities_of_kind("tier")? {
-        let role = p.proj.field_str(&t, "role")?;
-        let origin = p.proj.field_str(&t, "origin")?;
-        let tier_kind = p.proj.field_str(&t, "kind")?;
-        let translation = role.as_deref() == Some("translation")
-            || origin.as_deref() == Some(wugs_flex::flextext::TIER_FREE)
-            || (role.is_none() && tier_kind.as_deref() == Some("symbolic-association"));
-        if translation {
-            translation_tiers.push(t);
-        } else if matches!(role.as_deref(), None | Some("transcription")) && matches!(tier_kind.as_deref(), None | Some("time-aligned")) {
-            transcription_tiers.push(t);
-        }
-    }
-    Ok((translation_tiers, transcription_tiers))
+    wugs_cldf::corpus_tiers(p)
 }
 
 /// One segment as the corpus tools read it.
@@ -231,7 +218,7 @@ pub(crate) fn each_segment(
             let content = p.proj.field_str(&seg, "content")?.unwrap_or_default();
             let mut tokens: Vec<String> = p.proj.members(&seg)?;
             // FLEx keeps punctuation as tokens of their own; they are not words.
-            tokens.retain(|t| p.proj.field_str(t, "x.flex.kind").ok().flatten().as_deref() != Some("punct"));
+            tokens.retain(|t| !p.proj.is_punct_token(t));
             let words: Vec<String> = if tokens.is_empty() {
                 words_of(&content)
             } else {
@@ -351,6 +338,7 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
                     end_ms: p.proj.field_num(&seg.id, "end")?,
                     words: seg.words.clone(),
                     at,
+                    len: if phrase.is_empty() { 1 } else { phrase.len() },
                     breakdown,
                     glosses,
                 });
@@ -404,9 +392,10 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let mut session: Session = None;
         crate::sample::open_sample(&mut session, &dir, "tester").unwrap();
-        let w = concordance(&mut session, "KESI", Kind::Word).unwrap();
+        crate::sample::add_morphology(&mut session).unwrap();
+        let w = concordance(&mut session, "FAɪV", Kind::Word).unwrap();
         assert_eq!(w.total, 1);
-        assert_eq!(w.hits[0].words[w.hits[0].at], "kesi");
+        assert_eq!(w.hits[0].words[w.hits[0].at], "faɪv");
         let m = concordance(&mut session, "kani", Kind::Morph).unwrap();
         assert_eq!(m.total, 1);
         // With or without the marker, a morph meets.
@@ -417,8 +406,8 @@ mod tests {
         assert_eq!(m.hits[0].breakdown.as_deref(), Some("ni-kani"));
         assert_eq!(m.hits[0].glosses.as_deref(), Some("1SG-count"));
         assert_eq!(concordance(&mut session, "foc", Kind::Gloss).unwrap().total, 1);
-        // two, three, ten
-        assert_eq!(concordance(&mut session, "t*", Kind::Translation).unwrap().total, 3);
+        // two, three, to, ten
+        assert_eq!(concordance(&mut session, "t*", Kind::Translation).unwrap().total, 4);
         assert_eq!(concordance(&mut session, "*", Kind::Word).unwrap().total, 0);
         // A lexicon entry's occurrences: the words whose morphs link to its sense.
         let p = project(&mut session).unwrap();

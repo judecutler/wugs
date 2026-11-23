@@ -7739,6 +7739,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wugs-cldf"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-flex",
+ "wugs-model",
+ "wugs-projection",
+]
+
+[[package]]
+name = "wugs-conllu"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-model",
+ "wugs-projection",
+]
+
+[[package]]
 name = "wugs-core"
 version = "0.0.1"
 dependencies = [
@@ -7750,10 +7769,11 @@ dependencies = [
 
 [[package]]
 name = "wugs-desktop"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "csv",
  "keyring",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -7765,10 +7785,13 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "unicode-normalization",
  "ureq",
  "wugs-asr",
  "wugs-auth",
  "wugs-blob",
+ "wugs-cldf",
+ "wugs-conllu",
  "wugs-core",
  "wugs-elan",
  "wugs-flex",
@@ -7780,6 +7803,7 @@ dependencies = [
  "wugs-peaks",
  "wugs-seal",
  "wugs-sync",
+ "wugs-tei",
  "wugs-text",
  "wugs-unicode",
  "zeroize",
@@ -7868,6 +7892,7 @@ dependencies = [
 name = "wugs-seal"
 version = "0.0.1"
 dependencies = [
+ "wugs-cldf",
  "wugs-core",
  "wugs-elan",
  "wugs-flex",
@@ -7891,6 +7916,17 @@ dependencies = [
  "wugs-model",
  "wugs-oplog",
  "wugs-projection",
+]
+
+[[package]]
+name = "wugs-tei"
+version = "0.0.1"
+dependencies = [
+ "wugs-conllu",
+ "wugs-core",
+ "wugs-model",
+ "wugs-projection",
+ "wugs-xml",
 ]
 
 [[package]]

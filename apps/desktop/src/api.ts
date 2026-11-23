@@ -76,8 +76,13 @@ export const frequencies = (args: { kind: import("./concordance/logic").Concorda
 export const collocates = (args: { node: string; kind: "word" | "translation"; left: number; right: number; minTogether: number; textId: string | null }) =>
   invoke<import("./collocates/logic").Collocates>("collocates", args);
 export const keywords = (args: { kind: "word" | "translation"; textId: string; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
+/** One sentence's words, tags and dependency tree (src-tauri/src/sentence.rs); a correction returns it whole. */
+export const sentenceGet = (args: { textId: string; segmentId: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_get", args);
+export const sentenceSet = (args: { textId: string; segmentId: string; tokenId: string; column: string; value: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_set", args);
 export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null }) => invoke<ConcordanceResult>("concordance", args);
-/** The sample project (roadmap 68), built the first time in this computer's app data. */
+/** A CQP-style query over tokens and their annotation (src-tauri/src/cqp.rs); a query that does not parse is refused with what and where. */
+export const concordanceQuery = (args: { query: string; textId?: string | null }) => invoke<ConcordanceResult>("concordance_query", args);
+/** The tutorial project (roadmap 68), built the first time in this computer's app data. */
 export const openSample = (args: { researcher: string }) => invoke<ProjectInfo>("open_sample", args);
 export const listTexts = () => invoke<TextRow[]>("list_texts");
 export const getText = (args: { textId: string }) => invoke<TextDetail>("get_text", args);
@@ -174,7 +179,8 @@ export type HiddenEdit = { parent: string; member: string; label: string; fields
 /** The other side of a conflict on a word's morphs or the segment's words, offered as "use that instead". */
 export type Alternative = { parent: string; members: string[]; surfaces: string[]; glosses: string[] };
 
-export type GlossView = { segmentId: string; words: WordView[]; hidden: HiddenEdit[]; alternatives: Alternative[] };
+/** `readsAs`: the words as the transcription spells them (a CoNLL-U multi-word token as one), to tell whether it changed. */
+export type GlossView = { segmentId: string; words: WordView[]; readsAs: string[]; hidden: HiddenEdit[]; alternatives: Alternative[] };
 /** Every edit answers with the segment's fresh view, and notes worth a toast. */
 export type GlossEdit = { view: GlossView; notes: string[] };
 export type ApplyAllResult = { applied: number; texts: number; skippedAnalysed: number; view: GlossView };
@@ -499,7 +505,7 @@ export const assistDelete = (args: { id: string }) => invoke<void>("assist_delet
 /** `expect` is the provider id the caller showed; the backend writes nothing if what powers phone transcription changed since. */
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
 // Import and export in other tools' formats: src-tauri/src/interchange.rs.
-export type TextFormat = "elan" | "flextext" | "textgrid" | "plaintext";
+export type TextFormat = "elan" | "flextext" | "textgrid" | "conllu" | "tei" | "vertical" | "antconc" | "plaintext";
 export type LexiconFormat = "lift" | "toolbox";
 /** `text`: the text to show afterwards; `lexicon`: the lexicon changed; `lines`: what happened, in words. */
 export type Imported = { format: string; text: string | null; lexicon: boolean; lines: string[] };
@@ -518,6 +524,11 @@ export const exportText = (args: { textId: string; format: TextFormat; folder: s
 export const exportLexicon = (args: { format: LexiconFormat; folder: string }) => invoke<Exported>("export_lexicon", args);
 /** `date`: today on this computer's calendar (YYYY-MM-DD), which names the package folder. */
 export const sealProject = (args: { folder: string; date: string }) => invoke<Sealed>("seal_project", args);
+export const projectLanguage = () => invoke<import("./cldf/logic").Language>("project_language");
+export const setProjectLanguage = (args: { language: import("./cldf/logic").Language }) => invoke<import("./cldf/logic").Language>("set_project_language", args);
+export const exportCldf = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Published>("export_cldf", args);
+/** Save a document built here (a text's interlinear examples) as a new file in `folder`. */
+export const saveDocument = (args: { folder: string; title: string; extension: string; contents: string }) => invoke<{ path: string; notes: string[] }>("save_document", args);
 // People and consent (roadmap 61): src-tauri/src/people.rs. Every command returns the whole view.
 /** A term's answer: true agreed, false refused, null not asked. */
 export type PeopleConsent = { id: string; covers: string; terms: [string, boolean | null][]; date: string; evidenceName: string | null; hasEvidence: boolean };

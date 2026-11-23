@@ -26,13 +26,13 @@ To open a project that already exists, click **Open a project folder** and choos
 
 To start a text, open the **Texts** panel, type a title in **New text title**, and click **New text**.
 
-## Try the sample project
+## Try the tutorial project
 
-On the welcome screen, click **Open the sample project**. It holds a short made-up recording of someone counting to ten in an invented language, already segmented, transcribed, translated, glossed and in the lexicon. The last segment is left empty so you can try transcribing it.
+The first time you start wugs, click **Tutorial** in the top bar (or **Open the tutorial project** on the welcome screen). It holds a short recording of someone counting from one to six in English, already segmented, transcribed in IPA, translated, glossed and in the lexicon. The last segment, «six», is left empty so you can try transcribing it. After the first time, the Tutorial button moves into the **Project** menu, as **Open the tutorial project**.
 
 The first time you open it, a short tour shows what each panel is for. Press **Escape** or click **Skip the tour** to leave it at any point. To see it again, press **Ctrl+K** and choose **Take the tour**.
 
-The sample is an ordinary project kept in wugs's own folder on this computer. Change anything you like. It is never mixed into your own projects.
+The tutorial is an ordinary project kept in wugs's own folder on this computer. Change anything you like. It is never mixed into your own projects.
 
 ## Switch between Tongues and Scrolls
 
@@ -450,6 +450,8 @@ wugs reads these formats:
 - FLEx `.flextext` and LIFT `.lift`
 - Praat `.TextGrid`
 - Toolbox `.db`, `.sfm`, and `.lex`, and `.txt` files in Toolbox format
+- CoNLL-U `.conllu` (Universal Dependencies treebanks, and the output of UDPipe, Stanza and spaCy): each `# newdoc` becomes a text, each sentence a segment and each word a word in the Gloss panel. Lemmas, tags, features, the dependency tree, multi-word tokens (`al` = `a` + `el`), empty nodes and every comment are kept with the sentence. Punctuation is kept but not counted as a word in Concordance and Frequencies. A file with a mistake is refused whole, and the message names each problem by line. Importing the same file again adds nothing.
+- TEI `.xml` (TEI P5 and P4, as ParlaMint, national corpora and digital editions publish them): each `<TEI>` becomes a text, titled from its header. Each `<s>` becomes a segment, or each paragraph, speaker turn (`<u>`), verse line or block when it has no `<s>` inside. Each `<w>` and `<pc>` becomes a word with its `lemma`, `pos` and `msd`, so a TEI corpus answers CQP queries and exports as CoNLL-U. Notes, page furniture and figures are left out, and the message counts them. Importing the same file again adds nothing.
 - Plain text `.txt`: any other text file becomes a text named after the file, and the message says how it was cut. A file whose lines mostly end in a full stop, with no blank lines, comes in a segment per line. Otherwise blank lines separate paragraphs, a line ending in a full stop ends its sentence, and inside a line a sentence ends after `.`, `!`, `?` or the full stop of another script when the next word starts with a capital, a digit or a quote; "e.g. the" stays together, but "Dr. Smith" is cut. Thai and Lao paragraphs come in whole, and an orthography written all in lower case is cut only at line ends and blank lines. The file must be UTF-8 or UTF-16; a damaged one is refused. Importing the same file again adds nothing.
 
 A message reports what wugs imported, and the new text is selected. The import report also counts anything the format holds that wugs does not keep. For FLEx, that includes LIFT examples, notes, pronunciations, relations, and etymologies.
@@ -458,18 +460,43 @@ An imported ELAN or Praat text is not linked to its recording. Import the audio 
 
 ### Export a text or the lexicon
 
-To export a text, select it, choose ELAN (.eaf), FLEx (.flextext), Praat (.TextGrid), or plain text, and click **Export…**. Plain text writes one track a segment per line, in time order, which AntConc and most corpus tools read.
+To export a text, select it, choose ELAN (.eaf), FLEx (.flextext), Praat (.TextGrid), CoNLL-U (.conllu), TEI (.xml), or plain text, and click **Export…**. For corpus tools, **CWB vertical** writes a `.vert` file that CQPweb, NoSketch Engine and Sketch Engine import: one word a line with its lemma, UPOS, XPOS and features, `<s>` around each sentence, and `<g/>` where no space follows. **AntConc** writes a `.txt` with a sentence a line and each word as `word_TAG`; turn on tags in AntConc's Tag Settings with `_` as the separator. TEI writes a P5 document with a `<s>` per segment and a `<w>` or `<pc>` per word carrying its lemma, part of speech and features, and each translation as a `<note type="translation">`. Plain text writes one track a segment per line, in time order, which AntConc and most corpus tools read.
+
+CoNLL-U gives back an imported treebank exactly as it came in, with your edits: retyped words, and a `# text` line that matches the transcription. A word you add has no tags yet; the words around it keep theirs, and the tree still points at the same words. A text made in wugs exports too. Each sentence gets `# sent_id`, `# text` and its translations (`# text_en` when the translation track has a language), and each glossed word carries its analysis in MISC the way UD treebanks do: `Gloss=` for one morpheme, `MSeg=` and `MGloss=` for several. A root linked to a lexicon entry also gives LEMMA, and the entry's part of speech goes in XPOS (and UPOS when it is a common name such as noun or verb).
+
+To export every glossed sentence of a text as numbered examples for a grammar, a paper or a handout, select the text, choose a format beside **Glossed examples for**, and click **Export…**. Each example is the same as **Copy example** gives in the Gloss panel, with the same number:
+
+- **LaTeX (ExPex)** and **LaTeX (gb4e)** write a `.tex` file that compiles on its own with XeLaTeX or LuaLaTeX. Those read IPA and every script. Change the font named near the top to one you have, such as Charis SIL.
+- **Word / Google Docs** writes an `.html` file. Open it in Word, or upload it to Google Docs, and save it as a document there.
+- **Plain text** writes aligned columns.
+
+Sentences not glossed yet are left out, and the message says how many.
 
 To export the lexicon, choose LIFT or Toolbox beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT.
 
 wugs names the file after the text's title and never replaces a file that exists. It adds " (2)" to the name instead. You cannot export into the project folder itself.
+
+### Say which language the project documents
+
+At the top of **Import and export**, type the language's name and, if you know them, its Glottocode (from [glottolog.org](https://glottolog.org), like `stan1293`) and ISO 639-3 code (three letters, like `tur`). Each field saves when you press Enter or leave it. Archive packages and CLDF datasets carry them, so the data can be found and joined with other datasets. Everyone on the project sees the same language.
+
+### Publish the dictionary and examples as CLDF
+
+Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cldf-<date>` holding a CLDF Dictionary dataset: the CSV tables and metadata that pycldf, Zenodo, Dictionaria and other CLLD sites read.
+
+- `entries.csv`: one row per lexicon entry, with its part of speech, citation form and homograph number
+- `senses.csv`: one row per sense, with its glosses in each language, definition, usage, semantic domains, the Concepticon concept you elicited it for, and the examples that use it
+- `examples.csv`: every glossed sentence in Leipzig form (words, morpheme glosses, free translation), with its text and time span
+- `languages.csv`: the project's language and the languages of its translations
+
+Sentences from texts that are not open (restricted or community-only) are left out unless you tick **Include texts that are not open**. Tick it only if the speakers agreed to publication. Before you publish the dataset, add a licence and check it with `cldf validate Dictionary-metadata.json` (from `pip install pycldf`).
 
 ### Seal a version for the archive
 
 1. Click **Seal a version for the archive…**.
 2. Choose a folder outside the project folder.
 
-wugs writes a BagIt package named `wugs-sealed-<date>`. It holds ELAN, FLEx, and LIFT copies, OLAC and IMDI metadata, every recording, the full history, and checksums for every file. ELAR, PARADISEC, and AILLA accept BagIt deposits.
+wugs writes a BagIt package named `wugs-sealed-<date>`. It holds ELAN, FLEx, LIFT and CLDF copies, OLAC and IMDI metadata, every recording, the full history, and checksums for every file. ELAR, PARADISEC, and AILLA accept BagIt deposits.
 
 If any of the project is restricted, the message says so. The package then holds restricted data, so treat the whole package as restricted.
 
@@ -492,6 +519,40 @@ The **Concordance** panel lists every place a word is used, one line per occurre
 
 Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
 
+### Search with CQP queries
+
+Choose **CQP query** to search the way CQPweb, Sketch Engine and NoSketch Engine do. Each token goes in square brackets, and a query can be several tokens in a row:
+
+| Query | Finds |
+| --- | --- |
+| `"dog"` | the word dog (the same as `[word="dog"]`) |
+| `[lemma="go"] [upos="ADP"]` | any form of go followed by a preposition |
+| `[word="ni.*" %c]` | words starting with ni, any case |
+| `[upos="DET"] [upos="ADJ"]? [upos="NOUN"]` | a determiner and a noun, with or without an adjective between |
+| `[lemma="give"] []{0,3} [upos="NOUN"]` | give, then a noun up to three words later |
+| `[upos="ADJ" & !lemma="big"]` | adjectives other than big |
+| `[feats=".*Number=Plur.*"]` | plural words |
+| `[gloss=".*PL.*"]` | words whose morpheme glosses include PL |
+
+The attributes are `word`, `lemma`, `upos` (also `pos`), `xpos`, `feats` and `gloss`. A value is a regular expression that must match the whole value. Case matters unless you add `%c`, and `%d` ignores diacritics. Join conditions with `&` (and), `|` (or) and `!` (not), and repeat a token with `?`, `*`, `+` or `{1,3}`. `[]` is any token.
+
+Lemmas and tags come from CoNLL-U files. For words you glossed in wugs, the lemma is the root's lexicon entry, and its part of speech is the tag. Punctuation counts as a token in a query, so `[upos!="PUNCT"]` skips it. A match never runs from one sentence into the next. If a query has a mistake, the panel says what is wrong and where.
+
+## Correct a sentence's tags and tree
+
+The **Sentence** panel shows the selected sentence's dependency tree: each word with its part of speech, and an arc from each word's head to it, labelled with the relation. It is a tab beside Gloss in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Sentence**.
+
+Under the tree, a table lists every word with its lemma, UPOS, XPOS, features, head and relation. Change a cell and the tree redraws:
+
+- **UPOS** is one of the Universal Dependencies tags.
+- **Head** is the word it depends on, by number, or 0 for the root.
+- **Relation** suggests UD's relations; type a subtype after a colon, such as `obl:tmod`.
+- **Features** are written as UD writes them: `Number=Plur|Case=Nom`.
+
+Click a word in the tree to find its row. If the tree has a problem (no root, two roots, words that are each other's heads, or a head that is no longer in the sentence), a line under the tree says so. You can still save it while you work.
+
+Sentences imported from CoNLL-U or TEI arrive with their tags and tree. A sentence typed in wugs gets them the first time you correct a cell. Every correction comes back out in a CoNLL-U or TEI export.
+
 ## Count words, morphs and glosses
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.
@@ -506,7 +567,7 @@ The **Frequencies** panel lists the words of the project with how often each occ
 
 Every segment has a ▶ beside it: the lines in Transcribe, the top of the Gloss panel, each line of the Concordance, each segment found by Search, and the words a lexicon entry is used in. In the Lexicon, click **used in 3 words** (or however many) under a sense to list those words, then ▶ to hear each one.
 
-▶ plays from the text's own recording. A text learns its recording the first time you pick a recording for it in the Timeline's list (or import or drop one while the text is open), and from then on the Timeline opens the text with it and ▶ works from every panel, even while another text is on the Timeline. A text whose recording was never picked plays only while it is the text on screen and the recording loaded is not another text's; elsewhere ▶ says to pick its recording first. The sample project comes with its recording picked.
+▶ plays from the text's own recording. A text learns its recording the first time you pick a recording for it in the Timeline's list (or import or drop one while the text is open), and from then on the Timeline opens the text with it and ▶ works from every panel, even while another text is on the Timeline. A text whose recording was never picked plays only while it is the text on screen and the recording loaded is not another text's; elsewhere ▶ says to pick its recording first. The tutorial project comes with its recording picked.
 
 A text with no sharing level of its own shares like its recording, so picking a restricted recording makes the text restricted too; wugs says so when a pick changes this.
 

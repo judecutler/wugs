@@ -22,6 +22,7 @@ pub mod assist;
 pub mod conflicts;
 mod elicitation;
 mod gloss;
+pub mod language;
 mod lexicon;
 pub mod paradigms;
 pub mod people;
@@ -837,6 +838,14 @@ impl<'a> Txn<'a> {
         let id = new_id(prefix);
         self.push_create(entity, &id, &id, fields);
         id
+    }
+
+    /// Create an entity under an id the caller made with
+    /// [`wugs_model::new_id`], so a value written in an earlier create of
+    /// the same txn can name it (a CoNLL-U sentence's `analysis` names its
+    /// tokens, which name the sentence). The id must be fresh.
+    pub fn create_with_id(&mut self, entity: &str, id: &str, scope: &str, fields: Vec<(&str, Value)>) {
+        self.push_create(entity, id, scope, fields);
     }
 
     /// The one path every create op takes, so no create skips NFC.

@@ -69,6 +69,11 @@ test("a gloss with a space stays one LaTeX column; infix brackets print as < and
   const g = asGb4e(ex2);
   assert.match(g, /\\gll l\\textless\{\}um\\textgreater\{\}abas na\\\\/);
   assert.match(g, /\{go out\\textless\{\}\\textsc\{av\}\\textgreater\{\}\} already\\\\/);
+  // ExPex drops a lone group's braces and the space inside one, so its spaces are `\ `.
+  assert.match(asExpex(ex2), /\\glb \{go\\ out\\textless/);
+  const lone: Example = { number: 1, translation: null, words: [{ form: "a b", morphs: [{ surface: "a b", type: "root", gloss: "go out" }] }] };
+  assert.match(asExpex(lone), /\\gla \{a\\ b\}\/\/\n\\glb \{go\\ out\}\/\//);
+  assert.match(asGb4e(lone), /\\gll \{a b\}\\\\\n     \{go out\}\\\\/);
   // No translation: no empty quotes.
   assert.doesNotMatch(g, /\\glt/);
   assert.doesNotMatch(asExpex(ex2), /\\glft/);

@@ -3065,6 +3065,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "wugs-cldf"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-flex",
+ "wugs-model",
+ "wugs-projection",
+]
+
+[[package]]
+name = "wugs-conllu"
+version = "0.0.1"
+dependencies = [
+ "wugs-core",
+ "wugs-model",
+ "wugs-projection",
+]
+
+[[package]]
 name = "wugs-core"
 version = "0.0.1"
 dependencies = [
@@ -3157,6 +3176,7 @@ dependencies = [
 name = "wugs-seal"
 version = "0.0.1"
 dependencies = [
+ "wugs-cldf",
  "wugs-core",
  "wugs-elan",
  "wugs-flex",
@@ -3182,6 +3202,17 @@ dependencies = [
  "wugs-oplog",
  "wugs-projection",
  "wugs-text",
+]
+
+[[package]]
+name = "wugs-tei"
+version = "0.0.1"
+dependencies = [
+ "wugs-conllu",
+ "wugs-core",
+ "wugs-model",
+ "wugs-projection",
+ "wugs-xml",
 ]
 
 [[package]]
