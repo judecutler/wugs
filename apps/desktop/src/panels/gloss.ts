@@ -21,6 +21,7 @@ import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } 
 import { provide } from "../palette/registry";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { emptyState, h } from "../dom";
+import { typeWithShortcuts } from "../typing";
 import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, showToast, subscribeSelection, touchLexicon } from "../store";
 import { createComposition, formatRange, imeBusy } from "../transcribe/logic";
 import { hear, playButton } from "../hear/hear";
@@ -411,13 +412,13 @@ export const glossPanel: PanelDef = {
       const current = w.morphs.map((m) => ({ surface: m.surface, type: m.type as MorphType }));
       const ghost = w.suggestions[0] ?? null;
       const ghostText = ghost === null ? null : describe(ghost, w.suggestions);
-      const input = h("input", {
+      const input = typeWithShortcuts(h("input", {
         className: "gl-breakdown",
         value: drafts.get(id) ?? formatBreakdown(current),
         spellcheck: false,
         placeholder: ghostText === null ? "köpek -ler" : `${ghostText.breakdown}   ${ghostText.glosses}`,
         title: "The word's morphs: -ler suffix, ka- prefix, =ki clitic, re~ reduplication, <in> infix, ∅ zero. Enter on an empty field accepts the grey suggestion.",
-      });
+      }));
       input.dataset.cell = id;
       input.oninput = () => {
         drafts.set(id, input.value);

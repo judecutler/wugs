@@ -968,6 +968,8 @@ const LEXICON = [
     },
     delete_paradigm_template: ({ id }) => (paradigmTemplatesFixture = paradigmTemplatesFixture.filter((t) => t.id !== id)),
     domains_list: () => DOMAINS,
+    typing_shortcuts: () => ";n ŋ\nb' ɓ\n;e ɛ",
+    set_typing_shortcuts: ({ table }) => table,
     concept_lists_bundled: () => [
       { source: "Swadesh-1955-100", name: "Swadesh 1955 (100)", citation: "Swadesh 1955, via Concepticon", count: 100, listId: listSummary.id },
       { source: "Swadesh-1952-200", name: "Swadesh 1952 (200)", citation: "Swadesh 1952, via Concepticon", count: 200, listId: null },
