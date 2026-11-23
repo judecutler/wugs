@@ -5,7 +5,7 @@
 // Keyboard first: Enter saves the answer and moves to the next concept to do.
 import {
   conceptListLoad, conceptLists, conceptListsBundled, conceptListView, domainCollect, domainQuestions, domainsList, domainsLoadSil,
-  conceptListImport, elicitAnswer, elicitLink, elicitSkip, elicitUnlink, errorText, exportWordlist, lexiconEntry, lexiconList,
+  conceptListImport, elicitAnswer, elicitLink, elicitSkip, elicitUnlink, errorText, exportWordlist, lexiconEntry, lexiconList, projectLanguage, saveDocument,
   type Answer, type BundledList, type ConceptView, type DomainItem, type DomainQuestions, type EntryRow, type ListSummary, type ListView,
 } from "../api";
 import { emptyState, h } from "../dom";
@@ -13,6 +13,7 @@ import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { localDay } from "../dates";
 import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, ownListLine, soundLine, soundSegment, wordlistLines, type Filter } from "../elicit/logic";
 import { hear, hearSpan, playButton } from "../hear/hear";
+import { elicitationSheet } from "../elicit/sheet";
 import { clockTime } from "../search/logic";
 import { filterDomains, headword } from "../lexicon/logic";
 import { dataGeneration, getSelection, getState, lexiconRevision, showToast, subscribeSelection, touchLexicon } from "../store";
@@ -220,6 +221,39 @@ export const elicitPanel: PanelDef = {
         try {
           const r = await exportWordlist({ folder, date: localDay(new Date()), listId });
           showToast({ tone: r.forms === 0 ? "warn" : "info", lines: wordlistLines(r) });
+        } catch (e) {
+          showToast({ tone: "error", lines: [errorText(e)] });
+        }
+      };
+      return b;
+    }
+
+    /** This list on paper for a session without a laptop: the concepts the
+     * filter shows (still to ask, or all), answers already here in grey. */
+    function sheetButton(): HTMLElement {
+      const b = h("button", {
+        type: "button",
+        textContent: "Print a sheet…",
+        title: "This list as a form to print and fill in by hand: a header for the speaker, date and place, then a row per concept with room for the word and notes. With To do chosen, only the concepts still to ask",
+      });
+      b.onclick = async () => {
+        const v = view;
+        if (v === null) return;
+        const folder = await pickFolder({ directory: true, title: "Where should the sheet go?" });
+        if (typeof folder !== "string") return;
+        try {
+          const language = await projectLanguage().catch(() => ({ name: "", glottocode: "", iso: "" }));
+          const which = filter === "todo" ? "todo" : "all";
+          const contents = elicitationSheet({
+            list: { name: v.summary.name, citation: v.summary.citation },
+            language: language.name,
+            concepts: v.concepts.map((c) => ({ number: c.number, gloss: c.gloss, concepticonGloss: c.concepticonGloss, skipped: c.skipped, answers: c.answers.map((a) => ({ lemma: a.lemma, gloss: a.gloss })) })),
+            which,
+            withAnswers: which === "all",
+            generator: "wugs",
+          });
+          const r = await saveDocument({ folder, title: `${v.summary.name} sheet`, extension: "html", contents });
+          showToast({ tone: "info", lines: [`Saved a sheet to print in ${r.path}. Open it in a browser or Word and print it.`, which === "todo" ? "It holds the concepts still to ask; choose All first for every concept, with the answers already here in grey." : "Answers already in the project are printed in grey, to check them."] });
         } catch (e) {
           showToast({ tone: "error", lines: [errorText(e)] });
         }
@@ -504,7 +538,7 @@ export const elicitPanel: PanelDef = {
       };
       showSoundHint();
       return [
-        h("div", { className: "el-bar" }, picker, h("span", { className: "note", textContent: progressLabel(s) }), h("span", { className: "gl-spacer" }), exportButton(s.id), add),
+        h("div", { className: "el-bar" }, picker, h("span", { className: "note", textContent: progressLabel(s) }), h("span", { className: "gl-spacer" }), sheetButton(), exportButton(s.id), add),
         bar,
         ...(adder === null ? [] : [adder]),
         h(
