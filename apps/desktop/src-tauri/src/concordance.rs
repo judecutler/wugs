@@ -38,6 +38,10 @@ pub enum Kind {
     Translation,
     /// Words with a morph linked to this sense (the query is the sense's id): a lexicon entry's occurrences.
     Sense,
+    /// Lemmas (CoNLL-U, or a glossed word's root entry): counted by Frequencies, found with a CQP query.
+    Lemma,
+    /// Part-of-speech tags (UPOS): counted by Frequencies, found with a CQP query.
+    Tag,
 }
 
 #[derive(Debug, Serialize)]
@@ -223,7 +227,7 @@ impl Read {
         match kind {
             Kind::Word => Read::Words,
             Kind::Translation => Read::Translations,
-            Kind::Morph | Kind::Gloss | Kind::Sense => Read::Analyses,
+            Kind::Morph | Kind::Gloss | Kind::Sense | Kind::Lemma | Kind::Tag => Read::Analyses,
         }
     }
 }
@@ -352,6 +356,7 @@ pub(crate) fn scan(
         Kind::Morph | Kind::Gloss => bare_key(query.trim()),
         Kind::Word | Kind::Translation => key(query.trim()),
         Kind::Sense => query.trim().chars().collect(),
+        Kind::Lemma | Kind::Tag => return Err("lemmas and tags are found with a CQP query".into()),
     };
     let phrase: Vec<Vec<char>> = if how == Match::Exact && matches!(kind, Kind::Word | Kind::Translation) && query.split_whitespace().count() > 1 {
         query.split_whitespace().map(key).filter(|k| !k.is_empty()).collect()
@@ -401,6 +406,7 @@ pub(crate) fn scan(
                     }
                 }
             }
+            Kind::Lemma | Kind::Tag => unreachable!("refused above"),
         }
         on(seg, found)
     })

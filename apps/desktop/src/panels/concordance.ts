@@ -13,14 +13,14 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
 /** A query another panel asked for (Frequencies), taken by the panel once it is open. */
-type Asked = { query: string; kind: ConcordanceKind; text: { id: string; title: string } | null; exact: boolean; within: Where | null };
+type Asked = { query: string; kind: PanelKind; text: { id: string; title: string } | null; exact: boolean; within: Where | null };
 let pending: (Asked & { project: string }) | null = null;
 const askers = new Set<() => void>();
 
 /** Show the Concordance for this item, in one text or the whole project,
  * opening the panel if it is closed: met exactly (a Frequencies row, whose
  * spelling may hold a `?` glottal stop) or as a pattern (`walk*` from Collocates). */
-export function askConcordance(query: string, kind: ConcordanceKind, text: { id: string; title: string } | null = null, exact = true, within: Where | null = null): void {
+export function askConcordance(query: string, kind: PanelKind, text: { id: string; title: string } | null = null, exact = true, within: Where | null = null): void {
   const s = getState();
   if (s.kind !== "open") return;
   pending = { query, kind, text, exact, within, project: s.info.projectId };

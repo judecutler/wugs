@@ -39,3 +39,14 @@ test("a row keeps its frequency rank through sorting and filtering", () => {
   assert.deepEqual(r.map((x) => [x.item, x.rank]), [["Ata", 3], ["ŋai", 2]]);
   assert.equal(asTsv(r, 11).split("\n")[1]!.split("\t")[0], "3");
 });
+
+test("lemma and tag rows open the CQP query that finds their lines", async () => {
+  const { cqpFor, cqpLiteral, unlabelledNote } = await import("./logic.ts");
+  assert.equal(cqpLiteral("a.b"), "a\\.b");
+  assert.equal(cqpLiteral('x"y'), 'x\\"y');
+  assert.equal(cqpLiteral("c++ (1|2) ~-"), "c\\+\\+ \\(1\\|2\\) \\~\\-");
+  assert.equal(cqpFor("lemma", "go", null), '[lemma="go"]');
+  assert.equal(cqpFor("tag", "NOUN", { key: "genre", value: "news" }), '[upos="NOUN"] :: match.text_genre="news"');
+  assert.equal(unlabelledNote({ rows: [], tokens: 3, types: 1, unlabelled: 0 }, "lemma"), "");
+  assert.match(unlabelledNote({ rows: [], tokens: 3, types: 1, unlabelled: 2 }, "tag"), /^ 2 words have no tag yet: /);
+});

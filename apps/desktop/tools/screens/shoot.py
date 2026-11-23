@@ -376,6 +376,15 @@ def main():
                 run.shot("state-frequencies-detail", run.page.locator(".panel-frequencies"))
             if "Speaker:" in scope.inner_text():
                 failures.append("a detail every text shares is offered as a scope")
+            # A lemma list: a row opens the CQP query that finds its lines.
+            scope.select_option(index=0)
+            run.page.locator(".panel-frequencies .scopes button", has_text="Lemmas").click()
+            run.page.wait_for_timeout(400)
+            run.shot("state-frequencies-lemmas", run.page.locator(".panel-frequencies"))
+            run.page.locator(".panel-frequencies .fq-table tbody tr").first.click()
+            run.page.wait_for_timeout(600)
+            if run.page.locator(".panel-concordance .cc-query").input_value() != '[lemma="kani"]':
+                failures.append("a lemma row did not open the Concordance on its CQP query")
             # Collocates (Scrolls): a word's company, a row opens its Concordance.
             run.front("collocates", "Collocates")
             run.page.locator(".panel-collocates .co-node").fill("nikani")

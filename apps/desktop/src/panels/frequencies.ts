@@ -4,19 +4,21 @@
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, frequencies } from "../api";
-import { KINDS, type ConcordanceKind } from "../concordance/logic";
+import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
-import { asTsv, filterRows, FREQ_SORTS, perThousand, ranked, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
+import { asTsv, cqpFor, unlabelledNote, filterRows, FREQ_SORTS, perThousand, ranked, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
-const NOUNS: Record<ConcordanceKind, { one: string; many: string }> = {
+const NOUNS: Record<FreqKind, { one: string; many: string }> = {
   word: { one: "word", many: "words" },
   morph: { one: "morph", many: "morphs" },
   gloss: { one: "gloss", many: "glosses" },
   translation: { one: "translation word", many: "translation words" },
+  lemma: { one: "lemma", many: "lemmas" },
+  tag: { one: "tag", many: "tags" },
 };
 
 /** Rows drawn at once; the filter finds the rest. */
@@ -26,7 +28,7 @@ export const frequenciesPanel: PanelDef = {
   title: "Frequencies",
   create(): PanelView {
     const el = h("div", { className: "panel panel-frequencies" });
-    let kind: ConcordanceKind = "word";
+    let kind: FreqKind = "word";
     let sortBy: FreqSort = "count";
     let scope = "";
     let data: Frequencies | null = null;
@@ -61,7 +63,7 @@ export const frequenciesPanel: PanelDef = {
 
     const drawChips = () =>
       chips.replaceChildren(
-        ...KINDS.map((k) => {
+        ...FREQ_KINDS.map((k) => {
           const b = h("button", { type: "button", textContent: k.label, title: `Count ${NOUNS[k.id].many}` });
           b.setAttribute("role", "radio");
           b.setAttribute("aria-checked", String(k.id === kind));
@@ -89,7 +91,12 @@ export const frequenciesPanel: PanelDef = {
       const rows = shownRows();
       // Rates per 1000 running words, so n-gram rates compare with the word list's.
       const tokens = data.words ?? data.tokens;
-      const perWord = kind === "morph" || kind === "gloss" ? ` Each counts once per word, as the Concordance shows one line per word.` : "";
+      const perWord =
+        kind === "morph" || kind === "gloss"
+          ? ` Each counts once per word, as the Concordance shows one line per word.`
+          : kind === "lemma" || kind === "tag"
+            ? unlabelledNote(data, kind)
+            : "";
       const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn; filter to find the others (Copy table has them all).` : "";
       count.textContent = summary(data, noun()) + perWord + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
       const head = h("tr", {}, ...["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts"].map((t) => h("th", { textContent: t, scope: "col" })));
@@ -110,7 +117,8 @@ export const frequenciesPanel: PanelDef = {
             );
             const sc = scopeOf(scope);
             const text = sc.textId === null ? null : { id: sc.textId, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
-            const open = () => askConcordance(r.item, kind, text, true, sc.within);
+            // A lemma or tag opens the CQP query that finds exactly its lines.
+            const open = () => (kind === "lemma" || kind === "tag" ? askConcordance(cqpFor(kind, r.item, sc.within), "query", text, true, null) : askConcordance(r.item, kind, text, true, sc.within));
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
