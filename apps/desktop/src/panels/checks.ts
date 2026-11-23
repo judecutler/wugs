@@ -1,8 +1,11 @@
 // Checks: what to tidy before a grammar or a deposit. First check: morphs
 // glossed more than one way across the project (src-tauri/src/consistency.rs),
 // each with its glosses, how often each is used, where one occurs, and a
-// button that makes one gloss the only one.
-import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify } from "../api";
+// button that makes one gloss the only one. Then glossed roots the lexicon
+// lacks, rare words a letter away from common ones (../checks/spelling.ts),
+// and the characters the project uses.
+import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify, soundWords } from "../api";
+import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
 import { addedLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
 import { emptyState, h } from "../dom";
@@ -24,6 +27,7 @@ export const checksPanel: PanelDef = {
     let rows: Inconsistent[] | null = null;
     let missing: Missing[] = [];
     let chars: Inventory | null = null;
+    let near: { pairs: NearPair[]; read: number } | null = null;
     let showAllChars = false;
     let key = "";
     let seq = 0;
@@ -35,12 +39,13 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory()]).then(
-        ([r, m, c]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null })]).then(
+        ([r, m, c, w]) => {
           if (mine !== seq) return;
           rows = r;
           missing = m;
           chars = c;
+          near = { pairs: nearSpellings(w.words), read: w.words.length };
           paint();
         },
         (e) => {
@@ -178,6 +183,37 @@ export const checksPanel: PanelDef = {
       ];
     };
 
+    const pairCard = (p: NearPair): HTMLElement => {
+      const open = (word: string) => {
+        const b = h("button", { type: "button", className: "ck-show ck-word", textContent: word, title: `Every «${word}» in the Concordance` });
+        b.onclick = () => askConcordance(word, "word", null, true);
+        return b;
+      };
+      return h(
+        "li",
+        { className: "ck-card" },
+        h(
+          "div",
+          { className: "ck-variant" },
+          open(p.rare),
+          h("span", { className: "ck-count", textContent: `× ${p.rareCount}` }),
+          h("span", { className: "note", textContent: "beside" }),
+          open(p.common),
+          h("span", { className: "ck-count", textContent: `× ${p.commonCount}` }),
+        ),
+        h("p", { className: "note", textContent: pairNote(p) }),
+      );
+    };
+
+    const spellingSection = (): HTMLElement[] =>
+      near === null
+        ? []
+        : [
+            h("h3", { className: "ck-title", textContent: "Spellings to check" }),
+            h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: spellingSummary(near.pairs, near.read) })),
+            h("ul", { className: "ck-list" }, ...near.pairs.map(pairCard)),
+          ];
+
     const paint = () => {
       if (rows === null) {
         el.replaceChildren(emptyState("Checks", "Looking through every gloss…"));
@@ -201,6 +237,7 @@ export const checksPanel: PanelDef = {
         h("h3", { className: "ck-title", textContent: "Not in the lexicon" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
         h("ul", { className: "ck-list" }, ...missing.map(missingCard)),
+        ...spellingSection(),
         ...charSection(),
       );
     };
@@ -219,7 +256,7 @@ export const checksPanel: PanelDef = {
       if (!busy) load();
     };
 
-    const unprovide = provide("checks", () => [{ id: "checks:again", title: "Check glosses again", group: "Checks", words: ["consistency", "typo", "inconsistent", "lexicon", "missing", "word list", "characters", "alphabet", "orthography", "unicode", "spelling"], run: load }]);
+    const unprovide = provide("checks", () => [{ id: "checks:again", title: "Check glosses again", group: "Checks", words: ["consistency", "typo", "inconsistent", "lexicon", "missing", "word list", "characters", "alphabet", "orthography", "unicode", "spelling", "typo", "near spellings", "variants"], run: load }]);
     return { element: el, render: draw, dispose: unprovide };
   },
 };
