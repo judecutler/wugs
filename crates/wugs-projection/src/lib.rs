@@ -993,14 +993,20 @@ impl Projection {
         Ok(())
     }
 
+    /// A token that is punctuation, not a word: `kind = "punct"` (CoNLL-U's
+    /// PUNCT, any importer's) or FLEx's own `x.flex.kind`.
+    pub fn is_punct_token(&self, token: &str) -> bool {
+        ["kind", "x.flex.kind"].iter().any(|f| self.field_str(token, f).ok().flatten().as_deref() == Some("punct"))
+    }
+
     /// Mark the segment a write changed the words of: a segment's content,
     /// token list, text, tier, parent or position; a token's form, segment,
-    /// position or FLEx kind (the segment it is in now; `upsert_field` marks
+    /// position or kind (`kind`, FLEx's `x.flex.kind`) (the segment it is in now; `upsert_field` marks
     /// the one a moving token leaves).
     fn corpus_mark_write(&self, target: &str, kind: &str, field: &str, value: &Value) -> Result<(), String> {
         match (kind, field) {
             ("segment", "content" | "tokens" | "text" | "tier" | "parent" | "pos") => self.corpus_mark(target),
-            ("token", "form" | "segment" | "pos" | "x.flex.kind") => {
+            ("token", "form" | "segment" | "pos" | "kind" | "x.flex.kind") => {
                 // After the write: the token's segment as it is now.
                 self.corpus_mark_token(target)?;
                 if field == "segment" {
@@ -1104,8 +1110,8 @@ impl Projection {
             let children = has_child.step()?;
             has_child.reset();
             let mut tokens = if listed || children { self.members(seg)? } else { Vec::new() };
-            // FLEx keeps punctuation as tokens of their own; they are not words.
-            tokens.retain(|t| self.field_str(t, "x.flex.kind").ok().flatten().as_deref() != Some("punct"));
+            // FLEx and CoNLL-U keep punctuation as tokens of their own; they are not words.
+            tokens.retain(|t| !self.is_punct_token(t));
             let words: Vec<String> = if tokens.is_empty() {
                 wugs_model::words_of(&content)
             } else {
@@ -2053,6 +2059,13 @@ mod tests {
         run(&mut c, "create", "token", &p1, None, Value::obj(vec![("segment", Value::str(&seg)), ("form", Value::str(",")), ("pos", Value::str("1")), ("x.flex.kind", Value::str("punct"))]));
         run(&mut c, "create", "token", &t2, None, Value::obj(vec![("segment", Value::str(&seg)), ("form", Value::str("kesi")), ("pos", Value::str("2"))]));
         assert_eq!(counts(None, &[&tier]).iter().map(|r| r.0.as_str()).collect::<Vec<_>>(), ["kesi", "toru"], "FLEx punctuation is not a word");
+        // CoNLL-U's PUNCT comes in as `kind`; a later edit of `kind` marks the segment too.
+        let p2 = new_id("tok");
+        run(&mut c, "create", "token", &p2, None, Value::obj(vec![("segment", Value::str(&seg)), ("form", Value::str(".")), ("pos", Value::str("3")), ("kind", Value::str("punct"))]));
+        assert_eq!(counts(None, &[&tier]).len(), 2, "kind = punct is not a word either");
+        run(&mut c, "set", "token", &p2, Some("kind"), Value::Null);
+        assert!(counts(None, &[&tier]).iter().any(|r| r.1 == "."), "a token made a word again counts");
+        run(&mut c, "delete", "token", &p2, None, Value::Null);
         run(&mut c, "set", "token", &t2, Some("form"), Value::str("mopa"));
         assert!(counts(None, &[&tier]).iter().any(|r| r.0 == "mopa"), "a token's edit reaches its segment");
         run(&mut c, "delete", "token", &t2, None, Value::Null);

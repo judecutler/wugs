@@ -43,6 +43,7 @@ wugs-legacy = { path = "../../../crates/wugs-legacy" }
 wugs-elan = { path = "../../../crates/wugs-elan" }
 wugs-flex = { path = "../../../crates/wugs-flex" }
 wugs-seal = { path = "../../../crates/wugs-seal" }
+wugs-conllu = { path = "../../../crates/wugs-conllu" }
 # The OS keychain for the device key (DECISIONS 2026-11-08): Keychain
 # Services, Windows Credential Manager, the Secret Service on Linux.
 keyring = "4"
