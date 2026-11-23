@@ -154,7 +154,7 @@ pub struct Missing {
 }
 
 /// A live lexicon entry whose lemma or other form has this key.
-fn known(p: &wugs_core::Project, key: &str) -> Result<bool, String> {
+pub(crate) fn known(p: &wugs_core::Project, key: &str) -> Result<bool, String> {
     if !p.proj.by_lookup_key("lexeme", key)?.is_empty() {
         return Ok(true);
     }

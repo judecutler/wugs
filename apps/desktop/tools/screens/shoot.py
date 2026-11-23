@@ -406,6 +406,17 @@ def main():
             run.shot("state-frequencies", run.page.locator(".panel-frequencies"))
             if run.page.locator(".panel-frequencies .fq-table tbody tr").count() == 0:
                 failures.append("the frequency list showed no rows")
+            # Only the words the lexicon lacks, each with Add.
+            run.page.locator(".panel-frequencies .fq-missing input").check()
+            run.page.wait_for_timeout(200)
+            run.shot("state-frequencies-missing", run.page.locator(".panel-frequencies"))
+            if run.page.locator(".panel-frequencies .fq-table tbody tr").count() != 3:
+                failures.append("Only words not in the lexicon did not leave the three missing words")
+            run.page.locator(".panel-frequencies .fq-lexicon button", has_text="Add").first.click()
+            run.page.wait_for_timeout(300)
+            if run.page.locator(".panel-frequencies .fq-table tbody tr").count() != 2:
+                failures.append("a word added with Add stayed among the words not in the lexicon")
+            run.page.locator(".panel-frequencies .fq-missing input").uncheck()
             run.page.locator(".panel-frequencies .fq-table tbody tr").first.click()
             run.page.wait_for_timeout(600)
             if run.page.locator(".panel-concordance .cc-query").input_value() != "nikani":

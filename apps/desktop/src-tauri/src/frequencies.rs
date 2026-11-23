@@ -29,6 +29,12 @@ pub struct FrequencyRow {
     pub count: usize,
     /// How many texts it occurs in.
     pub texts: usize,
+    /// For single words of transcriptions: `entry` when an entry or one of
+    /// its forms (allomorph, variant, inflected form) is spelled this way,
+    /// `analysed` when not but some use of it is broken into morphs, else
+    /// `none`: the words a dictionary still lacks.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lexicon: Option<&'static str>,
 }
 
 #[derive(Debug, Serialize)]
@@ -169,15 +175,35 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: us
     let once = before - all.len();
     all.sort_by(|a, b| b.count.cmp(&a.count).then(a.first.cmp(&b.first)));
     all.truncate(LIMIT);
-    let rows = all
+    let mut rows: Vec<FrequencyRow> = all
         .into_iter()
         .map(|t| {
             let item = t.spellings.iter().fold(None::<&(String, usize)>, |best, s| if best.is_none_or(|b| s.1 > b.1) { Some(s) } else { best }).map(|s| s.0.clone()).unwrap_or_default();
-            FrequencyRow { item, count: t.count, texts: t.texts.len() }
+            FrequencyRow { item, count: t.count, texts: t.texts.len(), lexicon: None }
         })
         .collect();
+    if kind == Kind::Word && size == 1 {
+        mark_lexicon(p, &mut rows)?;
+    }
     let words = if matches!(kind, Kind::Word | Kind::Translation | Kind::Lemma | Kind::Tag) { running } else { tokens };
     Ok(Frequencies { rows, tokens, types, words, once, unlabelled })
+}
+
+/// Say of each word whether the lexicon has it (`FrequencyRow::lexicon`).
+/// Analysed uses are found in one query over every row's key.
+fn mark_lexicon(p: &wugs_core::Project, rows: &mut [FrequencyRow]) -> Result<(), String> {
+    let keys: Vec<String> = rows.iter().map(|r| wugs_model::fold_key(&r.item)).collect();
+    let analysed: std::collections::HashSet<String> = p.proj.tokens_by_keys(&keys)?.into_iter().filter(|t| t.3).map(|t| t.0).collect();
+    for (row, key) in rows.iter_mut().zip(&keys) {
+        row.lexicon = Some(if crate::consistency::known(p, &wugs_model::lexicon_key(&row.item))? {
+            "entry"
+        } else if analysed.contains(key) {
+            "analysed"
+        } else {
+            "none"
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -265,6 +291,35 @@ mod tests {
         }
         assert!(frequencies_of(&mut session, Kind::Morph, &Scope::all(), 2).is_err());
         assert!(frequencies_of(&mut session, Kind::Word, &Scope::all(), 6).is_err());
+        drop(session);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn words_say_whether_the_lexicon_has_them() {
+        let dir = std::env::temp_dir().join(format!("wugs-freq-lexicon-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir, "tester").unwrap();
+        let text = crate::session::list_texts(&mut session).unwrap()[0].id.clone();
+        crate::session::add_segment(&mut session, &text, None, Some(20_000.0), Some(20_900.0), "Blorp blorps zibu").unwrap();
+        let seg = crate::session::add_segment(&mut session, &text, None, Some(21_000.0), Some(21_900.0), "zibu").unwrap().id;
+        let forms = vec!["zibu".to_string()];
+        let view = crate::gloss::gloss_tokenize(&mut session, &text, &seg, &forms).unwrap().view;
+        let m = |surface: &str, kind: &str, gloss: &str| crate::gloss::MorphSpecView { surface: surface.into(), morph_type: kind.into(), gloss: Some(gloss.into()), glosses_by_lang: Default::default(), sense: None };
+        crate::gloss::gloss_apply(&mut session, &text, &seg, &view.words[0].id, vec![m("zib", "root", "eat"), m("u", "suffix", "PST")]).unwrap();
+        let status = |session: &mut Session, word: &str| {
+            let list = frequencies(session, Kind::Word, &Scope::all()).unwrap();
+            list.rows.into_iter().find(|r| r.item.to_lowercase() == word).and_then(|r| r.lexicon).unwrap()
+        };
+        assert_eq!(status(&mut session, "blorp"), "none");
+        assert_eq!(status(&mut session, "zibu"), "analysed", "a word broken into morphs somewhere");
+        let id = crate::lexicon::lexicon_add(&mut session, "blorp", "thing").unwrap().entry.unwrap().id;
+        assert_eq!(status(&mut session, "blorp"), "entry", "a headword, case folded");
+        assert_eq!(status(&mut session, "blorps"), "none");
+        crate::lexicon::lexicon_add_allomorph(&mut session, &id, "blorps").unwrap();
+        assert_eq!(status(&mut session, "blorps"), "entry", "one of an entry's forms");
+        assert!(frequencies(&mut session, Kind::Morph, &Scope::all()).unwrap().rows.iter().all(|r| r.lexicon.is_none()), "only words are marked");
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }
