@@ -1086,6 +1086,15 @@ body::before {
 .pg-chart .text-start { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .pg-chart .curve { fill: none; stroke: var(--accent); stroke-width: 2; }
 .pg-chart .tick, .pg-chart .axis { font-size: 10px; fill: var(--muted); }
+.panel-soundchanges .sca-top { display: flex; gap: 12px; flex-wrap: wrap; }
+.panel-soundchanges .sca-col { flex: 1 1 260px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.panel-soundchanges textarea { font-family: var(--font-ipa); font-size: var(--text-base); width: 100%; box-sizing: border-box; resize: vertical; }
+.panel-soundchanges .sca-problems { margin: 0; padding-left: 1.2em; color: var(--error); font-size: var(--text-sm); }
+.panel-soundchanges .sca-problems:empty { display: none; }
+.panel-soundchanges .sca-rows { overflow: auto; min-height: 0; flex: 1; }
+.panel-soundchanges .sca-out { font-weight: 600; }
+.panel-soundchanges .sca-steps { color: var(--muted); font-size: var(--text-sm); }
+.panel-soundchanges .sca-same td { color: var(--muted); }
 .ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; overflow: auto; min-height: 0; }
 .ws-group { border: 1px solid var(--line); border-radius: var(--radius, 8px); padding: 6px 8px; background: var(--surface-raised); }
 .ws-head { font-size: var(--text-sm); margin: 0 0 4px; font-weight: 600; }

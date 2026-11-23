@@ -27,6 +27,7 @@ import { affixesPanel } from "./affixes";
 import { wordTypesPanel } from "./wordtypes";
 import { notesPanel } from "./notes";
 import { wordSketchPanel } from "./wordsketch";
+import { soundChangesPanel } from "./soundchanges";
 import { orthographyPanel } from "./orthography";
 import { vowelsPanel } from "./vowels";
 import { contoursPanel } from "./contours";
@@ -58,6 +59,7 @@ export const PANELS = {
   wordtypes: wordTypesPanel,
   notes: notesPanel,
   wordsketch: wordSketchPanel,
+  soundchanges: soundChangesPanel,
   orthography: orthographyPanel,
   assist: assistPanel,
   people: peoplePanel,

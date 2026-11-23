@@ -40,6 +40,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "sentence",                      # one sentence's tags and dependency tree; not placed, opened from Settings or Ctrl+K
   "collocates",                    # which words keep company with a word; not placed either
   "wordsketch",                    # a lemma's grammatical company from the dependency trees; not placed
+  "soundchanges",                  # ordered sound-change rules run over the lexicon or a word list; not placed
   "keywords",                      # which words set a text apart; not placed either
   "checks",                        # glosses to tidy: a morph glossed more than one way; not placed either
   "vowels",                        # vowel space: F1 against F2 per segment; not placed either

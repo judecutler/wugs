@@ -800,6 +800,21 @@ At the top is a position-class chart: a column for each slot, counted from the r
 
 An affix is told apart by its spelling, type and gloss, so `-ler` PL and `-ler` 3PL are two rows. A word with no morph marked as a root is left out, and the panel says how many there are. **Copy chart** and **Copy table** copy them to paste into a document or a spreadsheet, and **Grammar sketch…** prints the chart in its morphology chapter.
 
+### Test sound changes and phonological rules
+
+The **Sound changes** panel runs ordered rewrite rules over your words, to test a reconstruction (did *p really become b between vowels?) or the phonological rules of a grammar (underlying forms to surface forms). In Tongues, press **Ctrl+K** and choose **Show Sound changes**.
+
+Write the rules in the box on the left, in the notation of Zompist's Sound Change Applier:
+
+- `V = a e i o u` makes a category: a capital letter and its sounds.
+- `p t k > b d g / V_V` changes each sound into the one in the same place, between vowels. `s/z/V_V` is the same rule written with slashes.
+- In the place after `/`, `_` is the sound itself, `#` the start or end of the word, `( )` something optional (`_(C)i`), and several places can be given with commas.
+- `∅` (or nothing) on the right deletes (`V > ∅ / _#`); on the left it inserts (`∅ > ə / C_C`).
+- After `//`, where the rule does not apply (`a > e / _i // k_`).
+- `;` starts a comment, and so does `*` at the start of a line.
+
+Rules run in order, each over the words as the rule before left them, and a sound with an accent or other mark is not taken for the plain letter. The words are the lexicon's headwords, or any words you type (**Words typed here**). The table lists each word, what it becomes and the steps, rule by rule (only the words that change, unless you untick that). A line that does not read is named in red and skipped. **Keep with the project** saves the rules in the project so they sync; **Copy table** copies every word with its output and steps. Nothing in the lexicon is changed.
+
 ### See what typology says about the language
 
 The **Typology** panel shows what [Grambank](https://grambank.clld.org) or the [World Atlas of Language Structures](https://wals.info) (WALS) says about the project's language. Choose **Grambank** (195 questions such as "Are there definite or specific articles?") or **WALS** (192 features such as "Order of Subject, Object and Verb") at the top; the choice is remembered. Each feature shows the dataset's answer for the language. Beside each answer it shows how the other coded languages of the same family answer, as a share of each answer and a bar. When the family has fewer than three coded languages, it compares with the languages of the same region instead. Open the panel from Settings (Closed panels) or with **Find an action**. It needs the project's Glottocode (see above).

@@ -53,6 +53,7 @@ pub mod sentence;
 pub mod notes_overview;
 pub mod growth;
 pub mod wordsketch;
+pub mod soundchanges;
 pub mod session;
 pub mod sounds;
 pub mod typology;
@@ -374,6 +375,16 @@ fn sentence_mark_checked(s: State<SessionThread>, text_id: String, segment_ids: 
 }
 
 /// Every character the project's transcriptions and lexicon use, with what may be a slip.
+#[tauri::command(async)]
+fn sound_changes(s: State<SessionThread>) -> Result<String, String> {
+    s.run(soundchanges::get)
+}
+
+#[tauri::command(async)]
+fn set_sound_changes(s: State<SessionThread>, rules: String) -> Result<String, String> {
+    s.run(move |session| soundchanges::set(session, &rules))
+}
+
 #[tauri::command(async)]
 fn word_sketch(s: State<SessionThread>, lemma: String) -> Result<wordsketch::WordSketch, String> {
     s.run(move |session| wordsketch::word_sketch(session, &lemma))
@@ -2064,6 +2075,8 @@ pub fn run() {
         all_notes,
         vocabulary_growth,
         word_sketch,
+        sound_changes,
+        set_sound_changes,
             tree_problems,
             sound_words,
             sentence_check_status,

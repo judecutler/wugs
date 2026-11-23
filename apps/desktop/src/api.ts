@@ -689,6 +689,8 @@ export const treeProblems = () => invoke<{ sentences: TreeProblem[]; total: numb
 export const allNotes = () => invoke<import("./notes/logic").Notes>("all_notes");
 export const vocabularyGrowth = () => invoke<import("./progress/growth").Growth>("vocabulary_growth");
 export const wordSketch = (args: { lemma: string }) => invoke<import("./wordsketch/logic").WordSketch>("word_sketch", args);
+export const soundChanges = () => invoke<string>("sound_changes");
+export const setSoundChanges = (args: { rules: string }) => invoke<string>("set_sound_changes", args);
 export const characterInventory = () => invoke<import("./checks/logic").Inventory>("character_inventory");
 export const setProjectLanguage = (args: { language: import("./cldf/logic").Language }) => invoke<import("./cldf/logic").Language>("set_project_language", args);
 /** Every text as one CWB corpus for CQPweb, NoSketch Engine or Sketch Engine (src-tauri/src/cwb.rs). */

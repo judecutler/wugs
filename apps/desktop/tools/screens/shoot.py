@@ -49,6 +49,7 @@ PANELS = [
     ("wordtypes", "Words to gloss"),
     ("notes", "Notes"),
     ("wordsketch", "Word sketch"),
+    ("soundchanges", "Sound changes"),
     ("orthography", "Orthography"),
     ("assist", "Speech assist"),
     ("people", "People"),
@@ -621,6 +622,15 @@ def main():
             run.shot("state-wordsketch", run.page.locator(".panel-wordsketch"))
             if "Objects of «eat»" not in run.page.locator(".panel-wordsketch").inner_text():
                 failures.append("Word sketch did not name the objects")
+            # Sound changes: example rules over the lexicon's headwords.
+            run.front("soundchanges", "Sound changes")
+            run.page.locator(".panel-soundchanges button", has_text="Example rules").click()
+            run.page.wait_for_timeout(400)
+            run.shot("state-soundchanges", run.page.locator(".panel-soundchanges"))
+            if "changed" not in run.page.locator(".panel-soundchanges .sca-line").inner_text():
+                failures.append("Sound changes did not run the example rules")
+            if run.page.locator(".panel-soundchanges .sca-table tbody tr").count() == 0:
+                failures.append("Sound changes listed no changed word")
             # Notes: every note in one list, questions only.
             run.front("notes", "Notes")
             run.page.locator(".panel-notes .nt-item").first.wait_for()
