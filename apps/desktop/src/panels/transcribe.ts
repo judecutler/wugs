@@ -9,6 +9,7 @@ import { hear, playButton, recordingForShown } from "../hear/hear";
 import { activeKit, capability, getSelection, getState, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
 import { IPA_GROUPS, projectGroup, type IpaGroup } from "../transcribe/ipa";
 import { createFieldController, type FieldController } from "../transcribe/field";
+import { preview as xsampaPreview, xsampaToIpa, XSAMPA_KEY } from "../transcribe/xsampa";
 import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, neighbor, renderWindow, tierSegments } from "../transcribe/logic";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -24,7 +25,14 @@ export const transcribePanel: PanelDef = {
     const hint = h("span", { className: "tx-hint" });
     const paletteToggle = h("button", { textContent: "IPA", title: "Show or hide the IPA symbol palette" });
     const keys = h("span", { className: "tx-keys", textContent: "Enter next · Shift+Enter back · Tab replay · Esc revert", title: "Tab replays the segment, so it stays in the field. Shift+Tab leaves the field. Ctrl/Cmd+Enter also replays." });
-    const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, paletteToggle, keys, hint);
+    const xsampaToggle = h("button", { textContent: "X-SAMPA", title: "Type IPA on a plain keyboard in X-SAMPA (S for ʃ, N for ŋ, t_h for tʰ, r\\ for ɹ): what you type is turned into IPA when the segment is saved, with a preview beside it" });
+    let xsampa = localStorage.getItem(XSAMPA_KEY) === "on";
+    const showXsampa = () => {
+      xsampaToggle.classList.toggle("active", xsampa);
+      xsampaToggle.setAttribute("aria-pressed", String(xsampa));
+    };
+    showXsampa();
+    const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, paletteToggle, xsampaToggle, keys, hint);
     const list = h("div", { className: "tx-list" });
     const palette = h("div", { className: "tx-palette" });
     const field = h("input", { className: "tx-field", spellcheck: false, title: "Enter: save, next and play. Shift+Enter: previous. Tab or Ctrl/Cmd+Enter: replay. Esc: revert. Shift+Tab leaves the field." });
@@ -34,7 +42,12 @@ export const transcribePanel: PanelDef = {
     const suggestButton = h("button", { type: "button", className: "tx-suggest", textContent: "Suggest", title: "Fill this empty segment with the phones a speech model hears (choose the model in Speech assist)." });
     /** The selected segment's row. It stays in the list across redraws so the field is never detached mid-composition. */
     const selPlay = playButton("Play this segment (Tab in the field)", () => play(ctl?.segmentId != null ? stored(ctl.segmentId) : undefined, false));
-    const selRow = h("div", { className: "tx-row selected" }, selPlay, selTime, field, suggestButton, selBadge);
+    /** The IPA X-SAMPA will save, while the field holds something it changes. */
+    const xsampaHint = h("span", { className: "tx-xsampa", ariaLive: "polite" });
+    const updateXsampaHint = () => {
+      xsampaHint.textContent = xsampa ? xsampaPreview(field.value) : "";
+    };
+    const selRow = h("div", { className: "tx-row selected" }, selPlay, selTime, field, xsampaHint, suggestButton, selBadge);
     let suggesting = false;
 
     /** Ask whatever powers phone transcription for the selected empty segment. */
@@ -101,12 +114,31 @@ export const transcribePanel: PanelDef = {
       return c;
     }
 
-    const commitField = (): void => void ctl?.commit();
+    /** In X-SAMPA mode the field's text becomes IPA as it is saved, so the store only ever holds IPA. */
+    const commitField = (): void => {
+      if (xsampa && ctl !== null) {
+        const ipa = xsampaToIpa(field.value);
+        if (ipa !== field.value) {
+          field.value = ipa;
+          ctl.type(ipa);
+        }
+        updateXsampaHint();
+      }
+      void ctl?.commit();
+    };
+    xsampaToggle.onmousedown = (ev) => ev.preventDefault();
+    xsampaToggle.onclick = () => {
+      xsampa = !xsampa;
+      localStorage.setItem(XSAMPA_KEY, xsampa ? "on" : "off");
+      showXsampa();
+      updateXsampaHint();
+    };
 
     function revertField(): void {
       if (ctl === null || ctl.segmentId === null) return;
       ctl.revert(stored(ctl.segmentId)?.content);
       field.value = ctl.value;
+      updateXsampaHint();
     }
 
     /** Plays from the text's own recording, loading it if another is loaded (roadmap 72). */
@@ -145,6 +177,7 @@ export const transcribePanel: PanelDef = {
     };
     field.oninput = () => {
       ctl?.type(field.value);
+      updateXsampaHint();
       // Typed text is the person's: the machine offer goes until the field is empty again.
       if (field.value.trim() !== "") suggestButton.style.display = "none";
       else draw(true);
@@ -272,6 +305,7 @@ export const transcribePanel: PanelDef = {
         c.sync(ordered.find((x) => x.id === selId)?.content);
       }
       if (field.value !== c.value) field.value = c.value;
+      updateXsampaHint();
       if (!force && ready && next === stamp) return;
       stamp = next;
 
