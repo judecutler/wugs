@@ -455,6 +455,8 @@ The **Elicit** panel collects words with a speaker in two ways. Every answer bec
 
 The progress bar counts answered concepts. Use **To do**, **Done**, and **All** to filter the list.
 
+To work through a questionnaire of your own, click **Add a word list**, then **Load a table…** under "A list of your own". Choose a CSV or tab-separated table (Excel and LibreOffice save both). The table needs a column of concepts headed **Gloss**, **English** or **Concept**. A **No.** column numbers the concepts, and a **Concepticon_ID** column links each one to its [Concepticon](https://concepticon.clld.org) concept set, so the list can be compared with other languages. The list takes the file's name. Loading the table again after you add rows adds only the new rows; answers already given stay.
+
 - If the word already exists in the lexicon, wugs offers **Use** with the entry's lemma and gloss. Click it to link the existing entry instead of adding a second one.
 - To take an answer back, click the × on its chip. The entry stays in the lexicon.
 - If a concept does not apply to the language, click **N/A**. Any text in the gloss field is kept as the reason.

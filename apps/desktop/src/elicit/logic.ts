@@ -82,3 +82,11 @@ export function wordlistLines(r: WordlistExport): string[] {
   if (r.skipped > 0) lines.push(r.skipped === 1 ? "1 concept is marked not applicable and has no form." : `${r.skipped.toLocaleString()} concepts are marked not applicable and have no form.`);
   return [...lines, ...r.notes];
 }
+
+/** The toast after loading a word list of one's own. */
+export function ownListLine(r: { summary: { name: string; total: number }; created: number; already: number; withConcepticon: number }): string {
+  const n = (k: number, one: string, many: string) => `${k.toLocaleString()} ${k === 1 ? one : many}`;
+  const added = r.already === 0 ? `«${r.summary.name}»: ${n(r.created, "concept", "concepts")} loaded` : `«${r.summary.name}»: ${n(r.created, "new concept", "new concepts")} added, ${r.already.toLocaleString()} already there`;
+  const linked = r.withConcepticon === 0 ? " None names a Concepticon concept set, so the export for comparison has no Concepticon IDs; a Concepticon_ID column adds them." : ` ${n(r.withConcepticon, "concept is", "concepts are")} linked to Concepticon.`;
+  return `${added}.${linked}`;
+}

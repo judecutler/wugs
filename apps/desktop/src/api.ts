@@ -531,6 +531,8 @@ export type DomainEdit = { domain: DomainQuestions; notes: string[] };
 
 export const conceptListsBundled = () => invoke<BundledList[]>("concept_lists_bundled");
 export const conceptListLoad = (args: { source: string }) => invoke<ListSummary>("concept_list_load", args);
+/** Load a word list of one's own from a CSV or tab-separated table (src-tauri/src/elicit.rs). */
+export const conceptListImport = (args: { path: string }) => invoke<{ summary: ListSummary; created: number; already: number; withConcepticon: number }>("concept_list_import", args);
 export const conceptLists = () => invoke<ListSummary[]>("concept_lists");
 export const conceptListView = (args: { listId: string }) => invoke<ListView>("concept_list_view", args);
 export const elicitAnswer = (args: { conceptId: string; form: string; gloss: string; segmentId: string | null }) => invoke<ConceptEdit>("elicit_answer", args);

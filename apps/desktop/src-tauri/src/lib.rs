@@ -957,6 +957,12 @@ fn concept_list_load(s: State<SessionThread>, source: String) -> Result<elicit::
     s.run(move |s| elicit::concept_list_load(s, &source))
 }
 
+/// Load a word list of one's own from a CSV or tab-separated table.
+#[tauri::command(async)]
+fn concept_list_import(s: State<SessionThread>, path: String) -> Result<elicit::OwnList, String> {
+    s.run(move |s| elicit::concept_list_import(s, std::path::Path::new(&path)))
+}
+
 #[tauri::command(async)]
 fn concept_lists(s: State<SessionThread>) -> Result<Vec<elicit::ListSummary>, String> {
     s.run(move |s| elicit::concept_lists(s))
@@ -1984,6 +1990,7 @@ pub fn run() {
             domains_load_sil,
             concept_lists_bundled,
             concept_list_load,
+            concept_list_import,
             concept_lists,
             concept_list_view,
             elicit_answer,
