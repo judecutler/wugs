@@ -44,6 +44,7 @@ PANELS = [
     ("sounds", "Sounds"),
     ("typology", "Typology"),
     ("progress", "Progress"),
+    ("affixes", "Affixes"),
     ("orthography", "Orthography"),
     ("assist", "Speech assist"),
     ("people", "People"),

@@ -710,6 +710,14 @@ It lists how much is recorded, how many sentences are transcribed and how much s
 
 A sentence is a segment on a transcription track. A word counts as glossed once it is broken into morphs. A recording that is not on this computer is not counted, and the panel says how many there are.
 
+### See the affixes in their slots
+
+The **Affixes** panel reads every glossed word in the project and lists its affixes and clitics the way a grammar's morphology chapter does. In Tongues, press **Ctrl+K** and choose **Show Affixes**.
+
+At the top is a position-class chart: a column for each slot, counted from the root (−1 right before it, +1 right after it), with each affix in the slot it holds most often, its gloss and how often it is used. Click an affix to see every word it is in, in the Concordance. Under the chart, a table gives each affix's gloss, slot (and the other slots it turns up in), uses, how many different roots it is found on, the parts of speech of those roots (from their lexicon entries), and an example word. Click the example to open its sentence.
+
+An affix is told apart by its spelling, type and gloss, so `-ler` PL and `-ler` 3PL are two rows. A word with no morph marked as a root is left out, and the panel says how many there are. **Copy chart** and **Copy table** copy them to paste into a document or a spreadsheet, and **Grammar sketch…** prints the chart in its morphology chapter.
+
 ### See what typology says about the language
 
 The **Typology** panel shows what [Grambank](https://grambank.clld.org) or the [World Atlas of Language Structures](https://wals.info) (WALS) says about the project's language. Choose **Grambank** (195 questions such as "Are there definite or specific articles?") or **WALS** (192 features such as "Order of Subject, Object and Verb") at the top; the choice is remembered. Each feature shows the dataset's answer for the language. Beside each answer it shows how the other coded languages of the same family answer, as a share of each answer and a bar. When the family has fewer than three coded languages, it compares with the languages of the same region instead. Open the panel from Settings (Closed panels) or with **Find an action**. It needs the project's Glottocode (see above).

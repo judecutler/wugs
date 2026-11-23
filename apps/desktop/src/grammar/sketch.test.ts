@@ -60,6 +60,13 @@ test("the sketch lays out what the project knows, chapter by chapter", () => {
   assert.match(html, /class="todo">\[Word order/);
 });
 
+test("the glossed words' slots become a position-class chart", () => {
+  const html = grammarSketch({ ...base, slots: [{ label: "−1", affixes: ["ni- 1SG", "ka- 2SG"] }, { label: "Root", affixes: [] }, { label: "+1", affixes: ["-ra PST"] }] });
+  assert.match(html, /<h3>4\.3 Position classes<\/h3>/);
+  assert.match(html, /<tr><th>−1<\/th><th>Root<\/th><th>\+1<\/th><\/tr><tr><td class="ipa">ni- 1SG<\/td><td class="ipa">ROOT<\/td><td class="ipa">-ra PST<\/td><\/tr><tr><td class="ipa">ka- 2SG<\/td><td class="ipa"><\/td><td class="ipa"><\/td><\/tr>/);
+  assert.doesNotMatch(grammarSketch(base), /Position classes/);
+});
+
 test("an empty project still gives a sketch with places to write", () => {
   const html = grammarSketch({ ...base, language: { name: "", glottocode: "", iso: "" }, words: [], graphemes: [], morphemes: [], features: [], texts: [], entries: 0 });
   assert.match(html, /A grammar sketch of the language/);

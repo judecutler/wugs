@@ -1340,3 +1340,12 @@ body::before {
 .pg-table tbody tr { cursor: pointer; }
 .pg-table tbody tr:hover, .pg-table tbody tr:focus { background: var(--accent-soft); outline: none; }
 .pg-table tfoot th, .pg-table tfoot td { font-weight: 600; }
+.af-chart { display: flex; gap: 8px; overflow-x: auto; margin: 8px 0; align-items: flex-start; }
+.af-col { display: flex; flex-direction: column; gap: 4px; min-width: 96px; }
+.af-head { font-size: var(--text-sm); color: var(--muted); text-align: center; border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+.af-rootbox { text-align: center; padding: 6px 4px; border: 1px dashed var(--muted); border-radius: var(--radius-sm, 6px); font-size: var(--text-sm); letter-spacing: 0.08em; color: var(--muted); }
+.af-chip { text-align: left; font-family: var(--font-ipa); }
+.af-chip .af-n { color: var(--muted); font-size: var(--text-sm); }
+.af-gloss .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
+.af-table td, .af-table th { text-align: left; }
+.af-table tbody tr { cursor: default; }
