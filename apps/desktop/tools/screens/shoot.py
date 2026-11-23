@@ -565,6 +565,10 @@ def main():
             if run.page.locator(".panel-lexicon .lx-list li").count() != 1:
                 failures.append("Needs a gloss did not list the one entry without a gloss")
             run.page.locator(".panel-lexicon .lx-show").select_option("all")
+            # Two entries share a lemma: number them, or merge the other into this one.
+            run.page.locator(".panel-lexicon .lx-list li", has_text="river").first.click()
+            run.page.locator(".panel-lexicon .gl-notice button", has_text="Merge").first.wait_for()
+            run.shot("state-lexicon-twins", run.page.locator(".panel-lexicon .lx-head"))
             # Paradigm templates of the project's own: pick one, then open the form for a new one.
             run.front("lexicon", "Lexicon")
             run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()

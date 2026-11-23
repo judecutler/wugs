@@ -7,7 +7,7 @@
 // template and returned whole by every form edit.
 import {
   concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
-  deleteParadigmTemplate, lexiconDeleteForm, lexiconFillCell, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
+  deleteParadigmTemplate, lexiconDeleteForm, lexiconFillCell, lexiconMerge, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
   lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
   type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
@@ -489,6 +489,13 @@ export const lexiconPanel: PanelDef = {
                     onclick: () => void run(() => lexiconNumberHomographs({ id: e.id }), true),
                   })
                 : null,
+              // A duplicate (two imports of one word): fold the other into this one.
+              ...e.sameLemma.map(([other, n]) =>
+                confirmButton(`merge:${other}`, `Merge ${n === null ? "the other" : headword(e.lemma, n)} into this one`, () => void run(() => lexiconMerge({ keep: e.id, other }), true), {
+                  armedText: "Merge? Click again",
+                  title: `Move the other «${headword(e.lemma, n)}»'s senses, forms, pronunciations and relations into this entry, then remove it. Glossed words linked to its senses stay linked.`,
+                }),
+              ),
             ),
       );
       const senses = e.senses.map((s, i) => senseBlock(e, s, i, lang));

@@ -886,6 +886,12 @@ fn lexicon_delete(s: State<SessionThread>, id: String) -> Result<lexicon::EntryE
     s.run(move |s| lexicon::lexicon_delete(s, &id))
 }
 
+/// Merge one entry into another: senses, forms, pronunciations and relations move over.
+#[tauri::command(async)]
+fn lexicon_merge(s: State<SessionThread>, keep: String, other: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_merge(s, &keep, &other))
+}
+
 #[tauri::command(async)]
 fn lexicon_add_sense(s: State<SessionThread>, id: String, gloss: String) -> Result<lexicon::EntryEdit, String> {
     s.run(move |s| lexicon::lexicon_add_sense(s, &id, &gloss))
@@ -2007,6 +2013,7 @@ pub fn run() {
             lexicon_set_homograph,
             lexicon_number_homographs,
             lexicon_delete,
+            lexicon_merge,
             lexicon_add_sense,
             lexicon_set_sense_gloss,
             lexicon_set_sense_text,

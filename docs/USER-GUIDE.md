@@ -399,7 +399,7 @@ The list beside it shows **Every entry**, or only the entries with work left: **
 
 In the entry editor you can set the lemma, the citation form, the category (part of speech), and the homograph number. Each sense has a gloss, an optional gloss in the Gloss panel's second language, a definition, and a usage note. Click **Add a sense** for another sense. Fields save when you press **Enter** or leave the field.
 
-When two entries share a lemma, the editor says so. Click **Number them** to give each one a homograph number.
+When two entries share a lemma, the editor says so. Click **Number them** to give each one a homograph number. If they are really one word, entered twice (by two imports, say), click **Merge … into this one** and then click again: the other entry's senses, other forms, pronunciations and related words move into the entry on screen, and the other entry is removed. Words in your texts glossed with its senses stay linked to them.
 
 **Other forms** lists the entry's allomorphs, the other shapes it takes: `-lar` beside `-ler`, `ew` beside `ev`. Type one and press **Enter** to add it; click × to remove it. In the Gloss panel a morph written in any of these forms finds the entry, and guesses for new words use them too. Variants and allomorphs from FLEx (LIFT) and Toolbox (`\va`, `\a`) files show here too, and go back out in those exports.
 

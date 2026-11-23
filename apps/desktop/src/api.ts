@@ -466,6 +466,7 @@ export const lexiconSetField = (args: { id: string; field: LexemeField; value: s
 export const lexiconSetHomograph = (args: { id: string; number: number | null }) => invoke<EntryEdit>("lexicon_set_homograph", args);
 export const lexiconNumberHomographs = (args: { id: string }) => invoke<EntryEdit>("lexicon_number_homographs", args);
 export const lexiconDelete = (args: { id: string }) => invoke<EntryEdit>("lexicon_delete", args);
+export const lexiconMerge = (args: { keep: string; other: string }) => invoke<EntryEdit>("lexicon_merge", args);
 export const lexiconAddSense = (args: { id: string; gloss: string }) => invoke<EntryEdit>("lexicon_add_sense", args);
 export const lexiconSetSenseGloss = (args: { senseId: string; gloss: string; lang: string | null }) =>
   invoke<EntryEdit>("lexicon_set_sense_gloss", args);
