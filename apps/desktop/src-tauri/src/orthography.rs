@@ -28,8 +28,8 @@ use wugs_core::converted::{ConvertReport, ConvertedRow};
 
 /// The project setting that holds the profile.
 const SETTING: &str = "orthography-profile";
-/// The longest profile kept (bytes).
-const MAX_PROFILE: usize = 200_000;
+/// The longest profile kept (bytes): what one project setting holds.
+const MAX_PROFILE: usize = wugs_core::settings::MAX_VALUE;
 /// Columns that describe a row rather than convert it.
 const NOT_OUTPUT: &[&str] = &["grapheme", "frequency", "comment", "comments", "note", "notes", "left", "right", "class", "codepoints", "unicode", "example", "examples"];
 /// Rows of before and after the preview lists.
@@ -239,7 +239,7 @@ pub fn stored(session: &mut Session) -> Result<Stored, String> {
 /// or is too long; other problems are reported, not refused.
 pub fn save(session: &mut Session, profile: &str) -> Result<Check, String> {
     if profile.len() > MAX_PROFILE {
-        return Err(format!("A profile is at most {} KB.", MAX_PROFILE / 1000));
+        return Err(format!("A profile is at most {} KB.", MAX_PROFILE / 1024));
     }
     let parsed = Profile::parse(profile);
     if !profile.trim().is_empty() && parsed.columns.is_empty() && parsed.rules.is_empty() {
@@ -508,6 +508,13 @@ mod tests {
         let done = convert(&mut session, &profile, &source, None, "IPA", true, "Practical").unwrap();
         assert!(done.created >= 2, "{done:?}");
         assert_eq!(stored(&mut session).unwrap().profile, profile, "the profile is kept");
+        // A real profile runs to hundreds of rows; one past what a setting holds is refused in words.
+        let long: String = std::iter::once("Grapheme\tIPA\tComment\n".to_string()).chain((0..600).map(|i| format!("x{i}\tx{i}\ta row with a note about it\n"))).collect();
+        assert!(long.len() > 16_000);
+        save(&mut session, &long).unwrap();
+        let too_long = "Grapheme\tIPA\n".to_string() + &"a\ta\n".repeat(20_000);
+        assert!(save(&mut session, &too_long).unwrap_err().contains("at most 64 KB"));
+        save(&mut session, &profile).unwrap();
         let again = convert(&mut session, &profile, &source, None, "IPA", true, "practical").unwrap();
         assert_eq!((again.created, again.updated, again.unchanged), (0, 0, done.created), "the same track, nothing new");
         let words = crate::sounds::sound_words(&mut session, Some(&done.track), None).unwrap();
