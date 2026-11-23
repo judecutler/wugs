@@ -2,14 +2,16 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { concordance, concordanceQuery, dispersion, errorText } from "../api";
+import { concordance, concordanceQuery, dispersion, errorText, getText, glossGet, type TextDetail } from "../api";
+import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
+import { translationLines } from "../gloss/translation";
 import { marks, per1000, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
 import { asTsv, clip, countLine, isRtl, keyword, left, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
 import { getState, selectSegment, selectText, showToast } from "../store";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
 /** A query another panel asked for (Frequencies), taken by the panel once it is open. */
@@ -26,6 +28,62 @@ export function askConcordance(query: string, kind: PanelKind, text: { id: strin
   pending = { query, kind, text, exact, within, project: s.info.projectId };
   window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "concordance" }));
   for (const take of askers) take();
+}
+
+/** At most this many sentences are copied as examples at once. */
+const EXAMPLES_MAX = 50;
+
+/** The sentences behind these lines (each once, in the order shown) as
+ * numbered glossed examples, in the format chosen for Copy example; a
+ * translation line brings the sentence it translates. */
+async function copyAsExamples(lines: readonly Hit[]): Promise<void> {
+  const seen = new Set<string>();
+  const picked: Hit[] = [];
+  let more = 0;
+  const texts = new Map<string, TextDetail>();
+  const examples: Example[] = [];
+  let unglossed = 0;
+  for (const hit of lines) {
+    let t = texts.get(hit.textId);
+    if (t === undefined) {
+      t = await getText({ textId: hit.textId });
+      texts.set(hit.textId, t);
+    }
+    const seg = t.segments.find((s) => s.id === hit.segmentId);
+    const sentence = seg?.parent ? t.segments.find((s) => s.id === seg.parent) : seg;
+    if (sentence === undefined || seen.has(sentence.id)) continue;
+    seen.add(sentence.id);
+    if (picked.length === EXAMPLES_MAX) {
+      more += 1;
+      continue;
+    }
+    picked.push(hit);
+    const v = await glossGet({ textId: hit.textId, segmentId: sentence.id });
+    const translation = translationLines(sentence, t.segments, t.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
+    const words = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
+    if (!words.some((w) => w.morphs.length > 0)) unglossed += 1;
+    examples.push({ number: examples.length + 1, translation, words: words.length > 0 ? words : [{ form: sentence.content, morphs: [] }] });
+  }
+  if (examples.length === 0) return;
+  let stored: string | null = null;
+  try {
+    stored = localStorage.getItem(FORMAT_KEY);
+  } catch {
+    stored = null;
+  }
+  const format = parseFormat(stored);
+  const c = clipboardForAll(examples, format);
+  if (c.html !== null) await writeHtml(c.html, c.text);
+  else await writeText(c.text);
+  const label = EXAMPLE_FORMATS.find((f) => f.id === format)?.label ?? "";
+  showToast({
+    tone: "info",
+    lines: [
+      `Copied ${examples.length} ${examples.length === 1 ? "sentence" : "sentences"} as numbered examples for ${label} (the format chosen for Copy example in the Gloss panel).`,
+      ...(more > 0 ? [`${more} more ${more === 1 ? "sentence was" : "sentences were"} left out; narrow the search to copy them.`] : []),
+      ...(unglossed > 0 ? [`${unglossed} ${unglossed === 1 ? "is" : "are"} not glossed yet and ${unglossed === 1 ? "shows" : "show"} its words only.`] : []),
+    ],
+  });
 }
 
 /** Characters of context shown on each side of the keyword. */
@@ -65,6 +123,7 @@ export const concordancePanel: PanelDef = {
     const sorter = h("select", { className: "cc-sort", title: "Order of the rows" }, ...SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
     sorter.setAttribute("aria-label", "Sort");
     const copy = h("button", { type: "button", textContent: "Copy rows", title: "Copy every row as a table to paste into a spreadsheet" });
+    const copyExamples = h("button", { type: "button", textContent: "Copy as examples", title: "Copy the sentences these lines come from as numbered glossed examples for a paper (at most 50)" });
     const plotToggle = h("button", { type: "button", textContent: "Plot", title: "Show where in each text it occurs, and how evenly it is spread (AntConc's Plot)" });
     plotToggle.setAttribute("aria-pressed", "false");
     const plotSorter = h("select", { className: "cc-sort", title: "Order of the texts" }, ...PLOT_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
@@ -146,6 +205,7 @@ export const concordancePanel: PanelDef = {
       plotToggle.setAttribute("aria-pressed", String(on));
       plotToggle.classList.toggle("active", on);
       sorter.hidden = on;
+      copyExamples.hidden = on;
       plotSorter.hidden = !on;
     };
 
@@ -256,6 +316,15 @@ export const concordancePanel: PanelDef = {
       sortBy = sorter.value as SortBy;
       drawRows();
     };
+    copyExamples.onclick = () => {
+      if (hits.length === 0) return;
+      copyExamples.disabled = true;
+      void copyAsExamples(sortHits(hits, sortBy))
+        .catch((e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }))
+        .finally(() => {
+          copyExamples.disabled = false;
+        });
+    };
     plotToggle.onclick = () => {
       setPlot(!plotOn);
       if (plotOn && asked !== "") run();
@@ -315,7 +384,7 @@ export const concordancePanel: PanelDef = {
       drawChips();
       drawRows();
       setPlot(plotOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, plotSorter, plotToggle, copy), chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, plotSorter, plotToggle, copy, copyExamples), chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */

@@ -193,3 +193,12 @@ export function clipboardFor(ex: Example, format: ExampleFormat): { text: string
       return { text: asText(ex), html: null };
   }
 }
+
+/** Several examples on the clipboard at once (the Concordance's lines as a
+ * paper's examples): one after another, a blank line apart in text, a
+ * paragraph apart in HTML. */
+export function clipboardForAll(examples: readonly Example[], format: ExampleFormat): { text: string; html: string | null } {
+  const parts = examples.map((ex) => clipboardFor(ex, format));
+  const html = format === "word" ? parts.map((p) => p.html ?? "").join("<p></p>") : null;
+  return { text: parts.map((p) => p.text.trimEnd()).join("\n\n") + "\n", html };
+}

@@ -84,3 +84,14 @@ test("the root around an infix is glossed once", () => {
   assert.deepEqual(wordLines(w), { morphs: "s<um>ulat", glosses: "write<AV>" });
   assert.equal(wordLines({ ...w, morphs: [w.morphs[0]!, w.morphs[1]!, { ...w.morphs[2]!, gloss: null }] }).glosses, "write<AV>");
 });
+
+test("several examples go on the clipboard one after another", async () => {
+  const { clipboardForAll } = await import("./example.ts");
+  const ex = (n: number, gloss: string) => ({ number: n, translation: `t${n}`, words: [{ form: "kesi", morphs: [{ surface: "kesi", type: "root", gloss }] }] });
+  const both = clipboardForAll([ex(1, "three"), ex(2, "three")], "text");
+  assert.equal(both.html, null);
+  assert.equal(both.text.split("\n\n").length, 2);
+  assert.match(both.text, /^\(1\)/);
+  const word = clipboardForAll([ex(1, "three"), ex(2, "three")], "word");
+  assert.equal((word.html ?? "").match(/<table/g)?.length, 2);
+});

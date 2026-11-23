@@ -415,6 +415,12 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+            # The lines' sentences as numbered examples for a paper.
+            run.page.locator(".panel-concordance .cc-bar button", has_text="Copy as examples").click()
+            run.page.wait_for_timeout(800)
+            if "as numbered examples" not in " ".join(run.toasts()):
+                failures.append("Copy as examples said nothing")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # The Plot view: where in each text, and how evenly.
             run.page.locator(".panel-concordance .cc-bar button", has_text="Plot").click()
             run.page.wait_for_timeout(500)
