@@ -7,7 +7,25 @@ export type RankedRow = FrequencyRow & { rank: number };
 /** Ranks in the backend's order (most frequent first, ties as first met). */
 export const ranked = (rows: readonly FrequencyRow[]): RankedRow[] => rows.map((r, i) => ({ ...r, rank: i + 1 }));
 /** `words` is the running word count rates are taken from; `once` the sequences met once and left out (n-grams). */
-export type Frequencies = { rows: FrequencyRow[]; tokens: number; types: number; words?: number; once?: number };
+export type Frequencies = { rows: FrequencyRow[]; tokens: number; types: number; words?: number; once?: number; unlabelled?: number };
+
+/** A value as a CQP string matching exactly it (`cqp::literal`): regular-expression characters and quotes escaped. */
+export const cqpLiteral = (value: string): string => value.replace(/[\\.+*?()|[\]{}^$#&\-~]/gu, (c) => `\\${c}`).replace(/"/gu, '\\"');
+
+/** The CQP query whose lines a lemma or tag row counts, limited to the texts a detail picks. */
+export function cqpFor(kind: "lemma" | "tag", item: string, within: { key: string; value: string } | null): string {
+  const q = `[${kind === "lemma" ? "lemma" : "upos"}="${cqpLiteral(item)}"]`;
+  return within === null ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
+}
+
+/** The note under a lemma or tag list: words not yet lemmatised or tagged. */
+export function unlabelledNote(f: Frequencies, kind: "lemma" | "tag"): string {
+  const n = f.unlabelled ?? 0;
+  if (n === 0) return "";
+  const what = kind === "lemma" ? "lemma" : "tag";
+  const how = kind === "lemma" ? "gloss the word and link its root to a lexicon entry" : "gloss the word and give its root's lexicon entry a category";
+  return ` ${n.toLocaleString("en")} ${n === 1 ? "word has" : "words have"} no ${what} yet: tag and parse its text in the Sentence panel, or ${how}.`;
+}
 
 export type FreqSort = "count" | "alpha" | "texts";
 

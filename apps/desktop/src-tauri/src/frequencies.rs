@@ -44,6 +44,8 @@ pub struct Frequencies {
     pub words: usize,
     /// Sequences met only once, left out of `rows` (n-grams only).
     pub once: usize,
+    /// Words with no lemma or tag yet (lemma and tag lists only).
+    pub unlabelled: usize,
 }
 
 /// At most this many rows are returned; `types` says how many there were.
@@ -73,7 +75,7 @@ pub const MAX_N: usize = 5;
 /// crowd the list; `words` is the running word count rates are taken from.
 pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: usize) -> Result<Frequencies, String> {
     if kind == Kind::Sense {
-        return Err("a frequency list counts words, morphs, glosses or translation words".into());
+        return Err("a frequency list counts words, morphs, glosses, translation words, lemmas or tags".into());
     }
     if !(1..=MAX_N).contains(&size) {
         return Err(format!("n-grams are 1 to {MAX_N} words long"));
@@ -85,6 +87,7 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: us
     let mut tallies: HashMap<String, Tally> = HashMap::new();
     let mut tokens = 0usize;
     let mut running = 0usize;
+    let mut unlabelled = 0usize;
     let mut count = |key: String, spelling: &str, text: &str, tokens: &mut usize| {
         if key.is_empty() {
             return;
@@ -136,6 +139,23 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: us
                     }
                 }
             }
+            Kind::Lemma | Kind::Tag => {
+                // Lemmas and tags as a CQP query reads them (CoNLL-U analysis,
+                // else a glossed word's root entry), written exactly, so a row's
+                // count is the lines `[lemma="…"]` finds; punctuation is not a word.
+                for t in crate::cqp::tokens_of(p, &seg.id)? {
+                    if t.upos == "PUNCT" {
+                        continue;
+                    }
+                    running += 1;
+                    let value = p.proj.nfc(if kind == Kind::Lemma { &t.lemma } else { &t.upos });
+                    if value.is_empty() {
+                        unlabelled += 1;
+                    } else {
+                        count(value.clone(), &value, &seg.text, &mut tokens);
+                    }
+                }
+            }
             Kind::Sense => unreachable!("refused above"),
         }
         Ok(())
@@ -156,8 +176,8 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: us
             FrequencyRow { item, count: t.count, texts: t.texts.len() }
         })
         .collect();
-    let words = if matches!(kind, Kind::Word | Kind::Translation) { running } else { tokens };
-    Ok(Frequencies { rows, tokens, types, words, once })
+    let words = if matches!(kind, Kind::Word | Kind::Translation | Kind::Lemma | Kind::Tag) { running } else { tokens };
+    Ok(Frequencies { rows, tokens, types, words, once, unlabelled })
 }
 
 #[cfg(test)]
@@ -189,6 +209,23 @@ mod tests {
                     let found = crate::concordance::concordance_in(&mut session, &row.item, kind, crate::concordance::Match::Exact, &scope).unwrap().total;
                     assert_eq!(found, row.count, "{kind:?} {}", row.item);
                 }
+            }
+        }
+        // Give every entry a part of speech, so glossed words carry a tag.
+        {
+            let p = crate::session::project(&mut session).unwrap();
+            for lex in p.proj.entities_of_kind("lexeme").unwrap() {
+                p.set_lexeme_field(&lex, "pos-of-speech", "num").unwrap();
+            }
+        }
+        // Lemma and tag rows equal the lines a CQP query finds for them.
+        for (kind, attr) in [(Kind::Lemma, "lemma"), (Kind::Tag, "upos")] {
+            let f = frequencies(&mut session, kind, &Scope::all()).unwrap();
+            assert!(!f.rows.is_empty(), "{attr}: the sample's glossed words have lemmas and tags");
+            assert_eq!(f.words, f.tokens + f.unlabelled);
+            for row in f.rows {
+                let q = format!("[{attr}=\"{}\"]", crate::cqp::literal(&row.item));
+                assert_eq!(crate::cqp::run(&mut session, &q, None).unwrap().total, row.count, "{q}");
             }
         }
         let lo = frequencies(&mut session, Kind::Morph, &Scope::all()).unwrap().rows.into_iter().find(|r| r.item == "lo").unwrap();

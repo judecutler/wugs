@@ -627,11 +627,13 @@ Only sentences with no tags yet are sent. Sentences you corrected or imported wi
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.
 
-1. Choose what to count: **Words**, **Morphs**, **Glosses** or words of **Translations**.
+1. Choose what to count: **Words**, **Morphs**, **Glosses**, words of **Translations**, **Lemmas** or part-of-speech **Tags**.
 2. Count in the **Whole project** or pick one text.
 3. Sort by count, alphabetically, or by how many texts a word is in, and type in **Filter the list** to find one.
 
 **Per 1000** is how often it occurs in every thousand. Capital letters count together (Kesi and kesi are one word, shown as the spelling used most); diacritics do not (ŋa and na are two). A morph or gloss counts once per word that has it, so a word with PL twice counts once. Click a row to see its occurrences in the Concordance, looked up exactly (a `?` in a word is a letter there, not a wildcard) and in the chosen text: the number of lines matches the count. The list counts again when the project syncs or texts change; after glossing or typing, click **Recount**. Up to 5,000 items are listed and the first 500 drawn; filter to find the rest. The **#** column is each item's frequency rank, whatever the order shown. **Copy table** copies the list to paste into a spreadsheet.
+
+A lemma list counts every form of a word together (go, goes, went), and a tag list how many nouns, verbs and so on a text has. Lemmas and tags come from CoNLL-U and TEI files and from **Tag and parse this text** in the Sentence panel; for words you glossed, the lemma is the root's lexicon entry and the tag its category. The line above the list says how many words have none yet. Click a lemma or tag to see its lines as a CQP query in the Concordance, such as `[lemma="go"]`.
 
 ## Hear any segment from anywhere
 

@@ -29,6 +29,15 @@ export const KINDS: { id: ConcordanceKind; label: string; hint: string }[] = [
   { id: "translation", label: "Translations", hint: "a word of a free translation" },
 ];
 
+/** What Frequencies counts: the shared kinds, and lemmas and tags (as a CQP query reads them). */
+export type FreqKind = ConcordanceKind | "lemma" | "tag";
+
+export const FREQ_KINDS: { id: FreqKind; label: string; hint: string }[] = [
+  ...KINDS,
+  { id: "lemma", label: "Lemmas", hint: "a lemma, from CoNLL-U or a glossed word's entry" },
+  { id: "tag", label: "Tags", hint: "a part-of-speech tag (UPOS)" },
+];
+
 /** The Concordance's chips: Frequencies shares KINDS, so the CQP chip is the Concordance's own. */
 export const PANEL_KINDS: { id: PanelKind; label: string; hint: string }[] = [...KINDS, { id: "query", label: "CQP query", hint: '[lemma="go"] [upos="ADP"], "ni.*" %c' }];
 

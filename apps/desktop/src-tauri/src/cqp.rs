@@ -401,6 +401,13 @@ pub fn parse(query: &str) -> Result<Query, QueryError> {
     Ok(Query { items, meta })
 }
 
+/// A value as a query string that matches exactly it: regular-expression
+/// characters escaped, quotes escaped for the parser (what Frequencies asks
+/// the Concordance for a lemma or tag row; `cqpLiteral` in the app).
+pub fn literal(value: &str) -> String {
+    regex::escape(value).replace('"', "\\\"")
+}
+
 /// One token as a query sees it.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Tok {
@@ -480,7 +487,7 @@ impl Query {
 /// with lemma, tags and features from its CoNLL-U `analysis`, or from its
 /// root's lexicon entry when glossed in wugs. A segment not yet broken into
 /// words reads as its words, with nothing but `word`.
-fn tokens_of(p: &Project, seg: &str) -> Result<Vec<Tok>, String> {
+pub(crate) fn tokens_of(p: &Project, seg: &str) -> Result<Vec<Tok>, String> {
     let ids: Vec<String> = p.proj.members(seg)?.into_iter().filter(|t| !p.proj.is_tombstoned(t).unwrap_or(true)).collect();
     if ids.is_empty() {
         let content = p.proj.field_str(seg, "content")?.unwrap_or_default();
@@ -602,6 +609,14 @@ mod tests {
 
     fn found(q: &str, t: &[Tok]) -> Vec<(usize, usize)> {
         parse(q).unwrap_or_else(|e| panic!("{q}: {e}")).matches(t)
+    }
+
+    #[test]
+    fn a_literal_matches_exactly_its_value() {
+        for v in ["a.b", "c++", "x\"y", "back\\slash\"", "(1|2)", "ŋai"] {
+            let s = toks(&[(v, v, "X"), ("other", "other", "X")]);
+            assert_eq!(found(&format!("[lemma=\"{}\"]", literal(v)), &s), [(0, 1)], "{v}");
+        }
     }
 
     #[test]

@@ -543,6 +543,10 @@
     }),
     list_texts: () => texts,
     link_recording: () => null,
+    concordance_query: () => ({
+      total: 1,
+      hits: [{ textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, len: 1, breakdown: null, glosses: null }],
+    }),
     dispersion: () => ({
       words: 1240,
       hits: 14,
@@ -583,7 +587,9 @@
       ],
     }),
     frequencies: ({ kind, size }) =>
-      size > 1
+      kind === "lemma"
+        ? { tokens: 52, types: 3, words: 65, unlabelled: 13, rows: [{ item: "kani", count: 23, texts: 3 }, { item: "ŋai", count: 19, texts: 3 }, { item: "kesi", count: 10, texts: 2 }] }
+        : size > 1
         ? { tokens: 58, types: 9, words: 65, once: 5, rows: [{ item: "nikani ŋai", count: 12, texts: 3 }, { item: "ŋai kesi", count: 7, texts: 2 }, { item: "kesi toruma", count: 4, texts: 1 }, { item: "toruma liwa", count: 2, texts: 1 }] }
         : ({
       tokens: kind === "gloss" ? 29 : 65,
