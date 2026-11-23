@@ -111,9 +111,83 @@ pub fn sentence_set(session: &mut Session, text_id: &str, segment_id: &str, toke
     view(p, segment_id)
 }
 
+/// Trees with something wrong, listed for the Checks panel; at most this many.
+const MAX_TREES: usize = 500;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TreeProblem {
+    pub text_id: String,
+    pub text_title: String,
+    pub tier_id: String,
+    pub segment_id: String,
+    pub content: String,
+    pub problems: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TreeProblems {
+    /// The first `MAX_TREES` sentences with a problem, in text order.
+    pub sentences: Vec<TreeProblem>,
+    /// All sentences with a problem.
+    pub total: usize,
+    /// Sentences with an analysis at all (a treebank's or a tagger's).
+    pub annotated: usize,
+}
+
+/// Every annotated sentence whose dependency tree has a problem (no root,
+/// several, a cycle, a head that is not there), as the Sentence panel says it.
+pub fn tree_problems(session: &mut Session) -> Result<TreeProblems, String> {
+    use crate::concordance::{each_segment, Read, Scope};
+    let p = project(session)?;
+    let mut out = TreeProblems { sentences: Vec::new(), total: 0, annotated: 0 };
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        if p.proj.field(&seg.id, "analysis")?.is_none() {
+            return Ok(());
+        }
+        out.annotated += 1;
+        let rows = wugs_conllu::tree::rows(p, &seg.id)?;
+        if rows.problems.is_empty() {
+            return Ok(());
+        }
+        out.total += 1;
+        if out.sentences.len() < MAX_TREES {
+            out.sentences.push(TreeProblem {
+                text_id: seg.text.clone(),
+                text_title: seg.title.clone(),
+                tier_id: seg.tier.clone(),
+                segment_id: seg.id.clone(),
+                content: p.proj.field_str(&seg.id, "content")?.unwrap_or_default(),
+                problems: rows.problems,
+            });
+        }
+        Ok(())
+    })?;
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn trees_with_problems_are_listed() {
+        let dir = std::env::temp_dir().join(format!("wugs-tree-checks-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::session::create_project(&mut s, dir.to_str().unwrap(), "prs_Ana").unwrap();
+        let p = project(&mut s).unwrap();
+        let tier = crate::session::utterance_tier(p).unwrap();
+        // One good tree, one with two roots.
+        let ud = "1\tDogs\tdog\tNOUN\t_\t_\t2\tnsubj\t_\t_\n2\tbark\tbark\tVERB\t_\t_\t0\troot\t_\t_\n\n1\tCats\tcat\tNOUN\t_\t_\t0\troot\t_\t_\n2\tsleep\tsleep\tVERB\t_\t_\t0\troot\t_\t_\n\n";
+        wugs_conllu::import_conllu(p, ud, "animals", &tier).unwrap();
+        let r = tree_problems(&mut s).unwrap();
+        assert_eq!((r.annotated, r.total), (2, 1));
+        assert_eq!(r.sentences[0].content, "Cats sleep");
+        assert!(r.sentences[0].problems[0].contains("root"), "{:?}", r.sentences[0].problems);
+        drop(s);
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn a_treebank_sentence_reads_and_corrects() {

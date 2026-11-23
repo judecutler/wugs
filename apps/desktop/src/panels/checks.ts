@@ -4,17 +4,17 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify, lexiconExampleGaps, lexiconExamplesFromTexts, soundWords } from "../api";
+import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify, lexiconExampleGaps, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
-import { addedLine, addLabel, exampleGapsLine, examplesAddedLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
+import { addedLine, addLabel, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { marked } from "../gloss/morphs";
 import type { MorphType } from "../gloss/morphs";
 import { provide } from "../palette/registry";
-import { dataGeneration, getState, refreshAll, selectSegment, showToast, touchLexicon } from "../store";
-import type { PanelDef, PanelView } from "./panel";
+import { dataGeneration, getState, refreshAll, selectSegment, selectText, showToast, touchLexicon } from "../store";
+import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
 function glossNode(gloss: string): HTMLElement {
   return h("span", { className: "ck-gloss" }, ...glossRuns(gloss).map((r) => (r.caps ? h("span", { className: "sc", textContent: r.text }) : document.createTextNode(r.text))));
@@ -29,6 +29,7 @@ export const checksPanel: PanelDef = {
     let chars: Inventory | null = null;
     let near: { pairs: NearPair[]; read: number } | null = null;
     let gaps: { without: number; fillable: number } | null = null;
+    let trees: { sentences: TreeProblem[]; total: number; annotated: number } | null = null;
     let showAllChars = false;
     let key = "";
     let seq = 0;
@@ -40,10 +41,11 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps()]).then(
-        ([r, m, c, w, g]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems()]).then(
+        ([r, m, c, w, g, t]) => {
           if (mine !== seq) return;
           gaps = g;
+          trees = t;
           rows = r;
           missing = m;
           chars = c;
@@ -224,6 +226,25 @@ export const checksPanel: PanelDef = {
       load();
     };
 
+    /** Parsed sentences whose tree has no root, several, a cycle or a missing head. */
+    const treesSection = (): HTMLElement[] => {
+      if (trees === null || trees.annotated === 0) return [];
+      const card = (t: TreeProblem) => {
+        const open = h("button", { type: "button", className: "link-button", textContent: t.content || "(no text)", title: `Open this sentence of «${t.textTitle}» in the Sentence panel` });
+        open.onclick = async () => {
+          await selectText(t.textId);
+          selectSegment({ textId: t.textId, tierId: t.tierId, segmentId: t.segmentId });
+          window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "sentence" }));
+        };
+        return h("li", { className: "ck-card" }, h("div", { className: "ck-head" }, open, h("span", { className: "note", textContent: ` · ${t.textTitle}` })), ...t.problems.map((p) => h("p", { className: "note", textContent: p })));
+      };
+      return [
+        h("h3", { className: "ck-title", textContent: "Dependency trees" }),
+        h("p", { className: "note", textContent: treesLine(trees.total, trees.annotated, trees.sentences.length) }),
+        h("ul", { className: "ck-list" }, ...trees.sentences.map(card)),
+      ];
+    };
+
     const examplesSection = (): HTMLElement[] => {
       if (gaps === null || gaps.without === 0) return [];
       const fill =
@@ -280,6 +301,7 @@ export const checksPanel: PanelDef = {
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
         h("ul", { className: "ck-list" }, ...missing.map(missingCard)),
         ...examplesSection(),
+        ...treesSection(),
         ...spellingSection(),
         ...charSection(),
       );

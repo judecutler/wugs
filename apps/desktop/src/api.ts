@@ -681,6 +681,9 @@ export const glottologFind = (args: { query: string }) => invoke<Languoid[]>("gl
 /** The word types on a transcription track, for the Sounds panel (src-tauri/src/sounds.rs). */
 export const soundWords = (args: { tierId: string | null; textId: string | null }) =>
   invoke<{ tracks: { id: string; name: string; words: number }[]; words: { word: string; count: number }[]; running: number; omitted: number }>("sound_words", args);
+/** Annotated sentences whose dependency tree has a problem (sentence.rs). */
+export type TreeProblem = { textId: string; textTitle: string; tierId: string; segmentId: string; content: string; problems: string[] };
+export const treeProblems = () => invoke<{ sentences: TreeProblem[]; total: number; annotated: number }>("tree_problems");
 export const characterInventory = () => invoke<import("./checks/logic").Inventory>("character_inventory");
 export const setProjectLanguage = (args: { language: import("./cldf/logic").Language }) => invoke<import("./cldf/logic").Language>("set_project_language", args);
 /** Every text as one CWB corpus for CQPweb, NoSketch Engine or Sketch Engine (src-tauri/src/cwb.rs). */

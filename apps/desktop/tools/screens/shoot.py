@@ -557,6 +557,11 @@ def main():
             run.shot("state-checks-examples", run.page.locator(".panel-checks"))
             if "Add 4 from the texts" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not offer examples from the texts")
+            trees = run.page.locator(".panel-checks .ck-title", has_text="Dependency trees")
+            trees.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
+            run.shot("state-checks-trees", run.page.locator(".panel-checks"))
+            if "1 of 4 parsed sentences has" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not list the tree problem")
             spelling = run.page.locator(".panel-checks .ck-title", has_text="Spellings to check")
             spelling.scroll_into_view_if_needed()
             run.shot("state-spellings", run.page.locator(".panel-checks"))

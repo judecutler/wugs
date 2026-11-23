@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addedLine, exampleGapsLine, examplesAddedLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
+import { addedLine, exampleGapsLine, examplesAddedLine, treesLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
 
 const v = (gloss: string, count: number) => ({ gloss, count, textId: "t", textTitle: "T", tierId: "u", segmentId: "s" });
 const ka: Inconsistent = { surface: "ka", kind: "suffix", key: "ka", total: 3, variants: [v("PL", 2), v("pl.", 1)], slip: true };
@@ -51,4 +51,11 @@ test("example sentences still to find", () => {
   assert.equal(exampleGapsLine({ without: 4, fillable: 1 }), "4 senses have no example sentence; 1 of them is glossed in a text that is open, so wugs can take one from there.");
   assert.equal(exampleGapsLine({ without: 1, fillable: 0 }), "1 sense has no example sentence, and none is glossed in a text that is open yet.");
   assert.equal(examplesAddedLine(2), "Added 2 example sentences from the texts, each with its translation where it has one. Edit them in the Lexicon.");
+});
+
+test("dependency trees with a problem", () => {
+  assert.equal(treesLine(0, 12, 0), "All 12 parsed sentences have a well-formed tree: one root, no cycles, every head a word of the sentence.");
+  assert.equal(treesLine(2, 12, 2), "2 of 12 parsed sentences have a tree problem. Click one to correct it in the Sentence panel.");
+  assert.equal(treesLine(1, 4, 1), "1 of 4 parsed sentences has a tree problem. Click one to correct it in the Sentence panel.");
+  assert.equal(treesLine(600, 900, 500), "600 of 900 parsed sentences have a tree problem. Click one to correct it in the Sentence panel. The first 500 are listed.");
 });

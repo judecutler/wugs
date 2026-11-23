@@ -362,6 +362,11 @@ fn sentence_mark_checked(s: State<SessionThread>, text_id: String, segment_ids: 
 
 /// Every character the project's transcriptions and lexicon use, with what may be a slip.
 #[tauri::command(async)]
+fn tree_problems(s: State<SessionThread>) -> Result<sentence::TreeProblems, String> {
+    s.run(sentence::tree_problems)
+}
+
+#[tauri::command(async)]
 fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory, String> {
     s.run(characters::inventory)
 }
@@ -2026,6 +2031,7 @@ pub fn run() {
             export_wordlist,
             set_typology_answer,
             character_inventory,
+            tree_problems,
             sound_words,
             sentence_check_status,
             sentence_mark_checked,

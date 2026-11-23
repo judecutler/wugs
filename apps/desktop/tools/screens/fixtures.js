@@ -755,6 +755,11 @@ const LEXICON = [
       };
     },
     lexicon_example_gaps: () => ({ without: 6, fillable: 4 }),
+    tree_problems: () => ({
+      sentences: [{ textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u02", content: "fɔɹ faɪv", problems: ["The tree has 2 roots: words 1 and 2."] }],
+      total: 1,
+      annotated: 4,
+    }),
     lexicon_examples_from_texts: () => 4,
     gloss_missing: () => [
       { surface: "haru", key: "haru", total: 6, variants: [
