@@ -422,6 +422,13 @@ def main():
             if run.page.locator(".panel-concordance .cc-plot-row").count() != 3:
                 failures.append("the concordance plot did not show one row per text with words")
             run.page.locator(".panel-concordance .cc-bar button", has_text="Plot").click()
+            # A word never analysed gets a guess read from known morphs.
+            run.front("gloss", "Gloss")
+            run.page.evaluate("async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u10' })")
+            run.page.wait_for_timeout(600)
+            run.shot("state-gloss-guess", run.page.locator(".panel-gloss"))
+            if run.page.locator(".panel-gloss .gl-guessed").count() == 0:
+                failures.append("a word starting ni- did not show its guess")
 
             # Media bin (roadmap 66): a card dragged onto the Timeline is used for the text on screen.
             run.front("media", "Media")

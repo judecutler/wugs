@@ -136,7 +136,17 @@
       const forms = s.content.split(" ").filter((w) => w !== "");
       return {
         segmentId,
-        words: forms.map((form, i) => ({ id: `${segmentId}-w${i}`, form, morphs: [], suggestions: [], othersUnanalysed: 2, findings: [] })),
+        // A word starting ni- gets a guess read from known morphs (never analysed in this spelling).
+        words: forms.map((form, i) => ({
+          id: `${segmentId}-w${i}`,
+          form,
+          morphs: [],
+          suggestions: form.startsWith("ni") && form.length > 3
+            ? [{ morphs: [{ surface: "ni", type: "prefix", gloss: "1SG", glossesByLang: {}, sense: null }, { surface: form.slice(2), type: "root", gloss: "count", glossesByLang: {}, sense: "sense-kani" }], count: 0, guessed: true }]
+            : [],
+          othersUnanalysed: 2,
+          findings: [],
+        })),
         readsAs: forms,
         hidden: [],
         alternatives: [],

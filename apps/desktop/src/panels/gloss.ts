@@ -458,7 +458,7 @@ export const glossPanel: PanelDef = {
 
       const chips: HTMLElement[] = [];
       if (ghostText !== null && ghost !== null) {
-        const chip = h("button", { type: "button", className: "gl-ghost", title: `${ghostText.usesLabel}. Enter in the empty field accepts it.` }, h("span", { textContent: ghostText.breakdown }), h("span", { className: "gl-ghost-gloss", textContent: ghostText.glosses }), h("span", { className: "gl-uses", textContent: ghost.count > 1 ? `×${ghost.count}` : "" }));
+        const chip = h("button", { type: "button", className: `gl-ghost${ghost.guessed === true ? " gl-guessed" : ""}`, title: `${ghostText.usesLabel}. Enter in the empty field accepts it.` }, h("span", { textContent: ghostText.breakdown }), h("span", { className: "gl-ghost-gloss", textContent: ghostText.glosses }), h("span", { className: "gl-uses", textContent: ghost.guessed === true ? "guess" : ghost.count > 1 ? `×${ghost.count}` : "" }));
         chip.onclick = () => acceptSuggestion(w);
         chips.push(chip);
         for (const alt of w.suggestions.slice(1)) {

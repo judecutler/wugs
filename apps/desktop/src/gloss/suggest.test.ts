@@ -83,3 +83,12 @@ test("the word's own character is copied, so a typed İ survives", () => {
   const kis: MorphSpec[] = [morph("ışık", "root", "light")];
   assert.equal(matchCase("Işık", kis)[0]?.surface, "Işık", "dotless I is a case variant of ı");
 });
+
+test("a guess from known morphs says so instead of a use count", () => {
+  const m = (surface: string, type: string, gloss: string): MorphSpec => ({ surface, type, gloss, glossesByLang: {}, sense: null });
+  const guess: Suggestion = { morphs: [m("ni", "prefix", "1SG"), m("kesi", "root", "three")], count: 0, guessed: true };
+  const d = describe(guess, [guess]);
+  assert.equal(d.breakdown, "ni-kesi");
+  assert.match(d.usesLabel, /^A guess from morphs glossed before/);
+  assert.equal(ghostFor([guess], false), guess);
+});

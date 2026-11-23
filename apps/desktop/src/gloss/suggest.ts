@@ -9,7 +9,8 @@ export type MorphSpec = {
   glossesByLang: Record<string, string>;
   sense: string | null;
 };
-export type Suggestion = { morphs: MorphSpec[]; count: number };
+/** `guessed`: read from morphs and entries the project knows, since no word spelled so was analysed yet (`count` 0). */
+export type Suggestion = { morphs: MorphSpec[]; count: number; guessed?: boolean };
 
 export type SuggestionLine = {
   /** `köpek-ler` */
@@ -37,7 +38,13 @@ export function describe(s: Suggestion, all: readonly Suggestion[]): SuggestionL
     glosses: s.morphs.map((m) => m.gloss ?? "?").join("-"),
     uses: s.count,
     share: total === 0 ? 0 : s.count / total,
-    usesLabel: s.count === 1 ? "used once" : all.length > 1 ? `used ${s.count} of ${total} times` : `used ${s.count} times`,
+    usesLabel: s.guessed
+      ? "A guess from morphs glossed before and the lexicon; this word was never analysed"
+      : s.count === 1
+        ? "used once"
+        : all.length > 1
+          ? `used ${s.count} of ${total} times`
+          : `used ${s.count} times`,
   };
 }
 
