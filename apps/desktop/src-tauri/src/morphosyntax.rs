@@ -9,6 +9,9 @@
 //! - **UDPipe 2 at LINDAT** (ÚFAL's public service): the text goes to
 //!   Prague, whose terms let ÚFAL keep what is sent, so a project must allow
 //!   it first, and texts that are not open are never sent.
+//! - **spaCy on this computer** (the person's Python with spaCy and a
+//!   pipeline they installed, `scripts/spacy_tag.py`): nothing leaves the
+//!   computer.
 //!
 //! The session thread gathers and writes; the tagger runs between, off it.
 
@@ -146,12 +149,140 @@ pub fn run_lindat(endpoint: &str, model: &str, lines: &[String]) -> Result<(Stri
     Ok((reply.result.ok_or("The UDPipe service sent no result.")?, reply.model.unwrap_or_else(|| model.to_string())))
 }
 
+// ---------------------------------------------------------------- spaCy on this computer
+
+/// The adapter run inside the person's Python (`python -c`).
+const SPACY_SCRIPT: &str = include_str!("../scripts/spacy_tag.py");
+
+/// Loads the pipeline and says what it is, so a choice is checked when it is made.
+const SPACY_CHECK: &str = "import sys\nsys.path[:] = [p for p in sys.path if p not in ('', '.')]\nimport spacy\nnlp = spacy.load(sys.argv[1])\nm = nlp.meta\nprint('spaCy %s, %s_%s %s (%s)' % (spacy.__version__, m.get('lang', ''), m.get('name', ''), m.get('version', ''), ', '.join(nlp.pipe_names)))\n";
+
+/// What this computer uses to run spaCy: the Python (else `python3` or
+/// `python` on PATH) and the pipeline, kept in `<app data>/spacy.json`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SpacySettings {
+    pub python: Option<String>,
+    pub pipeline: Option<String>,
+    /// What the check said when the pipeline was chosen.
+    pub about: Option<String>,
+}
+
+fn spacy_path(app_data: &Path) -> PathBuf {
+    app_data.join("spacy.json")
+}
+
+pub fn spacy_settings(app_data: &Path) -> SpacySettings {
+    std::fs::read(spacy_path(app_data)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+}
+
+/// spaCy ready to run here.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Spacy {
+    pub python: PathBuf,
+    pub pipeline: String,
+}
+
+/// Python on PATH, by name.
+fn python_on_path() -> Option<PathBuf> {
+    let names: &[&str] = if cfg!(windows) { &["python.exe", "python3.exe"] } else { &["python3", "python"] };
+    std::env::split_paths(&std::env::var_os("PATH")?).flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| p.is_file())
+}
+
+/// A pipeline is an installed package's name (`en_core_web_sm`) or a folder
+/// spaCy saved one in; it reaches Python as one argument, never through a shell.
+pub fn valid_pipeline(name: &str) -> bool {
+    let n = name.trim();
+    !n.is_empty() && n.len() <= 300 && !n.chars().any(char::is_control) && (n.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c)) || Path::new(n).is_dir())
+}
+
+fn python_of(s: &SpacySettings) -> Result<PathBuf, String> {
+    match &s.python {
+        Some(p) if Path::new(p).is_file() => Ok(PathBuf::from(p)),
+        Some(p) => Err(format!("Python was chosen at {p}, which is not there any more.")),
+        None => python_on_path().ok_or_else(|| "Python is not installed (spaCy runs in Python: install Python and spaCy, then choose Python).".to_string()),
+    }
+}
+
+/// spaCy and its pipeline as this computer has them, or why not, in words.
+pub fn spacy(app_data: &Path) -> Result<Spacy, String> {
+    let s = spacy_settings(app_data);
+    let python = python_of(&s)?;
+    let pipeline = s.pipeline.filter(|p| valid_pipeline(p)).ok_or("spaCy needs a pipeline for the language (such as en_core_web_sm); type its name.")?;
+    Ok(Spacy { python, pipeline })
+}
+
+/// What went wrong in Python, in words: the two usual cases named, else its last line.
+fn python_failure(python: &Path, pipeline: &str, stderr: &[u8]) -> String {
+    let why = String::from_utf8_lossy(stderr);
+    let py = python.display();
+    if why.contains("No module named 'spacy'") {
+        format!("spaCy is not installed for {py}: run `{py} -m pip install spacy`.")
+    } else if why.contains("[E050]") || why.contains("[E049]") {
+        format!("spaCy has no pipeline called {pipeline} here: run `{py} -m spacy download {pipeline}`, or type the name of one that is installed.")
+    } else {
+        format!("spaCy failed: {}", why.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("no message").trim())
+    }
+}
+
+/// Run Python with a script and one argument, `input` on stdin.
+fn run_python(python: &Path, script: &str, arg: &str, input: String) -> Result<std::process::Output, String> {
+    let mut child = Command::new(python)
+        .arg("-c")
+        .arg(script)
+        .arg(arg)
+        .env("PYTHONIOENCODING", "utf-8")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("Python could not start ({}): {e}", python.display()))?;
+    let mut stdin = child.stdin.take().ok_or("Python took no input")?;
+    let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
+    let out = child.wait_with_output().map_err(|e| format!("Python stopped: {e}"))?;
+    writer.join().map_err(|_| "Python's input could not be written".to_string())?.map_err(|e| format!("Python's input could not be written: {e}"))?;
+    Ok(out)
+}
+
+/// Check and keep this computer's spaCy choice: the pipeline is loaded once,
+/// so a missing spaCy or pipeline is said now rather than at the first run.
+/// An empty pipeline clears it.
+pub fn choose_spacy(app_data: &Path, python: Option<String>, pipeline: Option<String>) -> Result<SpacySettings, String> {
+    let mut s = SpacySettings { python: python.filter(|p| !p.trim().is_empty()), pipeline: pipeline.map(|p| p.trim().to_string()).filter(|p| !p.is_empty()), about: None };
+    if let Some(p) = &s.pipeline {
+        if !valid_pipeline(p) {
+            return Err(format!("«{p}» is not a spaCy pipeline name (such as en_core_web_sm) or a folder."));
+        }
+        let py = python_of(&s)?;
+        let out = run_python(&py, SPACY_CHECK, p, String::new())?;
+        if !out.status.success() {
+            return Err(python_failure(&py, p, &out.stderr));
+        }
+        s.about = Some(String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|a| !a.is_empty());
+    }
+    std::fs::create_dir_all(app_data).map_err(|e| e.to_string())?;
+    std::fs::write(spacy_path(app_data), serde_json::to_vec_pretty(&s).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    Ok(s)
+}
+
+/// Run spaCy on one sentence a line: the CoNLL-U and the pipeline it used.
+pub fn run_spacy(sp: &Spacy, lines: &[String]) -> Result<(String, String), String> {
+    let out = run_python(&sp.python, SPACY_SCRIPT, &sp.pipeline, lines.join("\n") + "\n")?;
+    if !out.status.success() {
+        return Err(python_failure(&sp.python, &sp.pipeline, &out.stderr));
+    }
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let used = stderr.lines().rev().find_map(|l| l.strip_prefix("wugs-pipeline: ")).map(str::trim).filter(|u| !u.is_empty()).unwrap_or(&sp.pipeline).to_string();
+    Ok((String::from_utf8(out.stdout).map_err(|_| "spaCy wrote something that is not UTF-8".to_string())?, used))
+}
+
 // ---------------------------------------------------------------- the run
 
 /// Where a run's sentences go.
 pub enum Tagger {
     Local(Local),
     Lindat { endpoint: String, model: String },
+    Spacy(Spacy),
 }
 
 /// One text's sentences, gathered on the session thread.
@@ -214,6 +345,10 @@ pub fn tag(tagger: &Tagger, lines: &[String]) -> Result<(Vec<wugs_conllu::format
             Tagger::Lindat { endpoint, model } => {
                 let (c, m) = run_lindat(endpoint, model, chunk)?;
                 (c, format!("udpipe-lindat {m}"))
+            }
+            Tagger::Spacy(sp) => {
+                let (c, m) = run_spacy(sp, chunk)?;
+                (c, format!("spacy {m}"))
             }
         };
         let sentences = wugs_conllu::format::parse(&conllu).map_err(|p| format!("The tagger's CoNLL-U could not be read: {}", p.first().map(ToString::to_string).unwrap_or_default()))?;
@@ -361,6 +496,45 @@ mod tests {
         assert_eq!(by, "udpipe test.udpipe");
         set_local_settings(&dir, &LocalSettings { program: Some(program.display().to_string()), model: None }).unwrap();
         assert!(local(&dir).unwrap_err().contains("needs a model"));
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn pipeline_names_are_package_names_or_folders() {
+        assert!(valid_pipeline("en_core_web_sm"));
+        assert!(valid_pipeline("de_dep_news_trf-3.8.0"));
+        assert!(!valid_pipeline(""));
+        assert!(!valid_pipeline("en core"));
+        assert!(!valid_pipeline("x; rm -rf /"));
+        assert!(valid_pipeline(&std::env::temp_dir().display().to_string()), "a folder spaCy saved a pipeline in");
+    }
+
+    /// spaCy itself, when this computer has it with the small English
+    /// pipeline (`pip install spacy` and `python -m spacy download
+    /// en_core_web_sm`); skipped otherwise, like the CLDF validator test.
+    #[test]
+    fn spacy_tags_one_sentence_a_line() {
+        let Some(python) = python_on_path() else { return eprintln!("no Python here: skipped") };
+        let ok = Command::new(&python).args(["-c", "import spacy; spacy.load('en_core_web_sm')"]).output().map(|o| o.status.success()).unwrap_or(false);
+        if !ok {
+            return eprintln!("spaCy with en_core_web_sm is not installed here: skipped");
+        }
+        let dir = std::env::temp_dir().join(format!("wugs-spacy-{}", wugs_model::ulid()));
+        let chosen = choose_spacy(&dir, None, Some("en_core_web_sm".into())).unwrap();
+        assert!(chosen.about.as_deref().unwrap_or_default().contains("en_core_web_sm"), "{chosen:?}");
+        let missing = choose_spacy(&dir, None, Some("xx_no_such_pipeline".into())).unwrap_err();
+        assert!(missing.contains("has no pipeline called xx_no_such_pipeline"), "{missing}");
+        assert_eq!(spacy_settings(&dir).pipeline.as_deref(), Some("en_core_web_sm"), "a failed check keeps the last good choice");
+        let sp = spacy(&dir).unwrap();
+        // Two sentences on one line stay one sentence; extra spaces make no token.
+        let lines = ["The dogs saw me. Then they ran.".to_string(), "I  like it, don't you?".to_string()];
+        let (sentences, by) = tag(&Tagger::Spacy(sp), &lines).unwrap();
+        assert!(by.starts_with("spacy en_core_web_sm "), "{by}");
+        assert_eq!(sentences.len(), 2);
+        let first = wugs_conllu::format::write(&sentences[..1]);
+        assert_eq!(first.lines().filter(|l| l.split('\t').nth(6) == Some("0")).count(), 1, "one root: {first}");
+        assert!(first.contains("\tdog\tNOUN\t"), "{first}");
+        assert!(first.contains("SpaceAfter=No"), "{first}");
         std::fs::remove_dir_all(dir).ok();
     }
 }

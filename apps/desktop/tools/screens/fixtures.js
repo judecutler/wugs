@@ -481,9 +481,10 @@
       machine: "automatic",
       pin: null,
       effective: null,
-      problem: "UDPipe needs a model for the language (a .udpipe file from the UDPipe models page); choose one. Or choose the UDPipe 2 web service.",
+      problem: "UDPipe needs a model for the language (a .udpipe file from the UDPipe models page); choose one. Or set up spaCy, or choose the UDPipe 2 web service.",
       options: [
         { id: "udpipe", name: "UDPipe on this computer", kind: "program", ready: false, note: "UDPipe needs a model for the language (a .udpipe file from the UDPipe models page); choose one.", score: null },
+        { id: "spacy", name: "spaCy on this computer", kind: "program", ready: false, note: "spaCy needs a pipeline for the language (such as en_core_web_sm); type its name.", score: null },
         { id: "udpipe-lindat", name: "UDPipe 2 (LINDAT web service)", kind: "web service", ready: true, note: "Sends the text to ÚFAL in Prague, who may keep it.", score: null },
       ],
     },
@@ -654,7 +655,8 @@
     corrections_summary: () => ({ ready: 12, recordedNo: 1, restricted: 2, unchecked: 3, unusable: 0, emptied: 1, partial: null }),
     praat_status: () => ({ path: "/usr/bin/praat", version: "6.4.27", chosen: false, problem: null }),
     praat_pending: () => false,
-    morphosyntax_setup: () => ({ local: { program: "/usr/bin/udpipe", model: null }, webOk: false }),
+    morphosyntax_setup: () => ({ local: { program: "/usr/bin/udpipe", model: null }, spacy: { python: null, pipeline: null, about: null }, webOk: false }),
+    morphosyntax_choose_spacy: ({ python, pipeline }) => ({ python, pipeline, about: pipeline ? `spaCy 3.8.18, ${pipeline} 3.8.0 (tok2vec, tagger, parser, attribute_ruler, lemmatizer, ner)` : null }),
     project_language: () => ({ name: "Kanu", glottocode: "abcd1234", iso: "" }),
     metadata_values: () => [
       { key: "genre", values: [["narrative", 2], ["procedural", 1]] },
