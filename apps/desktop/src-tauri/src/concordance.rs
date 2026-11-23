@@ -324,8 +324,26 @@ pub enum Match {
     Exact,
 }
 
-pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match, scope: &Scope) -> Result<Concordance, String> {
-    let p = project(session)?;
+/// One match in a segment: the word it starts at, how many words it covers,
+/// and for morphs and glosses the word's breakdown and glosses.
+pub(crate) struct Found {
+    pub at: usize,
+    pub len: usize,
+    pub breakdown: Option<String>,
+    pub glosses: Option<String>,
+}
+
+/// Calls `on` with every segment in `scope` the kind reads, in corpus order,
+/// and the matches of `query` in it (none for most segments), so the
+/// Concordance and the dispersion plot meet items by one rule.
+pub(crate) fn scan(
+    p: &Project,
+    query: &str,
+    kind: Kind,
+    how: Match,
+    scope: &Scope,
+    mut on: impl FnMut(&CorpusSegment, Vec<Found>) -> Result<(), String>,
+) -> Result<(), String> {
     let meets = |pattern: &[char], item: &[char]| if how == Match::Exact { pattern == item } else { glob(pattern, item) };
     let key = |s: &str| wugs_model::fold_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
     // Morphs and glosses meet without their edge markers, on both sides.
@@ -341,25 +359,25 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
         Vec::new()
     };
     if pattern.is_empty() || (how == Match::Glob && pattern.iter().all(|c| *c == '*')) {
-        return Ok(Concordance { hits: Vec::new(), total: 0 });
+        return Ok(());
     }
-    let mut hits = Vec::new();
-    let mut total = 0usize;
+    let len = if phrase.is_empty() { 1 } else { phrase.len() };
     each_segment(p, Read::of(kind), scope, |seg| {
-        let mut found: Vec<(usize, Option<String>, Option<String>)> = Vec::new();
+        let mut found: Vec<Found> = Vec::new();
+        let hit = |at: usize| Found { at, len, breakdown: None, glosses: None };
         match kind {
             Kind::Word | Kind::Translation if !phrase.is_empty() => {
                 let words: Vec<(usize, Vec<char>)> = seg.words.iter().enumerate().map(|(i, w)| (i, key(w))).filter(|(_, k)| !k.is_empty()).collect();
                 for run in words.windows(phrase.len()) {
                     if run.iter().zip(&phrase).all(|((_, k), q)| k == q) {
-                        found.push((run[0].0, None, None));
+                        found.push(hit(run[0].0));
                     }
                 }
             }
             Kind::Word | Kind::Translation => {
                 for (i, w) in seg.words.iter().enumerate() {
                     if meets(&pattern, &key(w)) {
-                        found.push((i, None, None));
+                        found.push(hit(i));
                     }
                 }
             }
@@ -379,12 +397,21 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
                         morphs.push((bare(&m.surface).to_string(), m.kind));
                     }
                     if matched {
-                        found.push((i, Some(joined(&morphs)), Some(joined(&glosses))));
+                        found.push(Found { at: i, len: 1, breakdown: Some(joined(&morphs)), glosses: Some(joined(&glosses)) });
                     }
                 }
             }
         }
-        for (at, breakdown, glosses) in found {
+        on(seg, found)
+    })
+}
+
+pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match, scope: &Scope) -> Result<Concordance, String> {
+    let p = project(session)?;
+    let mut hits = Vec::new();
+    let mut total = 0usize;
+    scan(p, query, kind, how, scope, |seg, found| {
+        for f in found {
             total += 1;
             if hits.len() < LIMIT {
                 hits.push(Hit {
@@ -395,10 +422,10 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
                     start_ms: p.proj.field_num(&seg.id, "start")?,
                     end_ms: p.proj.field_num(&seg.id, "end")?,
                     words: seg.words.clone(),
-                    at,
-                    len: if phrase.is_empty() { 1 } else { phrase.len() },
-                    breakdown,
-                    glosses,
+                    at: f.at,
+                    len: f.len,
+                    breakdown: f.breakdown,
+                    glosses: f.glosses,
                 });
             }
         }

@@ -1016,6 +1016,15 @@ body::before {
 .panel-concordance .scopes { flex-wrap: wrap; }
 .cc-count { margin: 6px 0; }
 .cc-rows { display: flex; flex-direction: column; }
+.cc-bar button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.cc-plot-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title count" "bar bar"; align-items: center; column-gap: 10px; row-gap: 3px; padding: 5px 4px; border-radius: var(--radius-sm); cursor: pointer; }
+.cc-plot-row:hover, .cc-plot-row:focus-visible { background: var(--accent-soft); outline: none; }
+.cc-plot-none { cursor: default; color: var(--muted); }
+.cc-plot-none:hover { background: none; }
+.cc-plot-title { grid-area: title; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-plot-count { grid-area: count; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.cc-plot-bar { grid-area: bar; position: relative; height: 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); }
+.cc-plot-mark { position: absolute; top: 2px; bottom: 2px; width: 2px; background: var(--accent); }
 .cc-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "play left key right" ". meta meta meta"; align-items: baseline; column-gap: 6px; padding: 4px; border-radius: var(--radius-sm); cursor: pointer; font-family: var(--font-ipa, inherit); }
 .cc-row:hover, .cc-row:focus-visible { background: var(--accent-soft); outline: none; }
 /* Media bin cards (roadmap 66). */

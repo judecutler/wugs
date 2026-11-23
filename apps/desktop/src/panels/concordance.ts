@@ -2,7 +2,8 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { concordance, concordanceQuery, errorText } from "../api";
+import { concordance, concordanceQuery, dispersion, errorText } from "../api";
+import { marks, per1000, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
 import { asTsv, clip, countLine, isRtl, keyword, left, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
@@ -54,12 +55,20 @@ export const concordancePanel: PanelDef = {
     let timer = 0;
     /** The item Frequencies asked for: met exactly and in its text while the query is unchanged. */
     let exactFor: Asked | null = null;
+    /** The Plot view (AntConc's Plot): where in each text the item occurs. */
+    let plotOn = false;
+    let plot: Dispersion | null = null;
+    let plotSort: PlotSort = "text";
     const input = h("input", { type: "search", className: "cc-query", placeholder: PANEL_KINDS[0]!.hint, spellcheck: false });
     input.setAttribute("aria-label", "Find");
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Look in" });
     const sorter = h("select", { className: "cc-sort", title: "Order of the rows" }, ...SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
     sorter.setAttribute("aria-label", "Sort");
     const copy = h("button", { type: "button", textContent: "Copy rows", title: "Copy every row as a table to paste into a spreadsheet" });
+    const plotToggle = h("button", { type: "button", textContent: "Plot", title: "Show where in each text it occurs, and how evenly it is spread (AntConc's Plot)" });
+    plotToggle.setAttribute("aria-pressed", "false");
+    const plotSorter = h("select", { className: "cc-sort", title: "Order of the texts" }, ...PLOT_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
+    plotSorter.setAttribute("aria-label", "Order of the texts");
     const count = h("p", { className: "note cc-count" });
     const rows = h("div", { className: "cc-rows", role: "list" });
 
@@ -79,7 +88,72 @@ export const concordancePanel: PanelDef = {
         }),
       );
 
+    /** Columns of a plot bar; matches closer than one column share a mark. */
+    const COLUMNS = 240;
+    const drawPlot = () => {
+      if (kind === "query") {
+        count.textContent = "The plot shows words, morphs, glosses and translation words. Choose one of those to plot.";
+        rows.replaceChildren();
+        return;
+      }
+      if (plot === null) {
+        count.textContent = "Counting…";
+        rows.replaceChildren();
+        return;
+      }
+      const d = plot;
+      count.textContent = spreadWords(d);
+      rows.replaceChildren(
+        ...sortPlots(d.texts, plotSort).map((t) => {
+          const bar = h("div", { className: "cc-plot-bar", role: "img" });
+          bar.setAttribute("aria-label", `${t.hits} in ${t.words} words`);
+          for (const col of marks(t.positions, t.words, COLUMNS)) {
+            const m = h("span", { className: "cc-plot-mark" });
+            m.style.left = `${(col / COLUMNS) * 100}%`;
+            bar.append(m);
+          }
+          const row = h(
+            "div",
+            { className: `cc-plot-row${t.hits === 0 ? " cc-plot-none" : ""}`, role: "listitem", tabIndex: 0, title: t.hits === 0 ? `Not in «${t.title}»` : `Show the ${t.hits} ${t.hits === 1 ? "line" : "lines"} in «${t.title}»` },
+            h("span", { className: "cc-plot-title", textContent: t.title || "(untitled)" }),
+            h("span", { className: "cc-plot-count", textContent: `${t.hits} · ${per1000(t.hits, t.words)} per 1000` }),
+            bar,
+          );
+          const show = () => {
+            if (t.hits === 0) return;
+            // The lines in this text, met as the plot met them.
+            const prior = exactFor !== null && exactFor.query === asked && exactFor.kind === kind ? exactFor : null;
+            exactFor = { query: asked, kind: kind as ConcordanceKind, text: { id: t.textId, title: t.title }, exact: prior?.exact ?? false, within: prior?.within ?? null };
+            setPlot(false);
+            run();
+          };
+          row.onclick = show;
+          row.onkeydown = (e) => {
+            if (e.key === "Enter") show();
+            else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const next = e.key === "ArrowDown" ? row.nextElementSibling : row.previousElementSibling;
+              if (next instanceof HTMLElement) next.focus();
+            }
+          };
+          return row;
+        }),
+      );
+    };
+
+    const setPlot = (on: boolean) => {
+      plotOn = on;
+      plotToggle.setAttribute("aria-pressed", String(on));
+      plotToggle.classList.toggle("active", on);
+      sorter.hidden = on;
+      plotSorter.hidden = !on;
+    };
+
     const drawRows = () => {
+      if (plotOn && asked !== "") {
+        drawPlot();
+        return;
+      }
       if (asked === "") {
         count.textContent = kind === "query" ? QUERY_HELP : "Type a word, morph or gloss. * stands for any letters: ni* finds every word starting ni.";
         rows.replaceChildren();
@@ -139,6 +213,21 @@ export const concordancePanel: PanelDef = {
       timer = window.setTimeout(() => {
         // An item asked for from Frequencies is met exactly, in its text, until the query is edited.
         const exactAsk = exactFor !== null && exactFor.query === query && exactFor.kind === kind ? exactFor : null;
+        plot = null;
+        if (plotOn && kind !== "query") {
+          const k = kind;
+          dispersion({ query, kind: k, exact: exactAsk?.exact ?? false, textId: exactAsk?.text?.id ?? null, within: exactAsk?.within ?? null }).then(
+            (d) => {
+              if (mine !== seq) return;
+              plot = d;
+              asked = query;
+              drawRows();
+            },
+            (e) => {
+              if (mine === seq) count.textContent = `Could not plot: ${errorText(e)}`;
+            },
+          );
+        }
         const asking =
           kind === "query"
             ? concordanceQuery({ query, textId: exactAsk?.text?.id ?? null })
@@ -167,7 +256,23 @@ export const concordancePanel: PanelDef = {
       sortBy = sorter.value as SortBy;
       drawRows();
     };
+    plotToggle.onclick = () => {
+      setPlot(!plotOn);
+      if (plotOn && asked !== "") run();
+      else drawRows();
+    };
+    plotSorter.onchange = () => {
+      plotSort = plotSorter.value as PlotSort;
+      drawRows();
+    };
     copy.onclick = () => {
+      if (plotOn && plot !== null) {
+        void writeText(plotTsv(plot)).then(
+          () => showToast({ tone: "info", lines: [`Copied the plot of ${plot?.texts.length ?? 0} texts. Paste it into a spreadsheet.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+        return;
+      }
       if (hits.length === 0) return;
       void writeText(asTsv(sortHits(hits, sortBy))).then(
         () =>
@@ -199,6 +304,7 @@ export const concordancePanel: PanelDef = {
       seq += 1;
       hits = [];
       total = 0;
+      plot = null;
       asked = "";
       exactFor = null;
       input.value = "";
@@ -208,7 +314,8 @@ export const concordancePanel: PanelDef = {
       }
       drawChips();
       drawRows();
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, copy), chips, count, rows);
+      setPlot(plotOn);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, plotSorter, plotToggle, copy), chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */

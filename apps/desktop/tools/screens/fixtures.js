@@ -543,6 +543,18 @@
     }),
     list_texts: () => texts,
     link_recording: () => null,
+    dispersion: () => ({
+      words: 1240,
+      hits: 14,
+      dp: 0.31,
+      dpNorm: 0.36,
+      texts: [
+        { textId: "t-count", title: "Counting to ten", words: 64, hits: 5, positions: [0, 9, 18, 40, 61] },
+        { textId: "t-fox", title: "The fox and the well", words: 812, hits: 8, positions: [12, 40, 41, 200, 333, 520, 700, 790] },
+        { textId: "t-greet", title: "Greetings at the market", words: 364, hits: 1, positions: [180] },
+        { textId: "t-empty", title: "Untranscribed session", words: 0, hits: 0, positions: [] },
+      ],
+    }),
     keywords: ({ minCount }) => {
       // Computed by the same formulas as src-tauri/src/keywords.rs.
       const c = 23, d = 42, n = c + d;
