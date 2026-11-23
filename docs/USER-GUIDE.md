@@ -333,6 +333,15 @@ Under **Notes**, at the bottom of the Gloss panel, type anything you want to rem
 
 Notes belong to the sentence's text, so they have its sharing level, and they sync with the project. Two people can add notes to the same sentence at once, and both notes stay. The **Interlinear** tab shows each note under its sentence, and **Search** finds words in notes too: the hit opens the sentence and says "note". Notes go in and out of FlexText as FLEx's Note line.
 
+### Go through every note before a session
+
+The **Notes** panel lists every note in the project in one place: the notes under sentences, grouped by text, and the notes on lexicon entries and senses. Press **Ctrl+K** and choose **Show Notes** (it is not placed in the workspace at first).
+
+- Type in **Find in the notes** to look for a word in the notes, their sentences or headwords and glosses, ignoring capitals and accents. **Sentences** and **Lexicon** show one kind only.
+- **Only questions** keeps the notes with a question mark: the things to ask the speaker next time.
+- Click a sentence to open it in the Gloss panel, or a headword to open its entry in the Lexicon, and change or delete the note there. Click **Read again** after adding notes elsewhere.
+- **Copy list** copies the notes shown as plain text. **Print a list…** saves them as a page to print, with a box to tick and room to write the answer under each.
+
 ### Gloss a word once for all its uses
 
 The **Words to gloss** panel (open it from Settings, Closed panels, or **Ctrl+K**) lists every word form with uses not yet broken into morphs, the most frequent first, so a few minutes there gloss a large share of a corpus (FLEx calls this word analyses). For each form, type its morphs as in the Gloss panel (`ni- kani` or `ni-kani`) and their glosses in the same order (`1SG count` or `1SG-count`), then press **Enter** or **Apply**: every use not yet analysed gets that analysis, in every text. A word analysed before, or one wugs can guess from the morphs it knows, shows its likely analysis on a button; click it, or press **Enter** in the empty field, to use it. Uses already analysed are never changed. A morph whose spelling and gloss match exactly one sense in the Lexicon (`kani` glossed `count`) is linked to that sense, as picking it in the Gloss panel would. Click a form to see its lines in the Concordance.

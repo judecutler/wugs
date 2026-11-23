@@ -19,7 +19,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
 import { filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
-import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
+import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { keyword, type Hit } from "../concordance/logic";
 import { glossRuns } from "../gloss/example";
@@ -1248,7 +1248,12 @@ export const lexiconPanel: PanelDef = {
           if (uses !== null) void loadUses(uses.senseId);
         }
         void loadOwnTemplates();
-        void loadList().then(() => loadEntry(selected, true));
+        const wanted = takeWantedEntry();
+        if (wanted !== null) {
+          search.value = "";
+          show = "all";
+        }
+        void loadList().then(() => loadEntry(wanted ?? selected, wanted === null));
       },
     };
     return view;

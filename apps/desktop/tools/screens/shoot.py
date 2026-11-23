@@ -47,6 +47,7 @@ PANELS = [
     ("progress", "Progress"),
     ("affixes", "Affixes"),
     ("wordtypes", "Words to gloss"),
+    ("notes", "Notes"),
     ("orthography", "Orthography"),
     ("assist", "Speech assist"),
     ("people", "People"),
@@ -583,6 +584,17 @@ def main():
             if "Analysed 4 uses of «wuno»" not in " ".join(run.toasts()):
                 failures.append("Words to gloss did not apply an analysis")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            # Notes: every note in one list, questions only.
+            run.front("notes", "Notes")
+            run.page.locator(".panel-notes .nt-item").first.wait_for()
+            run.shot("state-notes", run.page.locator(".panel-notes"))
+            run.page.locator(".panel-notes .nt-questions input").check()
+            if run.page.locator(".panel-notes .nt-item").count() != 2:
+                failures.append("Notes did not keep only the questions")
+            run.page.locator(".panel-notes .nt-where", has_text="tela").click()
+            run.page.wait_for_timeout(500)
+            if "tela" not in run.page.locator(".panel-lexicon .lx-entry").inner_text():
+                failures.append("Notes did not open the entry in the Lexicon")
             # Sounds: the IPA track's sounds on the chart.
             run.front("sounds", "Sounds")
             run.page.locator(".panel-sounds .sd-consonants").wait_for()
