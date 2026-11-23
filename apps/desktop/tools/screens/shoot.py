@@ -43,6 +43,7 @@ PANELS = [
     ("vowels", "Vowel space"),
     ("sounds", "Sounds"),
     ("typology", "Typology"),
+    ("progress", "Progress"),
     ("orthography", "Orthography"),
     ("assist", "Speech assist"),
     ("people", "People"),

@@ -22,6 +22,7 @@ import { textsPanel } from "./texts";
 import { timelinePanel } from "./timeline";
 import { transcribePanel } from "./transcribe";
 import { typologyPanel } from "./typology";
+import { progressPanel } from "./progress";
 import { orthographyPanel } from "./orthography";
 import { vowelsPanel } from "./vowels";
 
@@ -46,6 +47,7 @@ export const PANELS = {
   vowels: vowelsPanel,
   sounds: soundsPanel,
   typology: typologyPanel,
+  progress: progressPanel,
   orthography: orthographyPanel,
   assist: assistPanel,
   people: peoplePanel,

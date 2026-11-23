@@ -913,6 +913,20 @@ const LEXICON = [
       return LEXICON.filter((r) => q === "" || r.lemma.includes(q) || r.glosses.some((g) => g.includes(q)));
     },
     lexicon_entry: lexiconEntry,
+    project_progress: () => ({
+      texts: [
+        { id: "t-count", title: "Counting to ten", recordingMs: 62_000, sentences: 10, transcribed: 10, transcribedMs: 41_000, words: 65, glossedWords: 52, translated: 9 },
+        { id: "t-fox", title: "The fox and the well", recordingMs: 754_000, sentences: 24, transcribed: 17, transcribedMs: 402_000, words: 214, glossedWords: 60, translated: 11 },
+        { id: "t-market", title: "Greetings at the market", recordingMs: null, sentences: 7, transcribed: 7, transcribedMs: 0, words: 38, glossedWords: 0, translated: 7 },
+      ],
+      recordedMs: 816_000,
+      recordingsMissing: 0,
+      entries: 22,
+      senses: 25,
+      sensesWithoutGloss: 1,
+      people: 2,
+      consentRecords: 2,
+    }),
     lexicon_add: () => ({ entry: lexiconEntry({ id: LEXICON[0].id }), notes: [] }),
     // A paradigm answered for whatever axes the panel asks: every cell of the
     // grid, the first one filled, so the coverage line has something to count.

@@ -1330,3 +1330,13 @@ body::before {
 .vw-dot.is-selected { fill: var(--error); fill-opacity: 1; }
 .vw-label { font-family: var(--font-ipa); font-size: 18px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface-raised); stroke-width: 4px; pointer-events: none; }
 .vw-problem { color: var(--error); }
+
+.pg-summary { margin: 8px 0; padding-left: 18px; font-size: var(--text-sm); }
+.pg-summary li { margin: 2px 0; }
+.pg-rows { overflow: auto; }
+.pg-table { border-collapse: collapse; font-size: var(--text-sm); width: 100%; }
+.pg-table th, .pg-table td { padding: 3px 6px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pg-table th[scope="row"], .pg-table thead th:first-child { text-align: left; white-space: normal; }
+.pg-table tbody tr { cursor: pointer; }
+.pg-table tbody tr:hover, .pg-table tbody tr:focus { background: var(--accent-soft); outline: none; }
+.pg-table tfoot th, .pg-table tfoot td { font-weight: 600; }

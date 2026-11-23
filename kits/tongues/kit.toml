@@ -42,6 +42,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "vowels",                        # vowel space: F1 against F2 per segment; not placed either
   "sounds",                        # the sound inventory on the IPA chart; not placed either
   "typology",                      # Grambank's grammar features for the language, beside its relatives; not placed either
+  "progress",                      # how far the documentation has come, for reports; not placed either
   "orthography",                   # a track in another spelling (IPA) by an orthography profile; not placed either
   "assist",                        # speech assist: machine phone transcription
   "people",                        # speakers and what each agreed to (optional)

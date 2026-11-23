@@ -38,6 +38,7 @@ pub mod website;
 pub mod table_text;
 pub mod listen;
 pub mod praat;
+pub mod progress;
 pub mod praat_analysis;
 pub mod sample;
 pub mod segmentation;
@@ -315,6 +316,12 @@ fn import_lexicon_table(s: State<SessionThread>, path: String) -> Result<lexicon
 #[tauri::command(async)]
 fn export_lexicon_table(s: State<SessionThread>, folder: String) -> Result<String, String> {
     s.run(move |s| lexicon_table::export(s, std::path::Path::new(&folder)))
+}
+
+/// How far the documentation has come, text by text (`src/progress.rs`).
+#[tauri::command(async)]
+fn project_progress(s: State<SessionThread>) -> Result<progress::Progress, String> {
+    s.run(progress::progress)
 }
 
 /// The language the project documents (name, Glottocode, ISO 639-3).
@@ -1947,6 +1954,7 @@ pub fn run() {
             export_lexicon,
             import_lexicon_table,
             export_lexicon_table,
+            project_progress,
             seal_project,
             project_language,
             set_project_language,
