@@ -5,11 +5,13 @@
 // Keyboard first: Enter saves the answer and moves to the next concept to do.
 import {
   conceptListLoad, conceptLists, conceptListsBundled, conceptListView, domainCollect, domainQuestions, domainsList, domainsLoadSil,
-  elicitAnswer, elicitLink, elicitSkip, elicitUnlink, errorText, lexiconEntry, lexiconList,
+  elicitAnswer, elicitLink, elicitSkip, elicitUnlink, errorText, exportWordlist, lexiconEntry, lexiconList,
   type Answer, type BundledList, type ConceptView, type DomainItem, type DomainQuestions, type EntryRow, type ListSummary, type ListView,
 } from "../api";
 import { emptyState, h } from "../dom";
-import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, type Filter } from "../elicit/logic";
+import { open as pickFolder } from "@tauri-apps/plugin-dialog";
+import { localDay } from "../dates";
+import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, wordlistLines, type Filter } from "../elicit/logic";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { clockTime } from "../search/logic";
 import { filterDomains, headword } from "../lexicon/logic";
@@ -207,6 +209,22 @@ export const elicitPanel: PanelDef = {
             }),
         }),
       );
+    }
+
+    /** Export this list's answers for comparative work: a CLDF Wordlist and an EDICTOR table. */
+    function exportButton(listId: string): HTMLElement {
+      const b = h("button", { type: "button", textContent: "Export for comparison…", title: "This list's answers as a CLDF Wordlist (Lexibank, CLICS) and a table EDICTOR and LingPy open, each form cut into sound segments" });
+      b.onclick = async () => {
+        const folder = await pickFolder({ directory: true, title: "Where should the word list go?" });
+        if (typeof folder !== "string") return;
+        try {
+          const r = await exportWordlist({ folder, date: localDay(new Date()), listId });
+          showToast({ tone: r.forms === 0 ? "warn" : "info", lines: wordlistLines(r) });
+        } catch (e) {
+          showToast({ tone: "error", lines: [errorText(e)] });
+        }
+      };
+      return b;
     }
 
     function conceptRow(c: ConceptView) {
@@ -458,7 +476,7 @@ export const elicitPanel: PanelDef = {
       };
       showSoundHint();
       return [
-        h("div", { className: "el-bar" }, picker, h("span", { className: "note", textContent: progressLabel(s) }), h("span", { className: "gl-spacer" }), add),
+        h("div", { className: "el-bar" }, picker, h("span", { className: "note", textContent: progressLabel(s) }), h("span", { className: "gl-spacer" }), exportButton(s.id), add),
         bar,
         ...(adder === null ? [] : [adder]),
         h(

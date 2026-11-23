@@ -473,6 +473,15 @@ An answer heard this way has a ▶ on its chip. In the Lexicon its entry has the
 
 The concept lists come from Concepticon. Each answer stays linked to its Concepticon concept, so the list can later be compared across languages.
 
+#### Share a word list for comparative work
+
+**Export for comparison…** beside the list writes its answers into a new folder in two forms:
+
+- a CLDF Wordlist (`forms.csv`, `parameters.csv`, `languages.csv` and `Wordlist-metadata.json`), the format Lexibank and CLICS collect;
+- `edictor.tsv`, a table that [EDICTOR](https://digling.org/edictor/) and LingPy open for cognate judgements.
+
+Each form keeps its Concepticon concept and is cut into sound segments. If the project has an orthography profile (see [Write a track in IPA from a practical spelling](#write-a-track-in-ipa-from-a-practical-spelling)), the profile cuts the segments, so `ng` counts as one sound and a practical spelling comes out in IPA. Without a profile, each letter with its accents and length marks is one segment. Set the project's Glottocode in the Texts panel first, so the list can join other languages' lists.
+
 ### Collect words by meaning
 
 1. In **Elicit**, open **Semantic domains**.

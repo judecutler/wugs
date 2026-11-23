@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use wugs_cldf::{export, Dataset, Options};
+use wugs_cldf::{export, export_wordlist, Dataset, Options, WordlistOptions};
 use wugs_core::{concept_id, domain_id, ConceptRow, DomainRow, MorphSpec, Project};
 
 fn temp_project() -> (PathBuf, Project) {
@@ -179,4 +179,45 @@ fn the_reference_validator_accepts_the_dataset() {
         return;
     }
     std::fs::remove_dir_all(&b.root).ok();
+}
+
+#[test]
+fn elicited_answers_export_as_a_cldf_wordlist_and_an_edictor_table() {
+    let (root, mut p) = temp_project();
+    p.set_project_language("Kanu", "abcd1234", "xyz").unwrap();
+    let rows = [
+        ConceptRow { key: "k1".into(), number: 1, gloss: "I".into(), concepticon: "1209".into(), concepticon_gloss: "I".into() },
+        ConceptRow { key: "k2".into(), number: 2, gloss: "you (singular)".into(), concepticon: "1215".into(), concepticon_gloss: "THOU".into() },
+        ConceptRow { key: "k3".into(), number: 3, gloss: "snow".into(), concepticon: "1240".into(), concepticon_gloss: "SNOW".into() },
+    ];
+    p.import_concept_list("test:swadesh", "Test Swadesh", "", &rows).unwrap();
+    let (( _, _), _) = p.elicit(&concept_id("test:swadesh", "k1"), "nia", "", None).unwrap();
+    let (( _, _), _) = p.elicit(&concept_id("test:swadesh", "k2"), "ngo, \"ka\"", "thou (familiar)", None).unwrap();
+    p.set_concept_skipped(&concept_id("test:swadesh", "k3"), true, "no snow here").unwrap();
+    let cut = |w: &str| -> Vec<String> { if w.starts_with("ng") { vec!["ŋ".into(), "o".into()] } else { w.chars().filter(|c| c.is_alphabetic()).map(|c| c.to_string()).collect() } };
+    let wl = export_wordlist(&p, &WordlistOptions { title: "Kanu word list", generator: "wugs test", list: None, segment: &cut }).unwrap();
+    assert_eq!((wl.lists, wl.concepts, wl.answered, wl.forms, wl.skipped), (1, 3, 2, 2, 1));
+    let file = |name: &str| wl.files.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone()).unwrap();
+    let forms = file("forms.csv");
+    assert!(forms.lines().nth(1).unwrap().contains(",abcd1234,") && forms.contains(",nia,nia,n i a,"), "{forms}");
+    assert!(forms.contains("ŋ o,thou (familiar),thou (familiar)"), "{forms}");
+    let edictor = file("edictor.tsv");
+    assert_eq!(edictor.lines().next().unwrap(), "ID\tDOCULECT\tCONCEPT\tCONCEPTICON_ID\tVALUE\tFORM\tTOKENS\tNOTE");
+    assert_eq!(edictor.lines().nth(1).unwrap(), "1\tKanu\tI\t1209\tnia\tnia\tn i a\t");
+    assert!(file("parameters.csv").contains("SNOW"));
+    let dir = root.join("wordlist");
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, contents) in &wl.files {
+        std::fs::write(dir.join(name), contents).unwrap();
+    }
+    match Command::new("cldf").arg("validate").arg(dir.join("Wordlist-metadata.json")).output() {
+        Ok(out) => {
+            let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            assert!(out.status.success() && !said.contains("WARNING") && !said.contains("ERROR"), "cldf validate:\n{said}");
+        }
+        Err(_) => eprintln!("pycldf is not installed (pip install pycldf); skipped the reference validator"),
+    }
+    assert!(export_wordlist(&p, &WordlistOptions { title: "x", generator: "x", list: Some("cpl_nope"), segment: &cut }).is_err());
+    drop(p);
+    std::fs::remove_dir_all(&root).ok();
 }

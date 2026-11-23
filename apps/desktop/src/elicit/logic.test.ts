@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment } from "./logic.ts";
+import { exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, wordlistLines } from "./logic.ts";
 
 const c = (id: string, answered: boolean, skipped = false) => ({ id, skipped, answers: answered ? [{}] : [] });
 const list = [c("a", true), c("b", false), c("c", false, true), c("d", false)];
@@ -47,4 +47,14 @@ test("answers take their sound from the selected segment, then the next on its t
   const clock = (ms: number) => `${ms / 1000}s`;
   assert.equal(soundLine(segments[0]!, clock), "The next answer takes its sound from 0s–0.5s «ateş».");
   assert.match(soundLine(null, clock), /^Select a segment on the Timeline/u);
+});
+
+test("the word list export is reported in words", () => {
+  const r = { path: "/x/wugs-wordlist-2026-11-23", lists: 1, concepts: 100, answered: 40, forms: 41, skipped: 2, byProfile: false, notes: ["A note."] };
+  const lines = wordlistLines(r);
+  assert.equal(lines[0], "41 forms for 40 of 100 concepts written as a CLDF Wordlist, with edictor.tsv for EDICTOR and LingPy, in /x/wugs-wordlist-2026-11-23");
+  assert.match(lines[1]!, /letter by letter/);
+  assert.equal(lines[2], "2 concepts are marked not applicable and have no form.");
+  assert.equal(lines[3], "A note.");
+  assert.match(wordlistLines({ ...r, byProfile: true, skipped: 1, notes: [] })[2]!, /^1 concept is marked not applicable and has no form\.$/);
 });

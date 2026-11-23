@@ -45,6 +45,7 @@ pub mod session;
 pub mod sounds;
 pub mod typology;
 pub mod orthography;
+pub mod wordlist;
 pub mod spectrogram;
 pub mod updater;
 pub mod voice_analysis;
@@ -408,6 +409,13 @@ fn export_corpus(s: State<SessionThread>, folder: String, date: String, include_
 fn export_cldf(app: AppHandle, s: State<SessionThread>, folder: String, date: String, include_restricted: bool, audio: Option<bool>) -> Result<interchange::Published, String> {
     let generator = format!("wugs {}", app.package_info().version);
     s.run(move |s| interchange::export_cldf(s, std::path::Path::new(&folder), &date, include_restricted, audio.unwrap_or(false), &generator))
+}
+
+/// Export the elicited word lists (one, or all) as a CLDF Wordlist with an EDICTOR table, in a new folder inside `folder`.
+#[tauri::command(async)]
+fn export_wordlist(app: AppHandle, s: State<SessionThread>, folder: String, date: String, list_id: Option<String>) -> Result<wordlist::WordlistExport, String> {
+    let generator = format!("wugs {}", app.package_info().version);
+    s.run(move |s| wordlist::export(s, std::path::Path::new(&folder), &date, list_id.as_deref(), &generator))
 }
 
 /// Save a document the frontend built (interlinear examples) into `folder`.
@@ -1878,6 +1886,7 @@ pub fn run() {
             orthography_draft,
             orthography_preview,
             orthography_convert,
+            export_wordlist,
             set_typology_answer,
             character_inventory,
             sound_words,

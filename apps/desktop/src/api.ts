@@ -631,6 +631,8 @@ export type Languoid = import("./cldf/logic").Languoid;
 /** Glottolog's languages and dialects a typed name or code fits, best first (at most 8). */
 /** What Grambank or WALS says about a language, beside its relatives (src-tauri/src/typology.rs). */
 export const typologyProfile = (args: { glottocode: string; source: import("./typology/logic").Source }) => invoke<import("./typology/logic").Profile>("typology_profile", args);
+/** Export the elicited word lists (one, or all) as a CLDF Wordlist with an EDICTOR table (src-tauri/src/wordlist.rs). */
+export const exportWordlist = (args: { folder: string; date: string; listId: string | null }) => invoke<import("./elicit/logic").WordlistExport>("export_wordlist", args);
 /** The project's orthography profile and the tracks it can convert (src-tauri/src/orthography.rs). */
 export const orthographyGet = () => invoke<import("./orthography/logic").Stored>("orthography_get");
 /** Keep a profile as the project's. */
