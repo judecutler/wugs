@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { progress, sentencesOf, type Line } from "./logic.ts";
+import { nextWhere, progress, sentencesOf, showOf, toTranslate, type Line } from "./logic.ts";
 
 test("sentences are the utterance track's, translations left out, in number order", () => {
   const segs = [
@@ -37,4 +37,14 @@ test("the next sentence to gloss comes after the current one and wraps round", a
   assert.equal(nextToGloss(lines, "gone")?.id, "b");
   assert.equal(nextToGloss([line("a", [w(1)])], "a"), null);
   assert.equal(nextToGloss([line("a", [w(0)])], null)?.id, "a");
+});
+
+test("sentences without a translation, and the next one", () => {
+  const l = (id: string, content: string, translation: string | null): Line => ({ id, number: 1, content, words: [], translation, startMs: null });
+  const lines = [l("a", "kani", "count"), l("b", "ŋai", null), l("c", "", null), l("d", "toɾu", " ")];
+  assert.deepEqual(lines.filter(toTranslate).map((x) => x.id), ["b", "d"], "untranscribed sentences are not asked for a translation");
+  assert.equal(nextWhere(lines, "b", toTranslate)?.id, "d");
+  assert.equal(nextWhere(lines, "d", toTranslate)?.id, "b", "wrapping round");
+  assert.equal(showOf("translate").next, "Next to translate");
+  assert.equal(showOf("nonsense").id, "all");
 });
