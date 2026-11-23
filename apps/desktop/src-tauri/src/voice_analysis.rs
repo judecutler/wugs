@@ -213,7 +213,7 @@ fn resample(samples: &[f64], rate: f64, to: f64) -> Vec<f64> {
     out_spec[..keep].copy_from_slice(&spectrum[..keep]);
     // The inverse wants real values at 0 Hz and, for an even length, at the Nyquist.
     out_spec[0].im = 0.0;
-    if m % 2 == 0 {
+    if m.is_multiple_of(2) {
         let last = out_spec.len() - 1;
         out_spec[last].im = 0.0;
     }
@@ -242,10 +242,8 @@ fn burg(x: &[f64], m: usize) -> Option<Vec<f64>> {
     let mut b2 = vec![0.0; n + 1];
     b1[1] = x[0];
     b2[n - 1] = x[n - 1];
-    for j in 2..n {
-        b1[j] = x[j - 1];
-        b2[j - 1] = x[j - 1];
-    }
+    b1[2..n].copy_from_slice(&x[1..n - 1]);
+    b2[1..n - 1].copy_from_slice(&x[1..n - 1]);
     for i in 1..=m {
         let (mut num, mut den) = (0.0, 0.0);
         for j in 1..=n - i {
