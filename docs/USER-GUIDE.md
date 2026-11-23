@@ -501,6 +501,16 @@ Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cld
 
 Sentences from texts that are not open (restricted or community-only) are left out unless you tick **Include texts that are not open**. Tick it only if the speakers agreed to publication. Before you publish the dataset, add a licence and check it with `cldf validate Dictionary-metadata.json` (from `pip install pycldf`).
 
+### Load the corpus into CQPweb or Sketch Engine
+
+Press **Corpus for CQPweb…** to export every text as one corpus. wugs makes a folder with three files:
+
+- A vertical file (`.vert`): each word with its lemma, part of speech and features, sentences with their translations, and each text with its details.
+- `encode.sh`: the commands that load the corpus into the Corpus Workbench, so that CQPweb and `cqp` can search it.
+- `README.md`: how to load the corpus into CQPweb, NoSketch Engine and Sketch Engine.
+
+Texts that are not open are left out unless you tick **Include texts that are not open**.
+
 ### Seal a version for the archive
 
 1. Click **Seal a version for the archive…**.

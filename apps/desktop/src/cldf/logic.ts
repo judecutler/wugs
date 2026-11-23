@@ -20,6 +20,16 @@ export function isoProblem(code: string): string | null {
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 /** The toast after publishing. */
+/** What a corpus export wrote, in words. */
+export function corpusLines(r: { path: string; corpus: string; texts: number; sentences: number; restrictedLeftOut: number; notes: string[] }): string[] {
+  const lines = [
+    `Saved the corpus ${r.corpus} in ${r.path}: ${plural(r.texts, "text", "texts")}, ${plural(r.sentences, "sentence", "sentences")}.`,
+    "Run encode.sh there to load it into CQPweb or cqp, or upload the .vert file to Sketch Engine; the README says how.",
+  ];
+  if (r.restrictedLeftOut > 0) lines.push(`${plural(r.restrictedLeftOut, "text that is not open was", "texts that are not open were")} left out.`);
+  return [...lines, ...r.notes];
+}
+
 export function publishedLines(r: Published): string[] {
   return [
     `Saved a CLDF dataset in ${r.path}.`,

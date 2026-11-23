@@ -561,7 +561,7 @@ pub fn write_new(folder: &Path, stem: &str, ext: &str, contents: &[u8]) -> Resul
 
 /// Exports and seals go outside the project folder: inside it, `cache/` is
 /// wiped on a rebuild and `blobs/` would be copied into every later seal.
-fn outside_project(s: &mut Session, folder: &Path) -> Result<(), String> {
+pub(crate) fn outside_project(s: &mut Session, folder: &Path) -> Result<(), String> {
     let root = session::project_root(s)?;
     let (Ok(root), Ok(chosen)) = (root.canonicalize(), folder.canonicalize()) else {
         return Err(format!("{} is not a folder", folder.display()));
@@ -633,7 +633,7 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
 /// utterance tier when it holds this text's segments, else the
 /// transcription tier with the most; untimed segments after the timed, in
 /// their own order. A note names the track when others were left out.
-fn one_track(p: &wugs_core::Project, text_id: &str, notes: &mut Vec<String>, format: &str) -> Result<Vec<String>, String> {
+pub(crate) fn one_track(p: &wugs_core::Project, text_id: &str, notes: &mut Vec<String>, format: &str) -> Result<Vec<String>, String> {
     let (_, transcription) = crate::concordance::corpus_tiers(p)?;
     let mut by_tier: Vec<(String, Vec<(Option<f64>, usize, String)>)> = Vec::new();
     for (i, seg) in p.proj.ordered_children("text", text_id, "segment")?.into_iter().enumerate() {
@@ -667,7 +667,7 @@ fn one_track(p: &wugs_core::Project, text_id: &str, notes: &mut Vec<String>, for
 
 /// A sentence's translations: segments naming it as `parent` on a
 /// translation track, with the track's language when it has one.
-fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<Vec<(Option<String>, String)>, String> {
+pub(crate) fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<Vec<(Option<String>, String)>, String> {
     let mut out = Vec::new();
     for child in p.proj.children_by_ref("parent", segment, "segment")? {
         if p.proj.is_tombstoned(&child)? {

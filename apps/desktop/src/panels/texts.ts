@@ -1,6 +1,6 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { createText, errorText, exportCldf, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { glottocodeProblem, isoProblem, publishedLines, type Language } from "../cldf/logic";
+import { createText, errorText, exportCldf, exportCorpus, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { corpusLines, glottocodeProblem, isoProblem, publishedLines, type Language } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
@@ -196,6 +196,15 @@ function languageRow(project: string): HTMLElement {
   );
 }
 
+async function exportCwb() {
+  const folder = await chooseFolder("Choose where the corpus goes");
+  if (folder === null) return;
+  await work("cwb", async () => {
+    const r = await exportCorpus({ folder, date: localDay(new Date()), includeRestricted });
+    showToast({ tone: r.notes.length > 0 || r.restrictedLeftOut > 0 ? "warn" : "info", lines: corpusLines(r) });
+  });
+}
+
 async function publishCldf() {
   const folder = await chooseFolder("Choose where the CLDF dataset goes");
   if (folder === null) return;
@@ -367,6 +376,13 @@ export const textsPanel: PanelDef = {
             title: "The lexicon and every glossed sentence as a CLDF Dictionary dataset (CSV files with metadata), what Zenodo, pycldf and CLLD dictionaries read",
             disabled: busy !== null,
             onclick: () => void publishCldf(),
+          }),
+          h("button", {
+            type: "button",
+            textContent: busy === "cwb" ? "Exporting…" : "Corpus for CQPweb…",
+            title: "Every text as one corpus (a CWB vertical file with lemmas, tags and each text's details, plus the commands that encode it) for CQPweb, cqp, NoSketch Engine or Sketch Engine",
+            disabled: busy !== null,
+            onclick: () => void exportCwb(),
           }),
           h(
             "label",
