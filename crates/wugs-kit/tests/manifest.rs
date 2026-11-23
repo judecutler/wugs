@@ -32,7 +32,7 @@ fn the_bundled_tongues_kit_parses() {
     );
     assert_eq!(kit.layout[1].at, Some((Place::Left, "timeline".into())));
     assert_eq!(kit.layout[1].width, Some(260));
-    assert_eq!(kit.active, ["texts", "timeline"]);
+    assert_eq!(kit.active, ["gloss", "texts", "timeline"]);
     assert_eq!(
         kit.wug,
         Some(Wug {
