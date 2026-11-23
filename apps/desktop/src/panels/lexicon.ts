@@ -6,13 +6,15 @@
 // entry's paradigm (roadmap item 50) is its own view, fetched for the chosen
 // template and returned whole by every form edit.
 import {
-  concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
+  concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconClearPicture, lexiconSetPicture, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
   deleteParadigmTemplate, lexiconDeleteForm, lexiconFillCell, lexiconMerge, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
   lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
   type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
 import { filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
@@ -763,6 +765,27 @@ export const lexiconPanel: PanelDef = {
       });
     }
 
+    /** A picture of what the sense means, for picture dictionaries, the website and flashcards. */
+    function pictureBlock(s: SenseView) {
+      const choose = async () => {
+        const path = await pickFile({ title: "Choose a picture of this meaning", multiple: false, directory: false, filters: [{ name: "Pictures", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }] });
+        if (typeof path === "string") await run(() => lexiconSetPicture({ sense: s.id, path }));
+      };
+      const pic = s.picture ?? null;
+      if (pic === null) {
+        return h("div", { className: "lx-picture" }, keyed(`pic:${s.id}`, h("button", { type: "button", className: "lx-add-domain", textContent: "+ Picture", title: "A photo or drawing of what this means: shown here, in the printed dictionary, on the website and on flashcards", onclick: () => void choose() })));
+      }
+      return h(
+        "div",
+        { className: "lx-picture" },
+        pic.path === null
+          ? h("span", { className: "note", textContent: `${pic.name}: not on this computer yet` })
+          : h("img", { src: convertFileSrc(pic.path), alt: s.gloss || pic.name, title: pic.name }),
+        keyed(`pic:${s.id}`, h("button", { type: "button", className: "lx-add-domain", textContent: "Change…", onclick: () => void choose() })),
+        confirmButton(`unpic:${s.id}`, "Remove picture", () => void run(() => lexiconClearPicture({ sense: s.id }))),
+      );
+    }
+
     function senseBlock(e: EntryView, s: SenseView, i: number, lang: string | null) {
       const glossRow = row(
         e.senses.length > 1 ? `Sense ${i + 1}` : "Gloss",
@@ -803,6 +826,7 @@ export const lexiconPanel: PanelDef = {
         h("div", { className: "lx-def" }, area(`def:${s.id}`, s.definition, "Definition", (v) => run(() => lexiconSetSenseText({ senseId: s.id, field: "definition", text: v })))),
         h("div", { className: "lx-def" }, area(`use:${s.id}`, s.usage, "Usage note", (v) => run(() => lexiconSetSenseText({ senseId: s.id, field: "usage", text: v })))),
         examplesBlock(s),
+        pictureBlock(s),
         h(
           "div",
           { className: "lx-domains" },

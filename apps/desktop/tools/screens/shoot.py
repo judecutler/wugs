@@ -145,7 +145,14 @@ class Run:
         self.context = browser.new_context(viewport={"width": 1440, "height": 900}, device_scale_factor=1)
         self.context.add_init_script(init_script(auto_open))
         wav = silent_wav()
-        self.context.route("**/__mock_asset/**", lambda route: route.fulfill(status=200, body=wav, content_type="audio/wav"))
+        picture = (HERE.parent.parent / "public" / "brand" / "logo.svg").read_bytes()
+        # A file the fixtures name as a picture (`.svg`) is the brand wug; any other is a silent recording.
+        self.context.route(
+            "**/__mock_asset/**",
+            lambda route: route.fulfill(status=200, body=picture, content_type="image/svg+xml")
+            if route.request.url.endswith("svg")
+            else route.fulfill(status=200, body=wav, content_type="audio/wav"),
+        )
         self.page = self.context.new_page()
         self.page.on("pageerror", lambda e: self.errors.append(f"pageerror: {e}"))
         self.page.on("console", self.console)

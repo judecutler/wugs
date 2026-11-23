@@ -295,6 +295,7 @@ const LEXICON = [
               },
               { id: "exm-2", sentence: "kani ta haru", translation: "count the stones", reference: "Notebook 2, p. 14", from: null },
             ],
+            picture: { blob: "blake3:" + "ab".repeat(32), name: "counting.svg", path: "/project/blobs/counting.svg" },
           },
           { id: "sense-kani-2", gloss: "reckon", glossesByLang: {}, definition: "To think something likely.", usage: "", domains: [], occurrences: 1, examples: [] },
         ],

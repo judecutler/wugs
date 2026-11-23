@@ -279,6 +279,32 @@ impl Project {
         t.commit()
     }
 
+    /// A picture of what a sense means (DATA-MODEL §3 Sense `picture`): a
+    /// blob ref and the file's name as it was chosen, or `None` to take it
+    /// off. Resolving: a person's pick closes another device's.
+    pub fn set_sense_picture(&mut self, sense: &str, picture: Option<(&str, &str)>) -> Result<CommitResult, String> {
+        self.require(sense, "sense")?;
+        let (blob, name) = match picture {
+            Some((b, n)) => {
+                crate::check_blob_ref(b)?;
+                (Value::str(b), Value::str(n.trim()))
+            }
+            None => (Value::Null, Value::Null),
+        };
+        let mut t = self.intent("edit-sense").resolving();
+        t.set("sense", sense, SCOPE_LEXICON, "picture", blob)?;
+        t.set("sense", sense, SCOPE_LEXICON, "x.picture-name", name)?;
+        t.commit()
+    }
+
+    /// A sense's picture as (blob ref, file name), when it has one.
+    pub fn sense_picture(&self, sense: &str) -> Result<Option<(String, String)>, String> {
+        match self.proj.field_str(sense, "picture")? {
+            Some(b) if crate::parse_blob_ref(&b).is_some() => Ok(Some((b, self.proj.field_str(sense, "x.picture-name")?.unwrap_or_default()))),
+            _ => Ok(None),
+        }
+    }
+
     pub fn delete_sense(&mut self, sense: &str) -> Result<CommitResult, String> {
         self.require(sense, "sense")?;
         let mut t = self.intent("delete-sense");
@@ -412,6 +438,21 @@ mod tests {
             row("1.1.1", "DC1A2C6F-1B32-4631-8823-36DACC8CB7BB", "Sun"),
             row("1.2", "B47D2604-8B23-41E9-9158-01526DD83894", "World"),
         ]
+    }
+
+    #[test]
+    fn a_sense_takes_a_picture_and_gives_it_back() {
+        let (root, mut p) = project();
+        let ((_, sense), _) = p.add_lexeme("kesi", "fox").unwrap();
+        assert_eq!(p.sense_picture(&sense).unwrap(), None);
+        let blob = format!("blake3:{}", "ab".repeat(32));
+        assert!(p.set_sense_picture(&sense, Some(("not a blob", "fox.jpg"))).is_err());
+        p.set_sense_picture(&sense, Some((&blob, " fox.jpg "))).unwrap();
+        assert_eq!(p.sense_picture(&sense).unwrap(), Some((blob.clone(), "fox.jpg".into())));
+        assert!(p.blob_refs().unwrap().contains(&blob), "the log keeps the picture from GC");
+        p.set_sense_picture(&sense, None).unwrap();
+        assert_eq!(p.sense_picture(&sense).unwrap(), None);
+        std::fs::remove_dir_all(root).ok();
     }
 
     #[test]

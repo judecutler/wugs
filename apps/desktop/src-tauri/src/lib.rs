@@ -917,6 +917,17 @@ fn lexicon_set_sense_text(s: State<SessionThread>, sense_id: String, field: Stri
     s.run(move |s| lexicon::lexicon_set_sense_text(s, &sense_id, &field, &text))
 }
 
+/// Copy a picture into the project and show it with a sense (a picture dictionary).
+#[tauri::command(async)]
+fn lexicon_set_picture(s: State<SessionThread>, sense: String, path: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_set_picture(s, &sense, &path))
+}
+
+#[tauri::command(async)]
+fn lexicon_clear_picture(s: State<SessionThread>, sense: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_clear_picture(s, &sense))
+}
+
 #[tauri::command(async)]
 fn lexicon_add_allomorph(s: State<SessionThread>, id: String, form: String) -> Result<lexicon::EntryEdit, String> {
     s.run(move |s| lexicon::lexicon_add_allomorph(s, &id, &form))
@@ -2048,6 +2059,8 @@ pub fn run() {
             lexicon_set_sense_text,
             lexicon_delete_sense,
             lexicon_add_allomorph,
+            lexicon_set_picture,
+            lexicon_clear_picture,
             lexicon_add_example,
             lexicon_example_from,
             lexicon_set_example,

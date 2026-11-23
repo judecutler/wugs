@@ -33,6 +33,32 @@ pub struct Dictionary {
     /// With clips asked for: each ▶ on the page and the span it plays.
     #[serde(skip)]
     pub clips: Vec<Clip>,
+    /// Senses printed with their picture.
+    pub pictures: usize,
+    /// With pictures as files: each file the page shows and the blob it copies.
+    #[serde(skip)]
+    pub picture_files: Vec<(String, String)>,
+}
+
+/// How a dictionary page carries its pictures: inside the one HTML file
+/// (printing, Word) or as files beside it (a website).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Pictures {
+    Inline,
+    Files,
+}
+
+/// Standard base64, for a picture written into the page as a `data:` URL.
+pub(crate) fn base64(bytes: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for c in bytes.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for i in 0..4 {
+            out.push(if i <= c.len() { A[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
 }
 
 /// A headword's recording on a site's dictionary page: the file the ▶ plays,
@@ -135,12 +161,13 @@ h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; ma
 .hw { font-weight: bold; } .hn { font-size: 70%; vertical-align: sub; font-weight: normal; }
 .ps { font-style: italic; } .rel { font-variant: small-caps; } .pr { font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
 .gl2 { color: #333; } .ex { font-style: italic; } .tr { }
+.pic { display: block; max-width: 12em; max-height: 9em; margin: .3em 0 .2em 1.2em; border-radius: 3px; }
 .reversal p { margin: 0 0 .25em; } h2 { break-after: avoid; }
 .entry:target { background: #fff3c4; }
 @media print { body { margin: 0; max-width: none; } a { color: inherit; text-decoration: none; } }
 ";
 
-fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Option<&str>) -> String {
+fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Option<&str>, pictures: &BTreeMap<String, String>) -> String {
     let mut out = format!("<p class=\"entry\" id=\"{}\"><span class=\"hw\">{}</span>", esc(&e.id), esc(&e.lemma));
     if let Some(n) = e.homograph {
         out.push_str(&format!("<span class=\"hn\">{n}</span>"));
@@ -177,6 +204,9 @@ fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Op
         if !s.domains.is_empty() {
             let doms: Vec<String> = s.domains.iter().map(|d| esc(&d.label)).collect();
             out.push_str(&format!(" <span class=\"dom\">[{}]</span>", doms.join(", ")));
+        }
+        if let Some(src) = pictures.get(&s.id) {
+            out.push_str(&format!(" <img class=\"pic\" src=\"{}\" alt=\"{}\">", esc(src), esc(&s.gloss)));
         }
         for ex in examples.get(&s.id).into_iter().flatten() {
             out.push_str(&format!(". <span class=\"ex\">{}</span>", esc(ex.text.trim())));
@@ -229,7 +259,7 @@ pub fn export_dictionary(s: &mut Session, folder: &Path, date: &str, include_res
     }
     crate::interchange::outside_project(s, folder)?;
     let p = session::project(s)?;
-    let (title, html, mut d) = document(p, date, include_restricted, false)?;
+    let (title, html, mut d) = document(p, date, include_restricted, false, Pictures::Inline)?;
     let path = crate::interchange::write_new(folder, &crate::interchange::file_stem(&title, "dictionary"), "html", html.as_bytes())?;
     d.path = path.display().to_string();
     Ok(d)
@@ -254,7 +284,7 @@ pub(crate) fn headword_clip(p: &Project, e: &EntryView, include_restricted: bool
 /// The dictionary as one HTML page: its title, the page, and what it holds
 /// (`path` empty). With `clips`, a headword heard in an open recording gets
 /// a ▶ whose clip the caller cuts (`Dictionary::clips`).
-pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips: bool) -> Result<(String, String, Dictionary), String> {
+pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips: bool, pictures: Pictures) -> Result<(String, String, Dictionary), String> {
     let units = alphabet(p)?;
     let mut entries: Vec<EntryView> = p.proj.entities_of_kind("lexeme")?.iter().map(|id| entry_view(p, id)).collect::<Result<_, _>>()?;
     entries.retain(|e| !e.lemma.trim().is_empty());
@@ -293,6 +323,27 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
     let mut body = String::new();
     let mut current = String::new();
     let mut cut: Vec<Clip> = Vec::new();
+    // Each sense's picture that is on this computer, as the page will show it.
+    let mut shown: BTreeMap<String, String> = BTreeMap::new();
+    let mut picture_files: Vec<(String, String)> = Vec::new();
+    for e in &entries {
+        for sense in &e.senses {
+            let Some(pic) = &sense.picture else { continue };
+            let Some(path) = &pic.path else { continue };
+            let src = match pictures {
+                Pictures::Files => {
+                    let file = format!("pictures/p-{}.{}", picture_files.len() + 1, crate::lexicon::picture_ext(&pic.name));
+                    picture_files.push((file.clone(), pic.blob.clone()));
+                    file
+                }
+                Pictures::Inline => {
+                    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", pic.name))?;
+                    format!("data:{};base64,{}", crate::lexicon::picture_mime(&pic.name), base64(&bytes))
+                }
+            };
+            shown.insert(sense.id.clone(), src);
+        }
+    }
     body.push_str("<div class=\"entries\">\n");
     for e in &entries {
         let l = letter(&units, &p.proj.nfc(&e.lemma));
@@ -308,7 +359,7 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
             }
             None => None,
         };
-        body.push_str(&entry_html(e, &examples, clip.as_deref()));
+        body.push_str(&entry_html(e, &examples, clip.as_deref(), &shown));
     }
     body.push_str("</div>\n");
     // Reversal index: each primary gloss, case-blind, with the headwords that carry it.
@@ -357,7 +408,7 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
             glosses: e.senses.iter().map(|s| s.gloss.trim()).filter(|g| !g.is_empty()).collect::<Vec<_>>().join("; "),
         })
         .collect();
-    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords, clips: cut };
+    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords, clips: cut, pictures: shown.len(), picture_files };
     Ok((title, html, d))
 }
 
