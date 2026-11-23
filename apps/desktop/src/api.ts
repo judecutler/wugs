@@ -505,7 +505,9 @@ export const domainsLoadSil = () => invoke<DomainsLoaded>("domains_load_sil");
 
 export type BundledList = { source: string; name: string; citation: string; count: number; listId: string | null };
 export type ListSummary = { id: string; name: string; citation: string; total: number; answered: number; skipped: number };
-export type Answer = { senseId: string; lexemeId: string; lemma: string; homograph: number | null; gloss: string };
+/** Where an answer is heard: its entry's first pronunciation in a live recording. */
+export type Sound = { sourceId: string; startMs: number; endMs: number };
+export type Answer = { senseId: string; lexemeId: string; lemma: string; homograph: number | null; gloss: string; sound: Sound | null };
 export type ConceptView = {
   id: string;
   number: number;
@@ -531,8 +533,8 @@ export const conceptListsBundled = () => invoke<BundledList[]>("concept_lists_bu
 export const conceptListLoad = (args: { source: string }) => invoke<ListSummary>("concept_list_load", args);
 export const conceptLists = () => invoke<ListSummary[]>("concept_lists");
 export const conceptListView = (args: { listId: string }) => invoke<ListView>("concept_list_view", args);
-export const elicitAnswer = (args: { conceptId: string; form: string; gloss: string }) => invoke<ConceptEdit>("elicit_answer", args);
-export const elicitLink = (args: { conceptId: string; senseId: string }) => invoke<ConceptEdit>("elicit_link", args);
+export const elicitAnswer = (args: { conceptId: string; form: string; gloss: string; segmentId: string | null }) => invoke<ConceptEdit>("elicit_answer", args);
+export const elicitLink = (args: { conceptId: string; senseId: string; segmentId: string | null }) => invoke<ConceptEdit>("elicit_link", args);
 export const elicitUnlink = (args: { conceptId: string; senseId: string }) => invoke<ConceptEdit>("elicit_unlink", args);
 export const elicitSkip = (args: { conceptId: string; skipped: boolean; note: string }) => invoke<ConceptEdit>("elicit_skip", args);
 export const domainQuestions = (args: { domainId: string }) => invoke<DomainQuestions>("domain_questions", args);

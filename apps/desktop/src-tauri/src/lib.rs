@@ -896,13 +896,13 @@ fn concept_list_view(s: State<SessionThread>, list_id: String) -> Result<elicit:
 }
 
 #[tauri::command(async)]
-fn elicit_answer(s: State<SessionThread>, concept_id: String, form: String, gloss: String) -> Result<elicit::ConceptEdit, String> {
-    s.run(move |s| elicit::elicit_answer(s, &concept_id, &form, &gloss))
+fn elicit_answer(s: State<SessionThread>, concept_id: String, form: String, gloss: String, segment_id: Option<String>) -> Result<elicit::ConceptEdit, String> {
+    s.run(move |s| elicit::elicit_answer(s, &concept_id, &form, &gloss, segment_id.as_deref()))
 }
 
 #[tauri::command(async)]
-fn elicit_link(s: State<SessionThread>, concept_id: String, sense_id: String) -> Result<elicit::ConceptEdit, String> {
-    s.run(move |s| elicit::elicit_link(s, &concept_id, &sense_id))
+fn elicit_link(s: State<SessionThread>, concept_id: String, sense_id: String, segment_id: Option<String>) -> Result<elicit::ConceptEdit, String> {
+    s.run(move |s| elicit::elicit_link(s, &concept_id, &sense_id, segment_id.as_deref()))
 }
 
 #[tauri::command(async)]

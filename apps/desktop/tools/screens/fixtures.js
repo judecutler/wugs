@@ -343,7 +343,7 @@
       concepticonGloss: gloss.toUpperCase(),
       skipped: gloss in SKIPPED,
       skipNote: SKIPPED[gloss] ?? "",
-      answers: a === undefined ? [] : [{ senseId: `sense-${a[1]}`, lexemeId: a[1], lemma: a[0], homograph: a[1] === "lx-tela1" ? 1 : null, gloss }],
+      answers: a === undefined ? [] : [{ senseId: `sense-${a[1]}`, lexemeId: a[1], lemma: a[0], homograph: a[1] === "lx-tela1" ? 1 : null, gloss, sound: a[1] === "lx-tela1" || a[1] === "lx-kani" ? { sourceId: "src-count", startMs: 620, endMs: 1300 } : null }],
     };
   });
   const listSummary = {

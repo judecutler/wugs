@@ -44,3 +44,29 @@ export function exactMatches<T extends { lemma: string }>(rows: T[], form: strin
   if (f === "") return [];
   return rows.filter((r) => r.lemma.normalize("NFC").toLocaleLowerCase() === f).slice(0, limit);
 }
+
+/** A segment as the Elicit panel reads it from the text on screen. */
+export type SegmentLike = { id: string; tier: string; startMs: number | null; endMs: number | null; content: string };
+
+/** The selected segment an answer can take its sound from: one of the text
+ * on screen, with times. */
+export function soundSegment(sel: { textId: string; segmentId: string } | null, text: { id: string; segments: SegmentLike[] } | null): SegmentLike | null {
+  if (sel === null || text === null || sel.textId !== text.id) return null;
+  const seg = text.segments.find((s) => s.id === sel.segmentId);
+  return seg !== undefined && seg.startMs !== null && seg.endMs !== null && seg.endMs > seg.startMs ? seg : null;
+}
+
+/** The next timed segment on the same track, in time order: where the
+ * session's next word was said. */
+export function nextOnTrack(segments: SegmentLike[], current: SegmentLike): SegmentLike | null {
+  const after = segments.filter((s) => s.tier === current.tier && s.id !== current.id && s.startMs !== null && current.startMs !== null && (s.startMs > current.startMs || (s.startMs === current.startMs && s.id > current.id)));
+  after.sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0) || (a.id < b.id ? -1 : 1));
+  return after[0] ?? null;
+}
+
+/** The line saying where the next answer's sound comes from. */
+export function soundLine(seg: SegmentLike | null, clock: (ms: number) => string): string {
+  if (seg === null) return "Select a segment on the Timeline: the next answer takes its sound from it, and the segment after it is selected and played.";
+  const what = seg.content.trim() === "" ? "" : ` «${seg.content.trim()}»`;
+  return `The next answer takes its sound from ${clock(seg.startMs ?? 0)}–${clock(seg.endMs ?? 0)}${what}.`;
+}
