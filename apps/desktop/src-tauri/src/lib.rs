@@ -764,6 +764,26 @@ fn lexicon_add_allomorph(s: State<SessionThread>, id: String, form: String) -> R
 }
 
 #[tauri::command(async)]
+fn lexicon_add_example(s: State<SessionThread>, sense_id: String, sentence: String, translation: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_add_example(s, &sense_id, &sentence, &translation))
+}
+
+#[tauri::command(async)]
+fn lexicon_example_from(s: State<SessionThread>, sense_id: String, segment_id: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_example_from(s, &sense_id, &segment_id))
+}
+
+#[tauri::command(async)]
+fn lexicon_set_example(s: State<SessionThread>, example_id: String, field: String, text: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_set_example(s, &example_id, &field, &text))
+}
+
+#[tauri::command(async)]
+fn lexicon_delete_example(s: State<SessionThread>, example_id: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_delete_example(s, &example_id))
+}
+
+#[tauri::command(async)]
 fn lexicon_delete_allomorph(s: State<SessionThread>, id: String, form_id: String) -> Result<lexicon::EntryEdit, String> {
     s.run(move |s| lexicon::lexicon_delete_allomorph(s, &id, &form_id))
 }
@@ -1778,6 +1798,10 @@ pub fn run() {
             lexicon_set_sense_text,
             lexicon_delete_sense,
             lexicon_add_allomorph,
+            lexicon_add_example,
+            lexicon_example_from,
+            lexicon_set_example,
+            lexicon_delete_example,
             lexicon_delete_allomorph,
             lexicon_assign_domain,
             lexicon_unassign_domain,

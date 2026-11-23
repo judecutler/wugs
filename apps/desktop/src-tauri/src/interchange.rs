@@ -814,6 +814,8 @@ pub struct Published {
     pub entries: usize,
     pub senses: usize,
     pub examples: usize,
+    /// The lexicon's own example sentences, also in `examples.csv`.
+    pub lexicon_examples: usize,
     /// Sound clips cut for the examples (`audio`).
     pub clips: usize,
     pub restricted_left_out: usize,
@@ -864,7 +866,7 @@ pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricte
         fs::remove_dir_all(&scratch).ok();
         return Err(e);
     }
-    Ok(Published { path: out.display().to_string(), entries: ds.entries, senses: ds.senses, examples: ds.examples, clips: ds.clips.len(), restricted_left_out: ds.restricted_left_out, notes: ds.notes })
+    Ok(Published { path: out.display().to_string(), entries: ds.entries, senses: ds.senses, examples: ds.examples, lexicon_examples: ds.lexicon_examples, clips: ds.clips.len(), restricted_left_out: ds.restricted_left_out, notes: ds.notes })
 }
 
 /// The longest clip cut for an example; a sentence is far shorter.

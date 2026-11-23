@@ -18,6 +18,8 @@ test("the report counts in words and keeps the notes", () => {
   assert.equal(lines[2], "One more thing.");
   const clipped = publishedLines({ path: "/x", entries: 1, senses: 1, examples: 3, clips: 2, restrictedLeftOut: 0, notes: [] });
   assert.equal(clipped[2], "2 sentences come with their sound clip, cut from the recording, in the audio folder.");
+  const withExamples = publishedLines({ path: "/x", entries: 1, senses: 1, examples: 3, lexiconExamples: 1, restrictedLeftOut: 0, notes: [] });
+  assert.match(withExamples[1]!, /3 glossed sentences, with 1 example sentence from the lexicon, ready/u);
 });
 
 test("a corpus export says where it went and what was left out", () => {

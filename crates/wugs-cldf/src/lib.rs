@@ -57,7 +57,10 @@ pub struct Dataset {
     pub files: Vec<(String, String)>,
     pub entries: usize,
     pub senses: usize,
+    /// Glossed sentences from the texts.
     pub examples: usize,
+    /// Example sentences the lexicon holds for its senses (also in `examples.csv`).
+    pub lexicon_examples: usize,
     /// Sentences left out because their text is not open (`include_restricted` off).
     pub restricted_left_out: usize,
     /// The examples' sound clips, when asked for (`Options::audio`).
@@ -337,6 +340,29 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
             examples.rows.push(row);
         }
     }
+    // The lexicon's own example sentences (`wugs_core::examples`): lexicon
+    // data, so shown whatever their source text's access; no word-by-word
+    // analysis, so Analyzed_Word and Gloss stay empty.
+    for lex in p.proj.entities_of_kind("lexeme")? {
+        if !live(p, &lex, "lexeme")? {
+            continue;
+        }
+        for sen in p.proj.ordered_children("lexeme", &lex, "sense")? {
+            if !live(p, &sen, "sense")? {
+                continue;
+            }
+            for x in p.examples(&sen)? {
+                let id = cldf_id(&x.id);
+                uses.entry(sen.clone()).or_default().insert(id.clone());
+                let mut row = vec![id, lang_id.clone(), x.sentence, String::new(), String::new(), x.translation, String::new(), String::new(), String::new(), String::new()];
+                if o.audio.is_some() {
+                    row.push(String::new());
+                }
+                examples.rows.push(row);
+                ds.lexicon_examples += 1;
+            }
+        }
+    }
     for (id, code) in &meta_langs {
         languages.rows.push(vec![id.clone(), code.clone(), String::new(), if code.len() == 3 && code.bytes().all(|b| b.is_ascii_lowercase()) { code.clone() } else { String::new() }]);
     }
@@ -447,7 +473,7 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
 
     ds.entries = entries.rows.len();
     ds.senses = senses.rows.len();
-    ds.examples = examples.rows.len();
+    ds.examples = examples.rows.len() - ds.lexicon_examples;
     if ds.restricted_left_out > 0 {
         ds.notes.push(format!(
             "{} from texts that are not open {} left out; choose to include them only if the speakers agreed to publication.",
@@ -576,7 +602,7 @@ fn readme(o: &Options, ds: &Dataset, language: &str) -> String {
     let language = if language.is_empty() { "the project's language" } else { language };
     format!(
         "# {title}\n\nA CLDF Dictionary dataset of {language}, exported from wugs ({generator}).\n\n\
-- `entries.csv`: {entries}\n- `senses.csv`: {senses}, with semantic domains and Concepticon concept sets where the lexicon has them\n- `examples.csv`: {examples}, in Leipzig interlinear form (words and glosses separated by tabs), each with its text and time span in milliseconds\n- `languages.csv`: the language and the languages of the translations\n{media}\n\
+- `entries.csv`: {entries}\n- `senses.csv`: {senses}, with semantic domains and Concepticon concept sets where the lexicon has them\n- `examples.csv`: {examples}, in Leipzig interlinear form (words and glosses separated by tabs), each with its text and time span in milliseconds{lexicon_examples}\n- `languages.csv`: the language and the languages of the translations\n{media}\n\
 Validate with `pip install pycldf` and `cldf validate Dictionary-metadata.json`.\n\n\
 Before publishing, add a licence (`dc:license` in the metadata) and a citation, and check that the speakers agreed to publication. \
 {restricted}\n",
@@ -590,6 +616,11 @@ Before publishing, add a licence (`dc:license` in the metadata) and a citation, 
         entries = plural(ds.entries, "entry", "entries"),
         senses = plural(ds.senses, "sense", "senses"),
         examples = plural(ds.examples, "glossed sentence", "glossed sentences"),
+        lexicon_examples = if ds.lexicon_examples == 0 {
+            String::new()
+        } else {
+            format!(", and {} the lexicon gives for its senses (sentence and translation, no glosses)", plural(ds.lexicon_examples, "example sentence", "example sentences"))
+        },
         restricted = if o.include_restricted {
             "Sentences from texts marked restricted or community-only are included, as chosen at export."
         } else {

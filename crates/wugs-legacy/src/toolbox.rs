@@ -4,7 +4,8 @@
 //! Carried semantically (MDF meaning, see `MDF`): `\lx` lexeme, `\hm`
 //! homograph number, `\lc` citation form, `\sn` sense number, `\ps` part of
 //! speech, `\ge` English gloss, `\de` English definition, `\va` variant form,
-//! `\a` allomorph.
+//! `\a` allomorph, `\xv` example sentence and the `\xe` (English
+//! translation) right after it.
 //! Every other line, and any repeat of a carried marker within the same
 //! owner, is kept verbatim in its original position and counted in
 //! `ToolboxReport::markers_kept_verbatim`.
@@ -44,6 +45,8 @@ enum Carried {
     Definition,
     Variant,
     Allomorph,
+    Example,
+    ExampleTranslation,
 }
 
 /// The MDF subset wugs carries: marker, meaning, and the field it lands in.
@@ -57,6 +60,8 @@ const MDF: &[(&str, Carried, &str)] = &[
     ("de", Carried::Definition, "definition"),
     ("va", Carried::Variant, "form"),
     ("a", Carried::Allomorph, "form"),
+    ("xv", Carried::Example, "sentence"),
+    ("xe", Carried::ExampleTranslation, "translation"),
 ];
 
 fn carried(marker: &str) -> Option<(Carried, &'static str)> {
@@ -82,6 +87,7 @@ pub struct ToolboxReport {
     pub entries_skipped_matched_by_headword: usize,
     pub senses_created: usize,
     pub variants_created: usize,
+    pub examples_created: usize,
     /// Lines kept only verbatim, by marker.
     pub markers_kept_verbatim: Counts,
     /// Records sharing headword and homograph number with an earlier record.
@@ -95,6 +101,7 @@ enum Owner {
     Lexeme,
     Sense(usize),
     Variant(usize),
+    Example(usize),
 }
 
 enum Item {
@@ -120,6 +127,8 @@ struct EntryIn {
     senses: Vec<SenseIn>,
     /// Other forms in record order: (surface, `form` kind: `variant` for `\va`, `allomorph` for `\a`).
     variants: Vec<(String, &'static str)>,
+    /// Example sentences in record order: (sense index, sentence, translation).
+    examples: Vec<(usize, String, Option<String>)>,
 }
 
 /// Import a Toolbox MDF lexicon. One txn per entry, lexicon scope; the
@@ -196,6 +205,7 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
         block: Vec::new(),
         senses: Vec::new(),
         variants: Vec::new(),
+        examples: Vec::new(),
     };
     let mut current: Option<usize> = None;
     // Lines that belong to the sense the next \sn opens.
@@ -252,6 +262,30 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
                     Some(Owner::Sense(s))
                 } else {
                     None
+                }
+            }
+            // An example belongs to the sense it is written under (the first
+            // when there is no \sn); one above the first \sn stays verbatim.
+            Some((Carried::Example, _)) if !f.value.is_empty() => {
+                if !has_sn && e.senses.is_empty() {
+                    e.senses.push(SenseIn::default());
+                }
+                match current.or((!has_sn).then_some(0)) {
+                    Some(s) => {
+                        e.examples.push((s, f.value.clone(), None));
+                        Some(Owner::Example(e.examples.len() - 1))
+                    }
+                    None => None,
+                }
+            }
+            // A translation goes with the example just above it, once.
+            Some((Carried::ExampleTranslation, _)) if !f.value.is_empty() && rec.get(i.wrapping_sub(1)).is_some_and(|p| p.marker == "xv") => {
+                match e.examples.last_mut() {
+                    Some(x) if x.2.is_none() => {
+                        x.2 = Some(f.value.clone());
+                        Some(Owner::Example(e.examples.len() - 1))
+                    }
+                    _ => None,
                 }
             }
             Some((c @ (Carried::Variant | Carried::Allomorph), _)) if !f.value.is_empty() => {
@@ -343,10 +377,21 @@ fn create_entry(project: &mut Project, e: EntryIn, record: usize, report: &mut T
         report.variants_created += 1;
     }
 
+    let mut example_ids = Vec::new();
+    for (i, (sense, sentence, translation)) in e.examples.iter().enumerate() {
+        let mut fields = vec![("sense", Value::str(&sense_ids[*sense])), ("pos", Value::str(&pos_seq(i))), ("sentence", Value::str(sentence))];
+        if let Some(t) = translation {
+            fields.push(("translation", Value::str(t)));
+        }
+        example_ids.push(t.create("example", "exm", SCOPE_LEXICON, fields));
+        report.examples_created += 1;
+    }
+
     let ids = |o: Owner| match o {
         Owner::Lexeme => lex.clone(),
         Owner::Sense(i) => sense_ids[i].clone(),
         Owner::Variant(i) => variant_ids[i].clone(),
+        Owner::Example(i) => example_ids[i].clone(),
     };
     t.set("lexeme", &lex, SCOPE_LEXICON, F_FIELDS, layout(&e.block, &ids))?;
     for (s, id) in e.senses.iter().zip(&sense_ids) {
@@ -446,6 +491,8 @@ impl Writer<'_> {
                 (Some(h), Some(w)) if w.parse::<u32>().ok() == Some(h as u32) => Some(w),
                 (h, _) => h.map(|h| format!("{}", h as u32)),
             },
+            // A cleared translation writes no empty \xe line.
+            Carried::ExampleTranslation => opt_str(self.project, owner, field)?.filter(|t| !t.is_empty()),
             _ => opt_str(self.project, owner, field)?,
         })
     }
@@ -526,6 +573,11 @@ fn export_entry(project: &Project, lex: &str) -> Result<Vec<Field>, String> {
         }
         for c in SENSE_FIELDS {
             w.emit_new(*c, s)?;
+        }
+        // Examples added in wugs, after the sense's other lines.
+        for x in p.ordered_children("sense", s, "example")? {
+            w.emit_new(Carried::Example, &x)?;
+            w.emit_new(Carried::ExampleTranslation, &x)?;
         }
     }
     Ok(w.out)

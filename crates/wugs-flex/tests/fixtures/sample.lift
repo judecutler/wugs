@@ -14,7 +14,8 @@
       <gloss lang="en"><text>dog</text></gloss>
       <gloss lang="de"><text>Hund</text></gloss>
       <definition><form lang="en"><text>a domesticated <span lang="la">Canis</span> animal</text><annotation name="status" value="checked"/></form></definition>
-      <example><form lang="tr"><text>Köpek havladı.</text></form></example>
+      <example source="Notebook 2, p. 14"><form lang="tr"><text>Köpek havladı.</text></form><translation type="Free translation"><form lang="en"><text>The dog barked.</text></form><form lang="de"><text>Der Hund bellte.</text></form></translation><note><form lang="en"><text>elicited</text></form></note></example>
+      <example><form lang="tr"><text>Köpekler geldi.</text></form></example>
     </sense>
   </entry>
   <entry id="-ler_7b2c" guid="7b2c0002-0000-4000-8000-000000000002">

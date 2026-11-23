@@ -114,7 +114,7 @@ h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; ma
 @media print { body { margin: 0; max-width: none; } a { color: inherit; text-decoration: none; } }
 ";
 
-fn entry_html(e: &EntryView, examples: &BTreeMap<String, Example>) -> String {
+fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>) -> String {
     let mut out = format!("<p class=\"entry\" id=\"{}\"><span class=\"hw\">{}</span>", esc(&e.id), esc(&e.lemma));
     if let Some(n) = e.homograph {
         out.push_str(&format!("<span class=\"hn\">{n}</span>"));
@@ -145,7 +145,7 @@ fn entry_html(e: &EntryView, examples: &BTreeMap<String, Example>) -> String {
             let doms: Vec<String> = s.domains.iter().map(|d| esc(&d.label)).collect();
             out.push_str(&format!(" <span class=\"dom\">[{}]</span>", doms.join(", ")));
         }
-        if let Some(ex) = examples.get(&s.id) {
+        for ex in examples.get(&s.id).into_iter().flatten() {
             out.push_str(&format!(". <span class=\"ex\">{}</span>", esc(ex.text.trim())));
             if let Some(tr) = &ex.translation {
                 out.push_str(&format!(" ‘<span class=\"tr\">{}</span>’", esc(tr.trim())));
@@ -183,8 +183,16 @@ pub fn export_dictionary(s: &mut Session, folder: &Path, date: &str, include_res
     let mut examples = BTreeMap::new();
     for e in &entries {
         for sense in &e.senses {
-            if let Some(ex) = example(p, &sense.id, include_restricted, &mut left_out)? {
-                examples.insert(sense.id.clone(), ex);
+            // The examples chosen in the lexicon, else the sense's first use in a text.
+            let chosen: Vec<Example> = sense
+                .examples
+                .iter()
+                .map(|x| Example { text: x.sentence.clone(), translation: Some(x.translation.clone()).filter(|t| !t.trim().is_empty()) })
+                .collect();
+            if !chosen.is_empty() {
+                examples.insert(sense.id.clone(), chosen);
+            } else if let Some(ex) = example(p, &sense.id, include_restricted, &mut left_out)? {
+                examples.insert(sense.id.clone(), vec![ex]);
             }
         }
     }
@@ -234,14 +242,14 @@ pub fn export_dictionary(s: &mut Session, folder: &Path, date: &str, include_res
     let html = format!(
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>{title}</title>\n<style>{STYLE}</style>\n</head>\n<body>\n\
          <h1{lang_attr}>{title}</h1>\n<p class=\"front\">{entries} entries, {senses} senses{codes}. Made with wugs from the project's lexicon on {date}. \
-         Each example is the first use of the sense in the project's texts.{note}</p>\n{body}</body>\n</html>\n",
+         A sense's examples are the ones chosen for it in the lexicon, else its first use in the project's texts.{note}</p>\n{body}</body>\n</html>\n",
         title = esc(&title),
         entries = entries.len(),
         codes = if codes.is_empty() { String::new() } else { format!(" · {}", esc(&codes.join(", "))) },
         note = if include_restricted { " Examples from texts that are not open are included: check before sharing." } else { "" },
     );
     let path = crate::interchange::write_new(folder, &crate::interchange::file_stem(&title, "dictionary"), "html", html.as_bytes())?;
-    Ok(Dictionary { path: path.display().to_string(), entries: entries.len(), senses, examples: examples.len(), restricted_left_out: left_out })
+    Ok(Dictionary { path: path.display().to_string(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out })
 }
 
 #[cfg(test)]
@@ -279,6 +287,30 @@ mod tests {
         let closed = export_dictionary(&mut s, &out, "2026-11-23", false).unwrap();
         assert_eq!(closed.examples, 0);
         assert!(closed.restricted_left_out >= 5 && closed.path.ends_with(" (2).html"));
+        // An example chosen in the lexicon is printed in place of the first use.
+        let p = session::project(&mut s).unwrap();
+        let wan = p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "lemma").unwrap().as_deref() == Some("wʌn")).unwrap();
+        let sense = p.proj.ordered_children("lexeme", &wan, "sense").unwrap()[0].clone();
+        let first = p.proj.children_by_ref("text", &text, "segment").unwrap().into_iter().find(|g| p.proj.field_str(g, "content").unwrap().as_deref() == Some("wʌn tuː θɹiː")).unwrap();
+        let refused = crate::lexicon::lexicon_example_from(&mut s, &sense, &first).unwrap_err();
+        assert!(refused.contains("not open"), "a restricted sentence is not copied into the lexicon: {refused}");
+        crate::lexicon::lexicon_add_example(&mut s, &sense, "wʌn mɔː", "one more").unwrap();
+        let chosen = export_dictionary(&mut s, &out, "2026-11-23", false).unwrap();
+        let html = std::fs::read_to_string(&chosen.path).unwrap();
+        assert!(html.contains("<span class=\"ex\">wʌn mɔː</span> ‘<span class=\"tr\">one more</span>’"), "{html}");
+        assert_eq!(chosen.examples, 1);
+        // From an open text: the sentence, its translation and where it came from.
+        session::project(&mut s).unwrap().set_access(&text, "open").unwrap();
+        let e = crate::lexicon::lexicon_example_from(&mut s, &sense, &first).unwrap().entry.unwrap();
+        let x = &e.senses[0].examples[1];
+        assert_eq!(x.sentence, "wʌn tuː θɹiː");
+        assert!(!x.translation.is_empty(), "the sentence's translation comes with it");
+        assert_eq!(x.from.as_ref().map(|f| f.segment_id.as_str()), Some(first.as_str()));
+        assert!(crate::lexicon::lexicon_example_from(&mut s, &sense, &first).is_err(), "the same sentence twice");
+        let e = crate::lexicon::lexicon_set_example(&mut s, &x.id, "translation", "one, two, three").unwrap().entry.unwrap();
+        assert_eq!(e.senses[0].examples[1].translation, "one, two, three");
+        let e = crate::lexicon::lexicon_delete_example(&mut s, &e.senses[0].examples[0].id).unwrap().entry.unwrap();
+        assert_eq!(e.senses[0].examples.len(), 1);
         assert!(export_dictionary(&mut s, &dir.join("sample"), "2026-11-23", false).is_err(), "never inside the project");
         drop(s);
         std::fs::remove_dir_all(dir).ok();

@@ -51,6 +51,54 @@ pub struct SenseView {
     pub domains: Vec<DomainRef>,
     /// Morphs in texts linked to this sense.
     pub occurrences: usize,
+    /// Example sentences chosen for this sense, in order.
+    pub examples: Vec<ExampleView>,
+}
+
+/// An example sentence of a sense (`wugs_core::examples`).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExampleView {
+    pub id: String,
+    pub sentence: String,
+    pub translation: String,
+    pub reference: String,
+    /// The sentence it was taken from, while that sentence is still there.
+    pub from: Option<ExampleSource>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExampleSource {
+    pub text_id: String,
+    pub text_title: String,
+    pub tier_id: String,
+    pub segment_id: String,
+    pub start_ms: Option<f64>,
+    pub end_ms: Option<f64>,
+}
+
+fn example_views(p: &Project, sense: &str) -> Result<Vec<ExampleView>, String> {
+    let live = |id: &str| -> Result<bool, String> { Ok(p.proj.entity_kind(id)?.is_some() && !p.proj.is_tombstoned(id)?) };
+    let mut out = Vec::new();
+    for e in p.examples(sense)? {
+        let mut from = None;
+        if let Some(seg) = e.source.as_deref().filter(|s| live(s).unwrap_or(false)) {
+            let text = p.proj.field_str(seg, "text")?.unwrap_or_default();
+            if live(&text)? {
+                from = Some(ExampleSource {
+                    text_title: str_field(p, &text, "title")?,
+                    tier_id: str_field(p, seg, "tier")?,
+                    segment_id: seg.to_string(),
+                    start_ms: p.proj.field_num(seg, "start")?,
+                    end_ms: p.proj.field_num(seg, "end")?,
+                    text_id: text,
+                });
+            }
+        }
+        out.push(ExampleView { id: e.id, sentence: e.sentence, translation: e.translation, reference: e.reference.unwrap_or_default(), from });
+    }
+    Ok(out)
 }
 
 #[derive(Debug, Serialize)]
@@ -173,6 +221,7 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
             usage: str_field(p, &s, "usage")?,
             domains,
             occurrences: occurrences(p, &s)?,
+            examples: example_views(p, &s)?,
             id: s,
         });
     }
@@ -306,6 +355,58 @@ pub fn lexicon_set_sense_text(session: &mut Session, sense: &str, field: &str, t
     let p = project(session)?;
     let lex = owner(p, sense)?;
     let res = p.set_sense_text(sense, field, text)?;
+    edit(p, &lex, &res)
+}
+
+/// A new example typed for a sense.
+pub fn lexicon_add_example(session: &mut Session, sense: &str, sentence: &str, translation: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    let lex = owner(p, sense)?;
+    let (_, res) = p.add_example(sense, sentence, translation, None, None)?;
+    edit(p, &lex, &res)
+}
+
+/// A sentence from a text as an example of a sense, with its first
+/// translation and a link back to it. The lexicon is shared with everyone
+/// the project reaches, so a sentence of a text that is not open is not
+/// copied into it (DECISIONS 2026-11-23).
+pub fn lexicon_example_from(session: &mut Session, sense: &str, segment: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    let lex = owner(p, sense)?;
+    require(p, segment, "segment")?;
+    let text = p.proj.field_str(segment, "text")?.unwrap_or_default();
+    if p.text_access(&text)? != "open" {
+        let title = str_field(p, &text, "title")?;
+        return Err(format!("«{title}» is not open to everyone, and the lexicon is: type an example that may be shared instead."));
+    }
+    if p.examples(sense)?.iter().any(|e| e.source.as_deref() == Some(segment)) {
+        return Err("That sentence is already an example of this sense.".into());
+    }
+    let content = str_field(p, segment, "content")?;
+    let translation = crate::interchange::translations_of(p, segment)?.into_iter().map(|(_, t)| t).next().unwrap_or_default();
+    let (_, res) = p.add_example(sense, &content, &translation, Some(segment), None)?;
+    edit(p, &lex, &res)
+}
+
+/// Retype an example's `sentence` or `translation`.
+pub fn lexicon_set_example(session: &mut Session, example: &str, field: &str, text: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    require(p, example, "example")?;
+    let sense = p.proj.field_str(example, "sense")?.unwrap_or_default();
+    let lex = owner(p, &sense)?;
+    let res = p.set_example_text(example, field, text)?;
+    match res {
+        Some(res) => edit(p, &lex, &res),
+        None => Ok(EntryEdit { entry: Some(entry_view(p, &lex)?), notes: Vec::new() }),
+    }
+}
+
+pub fn lexicon_delete_example(session: &mut Session, example: &str) -> Result<EntryEdit, String> {
+    let p = project(session)?;
+    require(p, example, "example")?;
+    let sense = p.proj.field_str(example, "sense")?.unwrap_or_default();
+    let lex = owner(p, &sense)?;
+    let res = p.delete_example(example)?;
     edit(p, &lex, &res)
 }
 

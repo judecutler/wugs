@@ -65,9 +65,13 @@ struct CanonEntry {
     attrs: Vec<(String, String)>,
     lexical_unit: Multi,
     citation: Multi,
-    senses: Vec<(Vec<(String, String)>, Option<String>, Multi, Multi)>,
+    senses: Vec<(Vec<(String, String)>, Option<String>, Multi, Multi, Vec<CanonExample>)>,
     variants: Vec<(Vec<(String, String)>, Multi)>,
 }
+
+/// An example: attributes, its forms, and each translation's type and forms.
+#[derive(Debug, PartialEq)]
+struct CanonExample(Vec<(String, String)>, Multi, Vec<(Option<String>, Multi)>);
 
 fn canon_lift(s: &str) -> Vec<CanonEntry> {
     let root = xml::parse(s).unwrap();
@@ -88,6 +92,9 @@ fn canon_lift(s: &str) -> Vec<CanonEntry> {
                             .map(|g| (attr(g, "lang").unwrap(), g.child("text").unwrap().deep_text()))
                             .collect(),
                         forms(s.child("definition")),
+                        s.children_named("example")
+                            .map(|x| CanonExample(attrs(x), forms(Some(x)), x.children_named("translation").map(|t| (attr(t, "type"), forms(Some(t)))).collect()))
+                            .collect(),
                     )
                 })
                 .collect(),
@@ -204,8 +211,20 @@ fn fixtures_read_as_intended() {
 fn lift_round_trip_is_semantically_identical() {
     let (root, mut p) = temp_project();
     let r = import_lift(&mut p, LIFT).unwrap();
-    assert_eq!((r.entries_created, r.senses_created, r.variants_created), (6, 7, 1), "everything imported once");
+    assert_eq!((r.entries_created, r.senses_created, r.variants_created, r.examples_created), (6, 7, 1, 2), "everything imported once");
     assert_eq!(canon_lift(&export_lift(&p).unwrap()), canon_lift(LIFT), "exported LIFT matches the original");
+    // Examples arrive as the sense's examples, editable like any.
+    let exm = p.proj.entities_of_kind("example").unwrap();
+    let sense = p.proj.field_str(&exm[0], "sense").unwrap().unwrap();
+    let ex = p.examples(&sense).unwrap();
+    assert_eq!((ex[0].sentence.as_str(), ex[0].translation.as_str(), ex[0].reference.as_deref()), ("Köpek havladı.", "The dog barked.", Some("Notebook 2, p. 14")));
+    p.set_example_text(&ex[0].id, "translation", "The dog was barking.").unwrap();
+    p.add_example(&sense, "Köpek koştu.", "The dog ran.", None, None).unwrap();
+    let out = canon_lift(&export_lift(&p).unwrap());
+    let kopek = &out.iter().find(|e| e.id == "köpek_6f1a").unwrap().senses[0].4;
+    assert_eq!(kopek[0].2, vec![(Some("Free translation".to_string()), vec![("en".to_string(), "The dog was barking.".to_string()), ("de".to_string(), "Der Hund bellte.".to_string())])], "the edit replaces the first translation, the others stay");
+    assert_eq!(kopek[2].1, vec![("tr".to_string(), "Köpek koştu.".to_string())], "a new example is written in the entry's language");
+    assert_eq!(kopek[2].2, vec![(None, vec![("en".to_string(), "The dog ran.".to_string())])]);
     fs::remove_dir_all(root).ok();
 }
 
@@ -215,7 +234,7 @@ fn lift_report_names_what_is_not_carried() {
     let r = import_lift(&mut p, LIFT).unwrap();
     assert_eq!(r.spans_flattened, 1, "one span flattened");
     let nc = &r.not_carried.0;
-    assert_eq!(nc.get("sense/example"), Some(&1), "example counted: {nc:?}");
+    assert_eq!(nc.get("example/note"), Some(&1), "an example's note counted: {nc:?}");
     assert_eq!(nc.get("entry/note"), Some(&1), "note counted: {nc:?}");
     assert_eq!(nc.get("header"), Some(&1), "header counted: {nc:?}");
     assert_eq!(nc.get("form/annotation"), Some(&1), "form annotation counted: {nc:?}");
