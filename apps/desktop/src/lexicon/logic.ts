@@ -97,3 +97,27 @@ export function relatedName(r: { otherLemma: string; otherHomograph: number | nu
   const hw = headword(r.otherLemma, r.otherHomograph);
   return r.otherSense === null ? hw : `${hw} (sense ${r.otherSense})`;
 }
+
+/** Which entries the list shows: every one, or those with work left to do. */
+export type ListShow = "all" | "gloss" | "category" | "unused";
+export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean };
+
+export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; done: string }[] = [
+  { id: "all", label: "Every entry", title: "List every entry", done: "No entries match." },
+  { id: "gloss", label: "Needs a gloss", title: "Entries with a sense that has no gloss yet, such as words added from the Frequencies list", done: "Every entry found has a gloss." },
+  { id: "category", label: "Needs a category", title: "Entries with no category (part of speech) yet", done: "Every entry found has a category." },
+  { id: "unused", label: "Not in any text", title: "Entries no glossed word in a text is linked to yet", done: "Every entry found is linked from a text." },
+];
+
+/** Whether an entry belongs in the list shown. */
+export function shows(r: ListRow, show: ListShow): boolean {
+  if (show === "gloss") return r.glosses.length === 0 || r.glosses.some((g) => g.trim() === "");
+  if (show === "category") return r.posOfSpeech.trim() === "";
+  if (show === "unused") return !r.used;
+  return true;
+}
+
+/** The picker's label with how many entries it would list: "Needs a gloss (12)". */
+export function showLabel(rows: readonly ListRow[], s: { id: ListShow; label: string }): string {
+  return `${s.label} (${rows.filter((r) => shows(r, s.id)).length.toLocaleString("en")})`;
+}
