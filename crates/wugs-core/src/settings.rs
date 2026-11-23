@@ -33,6 +33,28 @@ impl Project {
         self.proj.field_str(&id, "value")
     }
 
+    /// Every live setting whose key starts with `prefix` and whose value is
+    /// not empty, as `(key, value)` sorted by key (a cleared setting reads
+    /// as absent).
+    pub fn settings_with_prefix(&self, prefix: &str) -> Result<Vec<(String, String)>, String> {
+        let mut out = Vec::new();
+        for id in self.proj.entities_of_kind("setting")? {
+            if self.proj.is_tombstoned(&id)? {
+                continue;
+            }
+            let key = self.proj.field_str(&id, "key")?.unwrap_or_default();
+            if !key.starts_with(prefix) {
+                continue;
+            }
+            let value = self.proj.field_str(&id, "value")?.unwrap_or_default();
+            if !value.is_empty() {
+                out.push((key, value));
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
     /// Set `key` to `value`: a person's choice, so it names every open
     /// version and settles a conflict on the setting.
     pub fn set_setting(&mut self, key: &str, value: &str) -> Result<CommitResult, String> {
@@ -171,5 +193,19 @@ mod tests {
         assert!(a.set_setting("k", &"x".repeat(MAX_VALUE + 1)).is_err());
         assert!(a.set_setting("k", &"x".repeat(2000)).is_ok(), "a small table fits");
         std::fs::remove_dir_all(ra).ok();
+    }
+
+    #[test]
+    fn settings_are_listed_by_prefix_and_a_cleared_one_drops_out() {
+        let (root, mut a) = open("prs_A");
+        a.set_setting("paradigm-template:case", "x").unwrap();
+        a.set_setting("paradigm-template:class", "y").unwrap();
+        a.set_setting("capability:asr", "z").unwrap();
+        let got = a.settings_with_prefix("paradigm-template:").unwrap();
+        assert_eq!(got, vec![("paradigm-template:case".into(), "x".into()), ("paradigm-template:class".into(), "y".into())]);
+        a.set_setting("paradigm-template:case", "").unwrap();
+        assert_eq!(a.settings_with_prefix("paradigm-template:").unwrap().len(), 1);
+        drop(a);
+        let _ = std::fs::remove_dir_all(root);
     }
 }

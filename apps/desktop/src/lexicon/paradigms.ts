@@ -41,9 +41,94 @@ export const TEMPLATES: readonly Template[] = [
   { id: "number", label: "Singular and plural", rows: NUMBER, cols: null },
 ];
 
-/** The template with this id, else the first. */
-export function templateById(id: string | null): Template {
-  return TEMPLATES.find((t) => t.id === id) ?? TEMPLATES[0]!;
+/** The template with this id among the built-in ones and the project's
+ * own (`own`, from `paradigm_templates`), else the first built-in one. */
+export function templateById(id: string | null, own: readonly Template[] = []): Template {
+  return TEMPLATES.find((t) => t.id === id) ?? own.find((t) => t.id === id) ?? TEMPLATES[0]!;
+}
+
+/** Whether a template is one of the project's own (editable), not built in. */
+export function isOwn(t: Template): boolean {
+  return !TEMPLATES.some((b) => b.id === t.id);
+}
+
+/** An axis's values as typed in the template form: "nom=nominative, acc,
+ * gen=genitive" (the value, then optionally what it means). */
+export function valuesText(a: Axis): string {
+  return a.values.map((v) => (v.label === v.value ? v.value : `${v.value}=${v.label}`)).join(", ");
+}
+
+/** The values typed in the form, in order; an empty piece is dropped. */
+export function parseValues(text: string): FeatureValue[] {
+  return text
+    .split(/[,;\n]/)
+    .map((piece) => {
+      const at = piece.indexOf("=");
+      const value = (at < 0 ? piece : piece.slice(0, at)).trim();
+      const label = at < 0 ? value : piece.slice(at + 1).trim() || value;
+      return { value, label };
+    })
+    .filter((v) => v.value !== "");
+}
+
+/** A feature name the engine takes (letters, digits and hyphens), made from
+ * what was typed: "Noun class" becomes "noun-class". */
+export function featureName(typed: string): string {
+  return typed
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 35);
+}
+
+/** A new template's id from its name, not one already taken. */
+export function templateId(name: string, taken: readonly string[]): string {
+  const base = featureName(name).slice(0, 34) || "template";
+  let id = base;
+  for (let n = 2; taken.includes(id) || TEMPLATES.some((t) => t.id === id); n++) id = `${base}-${n}`;
+  return id;
+}
+
+export type TemplateDraft = { name: string; rows: string; rowValues: string; cols: string; colValues: string };
+
+/** A draft filled in from a template, for editing it. */
+export function draftOf(t: Template | null): TemplateDraft {
+  if (t === null) return { name: "", rows: "", rowValues: "", cols: "", colValues: "" };
+  return { name: t.label, rows: t.rows.label, rowValues: valuesText(t.rows), cols: t.cols?.label ?? "", colValues: t.cols === null ? "" : valuesText(t.cols) };
+}
+
+/** The template the form describes, or what is missing in words. `id` keeps
+ * an edited template's id; a new one gets one from its name. */
+export function templateFromDraft(d: TemplateDraft, id: string | null, taken: readonly string[]): Template | string {
+  const name = d.name.trim();
+  if (name === "") return "Give the template a name.";
+  const axis = (label: string, values: string, what: string): Axis | string => {
+    const feature = featureName(label);
+    if (feature === "") return `Name the feature the ${what} stand for (case, number, noun class…).`;
+    const vs = parseValues(values);
+    if (vs.length === 0) return `List the ${what}' values, separated by commas.`;
+    if (vs.length > 16) return `At most 16 values in the ${what}.`;
+    const seen = new Set<string>();
+    for (const v of vs) {
+      const k = v.value.toLowerCase();
+      if (seen.has(k)) return `«${v.value}» is listed twice in the ${what}.`;
+      seen.add(k);
+    }
+    return { feature, label: label.trim(), values: vs };
+  };
+  const rows = axis(d.rows, d.rowValues, "rows");
+  if (typeof rows === "string") return rows;
+  let cols: Axis | null = null;
+  if (d.cols.trim() !== "" || d.colValues.trim() !== "") {
+    const c = axis(d.cols, d.colValues, "columns");
+    if (typeof c === "string") return c;
+    if (c.feature === rows.feature) return "The rows and the columns need two different features.";
+    cols = c;
+  }
+  return { id: id ?? templateId(name, taken), label: name, rows, cols };
 }
 
 /** What the paradigm commands take: the template's features and values, rows first. */

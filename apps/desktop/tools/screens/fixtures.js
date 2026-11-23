@@ -217,7 +217,15 @@
   const checkedTags = new Set();
   const checkStatus = () => ({ analysed: TAGGED.length, unchecked: TAGGED.filter((id) => !checkedTags.has(id)), sentences: utterances.map((u) => u.id) });
 
-  const LEXICON = [
+  let paradigmTemplatesFixture = [
+  {
+    id: "noun-class",
+    label: "Noun class × number",
+    rows: { feature: "noun-class", label: "Noun class", values: [{ value: "1", label: "1" }, { value: "3", label: "3" }, { value: "7", label: "7" }] },
+    cols: { feature: "number", label: "Number", values: [{ value: "sg", label: "singular" }, { value: "pl", label: "plural" }] },
+  },
+];
+const LEXICON = [
     ["lx-kani", "kani", null, "v", ["count", "reckon"]],
     ["lx-ni", "ni-", null, "prefix", ["1SG"]],
     ["lx-ma", "=ma", null, "clitic", ["FOC"]],
@@ -902,6 +910,24 @@
       return LEXICON.filter((r) => q === "" || r.lemma.includes(q) || r.glosses.some((g) => g.includes(q)));
     },
     lexicon_entry: lexiconEntry,
+    // A paradigm answered for whatever axes the panel asks: every cell of the
+    // grid, the first one filled, so the coverage line has something to count.
+    lexicon_paradigm: ({ id, axes }) => {
+      const cells = [];
+      const walk = (i, f) => {
+        if (i === axes.length) return void cells.push({ features: { ...f }, forms: [] });
+        for (const v of axes[i].values) walk(i + 1, { ...f, [axes[i].feature]: v });
+      };
+      walk(0, {});
+      if (cells.length > 0) cells[0].forms.push({ id: "form-1", form: "kani", features: cells[0].features });
+      return { lexeme: id, cells, others: [] };
+    },
+    paradigm_templates: () => paradigmTemplatesFixture,
+    save_paradigm_template: ({ template }) => {
+      paradigmTemplatesFixture = [...paradigmTemplatesFixture.filter((t) => t.id !== template.id), template];
+      return paradigmTemplatesFixture;
+    },
+    delete_paradigm_template: ({ id }) => (paradigmTemplatesFixture = paradigmTemplatesFixture.filter((t) => t.id !== id)),
     domains_list: () => DOMAINS,
     concept_lists_bundled: () => [
       { source: "Swadesh-1955-100", name: "Swadesh 1955 (100)", citation: "Swadesh 1955, via Concepticon", count: 100, listId: listSummary.id },

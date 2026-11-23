@@ -490,6 +490,7 @@ export const lexiconUnassignDomain = (args: { senseId: string; domainId: string 
 
 // Paradigms (roadmap 50): `axes` are a template's features and values (src/lexicon/paradigms.ts).
 export type ParadigmAxis = { feature: string; values: string[] };
+export type ParadigmTemplate = import("./lexicon/paradigms").Template;
 export type ParadigmForm = { id: string; form: string; features: Record<string, string> };
 export type ParadigmCell = { features: Record<string, string>; forms: ParadigmForm[] };
 export type ParadigmView = { lexeme: string; cells: ParadigmCell[]; others: ParadigmForm[] };
@@ -498,6 +499,10 @@ export const lexiconParadigm = (args: { id: string; axes: ParadigmAxis[] }) => i
 export const lexiconFillCell = (args: { id: string; formId: string | null; features: Record<string, string>; surface: string; axes: ParadigmAxis[] }) =>
   invoke<ParadigmEdit>("lexicon_fill_cell", args);
 export const lexiconDeleteForm = (args: { id: string; formId: string; axes: ParadigmAxis[] }) => invoke<ParadigmEdit>("lexicon_delete_form", args);
+/** The project's own paradigm templates (settings `paradigm-template:<id>`), by name. */
+export const paradigmTemplates = () => invoke<ParadigmTemplate[]>("paradigm_templates");
+export const saveParadigmTemplate = (args: { template: ParadigmTemplate }) => invoke<ParadigmTemplate[]>("save_paradigm_template", args);
+export const deleteParadigmTemplate = (args: { id: string }) => invoke<ParadigmTemplate[]>("delete_paradigm_template", args);
 export const domainsList = () => invoke<DomainItem[]>("domains_list");
 export const domainsLoadSil = () => invoke<DomainsLoaded>("domains_load_sil");
 

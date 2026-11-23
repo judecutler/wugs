@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, layout, otherFormLine, templateById, TEMPLATES } from "./paradigms.ts";
+import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, featureName, isOwn, layout, otherFormLine, parseValues, templateById, templateFromDraft, templateId, TEMPLATES } from "./paradigms.ts";
 
 const pn = templateById("person-number");
 const form = (id: string, surface: string, features: Record<string, string>) => ({ id, form: surface, features });
@@ -56,4 +56,47 @@ test("cells and stray forms read in words", () => {
 test("a cell's focus key ignores feature order", () => {
   assert.equal(cellKey("lex_1", { number: "sg", person: "1" }, 0), cellKey("lex_1", { person: "1", number: "sg" }, 0));
   assert.notEqual(cellKey("lex_1", { person: "1", number: "sg" }, 0), cellKey("lex_1", { person: "1", number: "sg" }, 1));
+});
+
+test("an own template is found beside the built-in ones and marked as own", () => {
+  const own = templateFromDraft({ name: "Case × number", rows: "Case", rowValues: "nom=nominative, acc, gen=genitive", cols: "Number", colValues: "sg, pl" }, null, []);
+  assert.ok(typeof own !== "string");
+  assert.equal(own.id, "case-number");
+  assert.deepEqual(own.rows.values, [
+    { value: "nom", label: "nominative" },
+    { value: "acc", label: "acc" },
+    { value: "gen", label: "genitive" },
+  ]);
+  assert.equal(own.rows.feature, "case");
+  assert.equal(templateById("case-number", [own]).label, "Case × number");
+  assert.equal(templateById("nothing", [own]).id, "person-number");
+  assert.equal(isOwn(own), true);
+  assert.equal(isOwn(TEMPLATES[0]!), false);
+  assert.deepEqual(draftOf(own), { name: "Case × number", rows: "Case", rowValues: "nom=nominative, acc, gen=genitive", cols: "Number", colValues: "sg, pl" });
+});
+
+test("a template form says in words what is missing", () => {
+  const d = { name: "Classes", rows: "Noun class", rowValues: "1, 2; 3\n4", cols: "", colValues: "" };
+  const t = templateFromDraft(d, null, ["classes"]);
+  assert.ok(typeof t !== "string");
+  assert.equal(t.id, "classes-2", "a taken id is not reused");
+  assert.equal(t.rows.feature, "noun-class");
+  assert.equal(t.cols, null);
+  assert.equal(templateFromDraft({ ...d, name: " " }, null, []), "Give the template a name.");
+  assert.match(templateFromDraft({ ...d, rowValues: "" }, null, []) as string, /List the rows/);
+  assert.match(templateFromDraft({ ...d, rowValues: "1, 1" }, null, []) as string, /twice/);
+  assert.match(templateFromDraft({ ...d, cols: "noun class", colValues: "a" }, null, []) as string, /two different features/);
+  assert.match(templateFromDraft({ ...d, cols: "Number" }, null, []) as string, /List the columns/);
+  assert.equal((templateFromDraft(d, "kept", []) as { id: string }).id, "kept");
+});
+
+test("feature names are what the engine takes", () => {
+  assert.equal(featureName("  Noun Class "), "noun-class");
+  assert.equal(featureName("Évidentialité"), "evidentialite");
+  assert.equal(featureName("***"), "");
+  assert.deepEqual(parseValues("a=, b = bee ,, "), [
+    { value: "a", label: "a" },
+    { value: "b", label: "bee" },
+  ]);
+  assert.equal(templateId("***", []), "template");
 });
