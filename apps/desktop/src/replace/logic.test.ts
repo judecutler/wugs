@@ -41,8 +41,15 @@ test("the toast names skipped and glossed sentences, but not glossing on the und
 test("headwords are counted as headwords", () => {
   const c = { textId: "", textTitle: "Lexicon «wʌn»", tierId: "", segmentId: "lex1", before: "wʌn", after: "wan", count: 1, glossed: false, field: "lemma" };
   assert.equal(previewNote({ changes: [c, { ...c, segmentId: "lex2" }], total: 2 }, "ʌ"), "2 places in 2 headwords.");
-  assert.equal(replaceLabel(1, true), "Replace in 1 headword");
+  assert.equal(replaceLabel(1, "headword"), "Replace in 1 headword");
   const lines = appliedLines({ done: [c], skipped: 0 });
   assert.equal(lines[0], "Replaced in 1 headword.");
   assert.match(lines[1]!, /^Sentences in the texts keep the old spelling/u);
+});
+
+test("glosses are counted as glosses", () => {
+  const c: Change = { textId: "t", textTitle: "Count · nikani", tierId: "u", segmentId: "mor1", before: "1SG", after: "1S", count: 1, glossed: false, field: "gloss" };
+  assert.equal(previewNote({ changes: [c], total: 1 }, "1SG"), "1 place in 1 gloss.");
+  assert.equal(replaceLabel(3, "gloss"), "Replace in 3 glosses");
+  assert.deepEqual(appliedLines({ done: [c], skipped: 0 }), ["Replaced in 1 gloss.", "Lexicon senses keep their glosses: change those in the Lexicon if they use it too."]);
 });

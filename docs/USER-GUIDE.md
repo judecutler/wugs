@@ -892,13 +892,15 @@ To change a spelling everywhere, for example after you settle on an orthography,
 
 1. Type what to find. It is matched exactly as you type it: no pattern syntax, and accents count, so `e` does not find `é`.
 2. Type the replacement. Leave it empty to delete what you found.
-3. Choose **Transcriptions**, **Translations** or **Headwords**, and tick **Whole words**, **Match case** or **Only the text on screen** if you need them. Without **Match case**, capitals do not matter.
+3. Choose **Transcriptions**, **Translations**, **Headwords** or **Glosses**, and tick **Whole words**, **Match case** or **Only the text on screen** if you need them. Without **Match case**, capitals do not matter.
 4. Every sentence that would change is listed with the change marked. Untick any you want to leave alone. Click a sentence to open it.
 5. Click **Replace in N sentences**. The message that follows has an **Undo** button.
 
 Each change is written as if you had typed it, so it syncs like any edit. A sentence someone changed after the preview is left alone, and the message says how many. A sentence marked **glossed** already has its words broken out: after the replace, open it in Gloss and use **Retokenize** to bring the words in line. A preview lists at most 2000 sentences; replace those, and the preview shows the rest.
 
 **Headwords** changes the lexicon instead: each entry's lemma, citation form and other forms, so a new spelling reaches the dictionary too. Run it once with **Transcriptions** and once with **Headwords** to change both. Each headword is written as if you had retyped it, and **Undo** puts them back.
+
+**Glosses** renames a gloss across every glossed word, for example `PST` to `PAST` when you change your abbreviations. Tick **Whole words** and **Match case** to change only the abbreviation itself: `SG` as a whole word does not touch `1SG`, which is one word. Each morph's gloss is written as if you had typed it in the Gloss panel, and **Undo** puts them back. Glosses of lexicon senses are not changed; edit those in the Lexicon.
 
 
 ## See every occurrence in context

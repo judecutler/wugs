@@ -5,7 +5,7 @@
 import { replaceApply, replacePreview } from "../api";
 import { h } from "../dom";
 import { attempt, getState, refreshAll, selectSegment, selectText, showToast } from "../store";
-import { appliedLines, previewNote, replaceLabel, TRACKS, undoOf, type Change, type Find, type Preview, type Track } from "./logic";
+import { appliedLines, nounOfTrack, previewNote, replaceLabel, TRACKS, undoOf, type Change, type Find, type Preview, type Track } from "./logic";
 
 export type ReplaceSection = { el: HTMLElement; run: () => void; reset: () => void };
 
@@ -76,7 +76,7 @@ export function replaceSection(findInput: HTMLInputElement): ReplaceSection {
     return { find: findInput.value, with: withInput.value, track, wholeWord: whole.input.checked, matchCase: matchCase.input.checked, text };
   };
   const paintFoot = () => {
-    go.textContent = replaceLabel(ticked.size, track === "headwords");
+    go.textContent = replaceLabel(ticked.size, nounOfTrack(track));
     go.disabled = busy || ticked.size === 0;
     all.checked = ticked.size === preview.changes.length && ticked.size > 0;
     all.indeterminate = ticked.size > 0 && ticked.size < preview.changes.length;
@@ -99,7 +99,7 @@ export function replaceSection(findInput: HTMLInputElement): ReplaceSection {
       tick,
       h(
         "button",
-        { type: "button", className: "rp-open", title: c.field != null ? "A headword: it changes in the Lexicon" : "Open this sentence", disabled: c.field != null, onclick: () => void open(c) },
+        { type: "button", className: "rp-open", title: c.field === "gloss" ? "A morph's gloss in this word and text" : c.field != null ? "A headword: it changes in the Lexicon" : "Open this sentence", disabled: c.field != null, onclick: () => void open(c) },
         h("span", { className: "hit-kind", textContent: c.textTitle || "Untitled text" }),
         sentence(c),
         c.glossed ? h("span", { className: "rp-glossed", textContent: "glossed", title: "Its words are glossed: after the replace, Retokenize it in Gloss" }) : "",

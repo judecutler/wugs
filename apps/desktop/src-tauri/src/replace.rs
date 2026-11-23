@@ -6,10 +6,13 @@
 //! before and after swapped is the undo. Headwords take part too, so an
 //! orthography change reaches the dictionary: each entry's lemma, citation
 //! form and other forms, each written as a person's edit of that field.
+//! Glosses take part as well, so an abbreviation can be renamed across the
+//! project (`PST` to `PAST`): each morph's gloss written as `set_gloss`.
 
 use regex::{NoExpand, Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
 
+use crate::concordance::{each_segment, Read, Scope};
 use crate::session::{self, Session};
 
 /// At most this many sentences in one preview.
@@ -22,6 +25,8 @@ pub enum Track {
     Translation,
     /// Lexicon headwords: lemmas, citation forms and other forms.
     Headwords,
+    /// Morph glosses (the primary language) of the transcriptions' words.
+    Glosses,
 }
 
 #[derive(Debug, Deserialize)]
@@ -54,8 +59,8 @@ pub struct Change {
     #[serde(default, skip_deserializing)]
     pub parts: Vec<Part>,
     /// For a headword: the field changed (`lemma`, `citation`, or `form` of
-    /// an other form), and `segment_id` holds the entry or form; `None` for
-    /// a sentence.
+    /// an other form), and `segment_id` holds the entry or form; for a gloss
+    /// `gloss`, with the morph in `segment_id`; `None` for a sentence.
     #[serde(default)]
     pub field: Option<String>,
 }
@@ -158,6 +163,45 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
         }
         return Ok(Preview { changes, total });
     }
+    if f.track == Track::Glosses {
+        let scope = match f.text.as_deref() {
+            Some(t) => Scope::text(t),
+            None => Scope::all(),
+        };
+        each_segment(p, Read::Analyses, &scope, |seg| {
+            for tok in &seg.tokens {
+                let word = p.proj.field_str(tok, "form")?.unwrap_or_default();
+                for m in p.proj.members(tok)? {
+                    let value = p.proj.field_str(&m, "gloss")?.unwrap_or_default();
+                    let count = re.find_iter(&value).count();
+                    if count == 0 {
+                        continue;
+                    }
+                    let after = re.replace_all(&value, NoExpand(&with)).into_owned();
+                    if after == value || after.trim().is_empty() {
+                        continue;
+                    }
+                    total += 1;
+                    if changes.len() < MAX_CHANGES {
+                        changes.push(Change {
+                            text_id: seg.text.clone(),
+                            text_title: format!("{} · {word}", seg.title),
+                            tier_id: seg.tier.clone(),
+                            segment_id: m.clone(),
+                            before: value.clone(),
+                            after,
+                            count,
+                            glossed: false,
+                            parts: parts(&re, &value, &with),
+                            field: Some("gloss".into()),
+                        });
+                    }
+                }
+            }
+            Ok(())
+        })?;
+        return Ok(Preview { changes, total });
+    }
     let (translation, transcription) = wugs_cldf::corpus_tiers(p)?;
     let tiers = if f.track == Track::Transcription { transcription } else { translation };
     for text in session::list_texts(s)? {
@@ -211,6 +255,16 @@ pub fn apply(s: &mut Session, changes: Vec<Change>) -> Result<Applied, String> {
     let mut skipped = 0;
     for c in changes {
         let p = session::project(s)?;
+        if c.field.as_deref() == Some("gloss") {
+            let now = p.proj.field_str(&c.segment_id, "gloss")?.unwrap_or_default();
+            if p.proj.entity_kind(&c.segment_id)?.as_deref() != Some("morph") || p.proj.is_tombstoned(&c.segment_id)? || now != c.before {
+                skipped += 1;
+                continue;
+            }
+            p.set_gloss(&c.text_id, &c.segment_id, &c.after, None)?;
+            done.push(c);
+            continue;
+        }
         if let Some(field) = c.field.as_deref() {
             let kind = if field == "form" { "form" } else { "lexeme" };
             let now = p.proj.field_str(&c.segment_id, field)?.unwrap_or_default();
@@ -243,6 +297,34 @@ mod tests {
 
     fn find(f: &str, w: &str) -> Find {
         Find { find: f.into(), with: w.into(), track: Track::Transcription, whole_word: false, match_case: false, text: None }
+    }
+
+    #[test]
+    fn a_gloss_is_renamed_everywhere_and_comes_back() {
+        let dir = std::env::temp_dir().join(format!("wugs-replace-gloss-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        crate::sample::add_morphology(&mut s).unwrap();
+        let rename = Find { track: Track::Glosses, whole_word: true, match_case: true, ..find("SG", "SING") };
+        // `1SG` is one word: SG inside it is not a whole word, so nothing changes.
+        assert_eq!(preview(&mut s, &rename).unwrap().total, 0);
+        let all = preview(&mut s, &Find { track: Track::Glosses, whole_word: true, match_case: true, ..find("1SG", "1S") }).unwrap();
+        assert_eq!(all.total, 1);
+        let c = &all.changes[0];
+        assert_eq!((c.before.as_str(), c.after.as_str(), c.field.as_deref()), ("1SG", "1S", Some("gloss")));
+        assert!(c.text_title.ends_with("· nikani"), "{}", c.text_title);
+        let done = apply(&mut s, all.changes.clone()).unwrap();
+        assert_eq!((done.done.len(), done.skipped), (1, 0));
+        let p = session::project(&mut s).unwrap();
+        assert_eq!(p.proj.field_str(&c.segment_id, "gloss").unwrap().as_deref(), Some("1S"));
+        // Applied twice, the second finds it changed and leaves it.
+        assert_eq!(apply(&mut s, all.changes.clone()).unwrap().skipped, 1);
+        // The undo: before and after swapped.
+        let undo: Vec<Change> = done.done.into_iter().map(|c| Change { before: c.after.clone(), after: c.before.clone(), ..c }).collect();
+        assert_eq!(apply(&mut s, undo).unwrap().done.len(), 1);
+        let p = session::project(&mut s).unwrap();
+        assert_eq!(p.proj.field_str(&c.segment_id, "gloss").unwrap().as_deref(), Some("1SG"));
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
