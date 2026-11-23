@@ -59,6 +59,15 @@ export function siteLines(r: Site): string[] {
   return lines;
 }
 
+export type Sheet = { path: string; texts: number; withoutRecording: number; notOpen: number };
+
+export function sheetLines(r: Sheet): string[] {
+  const lines = [`Saved a catalogue sheet of ${plural(r.texts, "text", "texts")} in ${r.path}: a row each with its details, language, recording and progress, to fill an archive's item forms from.`];
+  if (r.withoutRecording > 0) lines.push(`${plural(r.withoutRecording, "text has", "texts have")} no recording linked here, so no file name or length.`);
+  if (r.notOpen > 0) lines.push(`${plural(r.notOpen, "text is", "texts are")} not open; the access column says so.`);
+  return lines;
+}
+
 export type Flashcards = { path: string; cards: number; sounds: number; noGloss: number };
 
 export function flashcardLines(r: Flashcards): string[] {

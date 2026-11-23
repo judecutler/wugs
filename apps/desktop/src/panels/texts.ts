@@ -5,8 +5,8 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, errorText, exportCldf, exportFlashcards, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { corpusLines, dictionaryLines, flashcardLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
+import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { corpusLines, dictionaryLines, flashcardLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
@@ -164,6 +164,15 @@ async function exportLex() {
     }
     const r = await exportLexicon({ format: lexiconFormat, folder });
     showToast({ tone: "info", lines: [`Saved ${r.path}.`, ...r.notes] });
+  });
+}
+
+async function exportSheet() {
+  const folder = await chooseFolder("Choose where the catalogue sheet goes");
+  if (folder === null) return;
+  await work("sheet", async () => {
+    const r = await exportArchiveSheet({ folder });
+    showToast({ tone: r.withoutRecording > 0 ? "warn" : "info", lines: sheetLines(r) });
   });
 }
 
@@ -701,6 +710,13 @@ export const textsPanel: PanelDef = {
             title: "A self-describing package (BagIt) with every text, the lexicon, recordings and full history, for ELAR, PARADISEC or AILLA",
             disabled: busy !== null,
             onclick: () => void seal(),
+          }),
+          h("button", {
+            type: "button",
+            textContent: busy === "sheet" ? "Saving…" : "Catalogue sheet…",
+            title: "A spreadsheet with a row per text: title, date, place, speakers, genre, language and codes, recording and length, sharing level and how far it is transcribed, translated and glossed. What an archive's item forms ask for",
+            disabled: busy !== null,
+            onclick: () => void exportSheet(),
           }),
         ),
       );
