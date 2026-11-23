@@ -1,13 +1,16 @@
 // The transcription loop (TONGUES-UI build order step 3): one tier's
 // segments in time order, the selected one editable in place. Enter saves
 // and plays the next, so hearing and typing never leave the keyboard.
-import { assistSuggest, characterInventory, editSegmentContent, errorText, type SegmentRow, type TierRow } from "../api";
+import { assistSuggest, characterInventory, editSegmentContent, errorText, soundWords, type SegmentRow, type TierRow } from "../api";
 import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
 import { hear, playButton, recordingForShown } from "../hear/hear";
 import { activeKit, capability, getSelection, getState, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
 import { IPA_GROUPS, projectGroup, type IpaGroup } from "../transcribe/ipa";
+import { countWords, didYouMean, spellIndex, type SpellIndex } from "../checks/spelling";
+import { forms, tokenize } from "../gloss/tokenizer";
+import { matchCase, replaceWord } from "../transcribe/spell";
 import { createFieldController, type FieldController } from "../transcribe/field";
 import { preview as xsampaPreview, xsampaToIpa, XSAMPA_KEY } from "../transcribe/xsampa";
 import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, neighbor, renderWindow, tierSegments } from "../transcribe/logic";
@@ -47,7 +50,53 @@ export const transcribePanel: PanelDef = {
     const updateXsampaHint = () => {
       xsampaHint.textContent = xsampa ? xsampaPreview(field.value) : "";
     };
-    const selRow = h("div", { className: "tx-row selected" }, selPlay, selTime, field, xsampaHint, suggestButton, selBadge);
+    /** "Did you mean …?" for a word near a common one in the project (Checks' Spellings to check, as you type). */
+    const spellHint = h("button", { type: "button", className: "tx-spell" });
+    spellHint.onmousedown = (ev) => ev.preventDefault();
+    spellHint.hidden = true;
+    let spelling: SpellIndex | null = null;
+    let spellFor = "";
+    let spellTimer: number | undefined;
+    /** The last word counts only once the person pauses or moves past it, so a half-typed word is not flagged. */
+    const updateSpellHint = (typing = false): void => {
+      window.clearTimeout(spellTimer);
+      const words = tokenize(field.value);
+      const done = !typing || /[\s\p{P}]$/u.test(field.value) ? words : words.slice(0, -1);
+      let offer: { typed: string; word: string; count: number } | null = null;
+      if (spelling !== null) {
+        for (const w of done) {
+          const m = didYouMean(spelling, w.form);
+          if (m !== null) {
+            offer = { typed: w.form, word: m.word, count: m.count };
+            break;
+          }
+        }
+      }
+      if (offer === null) {
+        spellHint.hidden = true;
+        spellHint.onclick = null;
+      } else {
+        const o = offer;
+        const shown = matchCase(o.typed, o.word);
+        spellHint.hidden = false;
+        spellHint.textContent = `${o.typed} → ${shown}?`;
+        spellHint.title = `«${shown}» is used ${o.count} times in this project and «${o.typed}» hardly at all. Click to write «${shown}» instead.`;
+        spellHint.onclick = () => {
+          if (ctl?.segmentId == null) return;
+          const v = replaceWord(field.value, o.typed, shown);
+          field.value = v;
+          ctl.type(v);
+          field.focus();
+          updateHints();
+        };
+      }
+      if (typing && done.length < words.length) spellTimer = window.setTimeout(() => updateSpellHint(false), 700);
+    };
+    const updateHints = (typing = false): void => {
+      updateXsampaHint();
+      updateSpellHint(typing);
+    };
+    const selRow = h("div", { className: "tx-row selected" }, selPlay, selTime, field, xsampaHint, spellHint, suggestButton, selBadge);
     let suggesting = false;
 
     /** Ask whatever powers phone transcription for the selected empty segment. */
@@ -122,8 +171,9 @@ export const transcribePanel: PanelDef = {
           field.value = ipa;
           ctl.type(ipa);
         }
-        updateXsampaHint();
+        updateHints();
       }
+      if (spelling !== null && ctl?.segmentId != null && stored(ctl.segmentId)?.content !== field.value) countWords(spelling, forms(field.value));
       void ctl?.commit();
     };
     xsampaToggle.onmousedown = (ev) => ev.preventDefault();
@@ -131,14 +181,14 @@ export const transcribePanel: PanelDef = {
       xsampa = !xsampa;
       localStorage.setItem(XSAMPA_KEY, xsampa ? "on" : "off");
       showXsampa();
-      updateXsampaHint();
+      updateHints();
     };
 
     function revertField(): void {
       if (ctl === null || ctl.segmentId === null) return;
       ctl.revert(stored(ctl.segmentId)?.content);
       field.value = ctl.value;
-      updateXsampaHint();
+      updateHints();
     }
 
     /** Plays from the text's own recording, loading it if another is loaded (roadmap 72). */
@@ -177,7 +227,7 @@ export const transcribePanel: PanelDef = {
     };
     field.oninput = () => {
       ctl?.type(field.value);
-      updateXsampaHint();
+      updateHints(true);
       // Typed text is the person's: the machine offer goes until the field is empty again.
       if (field.value.trim() !== "") suggestButton.style.display = "none";
       else draw(true);
@@ -198,6 +248,18 @@ export const transcribePanel: PanelDef = {
     let ownLetters: IpaGroup | null = null;
     let lettersFor = "";
     function loadOwnLetters(projectId: string): void {
+      if (projectId !== spellFor) {
+        spellFor = projectId;
+        spelling = null;
+        soundWords({ tierId: null, textId: null }).then(
+          (r) => {
+            if (spellFor !== projectId) return;
+            spelling = spellIndex(r.words);
+            updateSpellHint();
+          },
+          () => {},
+        );
+      }
       if (projectId === lettersFor) return;
       lettersFor = projectId;
       ownLetters = null;
@@ -305,7 +367,7 @@ export const transcribePanel: PanelDef = {
         c.sync(ordered.find((x) => x.id === selId)?.content);
       }
       if (field.value !== c.value) field.value = c.value;
-      updateXsampaHint();
+      updateHints();
       if (!force && ready && next === stamp) return;
       stamp = next;
 
