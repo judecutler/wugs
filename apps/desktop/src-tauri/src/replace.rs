@@ -3,7 +3,9 @@
 //! written, each as a person's edit of that sentence (a resolving
 //! collaborative text edit, like typing it). A sentence that changed since
 //! the preview is skipped, never overwritten, and the same call run with
-//! before and after swapped is the undo.
+//! before and after swapped is the undo. Headwords take part too, so an
+//! orthography change reaches the dictionary: each entry's lemma, citation
+//! form and other forms, each written as a person's edit of that field.
 
 use regex::{NoExpand, Regex, RegexBuilder};
 use serde::{Deserialize, Serialize};
@@ -18,6 +20,8 @@ const MAX_CHANGES: usize = 2000;
 pub enum Track {
     Transcription,
     Translation,
+    /// Lexicon headwords: lemmas, citation forms and other forms.
+    Headwords,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +53,11 @@ pub struct Change {
     /// The sentence as kept text and replaced places, for the preview.
     #[serde(default, skip_deserializing)]
     pub parts: Vec<Part>,
+    /// For a headword: the field changed (`lemma`, `citation`, or `form` of
+    /// an other form), and `segment_id` holds the entry or form; `None` for
+    /// a sentence.
+    #[serde(default)]
+    pub field: Option<String>,
 }
 
 /// Kept text, then what one place held and what it will hold (both empty
@@ -107,10 +116,50 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
     if with.contains(['\n', '\r']) {
         return Err("A replacement cannot hold a line break.".into());
     }
-    let (translation, transcription) = wugs_cldf::corpus_tiers(p)?;
-    let tiers = if f.track == Track::Transcription { transcription } else { translation };
     let mut changes = Vec::new();
     let mut total = 0;
+    if f.track == Track::Headwords {
+        let mut lexemes: Vec<(String, String)> = Vec::new();
+        for id in p.proj.entities_of_kind("lexeme")? {
+            if !p.proj.is_tombstoned(&id)? {
+                lexemes.push((wugs_model::fold_key(&p.proj.field_str(&id, "lemma")?.unwrap_or_default()), id));
+            }
+        }
+        lexemes.sort();
+        for (_, lex) in lexemes {
+            let lemma = p.proj.field_str(&lex, "lemma")?.unwrap_or_default();
+            let mut fields: Vec<(String, &str, String)> = ["lemma", "citation"].iter().map(|f| Ok((lex.clone(), *f, p.proj.field_str(&lex, f)?.unwrap_or_default()))).collect::<Result<_, String>>()?;
+            fields.extend(p.allomorphs(&lex)?.into_iter().map(|(form, surface)| (form, "form", surface)));
+            for (id, field, value) in fields {
+                let count = re.find_iter(&value).count();
+                if count == 0 {
+                    continue;
+                }
+                let after = re.replace_all(&value, NoExpand(&with)).into_owned();
+                if after == value || after.trim().is_empty() {
+                    continue;
+                }
+                total += 1;
+                if changes.len() < MAX_CHANGES {
+                    changes.push(Change {
+                        text_id: String::new(),
+                        text_title: format!("Lexicon «{lemma}»"),
+                        tier_id: String::new(),
+                        segment_id: id,
+                        before: value.clone(),
+                        after,
+                        count,
+                        glossed: false,
+                        parts: parts(&re, &value, &with),
+                        field: Some(field.to_string()),
+                    });
+                }
+            }
+        }
+        return Ok(Preview { changes, total });
+    }
+    let (translation, transcription) = wugs_cldf::corpus_tiers(p)?;
+    let tiers = if f.track == Track::Transcription { transcription } else { translation };
     for text in session::list_texts(s)? {
         if f.text.as_deref().is_some_and(|t| t != text.id) {
             continue;
@@ -139,6 +188,7 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
                     count,
                     glossed,
                     parts: parts(&re, &seg.content, &with),
+                    field: None,
                 });
             }
         }
@@ -161,6 +211,21 @@ pub fn apply(s: &mut Session, changes: Vec<Change>) -> Result<Applied, String> {
     let mut skipped = 0;
     for c in changes {
         let p = session::project(s)?;
+        if let Some(field) = c.field.as_deref() {
+            let kind = if field == "form" { "form" } else { "lexeme" };
+            let now = p.proj.field_str(&c.segment_id, field)?.unwrap_or_default();
+            if !matches!(field, "lemma" | "citation" | "form") || p.proj.entity_kind(&c.segment_id)?.as_deref() != Some(kind) || p.proj.is_tombstoned(&c.segment_id)? || now != c.before {
+                skipped += 1;
+                continue;
+            }
+            if field == "form" {
+                p.set_form_surface(&c.segment_id, &c.after)?;
+            } else {
+                p.set_lexeme_field(&c.segment_id, field, &c.after)?;
+            }
+            done.push(c);
+            continue;
+        }
         let now = p.proj.field_str(&c.segment_id, "content")?.unwrap_or_default();
         if p.proj.is_tombstoned(&c.segment_id)? || now != c.before {
             skipped += 1;
@@ -226,6 +291,19 @@ mod tests {
         assert_eq!(english.total, 1, "{:?}", english.changes);
         assert!(english.changes[0].after.contains('2'));
         assert_eq!(preview(&mut s, &Find { track: Track::Translation, ..find("wʌn", "x") }).unwrap().total, 0);
+        // Headwords: lemmas, citation forms and other forms, never a sentence.
+        let wan = crate::lexicon::lexicon_list(&mut s, "wʌn").unwrap()[0].id.clone();
+        crate::lexicon::lexicon_add_allomorph(&mut s, &wan, "wʌnə").unwrap();
+        let heads = preview(&mut s, &Find { track: Track::Headwords, ..find("ʌ", "a") }).unwrap();
+        assert!(heads.changes.iter().any(|c| c.field.as_deref() == Some("lemma") && c.before == "wʌn" && c.after == "wan" && c.text_title == "Lexicon «wʌn»"), "{:?}", heads.changes);
+        assert!(heads.changes.iter().any(|c| c.field.as_deref() == Some("form") && c.after == "wanə"));
+        assert!(heads.changes.iter().all(|c| c.field.is_some()));
+        let done = apply(&mut s, heads.changes.clone()).unwrap();
+        assert_eq!(done.skipped, 0);
+        assert_eq!(crate::lexicon::lexicon_list(&mut s, "wan").unwrap()[0].lemma, "wan");
+        let undo: Vec<Change> = done.done.iter().map(|c| Change { before: c.after.clone(), after: c.before.clone(), ..c.clone() }).collect();
+        assert_eq!(apply(&mut s, undo).unwrap().skipped, 0);
+        assert_eq!(crate::lexicon::lexicon_list(&mut s, "wʌn").unwrap()[0].lemma, "wʌn", "the undo puts it back");
         std::fs::remove_dir_all(dir).ok();
     }
 }

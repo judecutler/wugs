@@ -37,3 +37,12 @@ test("the toast names skipped and glossed sentences, but not glossing on the und
   assert.match(lines[2] ?? "", /^2 glossed sentences now read/);
   assert.deepEqual(appliedLines({ done: [change("a", "b", { glossed: true })], skipped: 0 }, true), ["Put back 1 sentence."]);
 });
+
+test("headwords are counted as headwords", () => {
+  const c = { textId: "", textTitle: "Lexicon «wʌn»", tierId: "", segmentId: "lex1", before: "wʌn", after: "wan", count: 1, glossed: false, field: "lemma" };
+  assert.equal(previewNote({ changes: [c, { ...c, segmentId: "lex2" }], total: 2 }, "ʌ"), "2 places in 2 headwords.");
+  assert.equal(replaceLabel(1, true), "Replace in 1 headword");
+  const lines = appliedLines({ done: [c], skipped: 0 });
+  assert.equal(lines[0], "Replaced in 1 headword.");
+  assert.match(lines[1]!, /^Sentences in the texts keep the old spelling/u);
+});

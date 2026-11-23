@@ -1,7 +1,7 @@
 // Find and replace across texts (src-tauri/src/replace.rs): what the
 // preview shows and what the toast says, pure so it can be tested.
 
-export type Track = "transcription" | "translation";
+export type Track = "transcription" | "translation" | "headwords";
 
 export type Find = {
   find: string;
@@ -24,6 +24,8 @@ export type Change = {
   glossed: boolean;
   /** Kept text, then what one place held and will hold; only in a preview. */
   parts?: Part[];
+  /** A headword's field (`lemma`, `citation`, `form`); absent for a sentence. */
+  field?: string | null;
 };
 
 export type Part = { keep: string; removed: string; added: string };
@@ -34,7 +36,12 @@ export type Applied = { done: Change[]; skipped: number };
 export const TRACKS: { track: Track; label: string }[] = [
   { track: "transcription", label: "Transcriptions" },
   { track: "translation", label: "Translations" },
+  { track: "headwords", label: "Headwords" },
 ];
+
+/** Whether these changes are headwords rather than sentences. */
+const ofHeadwords = (changes: readonly Change[]): boolean => changes.some((c) => c.field != null);
+const things = (n: number, headwords: boolean) => (headwords ? (n === 1 ? "1 headword" : `${n} headwords`) : sentences(n));
 
 /** The undo of `done`: the same sentences with before and after swapped. */
 export const undoOf = (done: Change[]): Change[] => done.map((c) => ({ ...c, before: c.after, after: c.before }));
@@ -48,16 +55,18 @@ export function previewNote(p: Preview, find: string): string {
   const places = p.changes.reduce((n, c) => n + c.count, 0);
   const shown = p.total > p.changes.length ? ` The first ${p.changes.length} are listed; replace them, then preview again for the rest.` : "";
   const placesWord = places === 1 ? "1 place" : `${places} places`;
-  return `${placesWord} in ${sentences(p.total)}.${shown}`;
+  return `${placesWord} in ${things(p.total, ofHeadwords(p.changes))}.${shown}`;
 }
 
 /** The replace button's label for the ticked sentences. */
-export const replaceLabel = (ticked: number): string => (ticked === 0 ? "Replace" : `Replace in ${sentences(ticked)}`);
+export const replaceLabel = (ticked: number, headwords = false): string => (ticked === 0 ? "Replace" : `Replace in ${things(ticked, headwords)}`);
 
 /** What the toast says after a replace (`undo`: this was the undo). */
 export function appliedLines(a: Applied, undo = false): string[] {
-  const lines = [undo ? `Put back ${sentences(a.done.length)}.` : `Replaced in ${sentences(a.done.length)}.`];
-  if (a.skipped > 0) lines.push(`${sentences(a.skipped)} changed since the preview and ${a.skipped === 1 ? "was" : "were"} left alone.`);
+  const hw = ofHeadwords(a.done);
+  const lines = [undo ? `Put back ${things(a.done.length, hw)}.` : `Replaced in ${things(a.done.length, hw)}.`];
+  if (a.skipped > 0) lines.push(`${things(a.skipped, hw)} changed since the preview and ${a.skipped === 1 ? "was" : "were"} left alone.`);
+  if (hw && !undo) lines.push("Sentences in the texts keep the old spelling: replace in Transcriptions as well to change them there.");
   const glossed = a.done.filter((c) => c.glossed).length;
   if (glossed > 0 && !undo)
     lines.push(
