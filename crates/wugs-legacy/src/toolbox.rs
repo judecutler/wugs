@@ -3,7 +3,8 @@
 //!
 //! Carried semantically (MDF meaning, see `MDF`): `\lx` lexeme, `\hm`
 //! homograph number, `\lc` citation form, `\sn` sense number, `\ps` part of
-//! speech, `\ge` English gloss, `\de` English definition, `\va` variant form.
+//! speech, `\ge` English gloss, `\de` English definition, `\va` variant form,
+//! `\a` allomorph.
 //! Every other line, and any repeat of a carried marker within the same
 //! owner, is kept verbatim in its original position and counted in
 //! `ToolboxReport::markers_kept_verbatim`.
@@ -42,6 +43,7 @@ enum Carried {
     Gloss,
     Definition,
     Variant,
+    Allomorph,
 }
 
 /// The MDF subset wugs carries: marker, meaning, and the field it lands in.
@@ -54,6 +56,7 @@ const MDF: &[(&str, Carried, &str)] = &[
     ("ge", Carried::Gloss, "gloss"),
     ("de", Carried::Definition, "definition"),
     ("va", Carried::Variant, "form"),
+    ("a", Carried::Allomorph, "form"),
 ];
 
 fn carried(marker: &str) -> Option<(Carried, &'static str)> {
@@ -115,7 +118,8 @@ struct EntryIn {
     citation: Option<String>,
     block: Vec<Item>,
     senses: Vec<SenseIn>,
-    variants: Vec<String>,
+    /// Other forms in record order: (surface, `form` kind: `variant` for `\va`, `allomorph` for `\a`).
+    variants: Vec<(String, &'static str)>,
 }
 
 /// Import a Toolbox MDF lexicon. One txn per entry, lexicon scope; the
@@ -250,8 +254,8 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
                     None
                 }
             }
-            Some((Carried::Variant, _)) if !f.value.is_empty() => {
-                e.variants.push(f.value.clone());
+            Some((c @ (Carried::Variant | Carried::Allomorph), _)) if !f.value.is_empty() => {
+                e.variants.push((f.value.clone(), if c == Carried::Allomorph { "allomorph" } else { "variant" }));
                 Some(Owner::Variant(e.variants.len() - 1))
             }
             _ => None,
@@ -324,14 +328,14 @@ fn create_entry(project: &mut Project, e: EntryIn, record: usize, report: &mut T
         report.senses_created += 1;
     }
     let mut variant_ids = Vec::new();
-    for (i, v) in e.variants.iter().enumerate() {
+    for (i, (v, kind)) in e.variants.iter().enumerate() {
         variant_ids.push(t.create(
             "form",
             "frm",
             SCOPE_LEXICON,
             vec![
                 ("lexeme", Value::str(&lex)),
-                ("kind", Value::str("variant")),
+                ("kind", Value::str(kind)),
                 ("form", Value::str(v)),
                 ("pos", Value::str(&pos_seq(i))),
             ],
@@ -484,8 +488,10 @@ fn export_entry(project: &Project, lex: &str) -> Result<Vec<Field>, String> {
     let senses = p.ordered_children("lexeme", lex, "sense")?;
     let mut variants = Vec::new();
     for f in p.ordered_children("lexeme", lex, "form")? {
-        if opt_str(project, &f, "kind")?.as_deref() == Some("variant") {
-            variants.push(f);
+        match opt_str(project, &f, "kind")?.as_deref() {
+            Some("variant") => variants.push((f, Carried::Variant)),
+            Some("allomorph") => variants.push((f, Carried::Allomorph)),
+            _ => {}
         }
     }
     let lex_block = block_items(&opt_value(project, lex, F_FIELDS)?);
@@ -504,8 +510,8 @@ fn export_entry(project: &Project, lex: &str) -> Result<Vec<Field>, String> {
     w.walk(lex_block)?;
     w.emit_new(Carried::Homograph, lex)?;
     w.emit_new(Carried::Citation, lex)?;
-    for v in &variants {
-        w.emit_new(Carried::Variant, v)?;
+    for (v, c) in &variants {
+        w.emit_new(*c, v)?;
     }
     let numbered = senses.len() > 1 || sense_blocks.iter().any(Option::is_some);
     for (i, (s, block)) in senses.iter().zip(sense_blocks).enumerate() {

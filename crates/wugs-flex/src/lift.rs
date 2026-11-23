@@ -342,7 +342,8 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
             entry.children.push(sense);
         }
         for frm in ordered_children(project, "lexeme", lex, "form")? {
-            if p.field_str(&frm, "kind")?.as_deref() != Some("variant") {
+            // FLEx writes an entry's allomorphs as <variant>, so ours go out the same way.
+            if !matches!(p.field_str(&frm, "kind")?.as_deref(), Some("variant" | "allomorph")) {
                 continue;
             }
             let forms = with_primary(field_multi(project, &frm, F_FORMS)?, p.field_str(&frm, "form")?, &lang);
