@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel } from "./logic.ts";
+import { domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName } from "./logic.ts";
 
 test("a numbered homograph shows a subscript", () => {
   assert.equal(headword("yüz", null), "yüz");
@@ -57,4 +57,12 @@ test("usage reads naturally", () => {
   assert.equal(usageLabel(0), "not used in any text yet");
   assert.equal(usageLabel(1), "used in 1 word");
   assert.equal(usageLabel(4), "used in 4 words");
+});
+
+test("relations read in words from the entry they are shown under", () => {
+  assert.equal(relationLabel("compare"), "See also");
+  assert.equal(relationLabel("whole"), "Has part");
+  assert.equal(relationLabel("calendar"), "Calendar", "a file's own type is shown as written");
+  assert.equal(relatedName({ otherLemma: "tela", otherHomograph: 2, otherSense: null }), headword("tela", 2));
+  assert.equal(relatedName({ otherLemma: "laki", otherHomograph: null, otherSense: 2 }), "laki (sense 2)");
 });

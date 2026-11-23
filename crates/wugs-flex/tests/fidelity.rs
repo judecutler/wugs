@@ -68,6 +68,8 @@ struct CanonEntry {
     senses: Vec<(Vec<(String, String)>, Option<String>, Multi, Multi, Vec<CanonExample>)>,
     variants: Vec<(Vec<(String, String)>, Multi)>,
     pronunciations: Vec<(Vec<(String, String)>, Multi, Vec<Vec<(String, String)>>)>,
+    /// Each `<relation>`'s attributes, the entry's then each sense's (sense id, attributes).
+    relations: Vec<(String, Vec<(String, String)>)>,
 }
 
 /// An example: attributes, its forms, and each translation's type and forms.
@@ -101,6 +103,14 @@ fn canon_lift(s: &str) -> Vec<CanonEntry> {
                 .collect(),
             variants: e.children_named("variant").map(|v| (attrs(v), forms(Some(v)))).collect(),
             pronunciations: e.children_named("pronunciation").map(|x| (attrs(x), forms(Some(x)), x.children_named("media").map(attrs).collect())).collect(),
+            relations: {
+                let mut r: Vec<(String, Vec<(String, String)>)> = e.children_named("relation").map(|x| (String::new(), attrs(x))).collect();
+                for s in e.children_named("sense") {
+                    r.extend(s.children_named("relation").map(|x| (attr(s, "id").unwrap_or_default(), attrs(x))));
+                }
+                r.sort();
+                r
+            },
         })
         .collect();
     v.sort_by(|a, b| a.id.cmp(&b.id));
@@ -214,6 +224,7 @@ fn lift_round_trip_is_semantically_identical() {
     let (root, mut p) = temp_project();
     let r = import_lift(&mut p, LIFT).unwrap();
     assert_eq!((r.entries_created, r.senses_created, r.variants_created, r.examples_created, r.pronunciations_created), (6, 7, 1, 2, 2), "everything imported once");
+    assert_eq!(r.relations_created, 2, "the Compare pair FLEx lists on both ends is one relation, plus Calendar");
     assert_eq!(canon_lift(&export_lift(&p).unwrap()), canon_lift(LIFT), "exported LIFT matches the original");
     // Examples arrive as the sense's examples, editable like any.
     let exm = p.proj.entities_of_kind("example").unwrap();
@@ -232,14 +243,24 @@ fn lift_round_trip_is_semantically_identical() {
     let said = p.pronunciations(&lex).unwrap();
     assert_eq!(said.iter().map(|x| x.form.as_str()).collect::<Vec<_>>(), ["cœˈpec", ""]);
     p.set_pronunciation_form(&said[1].id, "cœˈpek").unwrap();
-    let gel = p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "lemma").unwrap().as_deref() == Some("gel")).unwrap();
-    p.add_pronunciation(&gel, "ɟel", None).unwrap();
+    let gel_id = p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "lemma").unwrap().as_deref() == Some("gel")).unwrap();
+    p.add_pronunciation(&gel_id, "ɟel", None).unwrap();
     let out = canon_lift(&export_lift(&p).unwrap());
     let kopek = &out.iter().find(|e| e.id == "köpek_6f1a").unwrap().pronunciations;
     assert_eq!(kopek[1].1, vec![("tr-fonipa".to_string(), "cœˈpek".to_string())], "a form typed into a media-only pronunciation");
     assert_eq!(kopek[1].2, vec![vec![("href".to_string(), "köpek-2.wav".to_string())]], "its media kept");
     let gel = &out.iter().find(|e| e.id == "gel_8c3d").unwrap().pronunciations;
     assert_eq!(gel[0].1, vec![("tr-fonipa".to_string(), "ɟel".to_string())]);
+    // Relations read from both ends, and one added in wugs goes out under its entry.
+    let yuz1 = p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "x.lift.id").unwrap().as_deref() == Some("yüz_1")).unwrap();
+    let yuz2 = p.relations(&yuz1).unwrap()[0].other.clone();
+    assert_eq!(p.relations(&yuz2).unwrap()[0].relation, "compare");
+    p.add_relation(&yuz1, "antonym", &gel_id).unwrap();
+    let out = canon_lift(&export_lift(&p).unwrap());
+    let y = &out.iter().find(|e| e.id == "yüz_1").unwrap().relations;
+    assert!(y.iter().any(|(_, a)| a.contains(&("type".to_string(), "Antonym".to_string())) && a.contains(&("ref".to_string(), "gel_8c3d".to_string()))), "{y:?}");
+    let g = &out.iter().find(|e| e.id == "gel_8c3d").unwrap().relations;
+    assert!(g.iter().any(|(_, a)| a.contains(&("ref".to_string(), "yüz_1".to_string()))), "the antonym is written on its other end too: {g:?}");
     fs::remove_dir_all(root).ok();
 }
 

@@ -133,7 +133,7 @@ h1 { font-size: 22pt; margin: 0 0 .2em; } .front { margin-bottom: 2em; color: #4
 h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; margin: 1.2em 0 .5em; break-after: avoid; }
 .entry { margin: 0 0 .6em; break-inside: avoid; text-indent: -1.2em; padding-left: 1.2em; }
 .hw { font-weight: bold; } .hn { font-size: 70%; vertical-align: sub; font-weight: normal; }
-.ps { font-style: italic; } .pr { font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
+.ps { font-style: italic; } .rel { font-variant: small-caps; } .pr { font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
 .gl2 { color: #333; } .ex { font-style: italic; } .tr { }
 .reversal p { margin: 0 0 .25em; } h2 { break-after: avoid; }
 .entry:target { background: #fff3c4; }
@@ -186,8 +186,40 @@ fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Op
         }
         out.push('.');
     }
+    // Related entries, grouped by type in the order first met, each a link to its entry.
+    let mut groups: Vec<(String, Vec<String>)> = Vec::new();
+    for r in &e.relations {
+        let link = format!(
+            "<a href=\"#{}\">{}{}</a>",
+            esc(&r.other_id),
+            esc(&r.other_lemma),
+            r.other_homograph.map(|n| format!("<span class=\"hn\">{n}</span>")).unwrap_or_default()
+        );
+        match groups.iter_mut().find(|(t, _)| *t == r.relation) {
+            Some((_, links)) => links.push(link),
+            None => groups.push((r.relation.clone(), vec![link])),
+        }
+    }
+    for (relation, links) in groups {
+        out.push_str(&format!(" <span class=\"rel\">{}:</span> {}.", esc(&relation_label(&relation)), links.join(", ")));
+    }
     out.push_str("</p>\n");
     out
+}
+
+/// How a dictionary names a relation, read from the entry it is printed under.
+pub(crate) fn relation_label(relation: &str) -> String {
+    match relation {
+        "synonym" => "Syn".into(),
+        "antonym" => "Ant".into(),
+        "compare" => "See also".into(),
+        "part" => "Part of".into(),
+        "whole" => "Has part".into(),
+        other => {
+            let mut c = other.chars();
+            c.next().map(|f| f.to_uppercase().chain(c).collect()).unwrap_or_default()
+        }
+    }
 }
 
 /// Write the dictionary as `<title>.html` in `folder` (never inside the project, never over a file).
@@ -349,6 +381,10 @@ mod tests {
         session::project(&mut s).unwrap().set_project_language("Tutorial English", "", "eng").unwrap();
         let out = dir.join("out");
         std::fs::create_dir_all(&out).unwrap();
+        // Two related entries: «tuː» compared with «θɹiː», printed under both.
+        let entries = crate::lexicon::lexicon_list(&mut s, "").unwrap();
+        let two = entries.iter().find(|r| r.lemma == "tuː").unwrap().id.clone();
+        crate::lexicon::lexicon_add_relation(&mut s, &two, "compare", "θɹiː").unwrap();
         let d = export_dictionary(&mut s, &out, "2026-11-23", false).unwrap();
         assert!(d.path.ends_with("Tutorial English dictionary.html"), "{}", d.path);
         assert!(d.entries >= 5 && d.examples >= 5, "{d:?}");
@@ -358,6 +394,7 @@ mod tests {
         }
         assert!(html.contains("<span class=\"hw\">wʌn</span>") && html.contains("<span class=\"ex\">wʌn tuː θɹiː</span> ‘<span class=\"tr\">"), "{html}");
         assert!(html.contains("Index of glosses") && html.contains("one — <a href=\"#"), "{html}");
+        assert_eq!(html.matches("<span class=\"rel\">See also:</span> <a href=\"#").count(), 2, "under both entries: {html}");
         // The tutorial text is restricted: its examples stay out unless included.
         let text = session::list_texts(&mut s).unwrap()[0].id.clone();
         session::project(&mut s).unwrap().set_access(&text, "restricted").unwrap();

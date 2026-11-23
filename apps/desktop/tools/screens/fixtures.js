@@ -258,6 +258,10 @@
           { id: "prn-1", form: "ˈka.ni", audio: { sourceId: "src-1", label: "elicitation 1", startMs: 1200, endMs: 1850 } },
           { id: "prn-2", form: "ˈkaːni", audio: null },
         ],
+        relations: [
+          { id: "rel-1", relation: "synonym", hereSense: null, otherId: "lx-tela-1", otherLemma: "tela", otherHomograph: 1, otherSense: null },
+          { id: "rel-2", relation: "compare", hereSense: 2, otherId: "lx-mopa", otherLemma: "mopa", otherHomograph: null, otherSense: null },
+        ],
         senses: [
           {
             id: "sense-kani-1",
@@ -291,6 +295,7 @@
       sameLemma,
       allomorphs: [],
       pronunciations: [],
+      relations: [],
       senses: row.glosses.map((g, i) => ({ id: `sense-${row.id}-${i}`, gloss: g, glossesByLang: {}, definition: "", usage: "", domains: row.posOfSpeech === "num" ? [domainRef("dom-8.1.1.1")] : [], occurrences: i === 0 ? 2 : 0, examples: [] })),
     };
   }

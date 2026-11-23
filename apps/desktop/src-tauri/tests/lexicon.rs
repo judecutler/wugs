@@ -164,3 +164,28 @@ fn a_paradigm_fills_cell_by_cell_and_lists_forms_that_fit_no_cell() {
     let edit = lexicon::lexicon_delete_form(&mut s, &id, &form, &axes).unwrap();
     assert!(edit.paradigm.cells.iter().all(|c| c.forms.is_empty()));
 }
+
+#[test]
+fn relations_are_added_by_headword_and_read_from_both_sides() {
+    let (_dir, mut s) = created();
+    let big = lexicon::lexicon_add(&mut s, "dakila", "big").unwrap().entry.unwrap().id;
+    let large = lexicon::lexicon_add(&mut s, "laki", "large").unwrap().entry.unwrap().id;
+    let tela1 = lexicon::lexicon_add(&mut s, "tela", "river").unwrap().entry.unwrap().id;
+    let tela2 = lexicon::lexicon_add(&mut s, "tela", "wade").unwrap().entry.unwrap().id;
+    lexicon::lexicon_number_homographs(&mut s, &tela1).unwrap();
+    let e = lexicon::lexicon_add_relation(&mut s, &big, "synonym", " laki ").unwrap().entry.unwrap();
+    assert_eq!((e.relations[0].relation.as_str(), e.relations[0].other_lemma.as_str()), ("synonym", "laki"));
+    let back = lexicon::lexicon_entry(&mut s, &large).unwrap();
+    assert_eq!(back.relations[0].other_id, big, "the other entry shows it too");
+    let err = lexicon::lexicon_add_relation(&mut s, &big, "compare", "tela").unwrap_err();
+    assert!(err.contains("homograph number"), "{err}");
+    let second = lexicon::lexicon_add_relation(&mut s, &big, "compare", "tela₂").unwrap().entry.unwrap();
+    let which = second.relations.iter().find(|r| r.relation == "compare").unwrap();
+    assert_eq!(which.other_id, tela2, "the subscript picks the second");
+    assert!(lexicon::lexicon_add_relation(&mut s, &big, "compare", "tela 1").is_ok());
+    assert!(lexicon::lexicon_add_relation(&mut s, &big, "synonym", "nothing").unwrap_err().contains("No entry"));
+    let id = second.relations[0].id.clone();
+    let after = lexicon::lexicon_delete_relation(&mut s, &big, &id).unwrap().entry.unwrap();
+    assert_eq!(after.relations.len(), 2);
+    assert!(lexicon::lexicon_entry(&mut s, &large).unwrap().relations.is_empty());
+}

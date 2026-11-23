@@ -822,6 +822,16 @@ fn lexicon_delete_pronunciation(s: State<SessionThread>, id: String, pronunciati
 }
 
 #[tauri::command(async)]
+fn lexicon_add_relation(s: State<SessionThread>, id: String, relation: String, target: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_add_relation(s, &id, &relation, &target))
+}
+
+#[tauri::command(async)]
+fn lexicon_delete_relation(s: State<SessionThread>, id: String, relation_id: String) -> Result<lexicon::EntryEdit, String> {
+    s.run(move |s| lexicon::lexicon_delete_relation(s, &id, &relation_id))
+}
+
+#[tauri::command(async)]
 fn lexicon_delete_sense(s: State<SessionThread>, sense_id: String) -> Result<lexicon::EntryEdit, String> {
     s.run(move |s| lexicon::lexicon_delete_sense(s, &sense_id))
 }
@@ -1848,6 +1858,8 @@ pub fn run() {
             lexicon_set_pronunciation,
             lexicon_pronunciation_audio,
             lexicon_delete_pronunciation,
+            lexicon_add_relation,
+            lexicon_delete_relation,
             lexicon_assign_domain,
             lexicon_unassign_domain,
             lexicon_paradigm,

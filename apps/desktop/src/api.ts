@@ -433,6 +433,18 @@ export type EntryView = {
   allomorphs: [string, string][];
   /** How the entry is said, each with where to hear it. */
   pronunciations: PronunciationView[];
+  /** Synonyms, antonyms and the like, read from this entry's side. */
+  relations: RelationView[];
+};
+export type RelationView = {
+  id: string;
+  /** Its type from this entry's side: synonym, antonym, compare, part, whole, or as a file wrote it. */
+  relation: string;
+  hereSense: number | null;
+  otherId: string;
+  otherLemma: string;
+  otherHomograph: number | null;
+  otherSense: number | null;
 };
 export type PronunciationView = {
   id: string;
@@ -462,6 +474,8 @@ export const lexiconAddPronunciation = (args: { id: string; form: string; segmen
 export const lexiconSetPronunciation = (args: { id: string; pronunciationId: string; form: string }) => invoke<EntryEdit>("lexicon_set_pronunciation", args);
 export const lexiconPronunciationAudio = (args: { id: string; pronunciationId: string; segmentId: string | null }) =>
   invoke<EntryEdit>("lexicon_pronunciation_audio", args);
+export const lexiconAddRelation = (args: { id: string; relation: string; target: string }) => invoke<EntryEdit>("lexicon_add_relation", args);
+export const lexiconDeleteRelation = (args: { id: string; relationId: string }) => invoke<EntryEdit>("lexicon_delete_relation", args);
 export const lexiconDeletePronunciation = (args: { id: string; pronunciationId: string }) => invoke<EntryEdit>("lexicon_delete_pronunciation", args);
 export const lexiconAddExample = (args: { senseId: string; sentence: string; translation: string }) => invoke<EntryEdit>("lexicon_add_example", args);
 export const lexiconExampleFrom = (args: { senseId: string; segmentId: string }) => invoke<EntryEdit>("lexicon_example_from", args);

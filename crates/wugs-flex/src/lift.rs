@@ -2,9 +2,10 @@
 //!
 //! Carried: entries (lexical-unit, citation, homograph `order`,
 //! pronunciations with their media file names), senses (gloss, definition,
-//! grammatical-info, examples with their translations) and variants, in
-//! every writing system, plus every attribute of entries, pronunciations,
-//! senses, examples and variants. Everything else is counted in
+//! grammatical-info, examples with their translations), variants, and
+//! relations between entries and senses, in every writing system, plus
+//! every attribute of entries, pronunciations, senses, examples, variants
+//! and relations. Everything else is counted in
 //! `ImportReport::not_carried`.
 
 use wugs_core::{Project, SCOPE_LEXICON};
@@ -39,6 +40,7 @@ pub struct ImportReport {
     pub variants_created: usize,
     pub examples_created: usize,
     pub pronunciations_created: usize,
+    pub relations_created: usize,
     /// `<span>` runs flattened into plain text (their text is kept in order;
     /// the markup is not).
     pub spans_flattened: usize,
@@ -59,6 +61,8 @@ struct Entry {
     variants: Vec<(MultiText, Value)>,
     /// Each `<pronunciation>`: its attributes, forms and `<media>` attributes.
     pronunciations: Vec<(Value, MultiText, Vec<Value>)>,
+    /// Each `<relation>`'s attributes (`type`, `ref`…).
+    relations: Vec<Value>,
 }
 
 struct Sense {
@@ -70,6 +74,7 @@ struct Sense {
     grammatical_info: Option<String>,
     examples: Vec<Example>,
     attrs: Value,
+    relations: Vec<Value>,
 }
 
 struct Example {
@@ -109,6 +114,8 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
     let mut report = ImportReport::default();
     let entries = parse_lift(lift, &mut report)?;
     let index = origin_index(project, "lexeme")?;
+    // Relations wait until every entry is in, since they point at each other.
+    let mut pending: Vec<(String, Value)> = Vec::new();
 
     for e in entries {
         if resolve_origin(project, &index, "lexeme", &e.origin)?.is_some() {
@@ -133,6 +140,7 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
         push_opt(&mut fields, F_ID, &e.id);
         push_opt(&mut fields, F_GUID, &e.guid);
         let lex = t.create("lexeme", "lex", SCOPE_LEXICON, fields);
+        pending.extend(e.relations.iter().map(|r| (lex.clone(), r.clone())));
 
         for (i, s) in e.senses.iter().enumerate() {
             let mut fields = vec![
@@ -154,6 +162,7 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
             push_opt(&mut fields, F_GUID, &s.guid);
             let sen = t.create("sense", "sen", SCOPE_LEXICON, fields);
             report.senses_created += 1;
+            pending.extend(s.relations.iter().map(|r| (sen.clone(), r.clone())));
             for (j, x) in s.examples.iter().enumerate() {
                 let mut fields = vec![
                     ("sense", Value::str(&sen)),
@@ -209,6 +218,44 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
         report.entries_created += 1;
         report.commits += 1;
         report.findings += res.findings.len();
+    }
+    if !pending.is_empty() {
+        let ids = lift_ids(project)?;
+        // A symmetric relation FLEx lists on both its ends becomes one relation.
+        let mut made: Vec<(String, String, String, Value)> = Vec::new();
+        for (from, attrs) in pending {
+            let Some(to) = attrs.get_str("ref").and_then(|r| ids.get(r)).cloned() else {
+                report.not_carried.add("relation (points at no entry in the file or project)");
+                continue;
+            };
+            let lift_type = attrs.get_str("type").unwrap_or("").to_string();
+            let relation = relation_of(&lift_type);
+            if relation.is_empty() || to == from {
+                report.not_carried.add("relation (no type, or to itself)");
+                continue;
+            }
+            let symmetric = wugs_core::relations::symmetric(&relation);
+            let twin = made.iter().any(|(a, b, r, _)| *r == relation && ((*a == from && *b == to) || (symmetric && *a == to && *b == from)))
+                || project.relations_between(&from, &to, &relation, symmetric)?;
+            if !twin {
+                made.push((from, to, relation, attrs));
+            }
+        }
+        if !made.is_empty() {
+            let mut t = project.intent("import-lift");
+            for (from, to, relation, attrs) in &made {
+                t.create(
+                    "lexical-relation",
+                    "rel",
+                    SCOPE_LEXICON,
+                    vec![("from", Value::str(from)), ("to", Value::str(to)), ("relation", Value::str(relation)), (F_ATTRS, attrs.clone())],
+                );
+                report.relations_created += 1;
+            }
+            let res = t.commit()?;
+            report.commits += 1;
+            report.findings += res.findings.len();
+        }
     }
     Ok(report)
 }
@@ -273,6 +320,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
         senses: Vec::new(),
         variants: Vec::new(),
         pronunciations: Vec::new(),
+        relations: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -304,6 +352,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
                 }
                 e.pronunciations.push((attrs_value(c), read_multi(c, report), media));
             }
+            "relation" => e.relations.push(parse_relation(c, report)),
             other => report.not_carried.add(&format!("entry/{other}")),
         }
     }
@@ -329,6 +378,7 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
         grammatical_info: None,
         examples: Vec::new(),
         attrs: attrs_value(node),
+        relations: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -350,10 +400,58 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
                 }
             }
             "example" => s.examples.push(parse_example(c, report)),
+            "relation" => s.relations.push(parse_relation(c, report)),
             other => report.not_carried.add(&format!("sense/{other}")),
         }
     }
     Ok(s)
+}
+
+/// `<relation type ref>`: its attributes; what it holds is not carried.
+fn parse_relation(node: &XmlNode, report: &mut ImportReport) -> Value {
+    for c in &node.children {
+        report.not_carried.add(&format!("relation/{}", c.name));
+    }
+    attrs_value(node)
+}
+
+/// FLEx's relation type names as wugs's, where they mean the same.
+fn relation_of(lift_type: &str) -> String {
+    match lift_type.trim().to_lowercase().as_str() {
+        "synonym" | "synonyms" => "synonym".into(),
+        "antonym" | "antonyms" => "antonym".into(),
+        "compare" | "confer" | "cf" => "compare".into(),
+        _ => lift_type.trim().to_string(),
+    }
+}
+
+/// wugs's relation types as FLEx names them.
+fn lift_type_of(relation: &str) -> String {
+    match relation {
+        "synonym" => "Synonyms".into(),
+        "antonym" => "Antonym".into(),
+        "compare" => "Compare".into(),
+        "part" => "Part".into(),
+        "whole" => "Whole".into(),
+        other => other.into(),
+    }
+}
+
+/// Every live lexeme and sense by the LIFT `id` it came with, else its own.
+fn lift_ids(project: &Project) -> Result<std::collections::HashMap<String, String>, String> {
+    let mut out = std::collections::HashMap::new();
+    for kind in ["lexeme", "sense"] {
+        for id in project.proj.entities_of_kind(kind)? {
+            if project.proj.is_tombstoned(&id)? {
+                continue;
+            }
+            if let Some(lift) = project.proj.field_str(&id, F_ID)? {
+                out.insert(lift, id.clone());
+            }
+            out.insert(id.clone(), id);
+        }
+    }
+    Ok(out)
 }
 
 /// `<example source><form>…</form><translation type><form>…</form></translation></example>`
@@ -484,8 +582,10 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
                 }
                 sense.children.push(x);
             }
+            relation_nodes(project, &sen, &mut sense)?;
             entry.children.push(sense);
         }
+        relation_nodes(project, lex, &mut entry)?;
         for frm in ordered_children(project, "lexeme", lex, "form")? {
             // FLEx writes an entry's allomorphs as <variant>, so ours go out the same way.
             if !matches!(p.field_str(&frm, "kind")?.as_deref(), Some("variant" | "allomorph")) {
@@ -499,6 +599,38 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
         root.children.push(entry);
     }
     Ok(root.to_xml())
+}
+
+/// An entry's or sense's `<relation>`s: those it points from, and the
+/// symmetric ones pointing at it, which FLEx lists on both ends.
+fn relation_nodes(project: &Project, holder: &str, node: &mut XmlNode) -> Result<(), String> {
+    let p = &project.proj;
+    let mut rels: Vec<(String, String, bool)> = Vec::new();
+    for (field, other_field) in [("from", "to"), ("to", "from")] {
+        for id in p.children_by_ref(field, holder, "lexical-relation")? {
+            let relation = p.field_str(&id, "relation")?.unwrap_or_default();
+            if field == "to" && !wugs_core::relations::symmetric(&relation) {
+                continue;
+            }
+            if let Some(other) = p.field_str(&id, other_field)? {
+                rels.push((id, other, field == "from"));
+            }
+        }
+    }
+    rels.sort();
+    for (id, other, own) in rels {
+        if p.entity_kind(&other)?.is_none() || p.is_tombstoned(&other)? {
+            continue;
+        }
+        let relation = p.field_str(&id, "relation")?.unwrap_or_default();
+        let stored = field_value(project, &id, F_ATTRS)?;
+        // The other end gets the type as the file wrote it, without the first end's other attributes.
+        let lift_type = stored.as_ref().and_then(|a| a.get_str("type")).filter(|t| relation_of(t) == relation).map(str::to_string).unwrap_or_else(|| lift_type_of(&relation));
+        let target = p.field_str(&other, F_ID)?.unwrap_or_else(|| other.clone());
+        let base = XmlNode::new("relation");
+        node.children.push(with_attrs(base, if own { stored } else { None }, &[("type", Some(lift_type)), ("ref", Some(target))]));
+    }
+    Ok(())
 }
 
 fn multi_node(name: &str, m: &MultiText) -> XmlNode {
