@@ -130,6 +130,15 @@ pub struct GlossView {
     pub reads_as: Vec<String>,
     pub hidden: Vec<HiddenView>,
     pub alternatives: Vec<AlternativeView>,
+    /// The sentence's notes (Annotations of kind `note`), oldest first.
+    pub segment_notes: Vec<NoteView>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NoteView {
+    pub id: String,
+    pub body: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -279,7 +288,8 @@ fn view(p: &Project, segment_id: &str) -> Result<GlossView, String> {
         }
     }
     let reads_as = reads_as(p, segment_id, &words)?;
-    Ok(GlossView { segment_id: segment_id.to_string(), words, reads_as, hidden, alternatives })
+    let segment_notes = p.segment_notes(segment_id)?.into_iter().map(|(id, body)| NoteView { id, body }).collect();
+    Ok(GlossView { segment_id: segment_id.to_string(), words, reads_as, hidden, alternatives, segment_notes })
 }
 
 /// The other list of an open conflict on `parent.field`, if it still names
@@ -356,6 +366,25 @@ pub fn gloss_apply_all(session: &mut Session, text_id: &str, segment_id: &str, f
 }
 
 /// Set a morph's gloss in the primary language, or in `lang`.
+/// Add a note to the sentence.
+pub fn gloss_add_note(session: &mut Session, text_id: &str, segment_id: &str, body: &str) -> Result<GlossEdit, String> {
+    let p = project(session)?;
+    require_segment(p, text_id, segment_id)?;
+    p.add_segment_note(text_id, segment_id, body)?;
+    edit(p, segment_id, Vec::new())
+}
+
+/// Retype one of the sentence's notes; an empty one is deleted.
+pub fn gloss_set_note(session: &mut Session, text_id: &str, segment_id: &str, note_id: &str, body: &str) -> Result<GlossEdit, String> {
+    let p = project(session)?;
+    require_segment(p, text_id, segment_id)?;
+    if !p.segment_notes(segment_id)?.iter().any(|(id, _)| id == note_id) {
+        return Err("That note is not on this sentence any more.".into());
+    }
+    p.set_note(text_id, note_id, body)?;
+    edit(p, segment_id, Vec::new())
+}
+
 pub fn gloss_set(session: &mut Session, text_id: &str, segment_id: &str, morph_id: &str, gloss: &str, lang: Option<&str>) -> Result<GlossEdit, String> {
     let p = project(session)?;
     require_segment(p, text_id, segment_id)?;
@@ -438,6 +467,26 @@ mod tests {
         assert_eq!(v.words[0].suggestions[0].count, 1);
         drop(s);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_sentence_takes_notes() {
+        let dir = std::env::temp_dir().join(format!("wugs-gloss-notes-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        let text = session::list_texts(&mut s).unwrap()[0].id.clone();
+        let seg = session::add_segment(&mut s, &text, None, Some(20_000.0), Some(21_000.0), "kani").unwrap().id;
+        assert!(gloss_get(&mut s, &text, &seg).unwrap().segment_notes.is_empty());
+        let v = gloss_add_note(&mut s, &text, &seg, "Said twice.").unwrap().view;
+        assert_eq!(v.segment_notes.len(), 1);
+        let id = v.segment_notes[0].id.clone();
+        let v = gloss_set_note(&mut s, &text, &seg, &id, "Said twice, softly.").unwrap().view;
+        assert_eq!(v.segment_notes[0].body, "Said twice, softly.");
+        let other = session::add_segment(&mut s, &text, None, Some(22_000.0), Some(23_000.0), "teka").unwrap().id;
+        assert!(gloss_set_note(&mut s, &text, &other, &id, "x").is_err(), "a note is edited from its own sentence");
+        assert!(gloss_set_note(&mut s, &text, &seg, &id, " ").unwrap().view.segment_notes.is_empty());
+        drop(s);
+        std::fs::remove_dir_all(dir).ok();
     }
 
     #[test]

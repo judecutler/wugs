@@ -317,6 +317,12 @@ A free translation lives on its own track, lined up in time with the utterance.
 
 The segment needs start and end times for this. If it has none, give it times on the Timeline first.
 
+### Keep notes on a sentence
+
+Under **Notes**, at the bottom of the Gloss panel, type anything you want to remember about the sentence: "the speaker hesitated here", "check this form with M.", "compare text 3". Press Enter or leave the field to keep it. A sentence can have as many notes as you like. Retype a note to change it, or empty it to delete it.
+
+Notes belong to the sentence's text, so they have its sharing level, and they sync with the project. Two people can add notes to the same sentence at once, and both notes stay. The **Interlinear** tab shows each note under its sentence.
+
 ### Copy an example into a paper
 
 Click **Copy example** at the top of the Gloss panel. The segment is copied as a numbered example: the words split into morphs, the glosses under them with grammatical glosses in small capitals, and the free translation in quotes. Then paste it into your paper.

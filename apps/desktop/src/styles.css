@@ -508,6 +508,8 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .gl-free-row { display: flex; gap: 8px; align-items: center; margin: 3px 0; }
 .gl-free-tier { flex: none; width: 90px; font-size: 11px; color: var(--muted); }
 .gl-free-input { flex: 1; min-width: 0; font-size: 14px; }
+.gl-notes { border-top: 1px solid var(--line); margin-top: 4px; display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
+.gl-notes .gl-free-input { font-size: 13px; }
 
 .panel-lexicon { display: flex; flex-direction: column; gap: 6px; }
 .panel-lexicon input[type="search"] { width: 100%; }
@@ -1092,6 +1094,7 @@ body::before {
 .il-title { margin: 0 0 2px; font-family: var(--font-display); }
 .il-bar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 2px; }
 .il-only { display: inline-flex; gap: 6px; align-items: center; }
+.il-note { margin: 2px 0 0; font-size: var(--text-sm); color: var(--muted); font-style: italic; }
 .il-abbr { margin: 6px 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--emphasis); }
 .il-abbr-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 14px; }
 .il-abbr-row { display: grid; grid-template-columns: 4.5em 1fr; gap: 6px; align-items: center; }

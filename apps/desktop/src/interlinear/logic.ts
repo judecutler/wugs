@@ -13,7 +13,7 @@ export function sentencesOf<S extends Seg>(segments: readonly S[], tiers: readon
 }
 
 /** One sentence as the panel draws it. */
-export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null };
+export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; notes?: string[] };
 
 export const analysed = (l: Line): boolean => l.words.some((w) => w.morphs.length > 0);
 

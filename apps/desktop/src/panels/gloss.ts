@@ -3,7 +3,7 @@
 // translation line up under the transcription. The project's earlier analyses
 // are one keypress away: Enter on an empty word accepts the ghost suggestion.
 import {
-  addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossTokenize,
+  addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
@@ -618,6 +618,46 @@ export const glossPanel: PanelDef = {
       return box;
     }
 
+    /** The sentence's notes, each retyped in place (emptied deletes it), and
+     * a field that adds one: remarks for later ("check with M."), FLEx's Note line. */
+    function notesBlock(v: GlossView): HTMLElement {
+      const at = ids();
+      const box = h("div", { className: "gl-notes" }, h("h3", { textContent: "Notes" }));
+      const field = (cell: string, stored: string, placeholder: string, save: (body: string) => void) => {
+        const input = h("input", { className: "gl-free-input", value: drafts.get(cell) ?? stored, spellcheck: true, placeholder });
+        input.dataset.cell = cell;
+        const commit = () => {
+          const draft = drafts.get(cell);
+          if (draft === undefined) return;
+          drafts.delete(cell);
+          if (draft.trim() === stored.trim()) return;
+          save(draft);
+        };
+        input.oninput = () => drafts.set(cell, input.value);
+        input.onblur = commit;
+        input.onkeydown = (ev) => {
+          if (imeBusy(ev, composition.active)) return;
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            commit();
+          } else if (ev.key === "Escape") {
+            drafts.delete(cell);
+            input.value = stored;
+          }
+        };
+        return input;
+      };
+      if (at === null) return box;
+      for (const n of v.segmentNotes) {
+        box.append(field(`n:${n.id}`, n.body, "Empty to delete this note", (body) => void run(() => glossSetNote({ ...at, noteId: n.id, body }))));
+      }
+      const fresh = field(`n:new:${v.segmentId}`, "", v.segmentNotes.length === 0 ? "Add a note about this sentence (Enter keeps it)" : "Add another note", (body) => {
+        if (body.trim() !== "") void run(() => glossAddNote({ ...at, body }));
+      });
+      box.append(fresh);
+      return box;
+    }
+
     /** Copy the segment as a numbered example for a paper (roadmap 69), in
      * the format the person writes in, remembered on this computer. */
     function copyControl(sel: NonNullable<ReturnType<typeof selected>>, v: GlossView): HTMLElement {
@@ -716,7 +756,7 @@ export const glossPanel: PanelDef = {
         body.push(h("div", { className: "gl-notice gl-hidden-words" }, h("span", { textContent: "Edits from another device on words no longer in this segment:" }), ...hiddenWords.map((x) => restoreButton(x, "word"))));
       }
       if (v.words.length > 0) body.push(h("div", { className: "gl-igt" }, ...v.words.map((w) => wordColumn(w, v))));
-      el.replaceChildren(head, transcription, ...body, translationBlock(sel));
+      el.replaceChildren(head, transcription, ...body, translationBlock(sel), notesBlock(v));
 
       if (pending !== null) applyPending(v);
       else if (keep !== null && keep.cell !== "") {
