@@ -16,6 +16,77 @@ use crate::{columns, row, F_ANALYSIS, F_KIND, F_MWT};
 /// The field that records which tagger wrote a segment's analysis.
 pub const F_TAGGED_BY: &str = "x.morphosyntax";
 
+/// The intent a tagger's analyses are written under.
+pub const MACHINE_INTENT: &str = "machine-annotate";
+
+/// The field that records the machine write `op` of `analysis`: the
+/// tagger and model, keyed by the op so a mark belongs to that one write
+/// (SCROLLS.md §2, "Checked, not just unedited"), as speech assist keys its
+/// records (`wugs_core::assist::record_field`).
+pub fn record_field(op: &str) -> String {
+    format!("x.tagged:{op}")
+}
+
+/// The tagger behind a sentence's analysis while a person has not looked at
+/// it: set while any open version of `analysis` is a tagger's write. A
+/// correction, or Mark checked, writes `analysis` as a person and names every
+/// open version, which clears it.
+pub fn unchecked(p: &Project, segment: &str) -> Result<Option<String>, String> {
+    for op in p.proj.open_version_ops(segment, F_ANALYSIS)? {
+        if let Some((by, _)) = p.proj.field(segment, &record_field(&op))? {
+            return Ok(Some(by.as_str().unwrap_or_default().to_string()));
+        }
+    }
+    Ok(None)
+}
+
+/// Mark sentences' machine tags as checked without changing them: a
+/// person's resolving write of each one's analysis as it reads now, in one
+/// txn. Sentences with nothing unchecked are left out; returns how many were
+/// marked.
+pub fn mark_checked(p: &mut Project, text: &str, segments: &[String]) -> Result<usize, String> {
+    let mut now: Vec<(String, Value)> = Vec::new();
+    for seg in segments {
+        if p.proj.is_tombstoned(seg)? || p.proj.field_str(seg, "text")?.as_deref() != Some(text) || unchecked(p, seg)?.is_none() {
+            continue;
+        }
+        if let Some((value, _)) = p.proj.field(seg, F_ANALYSIS)? {
+            now.push((seg.clone(), value));
+        }
+    }
+    if now.is_empty() {
+        return Ok(0);
+    }
+    let mut t = p.intent("check-analysis").resolving();
+    for (seg, value) in &now {
+        t.set("segment", seg, text, F_ANALYSIS, value.clone())?;
+    }
+    t.commit()?;
+    Ok(now.len())
+}
+
+/// How far a text's tagging is checked: sentences with an analysis, and
+/// those of them still a tagger's alone, in order.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct CheckStatus {
+    pub analysed: usize,
+    pub unchecked: Vec<String>,
+}
+
+pub fn check_status(p: &Project, segments: &[String]) -> Result<CheckStatus, String> {
+    let mut st = CheckStatus::default();
+    for seg in segments {
+        if p.proj.is_tombstoned(seg)? || p.proj.field(seg, F_ANALYSIS)?.is_none() {
+            continue;
+        }
+        st.analysed += 1;
+        if unchecked(p, seg)?.is_some() {
+            st.unchecked.push(seg.clone());
+        }
+    }
+    Ok(st)
+}
+
 /// What a tagger's output did to the segments it was given.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct Annotated {
@@ -107,10 +178,14 @@ pub fn annotate(p: &mut Project, text: &str, items: &[(String, Sentence)], prove
     if writes.is_empty() {
         return Ok(report);
     }
-    let mut t = p.intent("machine-annotate");
+    let mut t = p.intent(MACHINE_INTENT);
     for (seg, fields, tokens) in writes {
         for (field, value) in fields {
             t.set("segment", &seg, text, field, value)?;
+            if field == F_ANALYSIS {
+                let op = t.last_op_id().expect("the analysis op was just written").to_string();
+                t.set("segment", &seg, text, &record_field(&op), Value::str(provenance))?;
+            }
         }
         for (wi, (tok, form, punct)) in tokens.iter().enumerate() {
             let mut fields = vec![("segment", Value::str(&seg)), ("pos", Value::str(&pos_seq(wi))), ("form", Value::str(form))];

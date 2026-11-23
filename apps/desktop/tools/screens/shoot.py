@@ -495,6 +495,15 @@ def main():
             if run.page.locator(".panel-interlinear .il-selected").count() != 1:
                 failures.append("Next to gloss selected no sentence")
             run.page.locator(".panel-interlinear .il-only input").uncheck()
+            # Sentence: a tagger's analysis stays marked until checked; Checked, next moves on.
+            run.front("sentence", "Sentence")
+            run.page.locator(".panel-sentence .st-machine").wait_for()
+            run.shot("state-sentence-check", run.page.locator(".panel-sentence"))
+            run.page.locator(".panel-sentence .st-machine button", has_text="Checked, next").click()
+            run.page.wait_for_timeout(600)
+            if run.page.locator(".panel-sentence .st-check", has_text="3 of 4 tagged sentences").count() != 1:
+                failures.append("Checked, next did not count the sentence as checked")
+            run.front("interlinear", "Interlinear")
             # The abbreviations the text's glosses use, with Leipzig meanings and the project's own.
             run.page.locator(".panel-interlinear .il-bar button", has_text="Abbreviations").click()
             run.page.wait_for_timeout(300)

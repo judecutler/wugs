@@ -269,3 +269,39 @@ fn a_taggers_output_annotates_segments_without_touching_glosses() {
     assert_eq!((again.annotated, again.kept), (0, 2));
     std::fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn machine_tags_stay_marked_until_a_person_checks_or_corrects_them() {
+    use wugs_conllu::annotate::{annotate, check_status, mark_checked, unchecked};
+    let (root, mut p) = temp_project();
+    let tier = tier(&mut p);
+    let text = p.create_text("Typed").unwrap();
+    let (a, _) = p.add_segment(&text, &tier, 0, None, None, "Dogs bark.").unwrap();
+    let (b, _) = p.add_segment(&text, &tier, 1, None, None, "Cats sleep.").unwrap();
+    let (c, _) = p.add_segment(&text, &tier, 2, None, None, "Birds sing.").unwrap();
+    let tagged = "1\tDogs\tdog\tNOUN\t_\t_\t2\tnsubj\t_\t_\n2\tbark\tbark\tVERB\t_\t_\t0\troot\t_\t_\n\n\
+1\tCats\tcat\tNOUN\t_\t_\t2\tnsubj\t_\t_\n2\tsleep\tsleep\tVERB\t_\t_\t0\troot\t_\t_\n\n\
+1\tBirds\tbird\tNOUN\t_\t_\t2\tnsubj\t_\t_\n2\tsing\tsing\tVERB\t_\t_\t0\troot\t_\t_\n\n";
+    let items: Vec<(String, format::Sentence)> = vec![a.clone(), b.clone(), c.clone()].into_iter().zip(format::parse(tagged).unwrap()).collect();
+    annotate(&mut p, &text, &items, "udpipe english-ewt").unwrap();
+    let all = vec![a.clone(), b.clone(), c.clone()];
+    assert_eq!(unchecked(&p, &a).unwrap().as_deref(), Some("udpipe english-ewt"));
+    assert_eq!(check_status(&p, &all).unwrap().unchecked, all);
+    // A correction is a person's look at the sentence.
+    let toks = p.proj.members(&b).unwrap();
+    wugs_conllu::tree::set_cell(&mut p, &text, &b, &toks[0], "lemma", "kitty").unwrap();
+    assert_eq!(unchecked(&p, &b).unwrap(), None);
+    // Mark checked changes nothing in the analysis and clears the mark.
+    let before = p.proj.field(&a, wugs_conllu::F_ANALYSIS).unwrap().unwrap().0;
+    assert_eq!(mark_checked(&mut p, &text, &all).unwrap(), 2, "b was checked by its correction");
+    assert_eq!(p.proj.field(&a, wugs_conllu::F_ANALYSIS).unwrap().unwrap().0, before);
+    let st = check_status(&p, &all).unwrap();
+    assert_eq!((st.analysed, st.unchecked.len()), (3, 0));
+    assert_eq!(mark_checked(&mut p, &text, &all).unwrap(), 0, "nothing left writes nothing");
+    // The marks survive a rebuild of the cache from the log.
+    drop(p);
+    std::fs::remove_dir_all(root.join("cache")).unwrap();
+    let p = Project::open(&root, "prs_Tester").unwrap();
+    assert_eq!(check_status(&p, &all).unwrap().unchecked.len(), 0);
+    std::fs::remove_dir_all(root).ok();
+}

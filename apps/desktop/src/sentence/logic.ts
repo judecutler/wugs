@@ -3,7 +3,33 @@
 // and Arborator draw it. Pure: no DOM.
 
 export type WordRow = { token: string; form: string; lemma: string; upos: string; xpos: string; feats: string; head: number | null; deprel: string };
-export type SentenceView = { segmentId: string; content: string; words: WordRow[]; annotated: boolean; emptyNodes: number; problems: string[] };
+export type SentenceView = { segmentId: string; content: string; words: WordRow[]; annotated: boolean; emptyNodes: number; problems: string[]; machine: string | null };
+
+/** How far a text's tagging is checked (src-tauri/src/sentence.rs). */
+export type CheckView = { analysed: number; unchecked: string[]; sentences: string[] };
+
+/** The next sentence still to check after `current` in text order, wrapping
+ * round; `current` itself only when it is the last one left. */
+export function nextUnchecked(v: CheckView, current: string | null): string | null {
+  if (v.unchecked.length === 0) return null;
+  const at = current === null ? -1 : v.sentences.indexOf(current);
+  const place = (id: string) => v.sentences.indexOf(id);
+  const later = v.unchecked.find((id) => place(id) > at && id !== current);
+  return later ?? v.unchecked.find((id) => id !== current) ?? v.unchecked[0] ?? null;
+}
+
+/** The line about checking a text's tags. */
+export function checkLine(v: CheckView): string {
+  const left = v.unchecked.length;
+  if (v.analysed === 0) return "";
+  if (left === 0) return `All ${v.analysed} tagged ${v.analysed === 1 ? "sentence is" : "sentences are"} checked.`;
+  return `${left} of ${v.analysed} tagged ${v.analysed === 1 ? "sentence" : "sentences"} still to check.`;
+}
+
+/** The note on a sentence whose tags no one has checked. */
+export function machineNote(by: string): string {
+  return `Tagged by ${by}, not checked yet. Correct anything wrong below; Mark checked when it reads right.`;
+}
 
 /** UD's universal tags and relations, offered in the editor. */
 export const UPOS = ["ADJ", "ADP", "ADV", "AUX", "CCONJ", "DET", "INTJ", "NOUN", "NUM", "PART", "PRON", "PROPN", "PUNCT", "SCONJ", "SYM", "VERB", "X"];

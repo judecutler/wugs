@@ -309,6 +309,18 @@ fn set_project_language(s: State<SessionThread>, language: interchange::Language
     s.run(move |s| interchange::set_project_language(s, &language))
 }
 
+/// How far a text's machine tags are checked.
+#[tauri::command(async)]
+fn sentence_check_status(s: State<SessionThread>, text_id: String) -> Result<sentence::CheckView, String> {
+    s.run(move |s| sentence::check_status(s, &text_id))
+}
+
+/// Mark machine tags checked without changing them (the whole text when no sentence is named).
+#[tauri::command(async)]
+fn sentence_mark_checked(s: State<SessionThread>, text_id: String, segment_ids: Vec<String>) -> Result<sentence::CheckView, String> {
+    s.run(move |s| sentence::mark_checked(s, &text_id, &segment_ids))
+}
+
 /// Glottolog's languages and dialects a typed name or code fits, best first.
 #[tauri::command(async)]
 fn glottolog_find(query: String) -> Vec<glottolog::Languoid> {
@@ -1795,6 +1807,8 @@ pub fn run() {
             morphosyntax_choose_spacy,
             morphosyntax_choose_stanza,
             glottolog_find,
+            sentence_check_status,
+            sentence_mark_checked,
             morphosyntax_allow_web,
             morphosyntax_run,
             sentence_get,

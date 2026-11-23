@@ -30,6 +30,20 @@ pub struct SentenceView {
     pub annotated: bool,
     pub empty_nodes: usize,
     pub problems: Vec<String>,
+    /// The tagger whose analysis no person has checked yet, if any.
+    pub machine: Option<String>,
+}
+
+/// How far a text's tagging is checked: its transcription sentences with
+/// an analysis, and those still a tagger's alone, in order.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CheckView {
+    pub analysed: usize,
+    pub unchecked: Vec<String>,
+    /// Every transcription sentence of the text, in order, so the panel can
+    /// find the next one to check after any sentence.
+    pub sentences: Vec<String>,
 }
 
 fn require(p: &wugs_core::Project, text_id: &str, segment_id: &str) -> Result<(), String> {
@@ -48,7 +62,39 @@ fn view(p: &wugs_core::Project, segment_id: &str) -> Result<SentenceView, String
         annotated: r.annotated,
         empty_nodes: r.empty_nodes,
         problems: r.problems,
+        machine: wugs_conllu::annotate::unchecked(p, segment_id)?,
     })
+}
+
+/// The text's sentences on transcription tracks, in order.
+fn sentences_of(p: &wugs_core::Project, text_id: &str) -> Result<Vec<String>, String> {
+    let (_, transcription) = crate::concordance::corpus_tiers(p)?;
+    let mut out = Vec::new();
+    for seg in p.proj.ordered_children("text", text_id, "segment")? {
+        if !p.proj.is_tombstoned(&seg)? && transcription.contains(&p.proj.field_str(&seg, "tier")?.unwrap_or_default()) {
+            out.push(seg);
+        }
+    }
+    Ok(out)
+}
+
+pub fn check_status(session: &mut Session, text_id: &str) -> Result<CheckView, String> {
+    let p = project(session)?;
+    if p.proj.entity_kind(text_id)?.as_deref() != Some("text") || p.proj.is_tombstoned(text_id)? {
+        return Err("That text is not in this project.".into());
+    }
+    let sentences = sentences_of(p, text_id)?;
+    let st = wugs_conllu::annotate::check_status(p, &sentences)?;
+    Ok(CheckView { analysed: st.analysed, unchecked: st.unchecked, sentences })
+}
+
+/// Mark sentences' machine tags checked without changing them (all of the
+/// text's when `segment_ids` is empty); the text's status comes back.
+pub fn mark_checked(session: &mut Session, text_id: &str, segment_ids: &[String]) -> Result<CheckView, String> {
+    let p = project(session)?;
+    let segs = if segment_ids.is_empty() { sentences_of(p, text_id)? } else { segment_ids.to_vec() };
+    wugs_conllu::annotate::mark_checked(p, text_id, &segs)?;
+    check_status(session, text_id)
 }
 
 pub fn sentence_get(session: &mut Session, text_id: &str, segment_id: &str) -> Result<SentenceView, String> {
@@ -87,6 +133,20 @@ mod tests {
         assert_eq!(v.words[0].deprel, "obj");
         assert!(sentence_set(&mut s, &text, &seg, &dogs, "upos", "NOPE").unwrap_err().contains("not a UD"));
         assert!(sentence_get(&mut s, "txt_elsewhere", &seg).is_err());
+        assert_eq!(v.machine, None, "an imported treebank is not a tagger's guess");
+        let st = check_status(&mut s, &text).unwrap();
+        assert_eq!((st.analysed, st.unchecked.len()), (1, 0));
+        // A tagger's analysis is marked until checked.
+        let p = project(&mut s).unwrap();
+        let typed = p.create_text("typed").unwrap();
+        let (a, _) = p.add_segment(&typed, &tier, 0, None, None, "Cats sleep").unwrap();
+        let sent = wugs_conllu::format::parse("1\tCats\tcat\tNOUN\t_\t_\t2\tnsubj\t_\t_\n2\tsleep\tsleep\tVERB\t_\t_\t0\troot\t_\t_\n\n").unwrap();
+        wugs_conllu::annotate::annotate(p, &typed, &[(a.clone(), sent[0].clone())], "stanza 1.10 en").unwrap();
+        assert_eq!(sentence_get(&mut s, &typed, &a).unwrap().machine.as_deref(), Some("stanza 1.10 en"));
+        assert_eq!(check_status(&mut s, &typed).unwrap().unchecked, vec![a.clone()]);
+        let st = mark_checked(&mut s, &typed, &[]).unwrap();
+        assert_eq!((st.analysed, st.unchecked.len()), (1, 0));
+        assert_eq!(sentence_get(&mut s, &typed, &a).unwrap().machine, None);
         drop(s);
         std::fs::remove_dir_all(dir).ok();
     }

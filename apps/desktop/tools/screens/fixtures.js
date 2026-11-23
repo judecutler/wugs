@@ -212,6 +212,11 @@
 
   // ------------------------------------------------------------ lexicon
 
+  // Sentences a tagger tagged, and those a person has checked since (the Sentence panel).
+  const TAGGED = ["u01", "u02", "u03", "u04"];
+  const checkedTags = new Set();
+  const checkStatus = () => ({ analysed: TAGGED.length, unchecked: TAGGED.filter((id) => !checkedTags.has(id)), sentences: utterances.map((u) => u.id) });
+
   const LEXICON = [
     ["lx-kani", "kani", null, "v", ["count", "reckon"]],
     ["lx-ni", "ni-", null, "prefix", ["1SG"]],
@@ -788,6 +793,11 @@
     gloss_get: ({ segmentId }) => glossView(segmentId),
     gloss_add_note: glossEdit,
     gloss_set_note: glossEdit,
+    sentence_check_status: () => checkStatus(),
+    sentence_mark_checked: ({ segmentIds }) => {
+      for (const id of segmentIds.length === 0 ? TAGGED : segmentIds) checkedTags.add(id);
+      return checkStatus();
+    },
     // A tagged sentence for the Sentence panel: ni-kani ŋai toɾu-ma kesi, "I count one, two, three".
     sentence_get: ({ segmentId }) => ({
       segmentId,
@@ -795,6 +805,7 @@
       annotated: true,
       emptyNodes: 0,
       problems: [],
+      machine: checkedTags.has(segmentId) ? null : "udpipe kanu-test.udpipe",
       words: [
         { token: "w1", form: "nikani", lemma: "kani", upos: "VERB", xpos: "v", feats: "Person=1|Number=Sing", head: 0, deprel: "root" },
         { token: "w2", form: "ŋai", lemma: "ŋai", upos: "NUM", xpos: "num", feats: "NumType=Card", head: 1, deprel: "obj" },

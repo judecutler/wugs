@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { arcs, columns, headChoices, rootOf, type WordRow } from "./logic.ts";
+import { arcs, checkLine, columns, headChoices, nextUnchecked, rootOf, type WordRow } from "./logic.ts";
 
 const w = (form: string, head: number | null, deprel = ""): WordRow => ({ token: form, form, lemma: "", upos: "", xpos: "", feats: "", head, deprel });
 
@@ -31,4 +31,18 @@ test("columns leave room for the longer of form and tag", () => {
 test("a word cannot choose itself as head", () => {
   const choices = headChoices([w("a", 0), w("b", 1)], 1);
   assert.deepEqual(choices.map((c) => c.value), ["", "0", "1"]);
+});
+
+test("the next sentence to check follows the one on screen and wraps round", () => {
+  const v = { analysed: 4, unchecked: ["b", "d"], sentences: ["a", "b", "c", "d", "e"] };
+  assert.equal(nextUnchecked(v, "a"), "b");
+  assert.equal(nextUnchecked(v, "b"), "d");
+  assert.equal(nextUnchecked(v, "c"), "d");
+  assert.equal(nextUnchecked(v, "e"), "b", "wraps round");
+  assert.equal(nextUnchecked(v, null), "b");
+  assert.equal(nextUnchecked({ ...v, unchecked: ["b"] }, "b"), "b", "the last one left");
+  assert.equal(nextUnchecked({ ...v, unchecked: [] }, "a"), null);
+  assert.equal(checkLine(v), "2 of 4 tagged sentences still to check.");
+  assert.equal(checkLine({ ...v, unchecked: [] }), "All 4 tagged sentences are checked.");
+  assert.equal(checkLine({ analysed: 0, unchecked: [], sentences: [] }), "");
 });
