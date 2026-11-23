@@ -799,6 +799,16 @@ Sentences from texts that are not open (restricted or community-only) are left o
 
 Press **Dictionary to print…** beside the lexicon export. wugs writes one HTML file. Entries are in the order of your alphabet (the writing system's sort order, if the project has one), under letter headings. Each entry shows its part of speech and numbered senses, each sense with its glosses, definition, usage and semantic domains. Each sense also gets its example sentences from the lexicon, or, when it has none, its first use in your texts, with its translation. An index of glosses closes the file. Open it in a browser and print it to PDF, or open it in Word or Google Docs to edit it. Examples from texts that are not open are left out unless you tick **Include texts that are not open**.
 
+### Flashcards for learners
+
+Press **Flashcards…** beside **Dictionary to print…** to turn the lexicon into flashcards for people learning the language. wugs writes a folder `wugs-flashcards-<date>` with:
+
+- `anki.txt` for Anki: a note per entry, so each word is asked both ways (word to meaning, meaning to word). The front shows the headword and plays it when the entry has a pronunciation heard in a recording. The back shows the meanings, the part of speech and the first example sentence with its translation.
+- `quizlet.txt` for Quizlet and other flashcard sites: a word and its meaning on each line, separated by a tab.
+- `sounds/`, the sound of each word that has one, and a README that says how to import.
+
+In Anki, copy the files in `sounds/` into Anki's media folder first (in Anki, **Tools > Check Media > View Files**), then choose **File > Import** and pick `anki.txt`. Each card carries its entry's id, so when you import a newer `anki.txt` later, Anki updates the cards you already have and keeps your progress. Entries with no gloss yet are left out, and the message says how many. Sounds from recordings that are not open are left out unless you tick **Include texts that are not open**.
+
 ### Start a grammar sketch
 
 Press **Grammar sketch…** beside **Dictionary to print…**. wugs writes one HTML file with a grammar's usual chapters, filled with what the project already knows, for you to open in Word or LibreOffice and go on writing:

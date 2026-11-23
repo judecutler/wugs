@@ -8,6 +8,7 @@ pub mod concordance;
 pub mod cqp;
 pub mod cwb;
 pub mod dictionary;
+pub mod flashcards;
 pub mod dispersion;
 pub mod collocates;
 pub mod frequencies;
@@ -1133,6 +1134,12 @@ fn export_website(s: State<SessionThread>, folder: String, date: String, include
     s.run(move |s| website::export_website(s, std::path::Path::new(&folder), &date, include_restricted, audio))
 }
 
+/// The lexicon as flashcards for Anki and Quizlet (`flashcards.rs`).
+#[tauri::command(async)]
+fn export_flashcards(s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<flashcards::Flashcards, String> {
+    s.run(move |s| flashcards::export_flashcards(s, std::path::Path::new(&folder), &date, include_restricted))
+}
+
 /// Every sentence a find and replace would change, before and after.
 #[tauri::command(async)]
 fn replace_preview(s: State<SessionThread>, find: replace::Find) -> Result<replace::Preview, String> {
@@ -2084,6 +2091,7 @@ pub fn run() {
             praat_discard,
             acoustic_analysis,
             measure_track,
+            export_flashcards,
             save_clips,
             replace_preview,
             export_website,

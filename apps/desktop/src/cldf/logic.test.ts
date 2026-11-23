@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { glottocodeProblem, isoProblem, publishedLines, corpusLines, dictionaryLines, siteLines } from "./logic.ts";
+import { glottocodeProblem, isoProblem, publishedLines, corpusLines, dictionaryLines, flashcardLines, siteLines } from "./logic.ts";
 import { languoidLine, pickedLanguage, worthLooking } from "./logic.ts";
 
 test("codes are optional, and checked when typed", () => {
@@ -62,4 +62,12 @@ test("picking a match keeps a name the person gave", () => {
   assert.deepEqual(pickedLanguage({ name: "", glottocode: "", iso: "" }, tr, "turk"), { name: "Turkish", glottocode: "nucl1301", iso: "tur" });
   assert.deepEqual(pickedLanguage({ name: "Türkçe", glottocode: "", iso: "" }, tr, ""), { name: "Türkçe", glottocode: "nucl1301", iso: "tur" }, "found from the code field");
   assert.deepEqual(pickedLanguage({ name: "Türkçe", glottocode: "", iso: "" }, tr, "turkish"), { name: "Turkish", glottocode: "nucl1301", iso: "tur" }, "typed in the name field: the match's name");
+});
+
+test("flashcard lines say what to import and what is missing", () => {
+  const lines = flashcardLines({ path: "/x/wugs-flashcards-2026-11-23", cards: 40, sounds: 1, noGloss: 2 });
+  assert.match(lines[0]!, /^Saved 40 flashcards in \/x\/wugs-flashcards-2026-11-23: anki\.txt/u);
+  assert.equal(lines[1], "1 card plays the word as it is said: copy the sounds folder into Anki's media folder first.");
+  assert.equal(lines[2], "2 entries with no gloss were left out.");
+  assert.match(flashcardLines({ path: "/x", cards: 1, sounds: 0, noGloss: 0 })[1]!, /^No card has a sound yet/u);
 });

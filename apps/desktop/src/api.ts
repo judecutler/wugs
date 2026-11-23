@@ -673,6 +673,7 @@ export const exportCorpus = (args: { folder: string; date: string; includeRestri
 /** The lexicon as one HTML dictionary to print or share (src-tauri/src/dictionary.rs). */
 export const exportDictionary = (args: { folder: string; date: string; includeRestricted: boolean }) =>
   invoke<{ path: string; entries: number; senses: number; examples: number; restrictedLeftOut: number }>("export_dictionary", args);
+export const exportFlashcards = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Flashcards>("export_flashcards", args);
 export const exportWebsite = (args: { folder: string; date: string; includeRestricted: boolean; audio: boolean }) => invoke<import("./cldf/logic").Site>("export_website", args);
 export const exportCldf = (args: { folder: string; date: string; includeRestricted: boolean; audio: boolean }) => invoke<import("./cldf/logic").Published>("export_cldf", args);
 /** Save a document built here (a text's interlinear examples) as a new file in `folder`. */
