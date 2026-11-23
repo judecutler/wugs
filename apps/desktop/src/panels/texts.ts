@@ -1,6 +1,6 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { createText, errorText, exportCldf, exportCorpus, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { corpusLines, glottocodeProblem, isoProblem, publishedLines, type Language } from "../cldf/logic";
+import { createText, errorText, exportCldf, exportCorpus, exportDictionary, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, publishedLines, type Language } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
@@ -196,6 +196,15 @@ function languageRow(project: string): HTMLElement {
   );
 }
 
+async function exportDict() {
+  const folder = await chooseFolder("Choose where the dictionary goes");
+  if (folder === null) return;
+  await work("dictionary", async () => {
+    const r = await exportDictionary({ folder, date: localDay(new Date()), includeRestricted });
+    showToast({ tone: r.restrictedLeftOut > 0 ? "warn" : "info", lines: dictionaryLines(r) });
+  });
+}
+
 async function exportCwb() {
   const folder = await chooseFolder("Choose where the corpus goes");
   if (folder === null) return;
@@ -365,6 +374,13 @@ export const textsPanel: PanelDef = {
             textContent: busy === "lexicon" ? "Exporting…" : "Export…",
             disabled: busy !== null,
             onclick: () => void exportLex(),
+          }),
+          h("button", {
+            type: "button",
+            textContent: busy === "dictionary" ? "Making…" : "Dictionary to print…",
+            title: "The lexicon as a dictionary in the alphabet's order: senses, glosses, domains and an example from the texts for each sense, with an index of glosses. One HTML file to print to PDF or open in Word",
+            disabled: busy !== null,
+            onclick: () => void exportDict(),
           }),
         ),
         h(

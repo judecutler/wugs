@@ -4,6 +4,7 @@ pub mod capture;
 pub mod concordance;
 pub mod cqp;
 pub mod cwb;
+pub mod dictionary;
 pub mod collocates;
 pub mod frequencies;
 pub mod keywords;
@@ -254,6 +255,12 @@ fn project_language(s: State<SessionThread>) -> Result<interchange::LanguageDto,
 #[tauri::command(async)]
 fn set_project_language(s: State<SessionThread>, language: interchange::LanguageDto) -> Result<interchange::LanguageDto, String> {
     s.run(move |s| interchange::set_project_language(s, &language))
+}
+
+/// The lexicon as a dictionary to print or share (one HTML file in `folder`).
+#[tauri::command(async)]
+fn export_dictionary(s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<dictionary::Dictionary, String> {
+    s.run(move |s| dictionary::export_dictionary(s, std::path::Path::new(&folder), &date, include_restricted))
 }
 
 /// Every text as one CWB corpus (vertical file, encode.sh, README) in a new folder inside `folder`.
@@ -1589,6 +1596,7 @@ pub fn run() {
             set_project_language,
             export_cldf,
             export_corpus,
+            export_dictionary,
             save_document,
             add_segment,
             add_translation,
