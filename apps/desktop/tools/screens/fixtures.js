@@ -755,6 +755,8 @@ const LEXICON = [
       };
     },
     lexicon_example_gaps: () => ({ without: 6, fillable: 4 }),
+    sound_changes: () => "",
+    set_sound_changes: ({ rules }) => rules.trim(),
     word_sketch: ({ lemma }) => ({
       lemma: lemma.trim().toLowerCase(),
       count: 214,
