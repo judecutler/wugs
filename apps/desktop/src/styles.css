@@ -1090,6 +1090,8 @@ body::before {
 /* Sentence (Scrolls): a dependency tree over the words, and the table to correct it. */
 .panel-interlinear { overflow: auto; padding: 10px 14px; }
 .il-title { margin: 0 0 2px; font-family: var(--font-display); }
+.il-bar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 2px; }
+.il-only { display: inline-flex; gap: 6px; align-items: center; }
 .il-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .il-row { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: start; padding: 6px 8px; border-radius: var(--radius-md); cursor: pointer; }
 .il-row:hover { background: var(--panel); }

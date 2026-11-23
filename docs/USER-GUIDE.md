@@ -333,7 +333,9 @@ wugs remembers the choice on this computer. The number is the segment's place in
 
 The **Interlinear** tab, beside Gloss, shows the selected text the way you would print it: each sentence with its number, its words, the morph breakdown, the glosses with grammatical glosses in small capitals, and the free translation in quotes. Sentences not glossed yet show their transcription in grey.
 
-- The line at the top says how many sentences and words are glossed so far.
+- The line at the top says how many sentences and words are glossed so far. A sentence counts as glossed once every word in it is.
+- Tick **Only sentences still to gloss** to hide the finished ones.
+- Click **Next to gloss** (or choose **Go to the next sentence to gloss** with **Ctrl+K**) to open the next sentence with a word still to gloss in the Gloss panel.
 - Click a sentence, or move to it with the arrow keys and press Enter, to open it in the Gloss panel.
 - Click ▶ to hear a sentence that has times.
 
