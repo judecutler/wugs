@@ -86,6 +86,10 @@ export const dispersion = (args: { query: string; kind: import("./concordance/lo
 /** The project's own meanings of these gloss abbreviations, in the order asked (null where nobody wrote one). */
 /** Ten seconds of a recording's spectrogram as raw bytes (src-tauri/src/spectrogram.rs; layout in src/timeline/spectro.ts). */
 export const spectrogramChunk = (args: { source: string; index: number }) => invoke<ArrayBuffer>("spectrogram", args);
+/** Morphs glossed more than one way across the project (src-tauri/src/consistency.rs). */
+export const glossConsistency = () => invoke<import("./checks/logic").Inconsistent[]>("gloss_consistency");
+/** Gloss every morph of `key` and `kind` that reads `from` as `to`; returns how many changed. */
+export const glossUnify = (args: { key: string; kind: string; from: string; to: string }) => invoke<number>("gloss_unify", args);
 export const abbreviationMeanings = (abbreviations: string[]) => invoke<(string | null)[]>("abbreviation_meanings", { abbreviations });
 export const setAbbreviationMeaning = (abbreviation: string, meaning: string) => invoke<void>("set_abbreviation_meaning", { abbreviation, meaning });
 /** A CQP-style query over tokens and their annotation (src-tauri/src/cqp.rs); a query that does not parse is refused with what and where. */

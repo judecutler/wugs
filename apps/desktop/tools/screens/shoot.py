@@ -39,6 +39,7 @@ PANELS = [
     ("frequencies", "Frequencies"),
     ("collocates", "Collocates"),
     ("keywords", "Keywords"),
+    ("checks", "Checks"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),

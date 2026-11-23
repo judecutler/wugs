@@ -583,6 +583,17 @@
       total: 1,
       hits: [{ textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, len: 1, breakdown: null, glosses: null }],
     }),
+    gloss_consistency: () => [
+      { surface: "ma", kind: "clitic", key: "ma", total: 9, slip: true, variants: [
+        { gloss: "FOC", count: 7, textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01" },
+        { gloss: "foc.", count: 2, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "u01" },
+      ] },
+      { surface: "ka", kind: "suffix", key: "ka", total: 5, slip: false, variants: [
+        { gloss: "PL", count: 4, textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01" },
+        { gloss: "3SG", count: 1, textId: "t-greet", textTitle: "Greetings at the market", tierId: "tier-utt", segmentId: "u01" },
+      ] },
+    ],
+    gloss_unify: () => 1,
     abbreviation_meanings: ({ abbreviations }) => abbreviations.map((a) => (a === "INCL" ? "inclusive (speaker and hearer)" : null)),
     set_abbreviation_meaning: () => null,
     dispersion: () => ({
