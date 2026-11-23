@@ -2,6 +2,7 @@ pub mod assist;
 pub mod capability;
 pub mod capture;
 pub mod concordance;
+pub mod cqp;
 pub mod collocates;
 pub mod frequencies;
 pub mod keywords;
@@ -136,6 +137,12 @@ fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>,
 fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>) -> Result<concordance::Concordance, String> {
     let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
     s.run(move |s| concordance::concordance_in(s, &query, kind, how, text_id.as_deref()))
+}
+
+/// A CQP-style query over the sentences' tokens and their annotation (`src/cqp.rs`).
+#[tauri::command(async)]
+fn concordance_query(s: State<SessionThread>, query: String, text_id: Option<String>) -> Result<concordance::Concordance, String> {
+    s.run(move |s| cqp::run(s, &query, text_id.as_deref()))
 }
 
 /// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
@@ -1417,6 +1424,7 @@ pub fn run() {
             create_project,
             open_sample,
             concordance,
+            concordance_query,
             list_texts,
             link_recording,
             media_overview,

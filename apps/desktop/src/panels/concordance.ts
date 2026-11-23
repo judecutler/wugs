@@ -1,8 +1,8 @@
 // Concordance (roadmap 71): every occurrence of a word, morph, gloss or
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
-import { concordance, errorText } from "../api";
-import { asTsv, clip, countLine, isRtl, keyword, KINDS, left, right, SORTS, sortHits, type ConcordanceKind, type Hit, type SortBy } from "../concordance/logic";
+import { concordance, concordanceQuery, errorText } from "../api";
+import { asTsv, clip, countLine, isRtl, keyword, left, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
@@ -44,7 +44,7 @@ export const concordancePanel: PanelDef = {
   title: "Concordance",
   create(): PanelView {
     const el = h("div", { className: "panel panel-concordance" });
-    let kind: ConcordanceKind = "word";
+    let kind: PanelKind = "word";
     let sortBy: SortBy = "text";
     let hits: Hit[] = [];
     let total = 0;
@@ -53,7 +53,7 @@ export const concordancePanel: PanelDef = {
     let timer = 0;
     /** The item Frequencies asked for: met exactly and in its text while the query is unchanged. */
     let exactFor: Asked | null = null;
-    const input = h("input", { type: "search", className: "cc-query", placeholder: KINDS[0]!.hint, spellcheck: false });
+    const input = h("input", { type: "search", className: "cc-query", placeholder: PANEL_KINDS[0]!.hint, spellcheck: false });
     input.setAttribute("aria-label", "Find");
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Look in" });
     const sorter = h("select", { className: "cc-sort", title: "Order of the rows" }, ...SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
@@ -64,7 +64,7 @@ export const concordancePanel: PanelDef = {
 
     const drawChips = () =>
       chips.replaceChildren(
-        ...KINDS.map((k) => {
+        ...PANEL_KINDS.map((k) => {
           const b = h("button", { type: "button", textContent: k.label, title: `Find ${k.hint}` });
           b.setAttribute("role", "radio");
           b.setAttribute("aria-checked", String(k.id === kind));
@@ -80,7 +80,7 @@ export const concordancePanel: PanelDef = {
 
     const drawRows = () => {
       if (asked === "") {
-        count.textContent = "Type a word, morph or gloss. * stands for any letters: ni* finds every word starting ni.";
+        count.textContent = kind === "query" ? QUERY_HELP : "Type a word, morph or gloss. * stands for any letters: ni* finds every word starting ni.";
         rows.replaceChildren();
         return;
       }
@@ -137,7 +137,11 @@ export const concordancePanel: PanelDef = {
       timer = window.setTimeout(() => {
         // An item asked for from Frequencies is met exactly, in its text, until the query is edited.
         const exactAsk = exactFor !== null && exactFor.query === query && exactFor.kind === kind ? exactFor : null;
-        concordance({ query, kind, exact: exactAsk?.exact ?? false, textId: exactAsk?.text?.id ?? null }).then(
+        const asking =
+          kind === "query"
+            ? concordanceQuery({ query, textId: exactAsk?.text?.id ?? null })
+            : concordance({ query, kind, exact: exactAsk?.exact ?? false, textId: exactAsk?.text?.id ?? null });
+        asking.then(
           (r) => {
             if (mine !== seq) return;
             asked = query;
@@ -150,7 +154,7 @@ export const concordancePanel: PanelDef = {
             hits = [];
             total = 0;
             rows.replaceChildren();
-            count.textContent = `Could not search: ${errorText(e)}`;
+            count.textContent = kind === "query" ? `${errorText(e)}. ${QUERY_HELP}` : `Could not search: ${errorText(e)}`;
           },
         );
       }, 200);
@@ -216,7 +220,7 @@ export const concordancePanel: PanelDef = {
       ({ kind } = pending);
       exactFor = { query: pending.query, kind: pending.kind, text: pending.text, exact: pending.exact };
       input.value = pending.query;
-      input.placeholder = KINDS.find((k) => k.id === kind)?.hint ?? "";
+      input.placeholder = PANEL_KINDS.find((k) => k.id === kind)?.hint ?? "";
       pending = null;
       drawChips();
       run();

@@ -4,6 +4,8 @@
 export type ConcordanceKind = "word" | "morph" | "gloss" | "translation";
 /** What the backend searches: the panel's kinds, or a sense id (a lexicon entry's occurrences). */
 export type QueryKind = ConcordanceKind | "sense";
+/** The Concordance panel's chips: the shared kinds and a CQP query (its own command). */
+export type PanelKind = ConcordanceKind | "query";
 
 export type Hit = {
   textId: string;
@@ -14,6 +16,8 @@ export type Hit = {
   endMs: number | null;
   words: string[];
   at: number;
+  /** Words the match covers from `at` (a phrase or a CQP query); 1 when absent. */
+  len?: number;
   breakdown: string | null;
   glosses: string | null;
 };
@@ -25,6 +29,13 @@ export const KINDS: { id: ConcordanceKind; label: string; hint: string }[] = [
   { id: "translation", label: "Translations", hint: "a word of a free translation" },
 ];
 
+/** The Concordance's chips: Frequencies shares KINDS, so the CQP chip is the Concordance's own. */
+export const PANEL_KINDS: { id: PanelKind; label: string; hint: string }[] = [...KINDS, { id: "query", label: "CQP query", hint: '[lemma="go"] [upos="ADP"], "ni.*" %c' }];
+
+/** The reminder under the chips while a CQP query is chosen. */
+export const QUERY_HELP =
+  'Tokens in [ ]: word, lemma, upos, xpos, feats or gloss = "a regular expression" (whole value; %c ignores case, %d diacritics), joined with & | !. [] is any token; ? * + {1,3} repeat it. "dog" is [word="dog"].';
+
 export type SortBy = "text" | "left" | "right";
 
 export const SORTS: { id: SortBy; label: string }[] = [
@@ -33,9 +44,10 @@ export const SORTS: { id: SortBy; label: string }[] = [
   { id: "right", label: "By the word after" },
 ];
 
+const span = (h: Hit): number => Math.max(1, h.len ?? 1);
 export const left = (h: Hit): string => h.words.slice(0, h.at).join(" ");
-export const right = (h: Hit): string => h.words.slice(h.at + 1).join(" ");
-export const keyword = (h: Hit): string => h.words[h.at] ?? "";
+export const right = (h: Hit): string => h.words.slice(h.at + span(h)).join(" ");
+export const keyword = (h: Hit): string => h.words.slice(h.at, h.at + span(h)).join(" ");
 
 // Case is ignored, diacritics are not: ŋa and na are different words.
 const collator = new Intl.Collator(undefined, { sensitivity: "accent", numeric: true });
@@ -44,7 +56,7 @@ const collator = new Intl.Collator(undefined, { sensitivity: "accent", numeric: 
  * one out, as concordancers (AntConc's 1L, 2L) do; right context likewise. */
 export function sortHits(hits: readonly Hit[], by: SortBy): Hit[] {
   if (by === "text") return [...hits];
-  const keyOf = (h: Hit): string[] => (by === "left" ? h.words.slice(0, h.at).reverse() : h.words.slice(h.at + 1));
+  const keyOf = (h: Hit): string[] => (by === "left" ? h.words.slice(0, h.at).reverse() : h.words.slice(h.at + span(h)));
   return [...hits].sort((a, b) => {
     const ka = keyOf(a);
     const kb = keyOf(b);
