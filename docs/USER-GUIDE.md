@@ -878,6 +878,12 @@ The **Frequencies** panel lists the words of the project with how often each occ
 
 **Per 1000** is how often it occurs in every thousand. Capital letters count together (Kesi and kesi are one word, shown as the spelling used most); diacritics do not (ŋa and na are two). A morph or gloss counts once per word that has it, so a word with PL twice counts once. Click a row to see its occurrences in the Concordance, looked up exactly (a `?` in a word is a letter there, not a wildcard) and in the chosen text: the number of lines matches the count. The list counts again when the project syncs or texts change; after glossing or typing, click **Recount**. Up to 5,000 items are listed and the first 500 drawn; filter to find the rest. The **#** column is each item's frequency rank, whatever the order shown. **Copy table** copies the list to paste into a spreadsheet.
 
+### Find the words your dictionary still lacks
+
+A list of **Words** has an **In lexicon** column. **Yes** means a lexicon entry, or one of its other forms (an allomorph or a paradigm form), is spelled that way. **Glossed only** means the word is broken into morphs in a text but has no entry spelled that way, which is usual for inflected words. **No** means neither. The line above the list says how many words the lexicon lacks and how often they are used.
+
+Tick **Only words not in the lexicon** to list just those, most frequent first. Click **Add** beside a word to make it an entry, then give it a gloss in the Lexicon panel. For glossed words, the Checks panel's **Not in the lexicon** adds their roots instead. **Copy table** includes the column.
+
 A lemma list counts every form of a word together (go, goes, went), and a tag list how many nouns, verbs and so on a text has. Lemmas and tags come from CoNLL-U and TEI files and from **Tag and parse this text** in the Sentence panel; for words you glossed, the lemma is the root's lexicon entry and the tag its category. The line above the list says how many words have none yet. Click a lemma or tag to see its lines as a CQP query in the Concordance, such as `[lemma="go"]`.
 
 ## Hear any segment from anywhere

@@ -1,14 +1,16 @@
 // Frequencies (Scrolls, SCROLLS.md §5 step 3): how often each word, morph,
 // gloss or translation word occurs, in the whole project or one text. A row
 // opens the Concordance on that item, so every count can be checked line by line.
+// A word list also says which words the lexicon lacks, so a dictionary can be
+// grown from the texts, most used word first.
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, frequencies } from "../api";
+import { errorText, frequencies, lexiconAdd } from "../api";
 import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
-import { asTsv, cqpFor, unlabelledNote, filterRows, FREQ_SORTS, perThousand, ranked, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
+import { asTsv, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
-import { dataGeneration, getState, showToast } from "../store";
+import { dataGeneration, getState, showToast, touchLexicon } from "../store";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -59,6 +61,8 @@ export const frequenciesPanel: PanelDef = {
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy the list as a table to paste into a spreadsheet" });
     const recount = h("button", { type: "button", textContent: "Recount", title: "Count again (the list counts when the panel opens, the project syncs or texts change)" });
     const count = h("p", { className: "note fq-count" });
+    const missingOnly = h("input", { type: "checkbox" });
+    const missingBox = h("label", { className: "fq-missing", title: "List only the words no lexicon entry or form is spelled as" }, missingOnly, " Only words not in the lexicon");
     const table = h("table", { className: "fq-table" });
 
     const drawChips = () =>
@@ -81,7 +85,26 @@ export const frequenciesPanel: PanelDef = {
       scope = fillScopes(scopePicker, scope, drawScopes);
     };
 
-    const shownRows = () => sortRows(filterRows(rankedRows, filter.value), sortBy);
+    /** Words carry the lexicon column (single transcription words only). */
+    const marked = () => rankedRows.some((r) => r.lexicon !== undefined);
+    const shownRows = () => {
+      const rows = filterRows(rankedRows, filter.value);
+      return sortRows(marked() && missingOnly.checked ? notInLexicon(rows) : rows, sortBy);
+    };
+
+    /** Make a word an entry (its gloss left for the Lexicon panel); the row says so at once. */
+    async function addToLexicon(r: RankedRow) {
+      try {
+        await lexiconAdd({ lemma: r.item, gloss: "" });
+      } catch (e) {
+        showToast({ tone: "error", lines: [`Could not add «${r.item}»: ${errorText(e)}`] });
+        return;
+      }
+      r.lexicon = "entry";
+      touchLexicon();
+      drawRows();
+      showToast({ tone: "info", lines: [`Added «${r.item}» to the lexicon. Give it a gloss in the Lexicon panel.`] });
+    }
 
     const drawRows = () => {
       if (data === null) {
@@ -98,8 +121,11 @@ export const frequenciesPanel: PanelDef = {
             ? unlabelledNote(data, kind)
             : "";
       const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn; filter to find the others (Copy table has them all).` : "";
-      count.textContent = summary(data, noun()) + perWord + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
-      const head = h("tr", {}, ...["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts"].map((t) => h("th", { textContent: t, scope: "col" })));
+      count.textContent = summary(data, noun()) + perWord + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
+      const withLexicon = marked();
+      missingBox.hidden = !withLexicon;
+      const columns = ["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts", ...(withLexicon ? ["In lexicon"] : [])];
+      const head = h("tr", {}, ...columns.map((t) => h("th", { textContent: t, scope: "col" })));
       table.replaceChildren(
         h("thead", {}, head),
         h(
@@ -114,6 +140,7 @@ export const frequenciesPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: r.count.toLocaleString("en") }),
               h("td", { className: "fq-num", textContent: perThousand(r.count, tokens) }),
               h("td", { className: "fq-num", textContent: String(r.texts) }),
+              withLexicon ? lexiconTd(r) : null,
             );
             const sc = scopeOf(scope);
             const text = sc.textId === null ? null : { id: sc.textId, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
@@ -133,6 +160,26 @@ export const frequenciesPanel: PanelDef = {
         ),
       );
     };
+
+    function lexiconTd(r: RankedRow): HTMLElement {
+      const td = h("td", { className: `fq-lexicon fq-lexicon-${r.lexicon ?? "none"}`, textContent: lexiconCell(r.lexicon) });
+      if (r.lexicon === "entry") return td;
+      // A glossed word is usually inflected: its root belongs in the lexicon,
+      // which the Checks panel's Not in the lexicon list adds.
+      if (r.lexicon === "analysed") {
+        td.title = "Broken into morphs in a text, but no entry or form is spelled this way; the Checks panel adds glossed roots";
+        return td;
+      }
+      const add = h("button", { type: "button", className: "link-button", textContent: "Add", title: `Make «${r.item}» a lexicon entry` });
+      add.tabIndex = -1;
+      add.onclick = (e) => {
+        e.stopPropagation();
+        add.disabled = true;
+        void addToLexicon(r);
+      };
+      td.append(" ", add);
+      return td;
+    }
 
     async function load(): Promise<void> {
       const mine = ++seq;
@@ -170,6 +217,7 @@ export const frequenciesPanel: PanelDef = {
       drawRows();
     };
     filter.oninput = drawRows;
+    missingOnly.onchange = drawRows;
     recount.onclick = () => void load();
     copy.onclick = () => {
       if (data === null || rankedRows.length === 0) return;
@@ -201,12 +249,13 @@ export const frequenciesPanel: PanelDef = {
       if (!sameProject) {
         scope = "";
         filter.value = "";
+        missingOnly.checked = false;
         data = null;
       }
       drawChips();
       drawScopes();
       drawSizer();
-      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter), count, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, missingBox), count, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };

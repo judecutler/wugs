@@ -804,13 +804,15 @@ const LEXICON = [
       rows:
         kind === "gloss"
           ? [{ item: "1SG", count: 14, texts: 3 }, { item: "count", count: 9, texts: 2 }, { item: "FOC", count: 6, texts: 2 }]
+          : kind !== "word"
+          ? [{ item: "one", count: 9, texts: 2 }, { item: "two", count: 7, texts: 2 }]
           : [
-              { item: "nikani", count: 23, texts: 3 },
-              { item: "ŋai", count: 19, texts: 3 },
-              { item: "kesi", count: 11, texts: 2 },
-              { item: "toruma", count: 7, texts: 1 },
-              { item: "tekama", count: 4, texts: 2 },
-              { item: "liwa", count: 1, texts: 1 },
+              { item: "nikani", count: 23, texts: 3, lexicon: "analysed" },
+              { item: "ŋai", count: 19, texts: 3, lexicon: "entry" },
+              { item: "kesi", count: 11, texts: 2, lexicon: "entry" },
+              { item: "toruma", count: 7, texts: 1, lexicon: "none" },
+              { item: "tekama", count: 4, texts: 2, lexicon: "entry" },
+              { item: "liwa", count: 1, texts: 1, lexicon: "none" },
             ],
         }),
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),
@@ -910,6 +912,7 @@ const LEXICON = [
       return LEXICON.filter((r) => q === "" || r.lemma.includes(q) || r.glosses.some((g) => g.includes(q)));
     },
     lexicon_entry: lexiconEntry,
+    lexicon_add: () => ({ entry: lexiconEntry({ id: LEXICON[0].id }), notes: [] }),
     // A paradigm answered for whatever axes the panel asks: every cell of the
     // grid, the first one filled, so the coverage line has something to count.
     lexicon_paradigm: ({ id, axes }) => {

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asTsv, filterRows, perThousand, ranked, sortRows, summary } from "./logic.ts";
+import { asTsv, filterRows, lexiconCell, lexiconNote, notInLexicon, perThousand, ranked, sortRows, summary } from "./logic.ts";
 
 const rows = [
   { item: "kesi", count: 5, texts: 1 },
@@ -49,4 +49,20 @@ test("lemma and tag rows open the CQP query that finds their lines", async () =>
   assert.equal(cqpFor("tag", "NOUN", { key: "genre", value: "news" }), '[upos="NOUN"] :: match.text_genre="news"');
   assert.equal(unlabelledNote({ rows: [], tokens: 3, types: 1, unlabelled: 0 }, "lemma"), "");
   assert.match(unlabelledNote({ rows: [], tokens: 3, types: 1, unlabelled: 2 }, "tag"), /^ 2 words have no tag yet: /);
+});
+
+test("a word list says what the lexicon lacks", () => {
+  const words = ranked([
+    { item: "kesi", count: 5, texts: 1, lexicon: "entry" as const },
+    { item: "tolo", count: 3, texts: 1, lexicon: "none" as const },
+    { item: "zibu", count: 2, texts: 2, lexicon: "analysed" as const },
+  ]);
+  assert.deepEqual(notInLexicon(words).map((r) => r.item), ["tolo", "zibu"]);
+  assert.equal(lexiconNote(words), " 2 of these 3 words are not in the lexicon yet (used 5 times).");
+  assert.equal(lexiconNote(words.slice(0, 1)), " Every word listed is in the lexicon.");
+  assert.equal(lexiconNote(words.slice(1, 2)), " This word is not in the lexicon yet (used 3 times).");
+  assert.equal(lexiconNote([{ item: "x", count: 1, texts: 1 }]), "", "morph lists carry no lexicon column");
+  assert.equal(lexiconCell("analysed"), "Glossed only");
+  assert.equal(asTsv(words, 10).split("\n")[0], "rank\titem\tcount\tper 1000 words\ttexts\tin lexicon");
+  assert.equal(asTsv(words, 10).split("\n")[2], "2\ttolo\t3\t300\t1\tNo");
 });

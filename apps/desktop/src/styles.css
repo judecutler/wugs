@@ -1094,6 +1094,8 @@ body::before {
 /* Frequencies (Scrolls). */
 .panel-frequencies { display: flex; flex-direction: column; gap: 6px; }
 .fq-filter { flex: 1; }
+.fq-missing { display: flex; align-items: center; gap: 4px; font-size: var(--text-sm); white-space: nowrap; }
+.fq-lexicon-none { color: var(--muted); }
 .fq-rows { flex: 1; min-height: 0; overflow: auto; }
 .fq-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .fq-table th { position: sticky; top: 0; background: var(--surface-raised); text-align: left; font-weight: 600; color: var(--muted); font-size: var(--text-xs); padding: 4px 6px; border-bottom: 1px solid var(--line); }
@@ -1103,6 +1105,7 @@ body::before {
 .fq-rank { color: var(--muted); width: 3em; }
 .fq-item { font-family: var(--font-ipa); }
 .fq-num, .fq-table th:nth-child(n+3) { text-align: right; font-variant-numeric: tabular-nums; }
+.fq-table th:nth-child(6), .fq-table td.fq-lexicon { text-align: left; white-space: nowrap; }
 .co-table th:nth-child(n+2) { text-align: right; }
 .co-node { flex: 1; font-family: var(--font-ipa); }
 .co-neg { color: var(--muted); }

@@ -1,6 +1,10 @@
 // Frequency list (Scrolls): display rules. Pure: no DOM.
 
-export type FrequencyRow = { item: string; count: number; texts: number };
+/** `lexicon` (single transcription words only): `entry` when an entry or one
+ * of its forms is spelled this way, `analysed` when not but some use is broken
+ * into morphs, `none` when the dictionary does not have it yet. */
+export type LexiconStatus = "entry" | "analysed" | "none";
+export type FrequencyRow = { item: string; count: number; texts: number; lexicon?: LexiconStatus };
 /** A row with its frequency rank (1 = most frequent), kept through sorting and filtering. */
 export type RankedRow = FrequencyRow & { rank: number };
 
@@ -59,6 +63,30 @@ export function filterRows<R extends FrequencyRow>(rows: readonly R[], filter: s
   return rows.filter((r) => r.item.toLocaleLowerCase().includes(lower));
 }
 
+/** Only the words the lexicon does not have yet (no entry or form spelled so). */
+export const notInLexicon = <R extends FrequencyRow>(rows: readonly R[]): R[] => rows.filter((r) => r.lexicon === "none" || r.lexicon === "analysed");
+
+/** A row's lexicon column in words. */
+export function lexiconCell(status: LexiconStatus | undefined): string {
+  if (status === "entry") return "Yes";
+  if (status === "analysed") return "Glossed only";
+  return status === "none" ? "No" : "";
+}
+
+/** The sentence under a word list about what the lexicon lacks:
+ * "41 of these 318 words are not in the lexicon yet (they are used 96 times)." */
+export function lexiconNote(rows: readonly FrequencyRow[]): string {
+  const marked = rows.filter((r) => r.lexicon !== undefined);
+  if (marked.length === 0) return "";
+  const missing = notInLexicon(marked);
+  if (missing.length === 0) return " Every word listed is in the lexicon.";
+  const uses = missing.reduce((n, r) => n + r.count, 0);
+  const n = (x: number) => x.toLocaleString("en");
+  const used = `(used ${n(uses)} ${uses === 1 ? "time" : "times"})`;
+  if (marked.length === 1) return ` This word is not in the lexicon yet ${used}.`;
+  return ` ${n(missing.length)} of these ${n(marked.length)} words ${missing.length === 1 ? "is" : "are"} not in the lexicon yet ${used}.`;
+}
+
 /** "1,204 words, 318 different" in the kind's own nouns. */
 export function summary(f: Frequencies, noun: { one: string; many: string }): string {
   if (f.tokens === 0) return `No ${noun.many} yet.`;
@@ -71,5 +99,7 @@ export function summary(f: Frequencies, noun: { one: string; many: string }): st
 /** Tab-separated, with a header row, for a spreadsheet; rank is the frequency rank, whatever the order. */
 export function asTsv(rows: readonly RankedRow[], tokens: number, item = "item"): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
-  return [`rank\t${clean(item)}\tcount\tper 1000 words\ttexts`, ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts)].join("\t"))].join("\n");
+  const lexicon = rows.some((r) => r.lexicon !== undefined);
+  const head = `rank\t${clean(item)}\tcount\tper 1000 words\ttexts${lexicon ? "\tin lexicon" : ""}`;
+  return [head, ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts), ...(lexicon ? [lexiconCell(r.lexicon)] : [])].join("\t"))].join("\n");
 }
