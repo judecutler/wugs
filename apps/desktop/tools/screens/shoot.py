@@ -647,10 +647,16 @@ def main():
                 failures.append("Compare word lists did not report what it read")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.shot("state-compare", run.page.locator(".panel-compare"))
-            if "Kelani" not in run.page.locator(".panel-compare thead").inner_text():
+            if "Kelani" not in run.page.locator(".panel-compare .cmp-table thead").inner_text():
                 failures.append("Compare word lists did not add a column for the loaded language")
             if "look alike" not in run.page.locator(".panel-compare .cmp-line").inner_text():
                 failures.append("Compare word lists did not say how alike the lists are")
+            run.page.locator(".panel-compare .cmp-corr-block").scroll_into_view_if_needed()
+            run.shot("state-compare-correspondences", run.page.locator(".panel-compare"))
+            if "pairs of words at least 50% alike" not in run.page.locator(".panel-compare .cmp-corr-line").inner_text():
+                failures.append("Compare word lists did not align the pairs of words")
+            if run.page.locator(".panel-compare .cmp-corr tbody tr").count() == 0:
+                failures.append("Compare word lists listed no sound correspondence")
             # Notes: every note in one list, questions only.
             run.front("notes", "Notes")
             run.page.locator(".panel-notes .nt-item").first.wait_for()
