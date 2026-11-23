@@ -10,7 +10,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, soundWords } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
-import { gapsNote, positions, shapes, share, type Shape, type Where } from "../sounds/shapes";
+import { clustersNote, consonantClusters, gapsNote, positions, shapes, share, type Cluster, type Shape, type Where } from "../sounds/shapes";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
 import { dataGeneration, getState, showToast } from "../store";
@@ -25,7 +25,12 @@ const PAD = 26;
 /** Room on the left for unrounded vowels with several spellings (i ĩ iː). */
 const PADX = 72;
 
-type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[] };
+type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[]; clusters: Cluster[]; clustersNote: string };
+
+const clustersOf = (words: readonly { word: string; count: number }[]) => {
+  const clusters = consonantClusters(words);
+  return { clusters, clustersNote: clustersNote(words, clusters) };
+};
 
 export const soundsPanel: PanelDef = {
   title: "Sounds",
@@ -60,7 +65,7 @@ export const soundsPanel: PanelDef = {
         }
         if (mine !== seq) return;
         const sounds = inventory(r.words);
-        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words), where: positions(r.words, sounds.map((x) => x.sound)), shapes: shapes(r.words) };
+        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words), where: positions(r.words, sounds.map((x) => x.sound)), shapes: shapes(r.words), ...clustersOf(r.words) };
         problem = null;
       } catch (e) {
         if (mine !== seq) return;
@@ -139,6 +144,22 @@ export const soundsPanel: PanelDef = {
       return b;
     };
 
+    const clusterSection = (l: Loaded): HTMLElement[] => {
+      const cell = (n: number) => h("td", { className: `num${n === 0 ? " sd-gap" : ""}`, textContent: n === 0 ? "–" : n.toLocaleString() });
+      const rows = l.clusters.slice(0, 40).map((c) => {
+        const find = h("button", { type: "button", className: "sd-sound", textContent: c.cluster, title: `e.g. «${c.example}», in ${c.words} ${c.words === 1 ? "word" : "words"}: open every word with it in the Concordance` });
+        find.onclick = () => askConcordance(`*${c.cluster}*`, "word", null, false);
+        return h("tr", {}, h("td", {}, find), cell(c.initial), cell(c.medial), cell(c.final), h("td", { className: "ipa", textContent: c.example }));
+      });
+      return [
+        h("h4", { className: "sd-h", textContent: "Consonant clusters" }),
+        h("p", { className: "note", textContent: l.clustersNote }),
+        ...(rows.length === 0
+          ? []
+          : [h("div", { className: "sd-scroll" }, h("table", { className: "fq-table sd-where" }, h("thead", {}, h("tr", {}, ...["Cluster", "Word-initial", "Inside", "Word-final", "Example"].map((t) => h("th", { textContent: t })))), h("tbody", {}, ...rows)))]),
+      ];
+    };
+
     const whereSection = (l: Loaded): HTMLElement[] => {
       if (l.where.length === 0) return [];
       const cell = (n: number, total: number) => h("td", { className: `num${n === 0 ? " sd-gap" : ""}`, textContent: n === 0 ? "–" : share(n, total), title: n.toLocaleString() });
@@ -153,6 +174,7 @@ export const soundsPanel: PanelDef = {
         h("h4", { className: "sd-h", textContent: "Word shapes" }),
         h("p", { className: "note", textContent: "Each word as consonants (C) and vowels (V), by share of running words. ? is a letter the chart does not place." }),
         h("div", { className: "sd-list" }, ...shapeChips),
+        ...clusterSection(l),
         h("h4", { className: "sd-h", textContent: "Where sounds occur" }),
         ...(gaps === "" ? [] : [h("p", { className: "note", textContent: gaps })]),
         h(
