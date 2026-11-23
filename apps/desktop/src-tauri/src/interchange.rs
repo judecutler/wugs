@@ -279,6 +279,50 @@ pub fn import_file(s: &mut Session, path: &str) -> Result<Imported, String> {
     import_file_named(s, path, &name)
 }
 
+/// Where an `<illustration href>` of a LIFT file at `lift` can be: in the
+/// `pictures` folder beside it (FLEx's export), or at the path it names
+/// below the file's folder. Only plain relative names count, so a file
+/// cannot reach outside its own folder; a path from another computer is
+/// looked for by its last part.
+pub(crate) fn picture_beside(lift: &Path, href: &str) -> Option<std::path::PathBuf> {
+    let dir = lift.parent()?;
+    let parts: Vec<&str> = href.split(['/', '\\']).filter(|p| !p.is_empty()).collect();
+    let name = *parts.last()?;
+    let plain = |p: &str| p != "." && p != ".." && !p.contains(':');
+    let mut tries = vec![dir.join("pictures").join(name), dir.join(name)];
+    if parts.iter().all(|p| plain(p)) && !href.starts_with(['/', '\\']) {
+        tries.insert(0, parts.iter().fold(dir.to_path_buf(), |acc, p| acc.join(p)));
+    }
+    let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
+    if !plain(name) || !crate::lexicon::PICTURE_TYPES.contains(&ext.as_str()) {
+        return None;
+    }
+    tries.into_iter().find(|f| f.metadata().is_ok_and(|m| m.is_file() && m.len() <= crate::lexicon::PICTURE_MAX_BYTES))
+}
+
+/// Attach each imported illustration found beside the LIFT file as its
+/// sense's picture: (attached, not found).
+fn attach_lift_pictures(p: &mut wugs_core::Project, lift: &Path, found: &[(String, String)]) -> Result<(usize, usize), String> {
+    let mut attached = 0;
+    let mut missing = 0;
+    let mut done: std::collections::BTreeSet<&str> = std::collections::BTreeSet::new();
+    for (sense, href) in found {
+        // A sense takes one picture: its first illustration that is here.
+        let file = if done.contains(sense.as_str()) { None } else { picture_beside(lift, href) };
+        let Some(file) = file else {
+            missing += 1;
+            continue;
+        };
+        let store = wugs_blob::BlobStore::open(&p.root).map_err(|e| format!("open blob store: {e}"))?;
+        let blob = store.put_file(&file).map_err(|e| format!("store {href}: {e}"))?;
+        let name = file.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| href.clone());
+        wugs_flex::attach_illustration(p, sense, href, &blob, &name)?;
+        done.insert(sense);
+        attached += 1;
+    }
+    Ok((attached, missing))
+}
+
 /// Import the file at `path` as if it were named `file_name`: the format
 /// comes from that name's extension, a new text's title from its stem.
 pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result<Imported, String> {
@@ -364,6 +408,19 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 .flatten()
                 .collect();
                 lines.push(format!("With them came {}.", parts.join(" and ")));
+            }
+            if !r.illustrations.is_empty() {
+                let (attached, missing) = attach_lift_pictures(p, Path::new(path), &r.illustrations)?;
+                if attached > 0 {
+                    lines.push(format!("{} from the pictures folder beside the file.", plural(attached, "sense got its picture", "senses got their pictures")));
+                }
+                if missing > 0 {
+                    lines.push(format!(
+                        "{} not found beside the file (FLEx keeps them in a pictures folder next to the .lift); {} kept for the next LIFT export.",
+                        plural(missing, "picture was", "pictures were"),
+                        if missing == 1 { "its name is" } else { "their names are" }
+                    ));
+                }
             }
             lines.extend(not_carried(&r.not_carried.0));
             (None, true)
@@ -921,7 +978,42 @@ pub fn export_lexicon(s: &mut Session, format: Format, folder: &Path) -> Result<
         _ => return Err(format!("{} is a text format", format.name())),
     };
     let path = write_new(folder, "lexicon", format.extension(), contents.as_bytes())?;
-    Ok(Exported { path: path.display().to_string(), notes: Vec::new() })
+    let notes = if matches!(format, Format::Lift) { lift_pictures_out(p, folder)? } else { Vec::new() };
+    Ok(Exported { path: path.display().to_string(), notes })
+}
+
+/// A LIFT file names each sense's picture by its file name, and FLEx looks
+/// for it in a `pictures` folder beside the file: copy them there. A file
+/// already there with that name and other bytes is left alone and said.
+fn lift_pictures_out(p: &wugs_core::Project, folder: &Path) -> Result<Vec<String>, String> {
+    let mut copied = 0;
+    let mut notes = Vec::new();
+    for sense in p.proj.entities_of_kind("sense")? {
+        if p.proj.is_tombstoned(&sense)? {
+            continue;
+        }
+        let Some((blob, name)) = p.sense_picture(&sense)? else { continue };
+        let Some(hex) = wugs_blob::parse_ref(&blob) else { continue };
+        let from = p.root.join("blobs").join(hex);
+        if name.is_empty() || name.contains(['/', '\\']) || !from.is_file() {
+            continue;
+        }
+        let dir = folder.join("pictures");
+        fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        let to = dir.join(&name);
+        if to.exists() {
+            if fs::read(&to).ok() != fs::read(&from).ok() {
+                notes.push(format!("pictures/{name} was already there with other contents and was left as it was."));
+            }
+            continue;
+        }
+        fs::copy(&from, &to).map_err(|e| format!("{}: {e}", to.display()))?;
+        copied += 1;
+    }
+    if copied > 0 {
+        notes.insert(0, format!("{} copied into a pictures folder beside it, where FLEx looks for them.", plural(copied, "picture was", "pictures were")));
+    }
+    Ok(notes)
 }
 
 #[derive(Serialize, Debug)]
@@ -1251,6 +1343,46 @@ mod tests {
         assert_eq!(session::list_texts(&mut s).unwrap().len(), 1);
         drop(s);
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn lift_pictures_come_in_from_beside_the_file_and_go_back_out() {
+        let dir = std::env::temp_dir().join(format!("wugs-lift-pics-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let src = dir.join("from flex");
+        fs::create_dir_all(src.join("pictures")).unwrap();
+        fs::write(src.join("pictures").join("fox.jpg"), b"a fox").unwrap();
+        fs::write(dir.join("secret.png"), b"outside").unwrap();
+        let lift = src.join("animals.lift");
+        fs::write(
+            &lift,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<lift version="0.13">
+  <entry id="kesi_1"><lexical-unit><form lang="kan"><text>kesi</text></form></lexical-unit>
+    <sense id="s1"><gloss lang="en"><text>fox</text></gloss><illustration href="fox.jpg"/></sense></entry>
+  <entry id="mopa_1"><lexical-unit><form lang="kan"><text>mopa</text></form></lexical-unit>
+    <sense id="s2"><gloss lang="en"><text>secret</text></gloss><illustration href="../secret.png"/></sense></entry>
+</lift>"#,
+        )
+        .unwrap();
+        let r = import_file(&mut s, lift.to_str().unwrap()).unwrap();
+        assert!(r.lines.iter().any(|l| l.starts_with("1 sense got its picture")), "{:?}", r.lines);
+        assert!(r.lines.iter().any(|l| l.starts_with("1 picture was not found")), "a path out of the folder is never followed: {:?}", r.lines);
+        let kesi = crate::lexicon::lexicon_list(&mut s, "kesi").unwrap()[0].id.clone();
+        let e = crate::lexicon::entry_view(session::project(&mut s).unwrap(), &kesi).unwrap();
+        assert_eq!(e.senses[0].picture.as_ref().map(|x| x.name.as_str()), Some("fox.jpg"));
+
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let x = export_lexicon(&mut s, Format::Lift, &out).unwrap();
+        assert!(x.notes.iter().any(|n| n.starts_with("1 picture was copied")), "{:?}", x.notes);
+        assert_eq!(fs::read(out.join("pictures").join("fox.jpg")).unwrap(), b"a fox");
+        let written = fs::read_to_string(&x.path).unwrap();
+        assert!(written.contains(r#"<illustration href="fox.jpg"/>"#) && written.contains(r#"<illustration href="../secret.png"/>"#), "{written}");
+        assert!(picture_beside(&lift, "C:\\Users\\me\\pictures\\fox.jpg").is_some(), "another computer's path is looked for by its name");
+        assert!(picture_beside(&lift, "fox.exe").is_none());
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

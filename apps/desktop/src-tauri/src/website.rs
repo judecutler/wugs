@@ -319,7 +319,7 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
         }
         for (file, blob) in &pictures {
             let hex = wugs_blob::parse_ref(blob).ok_or_else(|| format!("malformed blob ref {blob:?}"))?;
-            fs::copy(p.root.join("blobs").join(hex.to_string()), scratch.join(file)).map_err(|e| format!("{file}: {e}"))?;
+            fs::copy(p.root.join("blobs").join(hex), scratch.join(file)).map_err(|e| format!("{file}: {e}"))?;
         }
         fs::rename(&scratch, &out).map_err(|e| format!("{}: {e}", out.display()))
     })();
