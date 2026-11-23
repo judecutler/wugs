@@ -4,6 +4,7 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, projectProgress, vocabularyGrowth } from "../api";
 import { growthNote, growthPath, ticks, type Box, type Growth } from "../progress/growth";
+import { composition, compositionNote, compositionTsv, detailKeys, keyLabel, wordShare } from "../progress/composition";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { COLUMNS, progressTsv, rowCells, summaryLines, totals, type Progress } from "../progress/logic";
@@ -21,6 +22,8 @@ export const progressPanel: PanelDef = {
     const table = h("table", { className: "pg-table" });
     const note = h("p", { className: "note" });
     let growth: Growth | null = null;
+    let detail = "";
+    const makeUp = h("div", { className: "pg-makeup" });
     const growthBox = h("div", { className: "pg-growth" });
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every text's figures and the totals, to paste into a spreadsheet or a report" });
     const recount = h("button", { type: "button", textContent: "Count again" });
@@ -47,6 +50,7 @@ export const progressPanel: PanelDef = {
       const parts: Node[] = [h("thead", {}, h("tr", {}, ...COLUMNS.map((c) => h("th", { scope: "col", textContent: c })))), h("tbody", {}, ...data.texts.map((t) => row(rowCells(t), t.id)))];
       if (data.texts.length > 1) parts.push(h("tfoot", {}, row(rowCells(totals(data)), null)));
       table.replaceChildren(...parts);
+      drawMakeUp();
       note.textContent =
         "A sentence is a segment on a transcription track; a word is glossed once it is broken into morphs; speech transcribed adds up the timed sentences that have a transcription.";
     };
@@ -93,6 +97,44 @@ export const progressPanel: PanelDef = {
       }
       parts.push(h("p", { className: "note", textContent: `${growthNote(g)}${g.texts.length > 1 ? " Dashed lines mark where each text starts, in the order the texts were made." : ""}` }));
       growthBox.replaceChildren(...parts);
+    };
+
+    const drawMakeUp = () => {
+      if (data === null) {
+        makeUp.replaceChildren();
+        return;
+      }
+      const keys = detailKeys(data.texts);
+      if (keys.length === 0) {
+        makeUp.replaceChildren(
+          h("h3", { className: "pg-head", textContent: "The corpus by detail" }),
+          h("p", { className: "note", textContent: "Give the texts details (genre, speaker, date…) in the Texts panel's Details or with Import details…, and their share of the words shows here." }),
+        );
+        return;
+      }
+      if (!keys.some((k) => k.key === detail)) detail = keys[0]!.key;
+      const picker = h("select", { className: "pg-detail", title: "Which detail to break the corpus down by" }, ...keys.map((k) => h("option", { value: k.key, textContent: `${keyLabel(k.key)} (${k.texts} ${k.texts === 1 ? "text" : "texts"})`, selected: k.key === detail })));
+      picker.setAttribute("aria-label", "Detail");
+      picker.onchange = () => {
+        detail = picker.value;
+        drawMakeUp();
+      };
+      const rows = composition(data.texts, detail);
+      const copyMakeUp = h("button", { type: "button", textContent: "Copy table", title: "Copy the corpus's make-up by this detail" });
+      copyMakeUp.onclick = () =>
+        void writeText(compositionTsv(rows, detail)).then(
+          () => showToast({ tone: "info", lines: [`Copied the corpus by ${keyLabel(detail)}.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      const n = (x: number) => x.toLocaleString("en");
+      const head = h("tr", {}, ...[keyLabel(detail), "Texts", "Sentences", "Words", "Share", "Glossed"].map((c) => h("th", { scope: "col", textContent: c[0]!.toUpperCase() + c.slice(1) })));
+      const body = rows.map((r) => h("tr", {}, h("th", { scope: "row", textContent: r.value }), h("td", { textContent: n(r.texts) }), h("td", { textContent: n(r.sentences) }), h("td", { textContent: n(r.words) }), h("td", { textContent: wordShare(r, rows) }), h("td", { textContent: n(r.glossed) })));
+      makeUp.replaceChildren(
+        h("h3", { className: "pg-head", textContent: "The corpus by detail" }),
+        h("div", { className: "cc-bar" }, picker, copyMakeUp),
+        h("div", { className: "pg-rows" }, h("table", { className: "pg-table" }, h("thead", {}, head), h("tbody", {}, ...body))),
+        h("p", { className: "note", textContent: compositionNote(rows, detail) }),
+      );
     };
 
     async function load() {
@@ -145,7 +187,7 @@ export const progressPanel: PanelDef = {
         el.replaceChildren(emptyState("Progress", "Open a project to see how far it has come.", "The wug is keeping score."));
         return;
       }
-      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, growthBox);
+      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, makeUp, growthBox);
       void load();
     };
     return { element: el, render, dispose: unprovide };

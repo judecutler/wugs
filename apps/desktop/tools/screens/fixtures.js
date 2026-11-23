@@ -988,9 +988,9 @@ const LEXICON = [
     },
     project_progress: () => ({
       texts: [
-        { id: "t-count", title: "Counting to ten", recordingMs: 62_000, sentences: 10, transcribed: 10, transcribedMs: 41_000, words: 65, glossedWords: 52, morphs: 97, translated: 9 },
-        { id: "t-fox", title: "The fox and the well", recordingMs: 754_000, sentences: 24, transcribed: 17, transcribedMs: 402_000, words: 214, glossedWords: 60, morphs: 131, translated: 11 },
-        { id: "t-market", title: "Greetings at the market", recordingMs: null, sentences: 7, transcribed: 7, transcribedMs: 0, words: 38, glossedWords: 0, morphs: 0, translated: 7 },
+        { id: "t-count", title: "Counting to ten", recordingMs: 62_000, sentences: 10, transcribed: 10, transcribedMs: 41_000, words: 65, glossedWords: 52, morphs: 97, translated: 9, meta: [["genre", "procedural"], ["speaker", "A. Speaker"]] },
+        { id: "t-fox", title: "The fox and the well", recordingMs: 754_000, sentences: 24, transcribed: 17, transcribedMs: 402_000, words: 214, glossedWords: 60, morphs: 131, translated: 11, meta: [["genre", "narrative"], ["speaker", "B. Speaker"]] },
+        { id: "t-market", title: "Greetings at the market", recordingMs: null, sentences: 7, transcribed: 7, transcribedMs: 0, words: 38, glossedWords: 0, morphs: 0, translated: 7, meta: [["genre", "conversation"]] },
       ],
       recordedMs: 816_000,
       recordingsMissing: 0,

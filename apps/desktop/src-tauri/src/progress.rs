@@ -30,6 +30,8 @@ pub struct TextProgress {
     pub morphs: usize,
     /// Transcribed sentences with a translation.
     pub translated: usize,
+    /// The text's details (`meta:<key>`), for the corpus's make-up by detail.
+    pub meta: Vec<(String, String)>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -99,6 +101,7 @@ pub fn progress(session: &mut Session) -> Result<Progress, String> {
         if row.title.is_empty() {
             row.title = p.proj.field_str(&text, "title")?.unwrap_or_default();
         }
+        row.meta = p.text_metadata(&text)?;
         if let Some((_, blob)) = p.text_recording(&text)? {
             let length = lengths
                 .entry(blob.clone())
@@ -147,6 +150,10 @@ mod tests {
         assert!(rec > 3000.0 && t.transcribed_ms > 0.0 && t.transcribed_ms < rec, "{t:?}");
         assert_eq!(r.recorded_ms, rec);
         assert!(r.entries >= 5 && r.senses >= r.entries && r.senses_without_gloss == 0, "{r:?}");
+        // A text's details come with its row, for the corpus by detail.
+        let text = t.id.clone();
+        crate::session::project(&mut session).unwrap().set_text_metadata(&text, "genre", "counting").unwrap();
+        assert_eq!(progress(&mut session).unwrap().texts[0].meta, vec![("genre".to_string(), "counting".to_string())]);
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

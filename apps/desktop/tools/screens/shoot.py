@@ -592,6 +592,12 @@ def main():
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Progress: the vocabulary growth curve under the table.
             run.front("progress", "Progress")
+            makeup = run.page.locator(".panel-progress .pg-makeup")
+            makeup.wait_for()
+            makeup.scroll_into_view_if_needed()
+            run.shot("state-makeup", run.page.locator(".panel-progress"))
+            if "narrative" not in makeup.inner_text():
+                failures.append("Progress did not break the corpus down by genre")
             growth = run.page.locator(".panel-progress .pg-chart")
             growth.wait_for()
             growth.scroll_into_view_if_needed()

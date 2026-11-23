@@ -788,6 +788,8 @@ A sentence is a segment on a transcription track. A word counts as glossed once 
 
 It also says how long the sentences are in words, and how many morphs a glossed word has on average (Greenberg's index of synthesis: near 1 for an isolating language, 2–3 for an agglutinating one), project-wide and text by text under **Morphs per word**. The grammar sketch's morphology chapter starts with the same figure.
 
+**The corpus by detail** breaks the texts down by one of their details (genre, speaker, date, place… as given in the Texts panel's Details or by **Import details…**): for each value, how many texts, sentences and words it has, its share of the words and how many words are glossed, with texts that do not give the detail last. Pick the detail above the table; **Copy table** copies it for the corpus description in a paper or a deposit form.
+
 Under the table, **Vocabulary growth** draws how many different words have come up against the running words, reading the texts in the order they were made (a dashed line where each text starts). A curve still climbing steeply means each new recording still brings many new words; a flattening one means most words of these kinds of text are in, and it may be time to record other genres. The sentence under it compares how many new words per 100 the first and the last tenth brought.
 
 ### See the affixes in their slots
