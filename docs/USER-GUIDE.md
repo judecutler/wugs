@@ -333,6 +333,12 @@ Under **Notes**, at the bottom of the Gloss panel, type anything you want to rem
 
 Notes belong to the sentence's text, so they have its sharing level, and they sync with the project. Two people can add notes to the same sentence at once, and both notes stay. The **Interlinear** tab shows each note under its sentence, and **Search** finds words in notes too: the hit opens the sentence and says "note". Notes go in and out of FlexText as FLEx's Note line.
 
+### Gloss a word once for all its uses
+
+The **Words to gloss** panel (open it from Settings, Closed panels, or **Ctrl+K**) lists every word form with uses not yet broken into morphs, the most frequent first, so a few minutes there gloss a large share of a corpus (FLEx calls this word analyses). For each form, type its morphs as in the Gloss panel (`ni- kani` or `ni-kani`) and their glosses in the same order (`1SG count` or `1SG-count`), then press **Enter** or **Apply**: every use not yet analysed gets that analysis, in every text. A word analysed before, or one wugs can guess from the morphs it knows, shows its likely analysis on a button; click it, or press **Enter** in the empty field, to use it. Uses already analysed are never changed. Click a form to see its lines in the Concordance.
+
+Only sentences already broken into words are listed. When some are not (a text imported from plain text, say), **Break N sentences into words** does it for all of them at once, as **Break into words** does for one in the Gloss panel.
+
 ### Check that each morph is glossed one way
 
 Over months of glossing, the same suffix can end up as `PL` in one text and `pl.` in another. The **Checks** panel finds them. Press **Ctrl+K** and choose **Show Checks** (it is not placed in the workspace at first).

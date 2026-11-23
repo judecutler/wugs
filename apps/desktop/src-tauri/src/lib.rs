@@ -25,6 +25,7 @@ pub mod feedback;
 pub mod help;
 pub mod glottolog;
 pub mod gloss;
+pub mod gloss_types;
 pub mod identity;
 pub mod interchange;
 pub mod kits;
@@ -731,6 +732,21 @@ fn gloss_retokenize(s: State<SessionThread>, text_id: String, segment_id: String
 #[tauri::command(async)]
 fn gloss_apply(s: State<SessionThread>, text_id: String, segment_id: String, token_id: String, morphs: Vec<MorphSpecView>) -> Result<GlossEdit, String> {
     s.run(move |s| gloss::gloss_apply(s, &text_id, &segment_id, &token_id, morphs))
+}
+
+#[tauri::command(async)]
+fn gloss_word_types(s: State<SessionThread>, text_id: Option<String>) -> Result<gloss_types::WordTypes, String> {
+    s.run(move |s| gloss_types::word_types(s, text_id.as_deref()))
+}
+
+#[tauri::command(async)]
+fn gloss_break_all(s: State<SessionThread>, text_id: Option<String>) -> Result<usize, String> {
+    s.run(move |s| gloss_types::break_all(s, text_id.as_deref()))
+}
+
+#[tauri::command(async)]
+fn gloss_apply_type(s: State<SessionThread>, form: String, morphs: Vec<gloss::MorphSpecView>) -> Result<gloss_types::TypeApplied, String> {
+    s.run(move |s| gloss_types::apply_type(s, &form, morphs))
 }
 
 #[tauri::command(async)]
@@ -2057,6 +2073,9 @@ pub fn run() {
             gloss_retokenize,
             gloss_apply,
             gloss_apply_all,
+            gloss_word_types,
+            gloss_break_all,
+            gloss_apply_type,
             gloss_set,
             gloss_pick_sense,
             gloss_add_note,

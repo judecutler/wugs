@@ -30,6 +30,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "transcribe",
   "gloss",                         # interlinear glossing
   "interlinear",                   # the whole text as interlinear glossed text, to read through
+  "wordtypes",                     # words to gloss: each unanalysed word form analysed once for all its uses; not placed
   "lexicon",
   "elicit",
   "search",

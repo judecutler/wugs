@@ -20,7 +20,7 @@ thread_local! {
 }
 
 /// The known-morph inventory for guesses, built once per change to the project.
-fn inventory(p: &Project) -> Result<std::rc::Rc<wugs_core::parse::Inventory>, String> {
+pub(crate) fn inventory(p: &Project) -> Result<std::rc::Rc<wugs_core::parse::Inventory>, String> {
     let newest = p.proj.max_hlc()?;
     if let Some(inv) = INVENTORY.with(|c| c.borrow().as_ref().filter(|(root, hlc, _)| *root == p.root && *hlc == newest).map(|(_, _, inv)| inv.clone())) {
         return Ok(inv);

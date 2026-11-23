@@ -924,6 +924,18 @@ const LEXICON = [
       return LEXICON.filter((r) => q === "" || r.lemma.includes(q) || r.glosses.some((g) => g.includes(q)));
     },
     lexicon_entry: lexiconEntry,
+    gloss_word_types: () => ({
+      rows: [
+        { form: "nikani", unanalysed: 4, uses: 9, suggestion: { morphs: [{ surface: "ni", type: "prefix", gloss: "1SG", glossesByLang: {}, sense: null }, { surface: "kani", type: "root", gloss: "count", glossesByLang: {}, sense: null }], count: 5, guessed: false } },
+        { form: "kanira", unanalysed: 3, uses: 3, suggestion: { morphs: [{ surface: "kani", type: "root", gloss: "count", glossesByLang: {}, sense: null }, { surface: "ra", type: "suffix", gloss: "PL", glossesByLang: {}, sense: null }], count: 0, guessed: true } },
+        { form: "wuno", unanalysed: 2, uses: 2, suggestion: null },
+      ],
+      unbrokenWords: 14,
+      unbrokenSentences: 3,
+      types: 40,
+    }),
+    gloss_break_all: () => 3,
+    gloss_apply_type: () => ({ applied: 4, texts: 2 }),
     project_affixes: () => {
       const ex = { word: "ni-kani-ra", textId: "t-count", tierId: "tier-utt", segmentId: "seg-1" };
       const a = (surface, kind, gloss, slot, uses, roots, positions, categories) => ({ surface, kind, gloss, uses, roots, positions, slot, categories, example: ex });
