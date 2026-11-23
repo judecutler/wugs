@@ -118,3 +118,18 @@ export function asTsv(rows: readonly RankedRow[], tokens: number, item = "item")
   const head = `rank\t${clean(item)}\tcount\tper 1000 words\ttexts${lexicon ? "\tin lexicon" : ""}`;
   return [head, ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts), ...(lexicon ? [lexiconCell(r.lexicon)] : [])].join("\t"))].join("\n");
 }
+
+/** Lexical richness of a word list: type/token ratio, Guiraud's index
+ * (types over the square root of tokens, steadier across text lengths) and
+ * the words met once (hapax legomena), when every type is listed. */
+export function richness(f: Frequencies): string {
+  if (f.tokens === 0 || f.types === 0) return "";
+  const ttr = f.types / f.tokens;
+  const guiraud = f.types / Math.sqrt(f.tokens);
+  const head = ` Type/token ratio ${ttr.toFixed(2)} (Guiraud's index ${guiraud.toFixed(1)}).`;
+  if (f.rows.length < f.types) return head;
+  const once = f.rows.filter((r) => r.count === 1).length;
+  if (once === 0) return head;
+  const share = Math.round((once / f.types) * 100);
+  return `${head} ${once.toLocaleString("en")} ${once === 1 ? "is" : "are"} met only once (hapax legomena, ${share}% of the different ones).`;
+}

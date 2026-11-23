@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asTsv, filterRows, lexiconCell, lexiconNote, notInLexicon, perThousand, ranked, reversed, sortRows, summary } from "./logic.ts";
+import { asTsv, filterRows, lexiconCell, lexiconNote, notInLexicon, perThousand, richness, ranked, reversed, sortRows, summary } from "./logic.ts";
 
 const rows = [
   { item: "kesi", count: 5, texts: 1 },
@@ -75,4 +75,12 @@ test("a reverse list sorts words by their endings, marks staying on their letter
     sortRows(rows, "ending").map((r) => r.item),
     ["kalem", "kitap", "adamlar", "kitaplar", "evler", "ev"],
   );
+});
+
+test("lexical richness of a word list", () => {
+  const row = (item: string, count: number) => ({ item, count, texts: 1 });
+  const f = { rows: [row("kani", 4), row("ŋai", 2), row("toɾu", 1), row("kesi", 1)], tokens: 8, types: 4 };
+  assert.equal(richness(f), " Type/token ratio 0.50 (Guiraud's index 1.4). 2 are met only once (hapax legomena, 50% of the different ones).");
+  assert.equal(richness({ ...f, types: 9 }), " Type/token ratio 1.13 (Guiraud's index 3.2).", "a list cut short says nothing of hapaxes");
+  assert.equal(richness({ rows: [], tokens: 0, types: 0 }), "");
 });

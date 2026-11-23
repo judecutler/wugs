@@ -8,7 +8,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, frequencies, lexiconAdd } from "../api";
 import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
-import { asTsv, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
+import { asTsv, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast, touchLexicon } from "../store";
 import { askConcordance } from "./concordance";
@@ -121,7 +121,9 @@ export const frequenciesPanel: PanelDef = {
             ? unlabelledNote(data, kind)
             : "";
       const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn; filter to find the others (Copy table has them all).` : "";
-      count.textContent = summary(data, noun()) + perWord + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
+      // Richness is a property of a whole word list, not of n-grams, morphs or tags.
+      const rich = !ngrams() && (kind === "word" || kind === "translation") ? richness(data) : "";
+      count.textContent = summary(data, noun()) + rich + perWord + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
       const withLexicon = marked();
       missingBox.hidden = !withLexicon;
       const columns = ["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts", ...(withLexicon ? ["In lexicon"] : [])];

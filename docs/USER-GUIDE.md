@@ -991,6 +991,8 @@ The **Frequencies** panel lists the words of the project with how often each occ
 
 **Per 1000** is how often it occurs in every thousand. Capital letters count together (Kesi and kesi are one word, shown as the spelling used most); diacritics do not (ŋa and na are two). A morph or gloss counts once per word that has it, so a word with PL twice counts once. Click a row to see its occurrences in the Concordance, looked up exactly (a `?` in a word is a letter there, not a wildcard) and in the chosen text: the number of lines matches the count. The list counts again when the project syncs or texts change; after glossing or typing, click **Recount**. Up to 5,000 items are listed and the first 500 drawn; filter to find the rest. The **#** column is each item's frequency rank, whatever the order shown. **Copy table** copies the list to paste into a spreadsheet.
 
+For **Words** and **Translations**, the line above the list also gives the vocabulary's richness: the type/token ratio (different words over running words), Guiraud's index (different words over the square root of running words, which changes less with the length of the text, so texts of different lengths compare better), and how many words are met only once (hapax legomena).
+
 ### Find the words your dictionary still lacks
 
 A list of **Words** has an **In lexicon** column. **Yes** means a lexicon entry, or one of its other forms (an allomorph or a paradigm form), is spelled that way. **Glossed only** means the word is broken into morphs in a text but has no entry spelled that way, which is usual for inflected words. **No** means neither. The line above the list says how many words the lexicon lacks and how often they are used.
