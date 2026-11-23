@@ -778,6 +778,8 @@ It lists how much is recorded, how many sentences are transcribed and how much s
 
 A sentence is a segment on a transcription track. A word counts as glossed once it is broken into morphs. A recording that is not on this computer is not counted, and the panel says how many there are.
 
+It also says how long the sentences are in words, and how many morphs a glossed word has on average (Greenberg's index of synthesis: near 1 for an isolating language, 2–3 for an agglutinating one), project-wide and text by text under **Morphs per word**. The grammar sketch's morphology chapter starts with the same figure.
+
 ### See the affixes in their slots
 
 The **Affixes** panel reads every glossed word in the project and lists its affixes and clitics the way a grammar's morphology chapter does. In Tongues, press **Ctrl+K** and choose **Show Affixes**.

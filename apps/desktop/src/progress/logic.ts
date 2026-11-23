@@ -11,6 +11,8 @@ export type TextProgress = {
   transcribedMs: number;
   words: number;
   glossedWords: number;
+  /** The morphs of the glossed words. */
+  morphs: number;
   translated: number;
 };
 
@@ -54,6 +56,7 @@ export function totals(p: Progress): TextProgress {
     transcribedMs: sum((t) => t.transcribedMs),
     words: sum((t) => t.words),
     glossedWords: sum((t) => t.glossedWords),
+    morphs: sum((t) => t.morphs),
     translated: sum((t) => t.translated),
   };
 }
@@ -66,13 +69,27 @@ export function summaryLines(p: Progress): string[] {
     `${n(p.texts.length)} ${p.texts.length === 1 ? "text" : "texts"}, ${duration(p.recordedMs)} recorded${p.recordingsMissing > 0 ? ` (${p.recordingsMissing} ${p.recordingsMissing === 1 ? "recording is" : "recordings are"} not on this computer and not counted)` : ""}.`,
     `${n(t.transcribed)} of ${n(t.sentences)} sentences transcribed (${percent(t.transcribed, t.sentences)}), covering ${duration(t.transcribedMs)} of timed speech.`,
     `${n(t.words)} words; ${n(t.glossedWords)} glossed (${percent(t.glossedWords, t.words)}); ${n(t.translated)} sentences translated (${percent(t.translated, t.transcribed)}).`,
+    ...shapeLine(t),
     `Lexicon: ${n(p.entries)} ${p.entries === 1 ? "entry" : "entries"}, ${n(p.senses)} ${p.senses === 1 ? "sense" : "senses"}${p.sensesWithoutGloss > 0 ? `, ${n(p.sensesWithoutGloss)} still without a gloss` : ""}.`,
     `People: ${n(p.people)}, with ${n(p.consentRecords)} consent ${p.consentRecords === 1 ? "record" : "records"}.`,
   ];
   return lines;
 }
 
-export const COLUMNS = ["Text", "Recording", "Sentences", "Transcribed", "Speech transcribed", "Words", "Glossed", "Translated"] as const;
+/** Words per transcribed sentence and morphs per glossed word (Greenberg's
+ * index of synthesis), to one decimal; "—" when there is nothing to divide. */
+export function ratio(part: number, whole: number): string {
+  return whole <= 0 ? "—" : (part / whole).toFixed(1);
+}
+
+/** How long the sentences and words are, once there are any. */
+function shapeLine(t: TextProgress): string[] {
+  if (t.transcribed === 0) return [];
+  const words = `Sentences average ${ratio(t.words, t.transcribed)} words`;
+  return [t.glossedWords === 0 ? `${words}.` : `${words}; glossed words average ${ratio(t.morphs, t.glossedWords)} morphs (the index of synthesis).`];
+}
+
+export const COLUMNS = ["Text", "Recording", "Sentences", "Transcribed", "Speech transcribed", "Words", "Glossed", "Morphs per word", "Translated"] as const;
 
 /** One table row's cells, in `COLUMNS` order. */
 export function rowCells(t: TextProgress): string[] {
@@ -85,6 +102,7 @@ export function rowCells(t: TextProgress): string[] {
     t.transcribedMs > 0 ? duration(t.transcribedMs) : "—",
     n(t.words),
     `${n(t.glossedWords)} (${percent(t.glossedWords, t.words)})`,
+    ratio(t.morphs, t.glossedWords),
     `${n(t.translated)} (${percent(t.translated, t.transcribed)})`,
   ];
 }
@@ -92,8 +110,8 @@ export function rowCells(t: TextProgress): string[] {
 /** Tab-separated, every text then the totals, numbers bare for a spreadsheet. */
 export function progressTsv(p: Progress): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
-  const head = ["text", "recording (min)", "sentences", "transcribed", "speech transcribed (min)", "words", "glossed words", "translated"].join("\t");
+  const head = ["text", "recording (min)", "sentences", "transcribed", "speech transcribed (min)", "words", "glossed words", "morphs", "translated"].join("\t");
   const min = (ms: number | null) => (ms === null ? "" : (ms / 60000).toFixed(1));
-  const row = (t: TextProgress) => [clean(t.title), min(t.recordingMs), t.sentences, t.transcribed, min(t.transcribedMs), t.words, t.glossedWords, t.translated].join("\t");
+  const row = (t: TextProgress) => [clean(t.title), min(t.recordingMs), t.sentences, t.transcribed, min(t.transcribedMs), t.words, t.glossedWords, t.morphs, t.translated].join("\t");
   return [head, ...p.texts.map(row), row(totals(p))].join("\n");
 }
