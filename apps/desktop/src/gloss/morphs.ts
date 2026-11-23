@@ -99,12 +99,14 @@ export function parseBreakdown(input: string): ParseResult {
   return { ok: true, morphs };
 }
 
+// A surface may already carry its marker (FLEx stores `-ler`, wugs stores
+// `ler`), so the marker is taken off before it is put on: never `köpek--ler`.
 const MARK: Record<string, (s: string) => string> = {
-  prefix: (s) => `${s}-`,
-  suffix: (s) => `-${s}`,
-  infix: (s) => `<${s}>`,
-  clitic: (s) => `=${s}`,
-  reduplication: (s) => `${s}~`,
+  prefix: (s) => `${s.replace(/-+$/u, "")}-`,
+  suffix: (s) => `-${s.replace(/^-+/u, "")}`,
+  infix: (s) => `<${s.replace(/^<|>$/gu, "")}>`,
+  clitic: (s) => `=${s.replace(/^=+/u, "")}`,
+  reduplication: (s) => `${s.replace(/~+$/u, "")}~`,
 };
 
 /** One morph with its marker, as written in a lexicon or typed back into the editor. */

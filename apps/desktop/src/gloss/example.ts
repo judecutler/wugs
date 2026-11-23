@@ -106,25 +106,31 @@ const LATEX_SPECIAL: Record<string, string> = {
 };
 export const latexEscape = (s: string): string => s.replace(/[\\{}&%$#_~^<>]/gu, (c) => LATEX_SPECIAL[c] ?? c);
 
+/** gb4e and ExPex split a line into columns at spaces, so a word or gloss
+ * holding one is grouped. gb4e takes braces as they are; ExPex drops the
+ * braces of a group that stands alone (`{go out}` printed "go") and loses
+ * the space inside one (`{a b}` printed "ab"), so for ExPex the space is
+ * written `\ ` as well. Both checked by compiling with XeLaTeX. */
+type Flavour = "gb4e" | "expex";
+const grouped = (set: string, spaced: boolean, flavour: Flavour): string => (!spaced ? set : flavour === "expex" ? `{${set.replace(/\s+/gu, "\\ ")}}` : `{${set}}`);
+
 /** A gloss for LaTeX: grammatical runs as \textsc{lowercase}, the rest escaped. */
-function latexGloss(gloss: string): string {
+function latexGloss(gloss: string, flavour: Flavour): string {
   if (gloss === "") return "{}";
   const set = glossRuns(gloss)
     .map((r) => (r.caps ? `\\textsc{${latexEscape(r.text.toLowerCase())}}` : latexEscape(r.text)))
     .join("");
-  // gb4e and ExPex split glosses on spaces too: `go out` stays one column.
-  return /\s/u.test(gloss) ? `{${set}}` : set;
+  return grouped(set, /\s/u.test(gloss), flavour);
 }
 
-/** gb4e and ExPex split words on spaces, so a word containing one is braced. */
-const latexWord = (s: string): string => (s === "" ? "{}" : /\s/u.test(s) ? `{${latexEscape(s)}}` : latexEscape(s));
+const latexWord = (s: string, flavour: Flavour): string => (s === "" ? "{}" : grouped(latexEscape(s), /\s/u.test(s), flavour));
 
 export function asGb4e(ex: Example): string {
   const lines = ex.words.map(wordLines);
   const out = [
     "\\begin{exe}",
-    `\\ex \\gll ${lines.map((l) => latexWord(l.morphs)).join(" ")}\\\\`,
-    `     ${lines.map((l) => latexGloss(l.glosses)).join(" ")}\\\\`,
+    `\\ex \\gll ${lines.map((l) => latexWord(l.morphs, "gb4e")).join(" ")}\\\\`,
+    `     ${lines.map((l) => latexGloss(l.glosses, "gb4e")).join(" ")}\\\\`,
   ];
   const t = (ex.translation ?? "").trim();
   if (t !== "") out.push(`\\glt \`${latexEscape(t)}'`);
@@ -138,8 +144,8 @@ export function asExpex(ex: Example): string {
   return [
     "\\ex",
     "\\begingl",
-    `\\gla ${lines.map((l) => latexWord(l.morphs)).join(" ")}//`,
-    `\\glb ${lines.map((l) => latexGloss(l.glosses)).join(" ")}//`,
+    `\\gla ${lines.map((l) => latexWord(l.morphs, "expex")).join(" ")}//`,
+    `\\glb ${lines.map((l) => latexGloss(l.glosses, "expex")).join(" ")}//`,
     ...(t === "" ? [] : [`\\glft \`${latexEscape(t)}'//`]),
     "\\endgl",
     "\\xe",
