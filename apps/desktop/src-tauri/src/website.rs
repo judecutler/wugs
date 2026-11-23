@@ -116,9 +116,64 @@ const SCRIPT: &str = "<script>\nlet playing = null;\nfor (const b of document.qu
 /// The site's search, run in the reader's browser over `search-index.js`.
 const SEARCH: &str = include_str!("site-search.js");
 
+/// The tags that make every page installable as an app on a phone or
+/// computer (a web app manifest and its icon).
+const HEAD_APP: &str = "<link rel=\"manifest\" href=\"manifest.webmanifest\">\n<link rel=\"icon\" href=\"icon-192.png\">\n<meta name=\"theme-color\" content=\"#00718a\">\n";
+/// Registers the service worker that keeps the site for reading offline.
+/// Browsers allow one only over https or on localhost, never from a file,
+/// so a site opened from disk or a USB stick simply goes without.
+const REGISTER: &str = "<script>\nif ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});\n</script>\n";
+const ICON_192: &[u8] = include_bytes!("../site-icons/icon-192.png");
+const ICON_512: &[u8] = include_bytes!("../icons/icon.png");
+
+/// The web app manifest: the language's name, the site's colours, its icons.
+fn manifest(name: &str, short: &str) -> String {
+    serde_json::json!({
+        "name": name,
+        "short_name": short,
+        "start_url": "index.html",
+        "scope": "./",
+        "display": "standalone",
+        "background_color": "#fff8de",
+        "theme_color": "#00718a",
+        "icons": [
+            { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+            { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+        ]
+    })
+    .to_string()
+}
+
+/// A service worker that stores the pages, styles, scripts and pictures when
+/// the site is first opened, and each sound clip the first time it plays, so
+/// the site keeps working with no connection. Its cache is named for this
+/// version of the site, and older versions' caches are dropped.
+fn service_worker(version: &str, files: &[String]) -> String {
+    format!(
+        "// Made by wugs: keeps this site for reading offline.\nconst CACHE = {cache};\nconst FILES = {files};\n\
+self.addEventListener('install', (e) => {{ e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); }});\n\
+self.addEventListener('activate', (e) => {{ e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith('wugs-site-') && k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())); }});\n\
+self.addEventListener('fetch', (e) => {{\n  const req = e.request;\n  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;\n  e.respondWith(caches.open(CACHE).then((c) => c.match(req, {{ ignoreSearch: true }}).then((hit) => hit || fetch(req).then((res) => {{ if (res.ok && res.status === 200) c.put(req, res.clone()); return res; }}))));\n}});\n",
+        cache = serde_json::json!(format!("wugs-site-{version}")),
+        files = serde_json::json!(files),
+    )
+}
+
+/// FNV-1a over what the site holds, so a new export gets a new cache.
+fn fingerprint(parts: &[&[u8]]) -> String {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for part in parts {
+        for b in part.iter().chain(&[0u8]) {
+            h ^= *b as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+    }
+    format!("{h:016x}")
+}
+
 fn page(title: &str, lang_attr: &str, body: &str, footer: &str, scripts: &str) -> String {
     format!(
-        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{t}</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n{body}<footer>{footer}</footer>\n{SCRIPT}{scripts}</body>\n</html>\n",
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{t}</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n{HEAD_APP}</head>\n<body>\n{body}<footer>{footer}</footer>\n{SCRIPT}{scripts}{REGISTER}</body>\n</html>\n",
         t = esc(title),
         body = body.replace("<h1>", &format!("<h1{lang_attr}>")),
     )
@@ -250,8 +305,9 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
             }
             // The printable page, with a way back and its ▶ working.
             let html = html
+                .replacen("</head>", &format!("{HEAD_APP}</head>"), 1)
                 .replacen("<body>\n", "<body>\n<nav><a href=\"index.html\">← Home</a></nav>\n", 1)
-                .replacen("</body>", &format!("<style>{DICTIONARY_PLAY}</style>\n{SCRIPT}</body>"), 1);
+                .replacen("</body>", &format!("<style>{DICTIONARY_PLAY}</style>\n{SCRIPT}{REGISTER}</body>"), 1);
             files.push(("dictionary.html".into(), html));
             true
         }
@@ -293,6 +349,19 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     files.push(("index.html".into(), page(&name, &lang_attr, &body, &footer, "<script src=\"search-index.js\"></script>\n<script src=\"search.js\"></script>\n")));
     files.push(("search-index.js".into(), search_index(&headwords, &searched)));
     files.push(("search.js".into(), SEARCH.to_string()));
+    let short = if lang.name.trim().is_empty() { "Texts".to_string() } else { lang.name.trim().to_string() };
+    files.push(("manifest.webmanifest".into(), manifest(&name, &short)));
+    // Everything but the sound clips is stored at install; clips as they play.
+    let mut stored: Vec<String> = vec!["./".into()];
+    stored.extend(files.iter().map(|(n, _)| n.clone()));
+    stored.extend(["icon-192.png".to_string(), "icon-512.png".to_string()]);
+    stored.extend(pictures.iter().map(|(f, _)| f.clone()));
+    let mut parts: Vec<&[u8]> = files.iter().map(|(_, c)| c.as_bytes()).collect();
+    parts.extend(pictures.iter().map(|(_, b)| b.as_bytes()));
+    let clip_names: Vec<String> = clips.iter().map(|c| format!("{}{}{}{}", c.file, c.blob, c.start, c.end)).collect();
+    parts.extend(clip_names.iter().map(|c| c.as_bytes()));
+    let version = format!("{date}-{}", fingerprint(&parts));
+    files.push(("sw.js".into(), service_worker(&version, &stored)));
 
     let mut out = folder.join(format!("wugs-site-{date}"));
     let mut k = 2;
@@ -307,6 +376,8 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
         for (name, contents) in &files {
             fs::write(scratch.join(name), contents).map_err(|e| format!("{name}: {e}"))?;
         }
+        fs::write(scratch.join("icon-192.png"), ICON_192).map_err(|e| format!("icon-192.png: {e}"))?;
+        fs::write(scratch.join("icon-512.png"), ICON_512).map_err(|e| format!("icon-512.png: {e}"))?;
         if !clips.is_empty() {
             fs::create_dir(scratch.join("audio")).map_err(|e| format!("audio: {e}"))?;
         }
@@ -381,6 +452,15 @@ mod tests {
         assert!(found.starts_with("var WUGS_INDEX = {") && found.contains("[\"text-1.html\",1,\"wʌn tuː θɹiː\""), "{found}");
         assert!(text.contains("<li id=\"s1\">"), "each sentence is a search target");
         assert!(root.join("search.js").is_file());
+        // Installable and readable offline once hosted.
+        assert!(index.contains(r#"<link rel="manifest" href="manifest.webmanifest">"#) && index.contains("serviceWorker.register('sw.js')"), "{index}");
+        assert!(text.contains("manifest.webmanifest") && text.contains("sw.js"), "every page registers it");
+        let manifest = fs::read_to_string(root.join("manifest.webmanifest")).unwrap();
+        assert!(manifest.contains("\"short_name\":\"Tutorial English\"") && manifest.contains("icon-512.png"), "{manifest}");
+        assert!(root.join("icon-192.png").is_file() && root.join("icon-512.png").is_file());
+        let sw = fs::read_to_string(root.join("sw.js")).unwrap();
+        assert!(sw.contains("const CACHE = \"wugs-site-2026-11-23-") && sw.contains("\"text-1.html\"") && sw.contains("\"dictionary.html\""), "{sw}");
+        assert!(!sw.contains("audio/"), "clips are stored as they play, not all at once: {sw}");
         // The dictionary page says the headword and plays it.
         let dict = fs::read_to_string(root.join("dictionary.html")).unwrap();
         assert!(dict.contains("<span class=\"pr\">ˈwʌn</span>") && dict.contains("data-src=\"audio/w-1.wav\" aria-label=\"Hear wʌn\""), "{dict}");
