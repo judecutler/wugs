@@ -54,6 +54,7 @@ pub mod notes_overview;
 pub mod growth;
 pub mod wordsketch;
 pub mod soundchanges;
+pub mod compare;
 pub mod session;
 pub mod sounds;
 pub mod typology;
@@ -380,6 +381,11 @@ fn sentence_mark_checked(s: State<SessionThread>, text_id: String, segment_ids: 
 }
 
 /// Every character the project's transcriptions and lexicon use, with what may be a slip.
+#[tauri::command(async)]
+fn compare_read(path: String) -> Result<compare::OtherList, String> {
+    compare::read_list(std::path::Path::new(&path))
+}
+
 #[tauri::command(async)]
 fn sound_changes(s: State<SessionThread>) -> Result<String, String> {
     s.run(soundchanges::get)
@@ -2082,6 +2088,7 @@ pub fn run() {
         vocabulary_growth,
         word_sketch,
         sound_changes,
+        compare_read,
         set_sound_changes,
             tree_problems,
             sound_words,
