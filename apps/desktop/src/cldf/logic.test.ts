@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { glottocodeProblem, isoProblem, publishedLines } from "./logic.ts";
+import { glottocodeProblem, isoProblem, publishedLines, corpusLines } from "./logic.ts";
 
 test("codes are optional, and checked when typed", () => {
   assert.equal(glottocodeProblem(""), null);
@@ -16,4 +16,11 @@ test("the report counts in words and keeps the notes", () => {
   assert.equal(lines[0], "Saved a CLDF dataset in /x/wugs-cldf-2026-11-23.");
   assert.match(lines[1]!, /^1 entry, 2 senses and 0 glossed sentences/u);
   assert.equal(lines[2], "One more thing.");
+});
+
+test("a corpus export says where it went and what was left out", () => {
+  const lines = corpusLines({ path: "/x/wugs-cwb-2026-11-23", corpus: "KAN_WUGS", texts: 3, sentences: 41, restrictedLeftOut: 1, notes: ["n"] });
+  assert.equal(lines[0], "Saved the corpus KAN_WUGS in /x/wugs-cwb-2026-11-23: 3 texts, 41 sentences.");
+  assert.equal(lines[2], "1 text that is not open was left out.");
+  assert.equal(lines.at(-1), "n");
 });
