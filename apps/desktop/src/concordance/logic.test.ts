@@ -47,3 +47,19 @@ test("the count line says what is shown", () => {
 test("tab-separated rows keep tabs out of the cells", () => {
   assert.equal(asTsv([hit(["a\tb", "K", "c"], 1, "Title")]), "left\tkeyword\tright\ttext\na b\tK\tc\tTitle");
 });
+
+test("a match of several words is the keyword whole, and the right context starts after it", () => {
+  const h: Hit = { ...hit(["went", "to", "the", "park", "."], 1), len: 3 };
+  assert.equal(keyword(h), "to the park");
+  assert.equal(left(h), "went");
+  assert.equal(right(h), ".");
+  const other: Hit = { ...hit(["x", "to", "a", "b", "Alpha"], 1), len: 2 };
+  // Sorting by the word after reads past the whole match.
+  assert.deepEqual(sortHits([h, other], "right").map((x) => right(x)), [". ", "b Alpha"].map((s) => s.trim()));
+});
+
+test("the CQP chip is the Concordance's own; Frequencies keeps the four kinds", async () => {
+  const { KINDS, PANEL_KINDS } = await import("./logic.ts");
+  assert.equal(KINDS.length, 4);
+  assert.equal(PANEL_KINDS.at(-1)?.id, "query");
+});

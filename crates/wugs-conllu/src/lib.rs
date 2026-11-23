@@ -394,7 +394,7 @@ fn cols_of(r: &Value, form: Option<&str>, index: &HashMap<&str, u32>, notes: &mu
 }
 
 /// UD's universal tags for what a lexicon category is commonly called.
-fn upos_of(category: &str) -> Option<&'static str> {
+pub fn upos_of(category: &str) -> Option<&'static str> {
     let c = category.trim().trim_end_matches('.').to_lowercase();
     Some(match c.as_str() {
         "noun" | "n" => "NOUN",

@@ -495,6 +495,25 @@ The **Concordance** panel lists every place a word is used, one line per occurre
 
 Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
 
+### Search with CQP queries
+
+Choose **CQP query** to search the way CQPweb, Sketch Engine and NoSketch Engine do. Each token goes in square brackets, and a query can be several tokens in a row:
+
+| Query | Finds |
+| --- | --- |
+| `"dog"` | the word dog (the same as `[word="dog"]`) |
+| `[lemma="go"] [upos="ADP"]` | any form of go followed by a preposition |
+| `[word="ni.*" %c]` | words starting with ni, any case |
+| `[upos="DET"] [upos="ADJ"]? [upos="NOUN"]` | a determiner and a noun, with or without an adjective between |
+| `[lemma="give"] []{0,3} [upos="NOUN"]` | give, then a noun up to three words later |
+| `[upos="ADJ" & !lemma="big"]` | adjectives other than big |
+| `[feats=".*Number=Plur.*"]` | plural words |
+| `[gloss=".*PL.*"]` | words whose morpheme glosses include PL |
+
+The attributes are `word`, `lemma`, `upos` (also `pos`), `xpos`, `feats` and `gloss`. A value is a regular expression that must match the whole value. Case matters unless you add `%c`, and `%d` ignores diacritics. Join conditions with `&` (and), `|` (or) and `!` (not), and repeat a token with `?`, `*`, `+` or `{1,3}`. `[]` is any token.
+
+Lemmas and tags come from CoNLL-U files. For words you glossed in wugs, the lemma is the root's lexicon entry, and its part of speech is the tag. Punctuation counts as a token in a query, so `[upos!="PUNCT"]` skips it. A match never runs from one sentence into the next. If a query has a mistake, the panel says what is wrong and where.
+
 ## Count words, morphs and glosses
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.

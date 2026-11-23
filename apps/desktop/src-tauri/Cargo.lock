@@ -7763,6 +7763,7 @@ version = "0.2.1"
 dependencies = [
  "csv",
  "keyring",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -7774,6 +7775,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "unicode-normalization",
  "ureq",
  "wugs-asr",
  "wugs-auth",
