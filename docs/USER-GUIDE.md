@@ -40,6 +40,10 @@ wugs comes with two kits: **Tongues** for fieldwork (recordings, transcription, 
 
 Your project stays open and nothing in it changes. Only the panels and their arrangement change, and each kit remembers its own arrangement. You can also press **Ctrl+K** and type "switch". **Manage kits…** in the same menu opens the Kits panel, where you can make your own kit.
 
+### Share a kit as one file
+
+In the Kits panel, press **Save as a file…** beside a kit. wugs saves one `.wugskit` file with the kit and its example project. You can put it on a USB stick or a shared drive, or send it by email. To install a kit file, press **Install a kit file…**. Before anything is installed, wugs shows what the kit holds, what it relies on, and whether the file was damaged on the way. Kit files are not signed yet, so install kits only from people you trust.
+
 ## Arrange the workspace
 
 The workspace is made of panels: Timeline, Media, Texts, Transcribe, Gloss, Lexicon, Elicit, Search, Speech assist, People, Devices, and Conflicts. Panels that share a space are stacked like pages behind binder dividers. The dividers rest as a thin coloured edge along the top of each panel and rise when you move the pointer to that edge, pushing the panel down a little so nothing is covered. Click a divider to bring its panel to the front. Drag a divider to move its panel, or drop it on another panel to stack them. wugs remembers your arrangement.

@@ -39,6 +39,7 @@ wugs-auth = { path = "../../../crates/wugs-auth" }
 wugs-net = { path = "../../../crates/wugs-net" }
 wugs-sync = { path = "../../../crates/wugs-sync" }
 wugs-kit = { path = "../../../crates/wugs-kit" }
+wugs-bundle = { path = "../../../crates/wugs-bundle" }
 wugs-legacy = { path = "../../../crates/wugs-legacy" }
 wugs-elan = { path = "../../../crates/wugs-elan" }
 wugs-flex = { path = "../../../crates/wugs-flex" }

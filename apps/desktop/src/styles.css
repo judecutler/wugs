@@ -1120,3 +1120,7 @@ body::before {
 .st-tag-allow { display: block; max-width: 60em; }
 .st-tag .note { margin: 0; }
 .st-tag select { max-width: 30em; }
+.kit-install { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 4px; }
+.kit-install h3 { margin: 0 0 4px; font-family: var(--font-display); font-weight: 400; font-size: 15px; }
+.kit-install .kit-note { margin: 0; }
+.kit-problem { color: var(--error); }

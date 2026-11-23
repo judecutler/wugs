@@ -306,3 +306,35 @@ fn scrolls_is_built_in_switchable_and_read_only() {
     assert!(!mine.bundled);
     assert!(mine.kit.tools.iter().any(|t| t == "concordance"));
 }
+
+#[test]
+fn a_kit_travels_as_a_wugskit_with_its_example_project() {
+    let dir = app_data();
+    let kit = "[package]\ntype = \"kit\"\nlicense = \"MPL-2.0\"\n\n[bundle]\nauthors = [\"A. Tester\"]\nsummary = \"Shared with a classmate.\"\n\n[examples]\nproject = \"examples/sample/\"\n\n\
+               [kit]\nid = \"org.test.field\"\nname = \"Field\"\nversion = \"0.2.0\"\n\n[tools]\nenabled = [\"texts\", \"gloss\"]\n\n[layout]\npanels = [{ panel = \"texts\" }]\n";
+    let src = dir.join("field.toml");
+    fs::write(&src, kit).unwrap();
+    kits::install_file(&dir, &src).unwrap();
+    let ex = kits::examples_dir(&dir, "org.test.field").unwrap();
+    fs::create_dir_all(ex.join("texts")).unwrap();
+    fs::write(ex.join("texts/story.txt"), "A synthetic story.\n").unwrap();
+    let out = dir.join("out");
+    fs::create_dir_all(&out).unwrap();
+    let file = kits::share_file(&dir, "org.test.field", &out).unwrap();
+    assert!(file.ends_with("org.test.field-0.2.0.wugskit"), "{file}");
+    assert!(kits::share_file(&dir, "org.test.field", &out).unwrap().ends_with("org.test.field-0.2.0 (2).wugskit"), "never replaces a file");
+    // Inspecting says what it holds and that the kit is here already.
+    let seen = kits::inspect_file(&dir, std::path::Path::new(&file)).unwrap();
+    assert!(seen.examples && seen.listed && seen.already_installed);
+    assert_eq!((seen.kit.name.as_str(), seen.summary.as_str()), ("Field", "Shared with a classmate."));
+    assert!(kits::install_file(&dir, std::path::Path::new(&file)).unwrap_err().contains("already installed"));
+    // On another computer (here: after a delete), it installs with its example.
+    kits::delete(&dir, "org.test.field").unwrap();
+    assert!(!ex.exists(), "a deleted kit's example goes with it");
+    let made = kits::install_file(&dir, std::path::Path::new(&file)).unwrap();
+    assert_eq!(made.kit.id, "org.test.field");
+    assert_eq!(fs::read_to_string(ex.join("texts/story.txt")).unwrap(), "A synthetic story.\n");
+    assert!(fs::read_dir(dir.join("staging")).unwrap().next().is_none(), "staging is left empty");
+    // Built-in kits can be shared too.
+    assert!(kits::share_file(&dir, SCROLLS_ID, &out).unwrap().ends_with(".wugskit"));
+}

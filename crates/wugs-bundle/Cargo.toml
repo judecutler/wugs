@@ -1,0 +1,17 @@
+[package]
+name = "wugs-bundle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Self-contained kit files (.wugskit): written and opened as untrusted input (docs/design/BUNDLES.md §3)"
+
+[dependencies]
+wugs-kit = { path = "../wugs-kit" }
+wugs-package = { path = "../wugs-package" }
+sha2 = "0.10"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+sha2 = "0.10"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+wugs-kit = { path = "../wugs-kit" }

@@ -62,6 +62,34 @@ export function bundleLines(b: BundleInfo): string[] {
   return lines;
 }
 
+/** A kit file's install screen in words (BUNDLES.md §4), before anything is written. */
+export function kitFileLines(v: {
+  kit: { name: string; version: string; subtitle: string };
+  license: string;
+  authors: string[];
+  summary: string;
+  requires: { kind: string; id: string; version: string; why: string; capability: string | null; inFile: boolean; bytes: number }[];
+  examples: boolean;
+  listed: boolean;
+}): string[] {
+  const lines: string[] = [`${v.kit.name}${v.kit.subtitle !== "" ? ` — ${v.kit.subtitle}` : ""}, version ${v.kit.version}.`];
+  if (v.summary !== "") lines.push(v.summary);
+  const who = v.authors.length > 0 ? `By ${v.authors.join(", ")}` : "";
+  const licence = v.license !== "" ? `licence ${v.license}` : "";
+  if (who !== "" || licence !== "") lines.push([who, licence].filter((x) => x !== "").join("; ") + ".");
+  for (const r of v.requires) {
+    const role = r.capability !== null ? ` for ${r.capability.replace(/-/g, " ")}` : "";
+    const where = r.inFile ? `in the file (${megabytesOf(r.bytes)}), checked against the kit's hash` : "not in the file: install it from the wugs index once that exists, or choose another provider";
+    lines.push(`${KIND_WORDS[r.kind] ?? r.kind} ${r.id} ${r.version}${role}: ${where}.`);
+  }
+  if (v.examples) lines.push("An example project comes with it.");
+  lines.push(v.listed ? "Every file matched the kit file's own list, so nothing was damaged on the way." : "The kit file carries no list of its files, so damage on the way could not be checked.");
+  lines.push("Not signed: wugs cannot say who made it. Install kits from people you trust.");
+  return lines;
+}
+
+const megabytesOf = (bytes: number) => (bytes < 1 << 20 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1 << 20)).toFixed(1)} MB`);
+
 export type Direction = "left" | "right" | "above" | "below" | "within";
 
 /** One dockview addPanel call. */

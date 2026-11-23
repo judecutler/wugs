@@ -275,6 +275,20 @@ export const kitSaveCode = (args: { id: string; code: string }) => invoke<KitEnt
 export const kitDuplicate = (args: { source: string; name: string }) => invoke<KitEntry>("kit_duplicate", args);
 export const kitDelete = (args: { id: string }) => invoke<KitsView>("kit_delete", args);
 export const kitInstall = (args: { path: string }) => invoke<KitEntry>("kit_install", args);
+/** What installing a kit file would add, before anything is written (src-tauri/src/kits.rs). */
+export type KitFileView = {
+  kit: Kit;
+  license: string;
+  authors: string[];
+  summary: string;
+  requires: { kind: string; id: string; version: string; why: string; capability: string | null; inFile: boolean; bytes: number }[];
+  examples: boolean;
+  listed: boolean;
+  alreadyInstalled: boolean;
+};
+export const kitInspect = (args: { path: string }) => invoke<KitFileView>("kit_inspect", args);
+/** Save a kit as a self-contained .wugskit in `folder`; returns the file's path. */
+export const kitShare = (args: { id: string; folder: string }) => invoke<string>("kit_share", args);
 export const kitSetActive = (args: { id: string }) => invoke<void>("kit_set_active", args);
 
 export type IdentityInfo = {
