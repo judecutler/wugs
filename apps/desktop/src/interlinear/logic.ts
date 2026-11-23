@@ -32,14 +32,31 @@ export function progress(lines: readonly Line[]): string {
  * into words or with a word that has no analysis. */
 export const toGloss = (l: Line): boolean => l.content.trim() !== "" && (l.words.length === 0 || l.words.some((w) => w.morphs.length === 0));
 
-/** The next sentence still to gloss after `current` (from the start when
+/** A transcribed sentence with no translation yet. */
+export const toTranslate = (l: Line): boolean => l.content.trim() !== "" && (l.translation === null || l.translation.trim() === "");
+
+/** Which sentences the panel lists. */
+export type Show = "all" | "gloss" | "translate";
+
+export const SHOWS: { id: Show; label: string; next: string; done: string; keep: (l: Line) => boolean }[] = [
+  { id: "all", label: "Every sentence", next: "Next to gloss", done: "Every sentence of this text is glossed.", keep: () => true },
+  { id: "gloss", label: "Sentences still to gloss", next: "Next to gloss", done: "Every sentence of this text is glossed.", keep: toGloss },
+  { id: "translate", label: "Sentences without a translation", next: "Next to translate", done: "Every sentence of this text has a translation.", keep: toTranslate },
+];
+
+export const showOf = (id: string | null): (typeof SHOWS)[number] => SHOWS.find((s) => s.id === id) ?? SHOWS[0]!;
+
+/** The next sentence after `current` that `wanted` keeps (from the start when
  * nothing or a sentence not listed is current), wrapping round; null when
- * every sentence is glossed. */
-export function nextToGloss(lines: readonly Line[], current: string | null): Line | null {
+ * none is left. */
+export function nextWhere(lines: readonly Line[], current: string | null, wanted: (l: Line) => boolean): Line | null {
   const at = lines.findIndex((l) => l.id === current);
   for (let k = 1; k <= lines.length; k++) {
     const l = lines[(at + k + lines.length) % lines.length]!;
-    if (toGloss(l)) return l;
+    if (wanted(l)) return l;
   }
   return null;
 }
+
+/** The next sentence still to gloss after `current`. */
+export const nextToGloss = (lines: readonly Line[], current: string | null): Line | null => nextWhere(lines, current, toGloss);

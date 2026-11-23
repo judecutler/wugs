@@ -9,13 +9,13 @@ import { glossRuns, wordLines, type ExampleWord } from "../gloss/example";
 import { numbering } from "../gloss/document";
 import { translationLines } from "../gloss/translation";
 import { hear, playButton } from "../hear/hear";
-import { analysed, nextToGloss, progress, sentencesOf, toGloss, type Line } from "../interlinear/logic";
+import { analysed, nextWhere, progress, sentencesOf, SHOWS, showOf, type Line, type Show } from "../interlinear/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getSelection, getState, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 /** Show only the sentences still to gloss (kept while the app runs). */
-let onlyToGloss = false;
+let show: Show = "all";
 
 /** Show the list of abbreviations the text's glosses use (kept while the app runs). */
 let showAbbreviations = false;
@@ -64,10 +64,12 @@ export const interlinearPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open" || s.text === null) return;
       const text = s.text;
-      const next = nextToGloss(lines, getSelection()?.segmentId ?? null);
+      // Next to translate while those are listed, else next to gloss.
+      const want = show === "translate" ? showOf("translate") : showOf("gloss");
+      const next = nextWhere(lines, getSelection()?.segmentId ?? null, want.keep);
       const seg = next === null ? undefined : text.segments.find((x) => x.id === next.id);
       if (seg === undefined) {
-        showToast({ tone: "info", lines: [lines.length === 0 ? "This text has no sentences yet." : "Every sentence of this text is glossed."] });
+        showToast({ tone: "info", lines: [lines.length === 0 ? "This text has no sentences yet." : want.done] });
         return;
       }
       selectSegment({ textId: text.id, tierId: seg.tier, segmentId: seg.id });
@@ -127,7 +129,7 @@ export const interlinearPanel: PanelDef = {
 
     const paint = (text: TextDetail) => {
       const sel = getSelection();
-      const shown = onlyToGloss ? lines.filter(toGloss) : lines;
+      const shown = lines.filter(showOf(show).keep);
       const rows = shown.map((l) => {
         const seg = text.segments.find((s) => s.id === l.id);
         const play = playButton("Play this sentence", () => {
@@ -168,12 +170,14 @@ export const interlinearPanel: PanelDef = {
       });
       const focused = el.contains(document.activeElement) ? [...el.querySelectorAll(".il-row")].indexOf(document.activeElement as Element) : -1;
       const focusedAbbr = document.activeElement instanceof HTMLInputElement && el.contains(document.activeElement) ? (document.activeElement.dataset.abbr ?? null) : null;
-      const only = h("input", { type: "checkbox", checked: onlyToGloss });
+      const only = h("select", { className: "il-show", title: "Which sentences to list" }, ...SHOWS.map((x) => h("option", { value: x.id, textContent: x.label, selected: x.id === show })));
+      only.setAttribute("aria-label", "Which sentences to list");
       only.onchange = () => {
-        onlyToGloss = only.checked;
+        show = only.value as Show;
         paint(text);
       };
-      const next = h("button", { type: "button", textContent: "Next to gloss", title: "Open the next sentence still to gloss in the Gloss panel" });
+      const nextLabel = showOf(show).next;
+      const next = h("button", { type: "button", textContent: nextLabel, title: show === "translate" ? "Open the next sentence without a translation in the Gloss panel, where its translation line is" : "Open the next sentence still to gloss in the Gloss panel" });
       next.onclick = goNext;
       const abbrButton = h("button", { type: "button", textContent: "Abbreviations", title: "The abbreviations this text's glosses use, and what each means" });
       abbrButton.setAttribute("aria-expanded", String(showAbbreviations));
@@ -181,9 +185,9 @@ export const interlinearPanel: PanelDef = {
         showAbbreviations = !showAbbreviations;
         paint(text);
       };
-      const bar = h("div", { className: "il-bar" }, h("label", { className: "il-only" }, only, " Only sentences still to gloss"), next, abbrButton);
+      const bar = h("div", { className: "il-bar" }, only, next, abbrButton);
       const abbrSection = showAbbreviations ? abbreviationsSection(text) : null;
-      const empty = onlyToGloss && shown.length === 0 && lines.length > 0 ? h("p", { className: "note", textContent: "Every sentence of this text is glossed." }) : null;
+      const empty = show !== "all" && shown.length === 0 && lines.length > 0 ? h("p", { className: "note", textContent: showOf(show).done }) : null;
       el.replaceChildren(h("h3", { className: "il-title", textContent: text.title || "(untitled)" }), h("p", { className: "note", textContent: progress(lines) }), bar, ...(abbrSection === null ? [] : [abbrSection]), ...(empty === null ? [] : [empty]), h("ol", { className: "il-list" }, ...rows));
       if (focused >= 0) el.querySelectorAll<HTMLElement>(".il-row")[focused]?.focus();
       if (focusedAbbr !== null) el.querySelector<HTMLInputElement>(`input[data-abbr="${CSS.escape(focusedAbbr)}"]`)?.focus();

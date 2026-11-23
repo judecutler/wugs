@@ -531,7 +531,7 @@ def main():
             # Interlinear: only the sentences still to gloss, and Next to gloss.
             run.front("interlinear", "Interlinear")
             run.page.wait_for_timeout(600)
-            run.page.locator(".panel-interlinear .il-only input").check()
+            run.page.locator(".panel-interlinear .il-show").select_option("gloss")
             run.page.wait_for_timeout(300)
             run.shot("state-interlinear-todo", run.page.locator(".panel-interlinear"))
             if run.page.locator(".panel-interlinear .il-row").count() == 0:
@@ -540,7 +540,15 @@ def main():
             run.page.wait_for_timeout(400)
             if run.page.locator(".panel-interlinear .il-selected").count() != 1:
                 failures.append("Next to gloss selected no sentence")
-            run.page.locator(".panel-interlinear .il-only input").uncheck()
+            # Sentences without a translation, and Next to translate.
+            run.page.locator(".panel-interlinear .il-show").select_option("translate")
+            run.page.wait_for_timeout(300)
+            run.shot("state-interlinear-translate", run.page.locator(".panel-interlinear"))
+            if run.page.locator(".panel-interlinear .il-bar button", has_text="Next to translate").count() != 1:
+                failures.append("Sentences without a translation did not offer Next to translate")
+            if run.page.locator(".panel-interlinear .il-tr").count() != 0:
+                failures.append("Sentences without a translation listed a translated one")
+            run.page.locator(".panel-interlinear .il-show").select_option("all")
             # Checks: the character inventory, a Cyrillic letter among Latin ones flagged.
             run.front("checks", "Checks")
             run.page.locator(".panel-checks .ck-char").first.wait_for()
