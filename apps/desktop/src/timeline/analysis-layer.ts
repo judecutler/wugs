@@ -1,4 +1,4 @@
-// Praat's pitch, intensity and formants drawn over the waveform band
+// Pitch, intensity and formants (Praat's, or wugs's own pitch and intensity) drawn over the waveform band
 // (roadmap item 46). Asks the backend for the 10 s chunks the view needs,
 // once each, and draws what has arrived; nothing is fetched while every kind
 // is off. Display rules are in ../praat/analysis.ts.
@@ -76,7 +76,7 @@ export class AnalysisLayer {
     const key = missing.join(",");
     if (key === this.pendingKey) return;
     this.pendingKey = key;
-    // Wait for scrolling to settle before running Praat.
+    // Wait for scrolling to settle before analysing.
     clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.pendingKey = "";
@@ -109,14 +109,14 @@ export class AnalysisLayer {
   /** Draw into the band from `top` to `top + height`. */
   draw(ctx: CanvasRenderingContext2D, v: Viewport, top: number, height: number): void {
     if (this.problem !== null) {
-      this.note(ctx, v, top, `Praat analysis failed: ${this.problem}`);
+      this.note(ctx, v, top, `Analysis failed: ${this.problem}`);
       return;
     }
     if (this.on.size === 0 || this.source === null) return;
     const endMs = v.t0Ms + (v.widthPx / v.pxPerSec) * 1000;
     const wanted = chunksFor(v.t0Ms, endMs, v.durationMs);
     if (wanted === null) {
-      this.note(ctx, v, top, "Zoom in to a minute or less to see Praat's analysis.");
+      this.note(ctx, v, top, "Zoom in to a minute or less to see the analysis.");
       return;
     }
     this.width = v.widthPx;
@@ -134,7 +134,7 @@ export class AnalysisLayer {
       if (this.on.has("pitch")) this.dots(ctx, c, c.pitch, "pitch", xOf, top, height, 2);
     }
     this.legend(ctx, v, top, height);
-    if (waiting) this.note(ctx, v, top, "Praat is analysing…");
+    if (waiting) this.note(ctx, v, top, "Analysing…");
   }
 
   private dots(ctx: CanvasRenderingContext2D, c: Chunk, values: (number | null)[], kind: Kind, xOf: (ms: number) => number, top: number, height: number, r: number): void {

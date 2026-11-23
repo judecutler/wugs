@@ -39,6 +39,7 @@ pub mod sentence;
 pub mod session;
 pub mod spectrogram;
 pub mod updater;
+pub mod voice_analysis;
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
@@ -881,8 +882,8 @@ fn praat_apply(s: State<SessionThread>, text: String) -> Result<praat::Applied, 
 }
 
 /// Pitch, intensity and formants of `source`'s recording for the given
-/// 10 s chunks, from whatever powers acoustic analysis (Praat today;
-/// cached per chunk).
+/// 10 s chunks, from whatever powers acoustic analysis (Praat, cached per
+/// chunk, else the built-in pitch and intensity).
 #[tauri::command]
 async fn acoustic_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>, source: String, chunks: Vec<u32>) -> Result<Vec<praat_analysis::Chunk>, String> {
     let cap = capability::Capability::AcousticAnalysis;
@@ -890,12 +891,13 @@ async fn acoustic_analysis(s: State<'_, SessionThread>, dir: State<'_, AppData>,
         let job = praat_analysis::job(s, &source)?;
         Ok((job, capability::project_pin(session::project(s)?, cap)?))
     })?;
-    let capability::Provider::Praat(exe) = capability::resolve(cap, pin.as_deref(), &dir.0)? else {
-        return Err("Acoustic analysis has no provider here.".into());
-    };
-    // Praat can take seconds: on a blocking thread, not an async worker or
+    // Either can take seconds: on a blocking thread, not an async worker or
     // the session thread.
-    tauri::async_runtime::spawn_blocking(move || praat_analysis::analyse(&exe, &job, &chunks)).await.map_err(|e| e.to_string())?
+    match capability::resolve(cap, pin.as_deref(), &dir.0)? {
+        capability::Provider::Praat(exe) => tauri::async_runtime::spawn_blocking(move || praat_analysis::analyse(&exe, &job, &chunks)).await.map_err(|e| e.to_string())?,
+        capability::Provider::VoiceAnalysis => tauri::async_runtime::spawn_blocking(move || voice_analysis::analyse(&job.wav, &chunks)).await.map_err(|e| e.to_string())?,
+        _ => Err("Acoustic analysis has no provider here.".into()),
+    }
 }
 
 /// The spectrogram of ten seconds of `source`'s recording (chunk `index`),

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { changeSummary, notBroughtBack, PAD_MS, praatRange } from "./logic.ts";
+import { changeSummary, notBroughtBack, overlayTitle, PAD_MS, praatRange } from "./logic.ts";
 
 test("a selected segment opens with a second either side, inside the recording", () => {
   const visible = { startMs: 0, endMs: 10_000 };
@@ -27,4 +27,11 @@ test("what stays out of wugs is listed with counts", () => {
     "Tier added in Praat",
     "Segment deleted in wugs since it went to Praat (2)",
   ]);
+});
+
+test("without Praat, pitch and intensity are built in and formants say they need Praat", () => {
+  assert.match(overlayTitle("pitch", false), /built-in/);
+  assert.match(overlayTitle("intensity", false), /built-in/);
+  assert.match(overlayTitle("formants", false), /need Praat/);
+  assert.match(overlayTitle("formants", true), /your Praat/);
 });

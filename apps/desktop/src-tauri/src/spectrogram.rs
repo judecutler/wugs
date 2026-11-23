@@ -31,7 +31,7 @@ const EMPHASIS_FROM_HZ: f64 = 50.0;
 
 /// The samples of `start_ms..end_ms` mixed to mono in -1..1 (silence past
 /// either end), with the rate.
-fn read_mono(wav: &Path, start_ms: f64, end_ms: f64) -> Result<(Vec<f32>, u32), String> {
+pub(crate) fn read_mono(wav: &Path, start_ms: f64, end_ms: f64) -> Result<(Vec<f32>, u32), String> {
     let mut f = File::open(wav).map_err(|e| e.to_string())?;
     let (fmt, frames) = {
         let r = wugs_peaks::WavReader::new(&mut f).map_err(|e| e.to_string())?;

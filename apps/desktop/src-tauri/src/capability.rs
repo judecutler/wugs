@@ -72,6 +72,11 @@ pub const PRAAT: &str = "praat";
 /// join it as packages later.
 pub const VOICE_ACTIVITY: &str = "voice-activity";
 
+/// Built-in pitch and intensity (`voice_analysis`), as a provider id: for a
+/// computer without Praat. Always ready; Praat comes first when found,
+/// since it also draws formants.
+pub const VOICE_ANALYSIS: &str = "voice-analysis";
+
 /// UDPipe 1 on this computer, with a model the person chose: the person's
 /// own program, nothing leaves the computer.
 pub const UDPIPE: &str = "udpipe";
@@ -154,7 +159,7 @@ pub fn project_pin(project: &wugs_core::Project, cap: Capability) -> Result<Opti
 pub fn known(cap: Capability) -> Vec<String> {
     let mut ids: Vec<String> = catalogue().iter().filter(|m| m.model.capability == cap.id()).map(|m| m.id.clone()).collect();
     match cap {
-        Capability::AcousticAnalysis => ids.push(PRAAT.into()),
+        Capability::AcousticAnalysis => ids.extend([PRAAT.to_string(), VOICE_ANALYSIS.to_string()]),
         Capability::Segmentation => ids.push(VOICE_ACTIVITY.into()),
         Capability::Morphosyntax => ids.extend([UDPIPE.to_string(), SPACY.to_string(), UDPIPE_LINDAT.to_string()]),
         Capability::PhoneTranscription => {}
@@ -228,6 +233,14 @@ pub fn options(cap: Capability, here: &Here) -> Vec<ProviderRow> {
             Err(e) => (false, e.clone()),
         };
         out.push(ProviderRow { id: PRAAT.into(), name: "Praat".into(), kind: "program", ready, note, score: None });
+        out.push(ProviderRow {
+            id: VOICE_ANALYSIS.into(),
+            name: "Pitch and intensity (built in)".into(),
+            kind: "built-in",
+            ready: true,
+            note: "Built in: pitch and intensity by Praat's methods, offline; formants need Praat.".into(),
+            score: None,
+        });
     }
     if cap == Capability::Segmentation {
         out.push(ProviderRow {
@@ -281,6 +294,7 @@ pub enum Provider {
     Model(&'static Manifest),
     Praat(PathBuf),
     VoiceActivity,
+    VoiceAnalysis,
     Udpipe(crate::morphosyntax::Local),
     UdpipeLindat,
     Spacy(crate::morphosyntax::Spacy),
@@ -292,6 +306,7 @@ impl Provider {
             Provider::Model(m) => &m.id,
             Provider::Praat(_) => PRAAT,
             Provider::VoiceActivity => VOICE_ACTIVITY,
+            Provider::VoiceAnalysis => VOICE_ANALYSIS,
             Provider::Udpipe(_) => UDPIPE,
             Provider::UdpipeLindat => UDPIPE_LINDAT,
             Provider::Spacy(_) => SPACY,
@@ -352,6 +367,9 @@ pub fn resolve(cap: Capability, pin: Option<&str>, app_data: &Path) -> Result<Pr
     if id == VOICE_ACTIVITY {
         return Ok(Provider::VoiceActivity);
     }
+    if id == VOICE_ANALYSIS {
+        return Ok(Provider::VoiceAnalysis);
+    }
     if id == UDPIPE {
         return here.udpipe.map(Provider::Udpipe);
     }
@@ -404,6 +422,7 @@ pub fn provider_name(id: &str) -> String {
         "" => "not pinned".into(),
         PRAAT => "Praat".into(),
         VOICE_ACTIVITY => "Voice activity (built in)".into(),
+        VOICE_ANALYSIS => "Pitch and intensity (built in)".into(),
         UDPIPE => "UDPipe on this computer".into(),
         UDPIPE_LINDAT => "UDPipe 2 (LINDAT web service)".into(),
         SPACY => "spaCy on this computer".into(),
@@ -455,7 +474,7 @@ mod tests {
     fn providers_are_known_only_for_their_own_capability() {
         assert!(known(Capability::PhoneTranscription).contains(&"wav2vec2-espeak".to_string()));
         assert!(!known(Capability::PhoneTranscription).contains(&PRAAT.to_string()));
-        assert_eq!(known(Capability::AcousticAnalysis), [PRAAT]);
+        assert_eq!(known(Capability::AcousticAnalysis), [PRAAT, VOICE_ANALYSIS]);
         assert_eq!(known(Capability::Segmentation), [VOICE_ACTIVITY]);
         assert!(!known(Capability::PhoneTranscription).contains(&VOICE_ACTIVITY.to_string()));
     }
@@ -486,11 +505,13 @@ mod tests {
     }
 
     #[test]
-    fn praat_powers_acoustic_analysis_only_when_found() {
+    fn praat_powers_acoustic_analysis_when_found_and_the_built_in_one_otherwise() {
         let here = Here { installed: vec![], praat: Err("Praat was not found.".into()), udpipe: Err("not needed".into()), spacy: Err("not needed".into()) };
         let os = options(Capability::AcousticAnalysis, &here);
-        assert_eq!(os.iter().map(|o| o.id.as_str()).collect::<Vec<_>>(), [PRAAT]);
-        assert_eq!(effective(Capability::AcousticAnalysis, None, &Choice::Automatic, &os).unwrap_err(), "Praat was not found.");
+        assert_eq!(os.iter().map(|o| (o.id.as_str(), o.ready)).collect::<Vec<_>>(), [(PRAAT, false), (VOICE_ANALYSIS, true)]);
+        assert_eq!(effective(Capability::AcousticAnalysis, None, &Choice::Automatic, &os).unwrap(), VOICE_ANALYSIS);
+        let err = effective(Capability::AcousticAnalysis, None, &Choice::Pick(PRAAT.into()), &os).unwrap_err();
+        assert!(err.contains("Praat was not found."), "{err}");
         let here = Here { installed: vec![], praat: Ok(PathBuf::from("/usr/bin/praat")), udpipe: Err("not needed".into()), spacy: Err("not needed".into()) };
         assert_eq!(effective(Capability::AcousticAnalysis, None, &Choice::Automatic, &options(Capability::AcousticAnalysis, &here)).unwrap(), PRAAT);
         assert!(options(Capability::PhoneTranscription, &here).iter().all(|o| o.kind == "model"));
