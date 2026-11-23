@@ -7739,6 +7739,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "wugs-bundle"
+version = "0.0.1"
+dependencies = [
+ "sha2 0.10.9",
+ "wugs-kit",
+ "wugs-package",
+ "zip",
+]
+
+[[package]]
 name = "wugs-cldf"
 version = "0.0.1"
 dependencies = [
@@ -7790,6 +7800,7 @@ dependencies = [
  "wugs-asr",
  "wugs-auth",
  "wugs-blob",
+ "wugs-bundle",
  "wugs-cldf",
  "wugs-conllu",
  "wugs-core",
@@ -8223,6 +8234,7 @@ checksum = "e3476fd497ac8af5b1ec7b51acab7bef380f7e8dd8e0487595bafd839417a302"
 dependencies = [
  "constant_time_eq 0.6.1",
  "crc32fast",
+ "flate2",
  "getrandom 0.4.3",
  "indexmap 2.14.2",
  "libc",
@@ -8231,6 +8243,7 @@ dependencies = [
  "typed-path",
  "windows-sys 0.61.2",
  "zeroize",
+ "zopfli",
 ]
 
 [[package]]
@@ -8244,6 +8257,18 @@ name = "zmij"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+
+[[package]]
+name = "zopfli"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaf7fc5d30c28483d93805c4a5e12b05bbb52407fa67c5f8bd552374cd01fb11"
+dependencies = [
+ "bumpalo",
+ "crc32fast",
+ "log",
+ "simd-adler32",
+]
 
 [[package]]
 name = "zune-core"

@@ -238,15 +238,16 @@ In this kit:
 
 ## Install and share a kit
 
-To share a kit, send its `.toml` file. There is no kit library yet.
+To share a kit, click **Save as a file…** beside it in the **Kits** panel. wugs writes one `.wugskit` file. The file holds the kit, its example project if it has one (`[examples]`), and the files of any packages it requires that are installed on your computer. You can also send the kit's `.toml` file on its own. There is no kit library yet.
 
 To install a kit file someone sent you:
 
 1. In the **Kits** panel, click **Install a kit file…**.
-2. Choose the `.toml` file.
-3. Click **Use** beside the new kit when you are ready.
+2. Choose the `.wugskit` or `.toml` file.
+3. For a `.wugskit`, read what wugs says the file holds, then click **Install**.
+4. Click **Use** beside the new kit when you are ready.
 
-wugs checks the file before it copies it. It never replaces a kit that is already installed. If a kit with the same id exists, delete that kit first, or change `id` in the file.
+wugs opens a `.wugskit` in a separate folder first, never in place. It refuses the whole file if any entry is unsafe, for example a path that leaves the folder, a link, or a file much larger than it claims to be. It also refuses the file if anything differs from the file's own list of what it holds. wugs checks the file before it copies it. It never replaces a kit that is already installed. If a kit with the same id exists, delete that kit first, or change `id` in the file.
 
 wugs stores your kits in the `kits` folder of its app data folder, one file per kit, named `<id>.toml`:
 

@@ -1336,7 +1336,19 @@ fn kit_delete(dir: State<AppData>, id: String) -> Result<kits::KitsView, String>
 
 #[tauri::command(async)]
 fn kit_install(dir: State<AppData>, path: String) -> Result<kits::KitEntry, String> {
-    kits::install(&dir.0, std::path::Path::new(&path))
+    kits::install_file(&dir.0, std::path::Path::new(&path))
+}
+
+/// What installing a kit file would add, before anything is written.
+#[tauri::command(async)]
+fn kit_inspect(dir: State<AppData>, path: String) -> Result<kits::KitFileView, String> {
+    kits::inspect_file(&dir.0, std::path::Path::new(&path))
+}
+
+/// Save a kit as a self-contained `.wugskit` in `folder`.
+#[tauri::command(async)]
+fn kit_share(dir: State<AppData>, id: String, folder: String) -> Result<String, String> {
+    kits::share_file(&dir.0, &id, std::path::Path::new(&folder))
 }
 
 #[tauri::command(async)]
@@ -1680,6 +1692,8 @@ pub fn run() {
             kit_duplicate,
             kit_delete,
             kit_install,
+            kit_inspect,
+            kit_share,
             kit_set_active,
             device_identity,
             devices_list,

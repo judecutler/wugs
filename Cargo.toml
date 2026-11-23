@@ -25,6 +25,7 @@ members = [
     "crates/wugs-conllu",
     "crates/wugs-tei",
     "crates/wugs-cldf",
+    "crates/wugs-bundle",
 ]
 
 [workspace.package]

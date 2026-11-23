@@ -5,9 +5,9 @@
 // read-only; "Duplicate" makes an editable copy. A kit's wug (its `[wug]`)
 // is picked here too, with a live preview.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { errorText, kitCode, kitDelete, kitDuplicate, kitInstall, kitSave, kitSaveCode, type KitEntry, type KitsView } from "../api";
+import { errorText, kitCode, kitDelete, kitDuplicate, kitInspect, kitInstall, kitSave, kitSaveCode, kitShare, type KitEntry, type KitFileView, type KitsView } from "../api";
 import { emptyState, h } from "../dom";
-import { bundleLines, describeLayout, kitNotes, withoutPanel, type Kit } from "../kits/logic";
+import { bundleLines, describeLayout, kitFileLines, kitNotes, withoutPanel, type Kit } from "../kits/logic";
 import { accessoryColour, paint, SLOTS, wear, wornIn } from "../kits/wug-picker";
 import { currentArrangement, reloadKits, useKit } from "../kits/workspace";
 import { getKits, setKits, showToast } from "../store";
@@ -36,6 +36,8 @@ export const kitsPanel: PanelDef = {
     let busy = false;
     /** The kit a "Duplicate" name field is open for, and its typed name. */
     let duplicating: { source: string; name: string } | null = null;
+    /** A kit file opened for its install screen, before anything is written. */
+    let pending: { path: string; view: KitFileView } | null = null;
     let armed: string | null = null;
     const dirty = (id: string) => {
       const d = drafts.get(id);
@@ -139,6 +141,7 @@ export const kitsPanel: PanelDef = {
           { className: "kit-actions" },
           h("button", { type: "button", textContent: "Install a kit file…", disabled: busy, onclick: () => void install() }),
         ),
+        ...(pending === null ? [] : [installScreen(pending.path, pending.view)]),
         ...(view.broken.length === 0 ? [] : [brokenList(view)]),
         ...(entry === null ? [] : [editor(entry)]),
       );
@@ -182,6 +185,7 @@ export const kitsPanel: PanelDef = {
               el.querySelector<HTMLInputElement>(".kit-dup input")?.select();
             },
           }),
+          h("button", { type: "button", textContent: "Save as a file…", disabled: busy, title: "One .wugskit file with this kit and its example project, to share on a USB stick, a shared drive or by email", onclick: () => void share(k) }),
           k.bundled ? null : confirmButton(`delete:${k.kit.id}`, "Delete", () => void remove(k.kit.id)),
         ),
         duplicating?.source === k.kit.id ? duplicateForm(k) : null,
@@ -444,13 +448,60 @@ export const kitsPanel: PanelDef = {
     // ------------------------------------------------------------------ actions
 
     async function install() {
-      const path = await pickFile({ multiple: false, directory: false, title: "Install a kit", filters: [{ name: "Kit manifest", extensions: ["toml"] }] });
+      const path = await pickFile({ multiple: false, directory: false, title: "Install a kit", filters: [{ name: "Kit file or manifest", extensions: ["wugskit", "toml"] }] });
       if (typeof path !== "string") return;
+      if (path.toLowerCase().endsWith(".wugskit")) {
+        // A kit file is opened and shown first; nothing is written until Install.
+        await act(async () => {
+          pending = { path, view: await kitInspect({ path }) };
+        });
+        draw();
+        el.querySelector<HTMLButtonElement>(".kit-install-go")?.focus();
+        return;
+      }
+      await installPath(path);
+    }
+
+    async function installPath(path: string) {
       await act(async () => {
         const made = await kitInstall({ path });
         selected = made.kit.id;
         await reloadKits();
         showToast({ tone: "info", lines: [`Installed ${made.kit.name}. Use it from the list when you are ready.`] });
+      });
+    }
+
+    function installScreen(path: string, v: KitFileView) {
+      return h(
+        "section",
+        { className: "kit-install", ariaLabel: "Install a kit file" },
+        h("h3", { textContent: "Install this kit?" }),
+        ...kitFileLines(v).map((line) => h("p", { className: "kit-note", textContent: line })),
+        v.alreadyInstalled ? h("p", { className: "kit-note kit-problem", textContent: "A kit with this id is installed already. Delete it first to install this one." }) : null,
+        h(
+          "div",
+          { className: "kit-actions" },
+          h("button", {
+            type: "button",
+            className: "primary kit-install-go",
+            textContent: "Install",
+            disabled: busy || v.alreadyInstalled,
+            onclick: () => {
+              pending = null;
+              void installPath(path);
+            },
+          }),
+          h("button", { type: "button", textContent: "Cancel", onclick: () => ((pending = null), draw()) }),
+        ),
+      );
+    }
+
+    async function share(k: KitEntry) {
+      const folder = await pickFile({ directory: true, title: `Choose where ${k.kit.name}'s kit file goes` });
+      if (typeof folder !== "string") return;
+      await act(async () => {
+        const file = await kitShare({ id: k.kit.id, folder });
+        showToast({ tone: "info", lines: [`Saved ${file}.`, "Anyone with wugs can install it from the Kits panel: Install a kit file…"] });
       });
     }
 

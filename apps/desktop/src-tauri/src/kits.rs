@@ -463,6 +463,10 @@ pub fn delete(app_data: &Path, id: &str) -> Result<KitsView, String> {
     refuse_bundled(id)?;
     let path = user_path(app_data, id)?;
     fs::remove_file(&path).map_err(|e| format!("delete {}: {e}", path.display()))?;
+    // Its example project goes with it; packages stay (another kit may need them).
+    if let Ok(ex) = examples_dir(app_data, id) {
+        let _ = fs::remove_dir_all(ex);
+    }
     if let Ok(layout) = crate::layout::layout_path(app_data, id) {
         let _ = fs::remove_file(layout);
     }
@@ -492,4 +496,175 @@ pub fn set_active(app_data: &Path, id: &str) -> Result<(), String> {
         return Err(format!("no kit {id:?} is installed"));
     }
     write_atomic(&dir(app_data).join("active"), id)
+}
+
+// ---------------------------------------------------------------- kit files (.wugskit)
+
+/// One package a kit file relies on, for the install screen.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RequirementView {
+    pub kind: String,
+    pub id: String,
+    pub version: String,
+    pub why: String,
+    pub capability: Option<String>,
+    /// Whether the file carries its files (checked against the kit's pin).
+    pub in_file: bool,
+    pub bytes: u64,
+}
+
+/// What installing a kit file would add, before anything is written.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KitFileView {
+    pub kit: KitDto,
+    pub license: String,
+    pub authors: Vec<String>,
+    pub summary: String,
+    pub requires: Vec<RequirementView>,
+    /// The file carries an example project.
+    pub examples: bool,
+    /// Every entry matched the file's own list (damage would have been refused).
+    pub listed: bool,
+    pub already_installed: bool,
+}
+
+fn staging(app_data: &Path) -> Result<PathBuf, String> {
+    let root = app_data.join("staging");
+    fs::create_dir_all(&root).map_err(|e| format!("{}: {e}", root.display()))?;
+    Ok(root.join(wugs_model::ulid()))
+}
+
+/// Where a kit's example project goes once installed.
+pub fn examples_dir(app_data: &Path, id: &str) -> Result<PathBuf, String> {
+    if !wugs_kit::valid_id(id) {
+        return Err(format!("{id:?} is not a kit id"));
+    }
+    Ok(app_data.join("kit-examples").join(id))
+}
+
+/// Where a package lives once installed: side by side by version (BUNDLES.md §2).
+pub fn package_dir(app_data: &Path, kind: &str, id: &str, version: &str) -> Result<PathBuf, String> {
+    if !wugs_kit::REQUIREMENT_KINDS.contains(&kind) || !wugs_kit::valid_package_id(id) || !wugs_kit::valid_version(version) {
+        return Err(format!("{kind} {id} {version} cannot name a folder"));
+    }
+    Ok(app_data.join("packages").join(kind).join(id).join(version))
+}
+
+fn view_of(app_data: &Path, o: &wugs_bundle::Opened) -> Result<KitFileView, String> {
+    let b = o.kit.bundle.clone().unwrap_or_default();
+    let requires = b
+        .requires
+        .iter()
+        .map(|r| {
+            let inc = o.included.iter().find(|i| i.kind == r.kind && i.id == r.id && i.version == r.version);
+            RequirementView { kind: r.kind.clone(), id: r.id.clone(), version: r.version.clone(), why: r.why.clone(), capability: r.capability.clone(), in_file: inc.is_some(), bytes: inc.map_or(0, |i| i.bytes) }
+        })
+        .collect();
+    Ok(KitFileView {
+        kit: KitDto::from(&o.kit),
+        license: b.license,
+        authors: b.authors,
+        summary: b.summary,
+        requires,
+        examples: o.examples,
+        listed: o.listed,
+        already_installed: reserved(&o.kit.id) || user_path(app_data, &o.kit.id)?.exists(),
+    })
+}
+
+fn is_kit_file(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("wugskit"))
+}
+
+/// Open a `.wugskit` into staging and say what it holds; nothing is installed.
+pub fn inspect_file(app_data: &Path, path: &Path) -> Result<KitFileView, String> {
+    if !is_kit_file(path) {
+        let text = read_capped(path)?;
+        let kit = wugs_kit::parse(&text).map_err(|p| problems_text(&p))?;
+        let b = kit.bundle.clone().unwrap_or_default();
+        return Ok(KitFileView {
+            kit: KitDto::from(&kit),
+            license: b.license,
+            authors: b.authors,
+            summary: b.summary,
+            requires: b.requires.iter().map(|r| RequirementView { kind: r.kind.clone(), id: r.id.clone(), version: r.version.clone(), why: r.why.clone(), capability: r.capability.clone(), in_file: false, bytes: 0 }).collect(),
+            examples: false,
+            listed: false,
+            already_installed: reserved(&kit.id) || user_path(app_data, &kit.id)?.exists(),
+        });
+    }
+    let stage = staging(app_data)?;
+    let opened = wugs_bundle::open(path, &stage, wugs_bundle::LIMITS)?;
+    let view = view_of(app_data, &opened);
+    fs::remove_dir_all(&stage).ok();
+    view
+}
+
+/// Install a kit file: a `.toml` as before, or a `.wugskit` opened into
+/// staging first, its packages moved to their side-by-side folders (one
+/// already there is kept), its example project to `kit-examples/<id>/`, and
+/// its manifest written last. Never replaces an installed kit.
+pub fn install_file(app_data: &Path, path: &Path) -> Result<KitEntry, String> {
+    if !is_kit_file(path) {
+        return install(app_data, path);
+    }
+    let stage = staging(app_data)?;
+    let opened = wugs_bundle::open(path, &stage, wugs_bundle::LIMITS)?;
+    let result = (|| {
+        let id = opened.kit.id.clone();
+        let target = user_path(app_data, &id)?;
+        if reserved(&id) || target.exists() {
+            return Err(format!("A kit with the id {id:?} is already installed. Delete it first."));
+        }
+        for inc in &opened.included {
+            let to = package_dir(app_data, &inc.kind, &inc.id, &inc.version)?;
+            if to.exists() {
+                continue;
+            }
+            fs::create_dir_all(to.parent().ok_or("no parent")?).map_err(|e| e.to_string())?;
+            fs::rename(stage.join(wugs_bundle::PACKAGES).join(&inc.kind).join(&inc.id).join(&inc.version), &to).map_err(|e| format!("{}: {e}", to.display()))?;
+        }
+        if opened.examples {
+            let ex = opened.kit.bundle.as_ref().and_then(|b| b.examples.clone()).unwrap_or_default();
+            let to = examples_dir(app_data, &id)?;
+            fs::remove_dir_all(&to).ok();
+            fs::create_dir_all(to.parent().ok_or("no parent")?).map_err(|e| e.to_string())?;
+            fs::rename(stage.join(ex.trim_end_matches('/')), &to).map_err(|e| format!("{}: {e}", to.display()))?;
+        }
+        write_atomic(&target, &opened.kit_toml)?;
+        Ok(KitEntry { kit: KitDto::from(&opened.kit), bundled: false })
+    })();
+    fs::remove_dir_all(&stage).ok();
+    result
+}
+
+/// Save a kit as a `.wugskit` in `folder`: its manifest, its installed
+/// example project, and the files of each required package installed here
+/// (checked against the pin; a package not installed here is left for the
+/// index). Never replaces a file.
+pub fn share_file(app_data: &Path, id: &str, folder: &Path) -> Result<String, String> {
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+    let text = code(app_data, id)?;
+    let kit = wugs_kit::parse(&text).map_err(|p| problems_text(&p))?;
+    let examples = examples_dir(app_data, id)?;
+    let examples = (kit.bundle.as_ref().is_some_and(|b| b.examples.is_some()) && examples.is_dir()).then_some(examples);
+    let packages: Vec<(wugs_kit::Requirement, PathBuf)> = kit
+        .bundle
+        .iter()
+        .flat_map(|b| b.requires.iter())
+        .filter_map(|r| package_dir(app_data, &r.kind, &r.id, &r.version).ok().filter(|d| d.is_dir()).map(|d| (r.clone(), d)))
+        .collect();
+    let stem = format!("{}-{}", kit.id, kit.version);
+    let mut out = folder.join(format!("{stem}.wugskit"));
+    let mut n = 2;
+    while out.symlink_metadata().is_ok() {
+        out = folder.join(format!("{stem} ({n}).wugskit"));
+        n += 1;
+    }
+    wugs_bundle::write(&out, &text, examples.as_deref(), &packages)?;
+    Ok(out.display().to_string())
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addsFor, bundleLines, describeLayout, kitNotes, placementsFrom, withoutPanel, type Kit, type Placement, type SerializedLayout } from "./logic.ts";
+import { addsFor, bundleLines, describeLayout, kitNotes, placementsFrom, withoutPanel, type Kit, type Placement, type SerializedLayout, kitFileLines } from "./logic.ts";
 
 const tongues: Placement[] = [
   { panel: "timeline" },
@@ -189,4 +189,24 @@ test("a bundle reads in words", () => {
     "Comes with an example project (examples/sample/).",
   ]);
   assert.ok(bundleLines({ license: "", source: "", authors: [], summary: "", requires: [] }).includes("Relies on no other packages."));
+});
+
+test("a kit file's install screen says what comes with it", () => {
+  const lines = kitFileLines({
+    kit: { name: "Field", version: "0.2.0", subtitle: "Fieldwork" },
+    license: "MPL-2.0",
+    authors: ["A. Tester"],
+    summary: "Shared with a classmate.",
+    requires: [
+      { kind: "dataset", id: "tagset", version: "1.0", why: "", capability: null, inFile: true, bytes: 3 << 20 },
+      { kind: "model", id: "udpipe-en", version: "2.5", why: "", capability: "morphosyntax", inFile: false, bytes: 0 },
+    ],
+    examples: true,
+    listed: true,
+  });
+  assert.equal(lines[0], "Field — Fieldwork, version 0.2.0.");
+  assert.equal(lines[2], "By A. Tester; licence MPL-2.0.");
+  assert.equal(lines[3], "Dataset tagset 1.0: in the file (3.0 MB), checked against the kit's hash.");
+  assert.match(lines[4]!, /^Model udpipe-en 2.5 for morphosyntax: not in the file/);
+  assert.equal(lines.at(-1), "Not signed: wugs cannot say who made it. Install kits from people you trust.");
 });
