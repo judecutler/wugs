@@ -581,6 +581,15 @@ def main():
             run.page.locator(".panel-elicit button", has_text="Load a table").wait_for()
             run.shot("state-elicit-add", run.page.locator(".panel-elicit"))
             run.page.locator(".panel-elicit button", has_text="Close").click()
+            # Transcribe: the project's typing shortcuts.
+            run.front("transcribe", "Transcribe")
+            run.page.locator(".panel-transcribe button", has_text="Shortcuts").click()
+            run.page.locator(".panel-transcribe .tx-shortcuts textarea").wait_for()
+            run.shot("state-transcribe-shortcuts", run.page.locator(".panel-transcribe"))
+            if "3 typing shortcuts on" not in run.page.locator(".panel-transcribe .tx-shortcuts").inner_text():
+                failures.append("The Shortcuts box did not count the project's shortcuts")
+            run.page.locator(".panel-transcribe button", has_text="Shortcuts").click()
+            run.front("elicit", "Elicit")
             # Semantic domains: how many words each holds, and the next one still empty.
             run.page.locator(".panel-elicit button", has_text="Semantic domains").click()
             run.page.locator(".panel-elicit .el-coverage").wait_for()

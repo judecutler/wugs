@@ -206,6 +206,8 @@ Click **IPA** in the Transcribe panel to show or hide the IPA palette. It has gr
 
 If you type IPA in X-SAMPA, click **X-SAMPA** in the Transcribe panel. Type `S` for ʃ, `N` for ŋ, `@` for ə, `t_h` for tʰ, `r\` for ɹ, `"` for the primary stress mark and `:` for length. Beside the field, wugs shows the IPA it will save. When you press Enter or leave the field, the text becomes that IPA. Characters with no X-SAMPA meaning stay as typed, so IPA you pasted or picked from the palette is kept. X-SAMPA reads digits and capital letters as symbols (`1` is ɨ, `E` is ɛ), so turn it off for an orthographic track. wugs remembers the setting on this computer.
 
+For the letters of a practical orthography that a keyboard lacks, make typing shortcuts, as Keyman users do. Click **Shortcuts…** in the Transcribe toolbar and write a line for each: what you type, a space, and what it becomes, such as `;n ŋ` or `b' ɓ`. **Start from an example** fills in a few common ones. Click **Save**. From then on, typing `;n` in the transcription field writes ŋ at once. The table belongs to the project, so everyone working on it, on any device, types the same way. Lines wugs cannot read are named under the table; a line starting with `#` is a comment.
+
 As you type, wugs checks each finished word against the words already in the project. A word used once or twice that is only accents, or one letter, away from a word used far more often shows up beside the field as a suggestion, such as **toɾuma → toɾumo?**. Click it to write the common spelling instead, or ignore it: it is only a hint, and a word you keep using soon counts as the project's own. It uses the same rules as **Spellings to check** in the Checks panel, which lists the slips already saved.
 
 ### Get machine suggestions

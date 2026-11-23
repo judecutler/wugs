@@ -1371,3 +1371,8 @@ body::before {
 .el-coverage .note { margin: 0; }
 .el-empty-only { font-size: var(--text-sm); }
 .el-count { margin-left: 6px; font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.tx-shortcuts { padding: 8px 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.tx-shortcuts[hidden] { display: none; }
+.tx-shortcuts .note { margin: 0; }
+.tx-shortcuts-table { font-family: var(--font-ipa); width: 100%; max-width: 28em; }
+.tx-shortcuts-actions { display: flex; gap: 6px; }

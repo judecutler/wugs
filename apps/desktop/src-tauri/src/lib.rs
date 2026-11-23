@@ -10,6 +10,7 @@ pub mod cwb;
 pub mod dictionary;
 pub mod flashcards;
 pub mod archive_sheet;
+pub mod typing;
 pub mod dispersion;
 pub mod collocates;
 pub mod frequencies;
@@ -1146,6 +1147,17 @@ fn export_website(s: State<SessionThread>, folder: String, date: String, include
     s.run(move |s| website::export_website(s, std::path::Path::new(&folder), &date, include_restricted, audio))
 }
 
+/// The project's typing shortcuts (`typing.rs`).
+#[tauri::command(async)]
+fn typing_shortcuts(s: State<SessionThread>) -> Result<String, String> {
+    s.run(typing::get)
+}
+
+#[tauri::command(async)]
+fn set_typing_shortcuts(s: State<SessionThread>, table: String) -> Result<String, String> {
+    s.run(move |s| typing::set(s, &table))
+}
+
 /// One catalogue row per text for an archive's item forms (`archive_sheet.rs`).
 #[tauri::command(async)]
 fn export_archive_sheet(s: State<SessionThread>, folder: String) -> Result<archive_sheet::Sheet, String> {
@@ -2113,6 +2125,8 @@ pub fn run() {
             measure_track,
             export_flashcards,
             export_archive_sheet,
+            typing_shortcuts,
+            set_typing_shortcuts,
             save_clips,
             replace_preview,
             export_website,
