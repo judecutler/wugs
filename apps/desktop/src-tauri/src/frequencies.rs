@@ -170,6 +170,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         let mut session: Session = None;
         crate::sample::open_sample(&mut session, &dir, "tester").unwrap();
+        crate::sample::add_morphology(&mut session).unwrap();
         // A segment with a glottal stop written `?` and a reduplicated word
         // whose two morphs share a gloss: the cases a count can get wrong.
         let text = crate::session::list_texts(&mut session).unwrap()[0].id.clone();

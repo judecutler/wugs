@@ -49,5 +49,5 @@ panels = [
 active = ["texts", "concordance", "frequencies"]
 
 [wug]
-body = "#7aa6d8"                   # ink blue, after old manuscripts
-accessories = ["glasses", "scroll"]
+body = "#f2c94c"                   # yellow, like old paper
+accessories = ["monocle", "scroll"]   # a monocle and a page of text
