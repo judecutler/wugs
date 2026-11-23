@@ -21,11 +21,12 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
 
 /** The toast after publishing. */
 /** What a dictionary export wrote, in words. */
-export function dictionaryLines(r: { path: string; entries: number; senses: number; examples: number; restrictedLeftOut: number }): string[] {
+export function dictionaryLines(r: { path: string; entries: number; senses: number; examples: number; restrictedLeftOut: number; topics?: number }): string[] {
   const lines = [
     `Saved the dictionary as ${r.path}: ${plural(r.entries, "entry", "entries")}, ${plural(r.senses, "sense", "senses")}, ${plural(r.examples, "example", "examples")} from the texts.`,
     "Open it in a browser and print it to PDF, or open it in Word or Google Docs to edit it.",
   ];
+  if ((r.topics ?? 0) > 0) lines.push(`Words by topic lists the entries under ${plural(r.topics!, "semantic domain", "semantic domains")}.`);
   if (r.restrictedLeftOut > 0) lines.push(`${plural(r.restrictedLeftOut, "example was", "examples were")} left out because ${r.restrictedLeftOut === 1 ? "its text is" : "their texts are"} not open.`);
   return lines;
 }

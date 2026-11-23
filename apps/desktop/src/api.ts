@@ -696,7 +696,7 @@ export const exportCorpus = (args: { folder: string; date: string; includeRestri
   invoke<{ path: string; corpus: string; texts: number; sentences: number; restrictedLeftOut: number; notes: string[] }>("export_corpus", args);
 /** The lexicon as one HTML dictionary to print or share (src-tauri/src/dictionary.rs). */
 export const exportDictionary = (args: { folder: string; date: string; includeRestricted: boolean }) =>
-  invoke<{ path: string; entries: number; senses: number; examples: number; restrictedLeftOut: number }>("export_dictionary", args);
+  invoke<{ path: string; entries: number; senses: number; examples: number; restrictedLeftOut: number; topics: number }>("export_dictionary", args);
 /** The project's typing shortcuts table (`;n ŋ`, a line each), a project setting. */
 export const typingShortcuts = () => invoke<string>("typing_shortcuts");
 export const setTypingShortcuts = (args: { table: string }) => invoke<string>("set_typing_shortcuts", args);
