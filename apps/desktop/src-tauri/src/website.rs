@@ -96,16 +96,34 @@ ol.sentences { list-style: none; padding: 0; } ol.sentences li { display: grid; 
 button.play { grid-column: 2; align-self: start; border: 1px solid #00718a; color: #00718a; background: none; border-radius: 50%; width: 1.8em; height: 1.8em; cursor: pointer; font-size: .9em; padding: 0; }
 button.play:hover, button.play:focus-visible { background: #d6f3f9; }
 footer { margin-top: 3em; color: #777; font-size: .85em; }
+ol.sentences li:target { background: #fff3c4; }
+.search input { font: inherit; width: 100%; box-sizing: border-box; padding: .4em .6em; border: 1px solid #b9b19a; border-radius: .4em; background: #fff; }
+.search label { display: block; margin-bottom: .3em; color: #555; }
+ul.hits { list-style: none; padding: 0; } ul.hits li { margin: .45em 0; } .hits .hw { font-weight: bold; } .hits .gl, .hits .ft { color: #333; }
+.count { color: #666; font-size: .9em; } mark { background: #fde68a; color: inherit; }
+#results:not(:empty) { margin-bottom: 1.5em; padding-bottom: .5em; border-bottom: 1px solid #eee6cc; }
 ";
 
 const SCRIPT: &str = "<script>\nlet playing = null;\nfor (const b of document.querySelectorAll('button.play')) b.addEventListener('click', () => { if (playing) playing.pause(); playing = new Audio(b.dataset.src); playing.play(); });\n</script>\n";
 
-fn page(title: &str, lang_attr: &str, body: &str, footer: &str) -> String {
+/// The site's search, run in the reader's browser over `search-index.js`.
+const SEARCH: &str = include_str!("site-search.js");
+
+fn page(title: &str, lang_attr: &str, body: &str, footer: &str, scripts: &str) -> String {
     format!(
-        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{t}</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n{body}<footer>{footer}</footer>\n{SCRIPT}</body>\n</html>\n",
+        "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>{t}</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n{body}<footer>{footer}</footer>\n{SCRIPT}{scripts}</body>\n</html>\n",
         t = esc(title),
         body = body.replace("<h1>", &format!("<h1{lang_attr}>")),
     )
+}
+
+/// What the search looks through, as a script that sets `WUGS_INDEX`
+/// (a script, not JSON, because browsers refuse to fetch files from a page opened from disk).
+fn search_index(entries: &[crate::dictionary::Headword], sentences: &[(String, usize, String, String, String)]) -> String {
+    use serde_json::{json, Value};
+    let entries: Vec<Value> = entries.iter().map(|h| json!([h.id, h.lemma, h.homograph, h.glosses])).collect();
+    let sentences: Vec<Value> = sentences.iter().map(|(f, n, t, tr, title)| json!([f, n, t, tr, title])).collect();
+    format!("var WUGS_INDEX = {};\n", json!({ "entries": entries, "sentences": sentences }))
 }
 
 struct Clip {
@@ -139,6 +157,7 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     }
     texts.sort_by(|a, b| wugs_model::fold_key(&a.0).cmp(&wugs_model::fold_key(&b.0)).then(a.1.cmp(&b.1)));
     let mut listed = Vec::new();
+    let mut searched: Vec<(String, usize, String, String, String)> = Vec::new();
     for (title, text) in &texts {
         if !include_restricted && p.text_access(text)? != "open" {
             site.restricted_left_out += 1;
@@ -156,12 +175,12 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
         let recording = match p.text_recording(text)? {
             Some((source, blob)) if audio => {
                 let open = include_restricted || p.proj.field_str(&source, "access")?.is_none_or(|a| a == "open");
-                let here = wugs_blob::parse_ref(&blob).is_some_and(|hex| p.root.join("blobs").join(hex.to_string()).is_file());
+                let here = wugs_blob::parse_ref(&blob).is_some_and(|hex| p.root.join("blobs").join(hex).is_file());
                 (open && here).then_some(blob)
             }
             _ => None,
         };
-        let mut body = format!("<nav><a href=\"index.html\">← All texts</a></nav>\n<h1>{}</h1>\n", esc(title));
+        let mut body = format!("<nav><a href=\"index.html\">← All texts and search</a></nav>\n<h1>{}</h1>\n", esc(title));
         let details = p.text_metadata(text)?;
         if !details.is_empty() {
             let d: Vec<String> = details.iter().map(|(k, v)| format!("{}: {}", esc(&k.replace('_', " ")), esc(v))).collect();
@@ -197,21 +216,25 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
             if !words.is_empty() {
                 body.push_str(&format!("<div class=\"igt\">{}</div>", words.join("")));
             }
-            if let Some((_, tr)) = translations_of(p, seg)?.into_iter().next() {
-                body.push_str(&format!("<p class=\"ft\">‘{}’</p>", esc(tr.trim())));
+            let translation = translations_of(p, seg)?.into_iter().next().map(|(_, t)| t.trim().to_string()).unwrap_or_default();
+            if !translation.is_empty() {
+                body.push_str(&format!("<p class=\"ft\">‘{}’</p>", esc(&translation)));
             }
+            searched.push((file.clone(), i + 1, content.trim().to_string(), translation, title.clone()));
             body.push_str("</div></li>\n");
         }
         body.push_str("</ol>\n");
         site.sentences += segments.len();
-        files.push((file.clone(), page(title, &lang_attr, &body, &footer)));
+        files.push((file.clone(), page(title, &lang_attr, &body, &footer, "")));
         listed.push((file, title.clone(), segments.len(), details));
     }
     site.texts = listed.len();
 
+    let mut headwords = Vec::new();
     let dictionary = match crate::dictionary::document(p, &date, include_restricted) {
         Ok((_, html, d)) => {
             site.entries = d.entries;
+            headwords = d.headwords;
             // The printable page, with a way back.
             let html = html.replacen("<body>\n", "<body>\n<nav><a href=\"index.html\">← Home</a></nav>\n", 1);
             files.push(("dictionary.html".into(), html));
@@ -228,6 +251,14 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     if !codes.is_empty() {
         body.push_str(&format!("<p class=\"front\">{}</p>\n", esc(&codes.join(" · "))));
     }
+    body.push_str(&format!(
+        "<div class=\"search\" role=\"search\"><label for=\"q\">Search {}</label><input id=\"q\" type=\"search\" autocomplete=\"off\" spellcheck=\"false\"></div>\n<div id=\"results\" aria-live=\"polite\"></div>\n",
+        match (dictionary, listed.is_empty()) {
+            (true, false) => "the dictionary and the texts",
+            (true, true) => "the dictionary",
+            _ => "the texts",
+        }
+    ));
     if dictionary {
         body.push_str(&format!("<p><a href=\"dictionary.html\">Dictionary</a> <span class=\"count\">({} entries)</span></p>\n", site.entries));
     }
@@ -244,7 +275,9 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
         }
         body.push_str("</ul>\n");
     }
-    files.push(("index.html".into(), page(&name, &lang_attr, &body, &footer)));
+    files.push(("index.html".into(), page(&name, &lang_attr, &body, &footer, "<script src=\"search-index.js\"></script>\n<script src=\"search.js\"></script>\n")));
+    files.push(("search-index.js".into(), search_index(&headwords, &searched)));
+    files.push(("search.js".into(), SEARCH.to_string()));
 
     let mut out = folder.join(format!("wugs-site-{date}"));
     let mut k = 2;
@@ -264,7 +297,7 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
         }
         for c in &clips {
             let hex = wugs_blob::parse_ref(&c.blob).ok_or_else(|| format!("malformed blob ref {:?}", c.blob))?;
-            cut_clip(&p.root.join("blobs").join(hex.to_string()), c.start, c.end, &scratch.join(&c.file)).map_err(|e| format!("{}: {e}", c.file))?;
+            cut_clip(&p.root.join("blobs").join(hex), c.start, c.end, &scratch.join(&c.file)).map_err(|e| format!("{}: {e}", c.file))?;
         }
         fs::rename(&scratch, &out).map_err(|e| format!("{}: {e}", out.display()))
     })();
@@ -314,6 +347,12 @@ mod tests {
         assert!(text.contains("<button class=\"play\" data-src=\"audio/1-1.wav\""), "{text}");
         assert!(text.contains("class=\"ft\">‘"), "the translation is shown: {text}");
         assert!(root.join("audio/1-1.wav").is_file() && root.join("style.css").is_file() && root.join("dictionary.html").is_file());
+        // The search: a box on the front page over an index of what the site shows.
+        assert!(index.contains("<input id=\"q\"") && index.contains("<script src=\"search-index.js\"></script>"), "{index}");
+        let found = fs::read_to_string(root.join("search-index.js")).unwrap();
+        assert!(found.starts_with("var WUGS_INDEX = {") && found.contains("[\"text-1.html\",1,\"wʌn tuː θɹiː\""), "{found}");
+        assert!(text.contains("<li id=\"s1\">"), "each sentence is a search target");
+        assert!(root.join("search.js").is_file());
         assert!(!dir.read_dir().unwrap().flatten().any(|e| e.file_name().to_string_lossy().ends_with(".partial")));
         assert!(export_website(&mut s, &dir.join("sample"), "2026-11-23", true, true).is_err(), "never inside the project");
         // WUGS_KEEP_SITE=1 keeps the site to look at by hand.

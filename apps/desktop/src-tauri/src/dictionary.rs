@@ -27,6 +27,18 @@ pub struct Dictionary {
     pub examples: usize,
     /// Examples left out because their text is not open.
     pub restricted_left_out: usize,
+    /// Each entry in the page's order, for a site's search.
+    #[serde(skip)]
+    pub headwords: Vec<Headword>,
+}
+
+/// An entry as a site's search lists it: its anchor, headword, homograph number and glosses.
+#[derive(Debug, Clone)]
+pub struct Headword {
+    pub id: String,
+    pub lemma: String,
+    pub homograph: Option<u32>,
+    pub glosses: String,
 }
 
 fn esc(s: &str) -> String {
@@ -111,6 +123,7 @@ h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; ma
 .ps { font-style: italic; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
 .gl2 { color: #333; } .ex { font-style: italic; } .tr { }
 .reversal p { margin: 0 0 .25em; } h2 { break-after: avoid; }
+.entry:target { background: #fff3c4; }
 @media print { body { margin: 0; max-width: none; } a { color: inherit; text-decoration: none; } }
 ";
 
@@ -256,7 +269,16 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool) -> Res
         codes = if codes.is_empty() { String::new() } else { format!(" · {}", esc(&codes.join(", "))) },
         note = if include_restricted { " Examples from texts that are not open are included: check before sharing." } else { "" },
     );
-    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out };
+    let headwords = entries
+        .iter()
+        .map(|e| Headword {
+            id: e.id.clone(),
+            lemma: e.lemma.clone(),
+            homograph: e.homograph,
+            glosses: e.senses.iter().map(|s| s.gloss.trim()).filter(|g| !g.is_empty()).collect::<Vec<_>>().join("; "),
+        })
+        .collect();
+    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords };
     Ok((title, html, d))
 }
 
