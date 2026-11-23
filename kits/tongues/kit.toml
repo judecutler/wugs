@@ -39,6 +39,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "frequencies",                   # how often each word occurs; not placed, opened from Settings or Ctrl+K
   "sentence",                      # one sentence's tags and dependency tree; not placed, opened from Settings or Ctrl+K
   "collocates",                    # which words keep company with a word; not placed either
+  "wordsketch",                    # a lemma's grammatical company from the dependency trees; not placed
   "keywords",                      # which words set a text apart; not placed either
   "checks",                        # glosses to tidy: a morph glossed more than one way; not placed either
   "vowels",                        # vowel space: F1 against F2 per segment; not placed either

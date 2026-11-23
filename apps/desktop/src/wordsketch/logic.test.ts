@@ -1,0 +1,31 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { groupTitle, pairQuery, sketchLine, sketchTsv, type WordSketch } from "./logic.ts";
+
+const sketch: WordSketch = {
+  lemma: "eat",
+  count: 2,
+  parsed: 3,
+  groups: [
+    { relation: "obj", direction: "dependent", total: 2, items: [{ lemma: "bone", count: 1, logDice: 13.41, after: 1 }] },
+    { relation: "nsubj", direction: "dependent", total: 2, items: [{ lemma: "cat", count: 3, logDice: 12.5, after: 0 }] },
+  ],
+};
+
+test("relations in words", () => {
+  assert.equal(groupTitle(sketch.groups[0]!, "eat"), "Objects of «eat»");
+  assert.equal(groupTitle({ relation: "nmod:poss", direction: "dependent", total: 1, items: [] }, "dog"), "Noun modifiers of «dog» (nmod:poss)");
+  assert.equal(groupTitle({ relation: "obj", direction: "head", total: 1, items: [] }, "bone"), "Words «bone» is among the objects of");
+  assert.equal(groupTitle({ relation: "conj", direction: "head", total: 1, items: [] }, "salt"), "Coordinated with «salt»");
+  assert.equal(groupTitle({ relation: "xyz", direction: "dependent", total: 1, items: [] }, "a"), "xyz of «a»");
+});
+
+test("the line, the query and the copy", () => {
+  assert.match(sketchLine({ lemma: "", count: 0, parsed: 0, groups: [] }, "x"), /^No sentence is parsed yet/);
+  assert.equal(sketchLine({ lemma: "", count: 0, parsed: 12, groups: [] }, " giraffe "), "«giraffe» is not a lemma in the 12 parsed sentences.");
+  assert.match(sketchLine(sketch, "eat"), /^«eat»: 2 uses in 3 parsed sentences, 2 relations\./);
+  assert.equal(pairQuery("eat", sketch.groups[0]!.items[0]!), '[lemma="eat" %c] []{0,10} [lemma="bone" %c]');
+  assert.equal(pairQuery("eat", sketch.groups[1]!.items[0]!), '[lemma="cat" %c] []{0,10} [lemma="eat" %c]');
+  assert.equal(pairQuery("a.b", { lemma: "x", count: 1, logDice: 1, after: 1 }), '[lemma="a\\.b" %c] []{0,10} [lemma="x" %c]');
+  assert.equal(sketchTsv(sketch), "relation\tdirection\tlemma\tcount\tlogDice\nobj\tdependent\tbone\t1\t13.41\nnsubj\tdependent\tcat\t3\t12.50");
+});

@@ -1086,6 +1086,17 @@ body::before {
 .pg-chart .text-start { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .pg-chart .curve { fill: none; stroke: var(--accent); stroke-width: 2; }
 .pg-chart .tick, .pg-chart .axis { font-size: 10px; fill: var(--muted); }
+.ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; overflow: auto; min-height: 0; }
+.ws-group { border: 1px solid var(--line); border-radius: var(--radius, 8px); padding: 6px 8px; background: var(--surface-raised); }
+.ws-head { font-size: var(--text-sm); margin: 0 0 4px; font-weight: 600; }
+.ws-total { color: var(--muted); font-weight: normal; }
+.ws-items { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.ws-items td, .ws-items th { padding: 1px 2px; }
+.ws-items th { font-size: var(--text-xs); color: var(--muted); font-weight: normal; text-align: left; }
+.ws-items th.num { text-align: right; }
+.ws-head { margin-bottom: 2px; }
+.ws-items td.num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+.panel-wordsketch .ws-lemma { flex: 1; min-width: 8em; }
 .panel-notes .nt-list { overflow: auto; flex: 1; min-height: 0; }
 .panel-notes .nt-head { font-family: var(--font-display); font-size: 15px; margin: 12px 0 4px; }
 .panel-notes .nt-item { padding: 6px 0; border-bottom: 1px solid var(--line); }

@@ -48,6 +48,7 @@ PANELS = [
     ("affixes", "Affixes"),
     ("wordtypes", "Words to gloss"),
     ("notes", "Notes"),
+    ("wordsketch", "Word sketch"),
     ("orthography", "Orthography"),
     ("assist", "Speech assist"),
     ("people", "People"),
@@ -597,6 +598,14 @@ def main():
             run.shot("state-growth", run.page.locator(".panel-progress"))
             if "flattening" not in run.page.locator(".panel-progress .pg-growth").inner_text():
                 failures.append("Progress did not describe the vocabulary growth")
+            # Word sketch: a lemma's company by relation.
+            run.front("wordsketch", "Word sketch")
+            run.page.locator(".panel-wordsketch .ws-lemma").fill("eat")
+            run.page.locator(".panel-wordsketch .ws-lemma").press("Enter")
+            run.page.locator(".panel-wordsketch .ws-group").first.wait_for()
+            run.shot("state-wordsketch", run.page.locator(".panel-wordsketch"))
+            if "Objects of «eat»" not in run.page.locator(".panel-wordsketch").inner_text():
+                failures.append("Word sketch did not name the objects")
             # Notes: every note in one list, questions only.
             run.front("notes", "Notes")
             run.page.locator(".panel-notes .nt-item").first.wait_for()

@@ -1012,6 +1012,12 @@ Choose the tagger under **Tagger…**. **Automatic** uses UDPipe on this compute
 
 Only sentences with no tags yet are sent. Sentences you corrected or imported with tags keep theirs. For words you already split in the Gloss panel, the tags are added to your words and your glosses stay. A sentence whose words you split differently from the tagger is left alone, and wugs tells you how many. Check the result: a tagger's guess is a start, not an answer.
 
+### Sketch a word's grammatical company
+
+Once sentences are parsed, the **Word sketch** panel shows a lemma's company by grammatical relation, as Sketch Engine's word sketches do: the objects and subjects of a verb, the adjectives and determiners of a noun, the verbs a noun is the object of. It is a tab beside Search in Scrolls; in Tongues press **Ctrl+K** and choose **Show Word sketch**.
+
+Type a lemma and press **Sketch**. Each relation is a box with the words found in it, how often (**n**) and their logDice, Sketch Engine's association score (14 when the two always come together, lower the more each also turns up apart), strongest first. Click a word to see the lines with both in the Concordance. Only parsed sentences count, punctuation is left out, and **Copy table** copies every relation and word.
+
 ## Count words, morphs and glosses
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.

@@ -28,6 +28,7 @@ enabled = [
   "frequencies",                   # how often each word, morph or gloss occurs
   "collocates",                    # which words keep company with a word
   "keywords",                      # which words set a text apart from the others
+  "wordsketch",                    # a lemma's subjects, objects and modifiers, from the dependency trees
   "search",
   "gloss",                         # morph analysis of one sentence
   "sentence",                      # one sentence's tags and dependency tree, to correct
@@ -44,6 +45,7 @@ panels = [
   { panel = "frequencies", place = "tab", of = "search" },
   { panel = "collocates", place = "tab", of = "search" },
   { panel = "keywords", place = "tab", of = "search" },
+  { panel = "wordsketch", place = "tab", of = "search" },
   { panel = "lexicon", place = "tab", of = "search" },
   { panel = "transcribe", place = "below", of = "concordance", height = 280 },
   { panel = "gloss", place = "right", of = "transcribe", width = 460 },
