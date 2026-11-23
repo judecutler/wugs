@@ -1092,6 +1092,13 @@ body::before {
 .il-title { margin: 0 0 2px; font-family: var(--font-display); }
 .il-bar { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin: 4px 0 2px; }
 .il-only { display: inline-flex; gap: 6px; align-items: center; }
+.il-abbr { margin: 6px 0 8px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--emphasis); }
+.il-abbr-list { list-style: none; margin: 6px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 14px; }
+.il-abbr-row { display: grid; grid-template-columns: 4.5em 1fr; gap: 6px; align-items: center; }
+.il-abbr-code { font-weight: 600; overflow-wrap: anywhere; }
+.il-abbr-row input { min-width: 0; }
+.il-abbr-unknown .il-abbr-code { color: var(--warn); }
+.il-abbr-warn { color: var(--warn); }
 .il-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
 .il-row { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; align-items: start; padding: 6px 8px; border-radius: var(--radius-md); cursor: pointer; }
 .il-row:hover { background: var(--panel); }
@@ -1104,7 +1111,7 @@ body::before {
 .il-form { font-family: var(--font-ipa); font-weight: 600; color: var(--ink); }
 .il-morphs { font-family: var(--font-ipa); font-style: italic; color: var(--ink); min-height: 1.2em; }
 .il-gloss { color: var(--ink); min-height: 1.2em; }
-.il-gloss .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
+.il-gloss .sc, .il-abbr-code { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
 .il-plain { margin: 0; font-family: var(--font-ipa); color: var(--ink); }
 .il-unglossed .il-plain { color: var(--muted); }
 .il-tr { margin: 3px 0 0; color: var(--muted); }

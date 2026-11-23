@@ -41,3 +41,19 @@ test("numbers follow the tier as Copy example numbers it, and unglossed sentence
   assert.equal(glossed({ number: 1, translation: null, words: [{ form: "x", morphs: [] }] }), false);
   assert.equal(glossed(ex(1)), true);
 });
+
+test("the abbreviations follow the examples in every format", () => {
+  const list = [
+    { abbr: "1", meaning: "first person", source: "leipzig" as const },
+    { abbr: "SG", meaning: "singular", source: "leipzig" as const },
+    { abbr: "AV", meaning: null, source: "none" as const },
+  ];
+  const tex = textDocument("T", [ex(1)], "expex", list).contents;
+  assert.match(tex, /\\section\*\{Abbreviations\}\n\\begin\{tabular\}\{@\{\}ll@\{\}\}\n\\textsc\{1\} & first person \\\\\n\\textsc\{sg\} & singular \\\\\n\\textsc\{av\} & \? \\\\\n\\end\{tabular\}\n\n\\end\{document\}/u);
+  const html = textDocument("T", [ex(1)], "word", list).contents;
+  assert.ok(html.indexOf("<h2>Abbreviations</h2>") > html.indexOf("(1)"));
+  assert.match(html, /80%">SG<\/span><\/td><td style="border: none">singular/u);
+  const txt = textDocument("T", [ex(1)], "text", list).contents;
+  assert.match(txt, /\n\nAbbreviations\n\n1   first person\nSG  singular\nAV  \?\n$/u);
+  assert.doesNotMatch(textDocument("T", [ex(1)], "text").contents, /Abbreviations/u, "none given, none listed");
+});
