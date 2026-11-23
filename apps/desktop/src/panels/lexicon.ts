@@ -6,7 +6,7 @@
 // entry's paradigm (roadmap item 50) is its own view, fetched for the chosen
 // template and returned whole by every form edit.
 import {
-  concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddSense, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
+  concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
   lexiconDeleteForm, lexiconFillCell, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain,
   type DomainItem, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
@@ -352,6 +352,31 @@ export const lexiconPanel: PanelDef = {
         row("Lemma", cell(`lemma:${e.id}`, e.lemma, "Lemma", setField("lemma"))),
         row("Citation", cell(`cit:${e.id}`, e.citation, "Citation form", setField("citation"), { placeholder: "if it differs from the lemma" })),
         row("Category", cell(`pos:${e.id}`, e.posOfSpeech, "Part of speech", setField("pos-of-speech"), { placeholder: "n, v, adj…" })),
+        row(
+          "Other forms",
+          h(
+            "div",
+            { className: "lx-forms" },
+            ...e.allomorphs.map(([formId, form]) =>
+              h(
+                "span",
+                { className: "lx-chip", title: "Another spelling of this entry (an allomorph): glossing finds it like the lemma" },
+                `${form} `,
+                h("button", {
+                  type: "button",
+                  className: "lx-x",
+                  ariaLabel: `Remove ${form}`,
+                  textContent: "×",
+                  onclick: () => void run(() => lexiconDeleteAllomorph({ id: e.id, formId }), true),
+                }),
+              ),
+            ),
+            cell(`allo:${e.id}`, "", "Add another form", (v) => (v.trim() === "" ? Promise.resolve() : run(() => lexiconAddAllomorph({ id: e.id, form: v }), true)), {
+              placeholder: e.allomorphs.length === 0 ? "allomorphs: -lar, ew…" : "add another",
+              size: 14,
+            }),
+          ),
+        ),
         row("Homograph", homograph),
         note === null
           ? null

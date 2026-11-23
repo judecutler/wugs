@@ -404,6 +404,8 @@ export type EntryView = {
   senses: SenseView[];
   /** Other entries with exactly this lemma: [id, homograph]. */
   sameLemma: [string, number | null][];
+  /** Other spellings of the entry (allomorphs): [form id, surface]. */
+  allomorphs: [string, string][];
 };
 export type EntryEdit = { entry: EntryView | null; notes: string[] };
 export type DomainItem = { id: string; code: string; label: string; description: string; depth: number };
@@ -422,6 +424,8 @@ export const lexiconSetSenseGloss = (args: { senseId: string; gloss: string; lan
   invoke<EntryEdit>("lexicon_set_sense_gloss", args);
 export const lexiconSetSenseText = (args: { senseId: string; field: "definition" | "usage"; text: string }) =>
   invoke<EntryEdit>("lexicon_set_sense_text", args);
+export const lexiconAddAllomorph = (args: { id: string; form: string }) => invoke<EntryEdit>("lexicon_add_allomorph", args);
+export const lexiconDeleteAllomorph = (args: { id: string; formId: string }) => invoke<EntryEdit>("lexicon_delete_allomorph", args);
 export const lexiconDeleteSense = (args: { senseId: string }) => invoke<EntryEdit>("lexicon_delete_sense", args);
 export const lexiconAssignDomain = (args: { senseId: string; domainId: string }) => invoke<EntryEdit>("lexicon_assign_domain", args);
 export const lexiconUnassignDomain = (args: { senseId: string; domainId: string }) => invoke<EntryEdit>("lexicon_unassign_domain", args);

@@ -169,7 +169,7 @@ impl Inventory {
 impl Project {
     /// The morphs this project knows: every live morph of a live token with a
     /// surface (counted by use), and every live lexicon entry's lemma with its
-    /// first sense (an affix by the marker it is written with).
+    /// first sense (an affix by the marker it is written with), and its allomorphs.
     pub fn morph_inventory(&self) -> Result<Inventory, String> {
         let mut inv = Inventory::default();
         for morph in self.proj.entities_of_kind("morph")? {
@@ -208,6 +208,17 @@ impl Project {
                 }
             }
             let spec = MorphSpec { surface, morph_type: type_of_lemma(&lemma).to_string(), gloss, glosses_by_lang, sense: Some(sense) };
+            // Its allomorphs (`-lar` beside `-ler`) are the same morph spelled another way;
+            // one written without a marker takes the lemma's type.
+            for (_, other) in self.allomorphs(&lexeme)? {
+                let bare = other.trim().trim_matches(|c| wugs_model::MARKERS.contains(&c)).to_string();
+                if bare.is_empty() {
+                    continue;
+                }
+                let own = type_of_lemma(&other);
+                let morph_type = if own == "root" { spec.morph_type.clone() } else { own.to_string() };
+                inv.add(wugs_model::lexicon_key(&self.proj.nfc(&other)), MorphSpec { surface: bare, morph_type, ..spec.clone() }, 0);
+            }
             inv.add(wugs_model::lexicon_key(&self.proj.nfc(&lemma)), spec, 0);
         }
         Ok(inv)

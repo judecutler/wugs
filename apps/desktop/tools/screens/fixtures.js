@@ -230,6 +230,7 @@
         posOfSpeech: "v",
         homograph: null,
         sameLemma,
+        allomorphs: [["frm-kan", "kan"], ["frm-hani", "hani"]],
         senses: [
           {
             id: "sense-kani-1",
@@ -251,6 +252,7 @@
       posOfSpeech: row.posOfSpeech,
       homograph: row.homograph,
       sameLemma,
+      allomorphs: [],
       senses: row.glosses.map((g, i) => ({ id: `sense-${row.id}-${i}`, gloss: g, glossesByLang: {}, definition: "", usage: "", domains: row.posOfSpeech === "num" ? [domainRef("dom-8.1.1.1")] : [], occurrences: i === 0 ? 2 : 0 })),
     };
   }
