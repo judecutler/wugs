@@ -557,6 +557,18 @@ The **Concordance** panel lists every place a word is used, one line per occurre
 
 Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
 
+### See where it occurs across your texts
+
+Click **Plot** beside the search box to see, text by text, where the word, morph or gloss occurs, as AntConc's Plot does. Each text gets a bar as long as the text, with a mark at every occurrence, its count and its rate per 1000 words.
+
+The line above the bars says how evenly it is spread, as Gries's DP: 0 means it occurs in step with each text's size, and 1 means it all sits in one text. A word that seems frequent but sits in one text tells you about that text, not about the language.
+
+- Order the texts as they are, by most matches, or by highest rate.
+- Click a text to see its lines in the Concordance.
+- **Copy rows** copies the plot as a table: each text, its words, its matches, the rate and the word positions.
+
+The plot works for words, morphs, glosses and translation words, not CQP queries.
+
 ### Search with CQP queries
 
 Choose **CQP query** to search the way CQPweb, Sketch Engine and NoSketch Engine do. Each token goes in square brackets, and a query can be several tokens in a row:

@@ -406,6 +406,13 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+            # The Plot view: where in each text, and how evenly.
+            run.page.locator(".panel-concordance .cc-bar button", has_text="Plot").click()
+            run.page.wait_for_timeout(500)
+            run.shot("state-concordance-plot", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance .cc-plot-row").count() != 3:
+                failures.append("the concordance plot did not show one row per text with words")
+            run.page.locator(".panel-concordance .cc-bar button", has_text="Plot").click()
 
             # Media bin (roadmap 66): a card dragged onto the Timeline is used for the text on screen.
             run.front("media", "Media")

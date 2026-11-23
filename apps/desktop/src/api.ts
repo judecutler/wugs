@@ -80,6 +80,9 @@ export const keywords = (args: { kind: "word" | "translation"; textId: string | 
 export const sentenceGet = (args: { textId: string; segmentId: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_get", args);
 export const sentenceSet = (args: { textId: string; segmentId: string; tokenId: string; column: string; value: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_set", args);
 export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null; within?: import("./metadata/logic").Where | null }) => invoke<ConcordanceResult>("concordance", args);
+/** Where an item occurs, text by text, and how evenly (src-tauri/src/dispersion.rs): the Concordance's Plot. */
+export const dispersion = (args: { query: string; kind: import("./concordance/logic").ConcordanceKind; exact?: boolean; textId?: string | null; within?: import("./metadata/logic").Where | null }) =>
+  invoke<import("./concordance/plot").Dispersion>("dispersion", args);
 /** A CQP-style query over tokens and their annotation (src-tauri/src/cqp.rs); a query that does not parse is refused with what and where. */
 export const concordanceQuery = (args: { query: string; textId?: string | null }) => invoke<ConcordanceResult>("concordance_query", args);
 /** The tutorial project (roadmap 68), built the first time in this computer's app data. */

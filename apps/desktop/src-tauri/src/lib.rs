@@ -5,6 +5,7 @@ pub mod concordance;
 pub mod cqp;
 pub mod cwb;
 pub mod dictionary;
+pub mod dispersion;
 pub mod collocates;
 pub mod frequencies;
 pub mod keywords;
@@ -143,6 +144,13 @@ fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>,
 fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>, within: Option<concordance::Where>) -> Result<concordance::Concordance, String> {
     let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
     s.run(move |s| concordance::concordance_in(s, &query, kind, how, &concordance::Scope::of(text_id, within)))
+}
+
+/// Where an item occurs, text by text, and how evenly (AntConc's Plot; `src/dispersion.rs`).
+#[tauri::command(async)]
+fn dispersion(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>, within: Option<concordance::Where>) -> Result<dispersion::Dispersion, String> {
+    let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
+    s.run(move |s| dispersion::dispersion(s, &query, kind, how, &concordance::Scope::of(text_id, within)))
 }
 
 /// A CQP-style query over the sentences' tokens and their annotation (`src/cqp.rs`).
@@ -1570,6 +1578,7 @@ pub fn run() {
             open_sample,
             concordance,
             concordance_query,
+            dispersion,
             text_metadata,
             set_text_metadata,
             import_metadata,
