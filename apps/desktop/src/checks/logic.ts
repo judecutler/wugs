@@ -52,3 +52,46 @@ export function addedLine(a: Added): string {
   if (a.entries === 0) return "Nothing to add any more.";
   return `Added ${n(a.entries, "entry", "entries")} with ${n(a.senses, "sense", "senses")}, and linked ${n(a.linked, "use", "uses")} in the texts to them.`;
 }
+
+/** One character the project uses (src-tauri/src/characters.rs). */
+export type Place = { textId: string; textTitle: string; tierId: string; segmentId: string; context: string };
+export type CharRow = {
+  ch: string;
+  code: string;
+  name: string;
+  script: string;
+  kind: "letter" | "mark" | "digit" | "space" | "invisible" | "other";
+  inTexts: number;
+  inLexicon: number;
+  place: Place | null;
+  entry: [string, string] | null;
+  flags: string[];
+};
+export type Inventory = { rows: CharRow[]; mainScript: string; notNfc: number };
+
+/** How a character is shown: a combining mark on a dotted circle, an
+ * invisible or space character by its code, since it would show as nothing. */
+export function glyph(r: Pick<CharRow, "ch" | "kind" | "code">): string {
+  if (r.kind === "mark") return `◌${r.ch}`;
+  if (r.kind === "invisible" || r.kind === "space") return r.code;
+  return r.ch;
+}
+
+/** Whether the Concordance can look a character up as `*c*`: a letter or
+ * mark that is not itself one of the pattern's wildcards. */
+export function findable(r: Pick<CharRow, "ch" | "kind">): boolean {
+  return (r.kind === "letter" || r.kind === "mark" || r.kind === "digit") && r.ch !== "*" && r.ch !== "?";
+}
+
+/** The line over the character inventory. */
+export function inventoryNote(inv: Inventory): string {
+  if (inv.rows.length === 0) return "No transcriptions or lexicon entries yet.";
+  const letters = inv.rows.filter((r) => r.kind === "letter").length;
+  const marks = inv.rows.filter((r) => r.kind === "mark").length;
+  const odd = inv.rows.filter((r) => r.flags.length > 0).length;
+  const script = inv.mainScript === "" ? "" : `, mostly ${inv.mainScript}`;
+  const parts = [`${n(inv.rows.length, "character", "characters")} in use: ${n(letters, "letter", "letters")}${script}${marks > 0 ? `, ${n(marks, "combining mark", "combining marks")}` : ""}.`];
+  parts.push(odd === 0 ? "Nothing looks like a slip." : `${n(odd, "is", "are")} worth a look:`);
+  if (inv.notNfc > 0) parts.push(`${n(inv.notNfc, "transcription or headword is", "transcriptions or headwords are")} stored decomposed (from an older import); they still match, but other tools may count them apart.`);
+  return parts.join(" ");
+}

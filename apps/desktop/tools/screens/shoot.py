@@ -495,6 +495,14 @@ def main():
             if run.page.locator(".panel-interlinear .il-selected").count() != 1:
                 failures.append("Next to gloss selected no sentence")
             run.page.locator(".panel-interlinear .il-only input").uncheck()
+            # Checks: the character inventory, a Cyrillic letter among Latin ones flagged.
+            run.front("checks", "Checks")
+            run.page.locator(".panel-checks .ck-char").first.wait_for()
+            run.page.locator(".panel-checks button", has_text="Every character").click()
+            run.page.locator(".panel-checks .ck-chars").scroll_into_view_if_needed()
+            run.shot("state-characters", run.page.locator(".panel-checks"))
+            if run.page.locator(".panel-checks .ck-chars tbody tr").count() != 8:
+                failures.append("Every character did not list the inventory")
             # Elicit: answers heard in the Timeline's selected segment.
             run.front("elicit", "Elicit")
             run.page.locator(".panel-elicit .el-sound input").check()

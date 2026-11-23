@@ -660,6 +660,25 @@
       ] },
     ],
     gloss_unify: () => 1,
+    // The character inventory: a Cyrillic «а» typed among Latin letters, and two apostrophes.
+    character_inventory: () => {
+      const place = (context) => ({ textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u02", context });
+      const row = (ch, code, name, script, kind, inTexts, inLexicon, flags = [], where = null) => ({ ch, code, name, script, kind, inTexts, inLexicon, place: where, entry: null, flags });
+      return {
+        mainScript: "Latin",
+        notNfc: 0,
+        rows: [
+          row("а", "U+0430", "cyrillic small letter a", "Cyrillic", "letter", 1, 0, ["A Cyrillic letter among Latin ones: often typed by mistake for a look-alike.", "Used only once."], place("kesi mоpа")),
+          row("'", "U+0027", "apostrophe", "Common", "other", 3, 0, ["Looks like «ʼ» (modifier letter apostrophe), which the project also uses."], place("ta'a tela")),
+          row("ʼ", "U+02BC", "modifier letter apostrophe", "Common", "letter", 14, 6, ["Looks like «'» (apostrophe), which the project also uses."], place("taʼa senu")),
+          row("a", "U+0061", "latin small letter a", "Latin", "letter", 212, 48),
+          row("k", "U+006B", "latin small letter k", "Latin", "letter", 96, 21),
+          row("ŋ", "U+014B", "latin small letter eng", "Latin", "letter", 40, 9),
+          row("ɾ", "U+027E", "latin small letter r with fishhook", "Latin", "letter", 18, 4),
+          row("\u0301", "U+0301", "combining acute accent", "Inherited", "mark", 7, 2),
+        ],
+      };
+    },
     gloss_missing: () => [
       { surface: "haru", key: "haru", total: 6, variants: [
         { gloss: "stone", count: 5, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "u01" },

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addedLine, addLabel, cardNote, missingSummary, summary, unifiedLine, useLabel, type Inconsistent } from "./logic.ts";
+import { addedLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
 
 const v = (gloss: string, count: number) => ({ gloss, count, textId: "t", textTitle: "T", tierId: "u", segmentId: "s" });
 const ka: Inconsistent = { surface: "ka", kind: "suffix", key: "ka", total: 3, variants: [v("PL", 2), v("pl.", 1)], slip: true };
@@ -29,4 +29,19 @@ test("roots with no entry are counted and added in words", () => {
   assert.equal(addLabel(rows[1]!), "Add to lexicon");
   assert.equal(addedLine({ entries: 1, senses: 2, linked: 3 }), "Added 1 entry with 2 senses, and linked 3 uses in the texts to them.");
   assert.equal(addedLine({ entries: 0, senses: 0, linked: 0 }), "Nothing to add any more.");
+});
+
+test("the character inventory reads in words", () => {
+  const row = (ch: string, kind: CharRow["kind"], flags: string[] = []): CharRow => ({ ch, code: `U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}`, name: "", script: "Latin", kind, inTexts: 1, inLexicon: 0, place: null, entry: null, flags });
+  assert.equal(glyph(row("́", "mark")), "◌́");
+  assert.equal(glyph(row(" ", "invisible")), "U+00A0");
+  assert.equal(glyph(row("ɡ", "letter")), "ɡ");
+  assert.equal(findable(row("ɡ", "letter")), true);
+  assert.equal(findable(row("?", "other")), false);
+  assert.equal(findable(row(",", "other")), false);
+  const inv: Inventory = { rows: [row("a", "letter"), row("а", "letter", ["A Cyrillic letter among Latin ones."]), row("́", "mark")], mainScript: "Latin", notNfc: 0 };
+  assert.equal(inventoryNote(inv), "3 characters in use: 2 letters, mostly Latin, 1 combining mark. 1 is worth a look:");
+  assert.equal(inventoryNote({ ...inv, rows: [row("a", "letter"), row("b", "letter")] }), "2 characters in use: 2 letters, mostly Latin. Nothing looks like a slip.");
+  assert.match(inventoryNote({ ...inv, notNfc: 2 }), /2 transcriptions or headwords are stored decomposed/u);
+  assert.equal(inventoryNote({ rows: [], mainScript: "", notNfc: 0 }), "No transcriptions or lexicon entries yet.");
 });
