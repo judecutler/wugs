@@ -18,7 +18,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::concordance::{Read, bare, each_segment, morphs_of, Kind};
+use crate::concordance::{Read, Scope, bare, each_segment, morphs_of, Kind};
 use crate::session::{project, Session};
 
 #[derive(Debug, Serialize)]
@@ -57,8 +57,8 @@ struct Tally {
     texts: Vec<String>,
 }
 
-pub fn frequencies(session: &mut Session, kind: Kind, text: Option<&str>) -> Result<Frequencies, String> {
-    frequencies_of(session, kind, text, 1)
+pub fn frequencies(session: &mut Session, kind: Kind, scope: &Scope) -> Result<Frequencies, String> {
+    frequencies_of(session, kind, scope, 1)
 }
 
 /// The longest word sequence an n-gram list counts.
@@ -71,7 +71,7 @@ pub const MAX_N: usize = 5;
 /// several words meets them in a row). Sequences met only once are left out
 /// (`once` says how many), as almost every sequence occurs once and would
 /// crowd the list; `words` is the running word count rates are taken from.
-pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, size: usize) -> Result<Frequencies, String> {
+pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: usize) -> Result<Frequencies, String> {
     if kind == Kind::Sense {
         return Err("a frequency list counts words, morphs, glosses or translation words".into());
     }
@@ -101,7 +101,7 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, text: Option<&str>, siz
             t.texts.push(text.to_string());
         }
     };
-    each_segment(p, Read::of(kind), text, |seg| {
+    each_segment(p, Read::of(kind), scope, |seg| {
         match kind {
             Kind::Word | Kind::Translation => {
                 let words: Vec<(String, String)> = seg
@@ -179,37 +179,43 @@ mod tests {
         let view = crate::gloss::gloss_tokenize(&mut session, &text, &seg, &forms).unwrap().view;
         let m = |surface: &str, kind: &str| crate::gloss::MorphSpecView { surface: surface.into(), morph_type: kind.into(), gloss: Some("PL".into()), glosses_by_lang: Default::default(), sense: None };
         crate::gloss::gloss_apply(&mut session, &text, &seg, &view.words[2].id, vec![m("lo", "reduplication"), m("lo", "root")]).unwrap();
-        let words = frequencies(&mut session, Kind::Word, None).unwrap();
+        let words = frequencies(&mut session, Kind::Word, &Scope::all()).unwrap();
         assert!(words.tokens > 0 && words.types <= words.tokens);
         // Every row's count is what the Concordance finds for that exact item,
         // in the whole project and in the one text.
         for kind in [Kind::Word, Kind::Morph, Kind::Gloss, Kind::Translation] {
-            for scope in [None, Some(text.as_str())] {
-                for row in frequencies(&mut session, kind, scope).unwrap().rows {
-                    let found = crate::concordance::concordance_in(&mut session, &row.item, kind, crate::concordance::Match::Exact, scope).unwrap().total;
+            for scope in [Scope::all(), Scope::text(&text)] {
+                for row in frequencies(&mut session, kind, &scope).unwrap().rows {
+                    let found = crate::concordance::concordance_in(&mut session, &row.item, kind, crate::concordance::Match::Exact, &scope).unwrap().total;
                     assert_eq!(found, row.count, "{kind:?} {}", row.item);
                 }
             }
         }
-        let lo = frequencies(&mut session, Kind::Morph, None).unwrap().rows.into_iter().find(|r| r.item == "lo").unwrap();
+        let lo = frequencies(&mut session, Kind::Morph, &Scope::all()).unwrap().rows.into_iter().find(|r| r.item == "lo").unwrap();
         assert_eq!(lo.count, 1, "a word with lo twice counts once");
         assert!(words.rows.windows(2).all(|w| w[0].count >= w[1].count), "most frequent first");
-        let morphs = frequencies(&mut session, Kind::Morph, None).unwrap();
+        let morphs = frequencies(&mut session, Kind::Morph, &Scope::all()).unwrap();
         let kani = morphs.rows.iter().find(|r| r.item == "kani").expect("kani counted");
         assert_eq!(kani.count, 1);
         let ni = morphs.rows.iter().find(|r| r.item == "ni").expect("markers dropped");
         assert_eq!(ni.texts, 1);
-        assert!(frequencies(&mut session, Kind::Gloss, None).unwrap().rows.iter().any(|r| r.item == "1SG"));
-        let t = frequencies(&mut session, Kind::Translation, None).unwrap();
+        assert!(frequencies(&mut session, Kind::Gloss, &Scope::all()).unwrap().rows.iter().any(|r| r.item == "1SG"));
+        let t = frequencies(&mut session, Kind::Translation, &Scope::all()).unwrap();
         assert!(t.rows.iter().any(|r| r.item.eq_ignore_ascii_case("three")));
         // One text: the sample has one, so it is the whole project.
-        assert_eq!(frequencies(&mut session, Kind::Word, Some(&text)).unwrap().tokens, words.tokens);
-        assert_eq!(frequencies(&mut session, Kind::Word, Some("txt_none")).unwrap().tokens, 0);
-        assert!(frequencies(&mut session, Kind::Sense, None).is_err());
+        assert_eq!(frequencies(&mut session, Kind::Word, &Scope::text(&text)).unwrap().tokens, words.tokens);
+        assert_eq!(frequencies(&mut session, Kind::Word, &Scope::text("txt_none")).unwrap().tokens, 0);
+        // Texts picked by a detail: the one text with it, then none.
+        crate::metadata::set_text_metadata(&mut session, &text, "Genre", "counting").unwrap();
+        let by = |value: &str| Scope::of(None, Some(crate::concordance::Where { key: "genre".into(), value: value.into() }));
+        assert_eq!(frequencies(&mut session, Kind::Word, &by("counting")).unwrap().tokens, words.tokens);
+        assert_eq!(frequencies(&mut session, Kind::Word, &by("news")).unwrap().tokens, 0);
+        assert_eq!(crate::concordance::concordance_in(&mut session, "wʌn", Kind::Word, crate::concordance::Match::Exact, &by("news")).unwrap().total, 0);
+        assert!(frequencies(&mut session, Kind::Sense, &Scope::all()).is_err());
         // Bigrams: one per pair of words in a row, never across segments.
         crate::session::add_segment(&mut session, &text, None, Some(20_000.0), Some(20_900.0), "Ka?a kaba").unwrap();
-        let words = frequencies(&mut session, Kind::Word, None).unwrap();
-        let bi = frequencies_of(&mut session, Kind::Word, None, 2).unwrap();
+        let words = frequencies(&mut session, Kind::Word, &Scope::all()).unwrap();
+        let bi = frequencies_of(&mut session, Kind::Word, &Scope::all(), 2).unwrap();
         assert!(bi.rows.iter().any(|r| r.item.to_lowercase() == "ka?a kaba" && r.count == 2), "case folded together");
         let segments: usize = crate::concordance::tests_word_counts(&mut session).iter().map(|n| n.saturating_sub(1)).sum();
         assert_eq!(bi.tokens, segments);
@@ -217,11 +223,11 @@ mod tests {
         assert_eq!(bi.words, words.tokens);
         // A sequence's count is the Concordance's lines for it, met in a row.
         for row in bi.rows.iter().take(20) {
-            let found = crate::concordance::concordance_in(&mut session, &row.item, Kind::Word, crate::concordance::Match::Exact, None).unwrap().total;
+            let found = crate::concordance::concordance_in(&mut session, &row.item, Kind::Word, crate::concordance::Match::Exact, &Scope::all()).unwrap().total;
             assert_eq!(found, row.count, "{}", row.item);
         }
-        assert!(frequencies_of(&mut session, Kind::Morph, None, 2).is_err());
-        assert!(frequencies_of(&mut session, Kind::Word, None, 6).is_err());
+        assert!(frequencies_of(&mut session, Kind::Morph, &Scope::all(), 2).is_err());
+        assert!(frequencies_of(&mut session, Kind::Word, &Scope::all(), 6).is_err());
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

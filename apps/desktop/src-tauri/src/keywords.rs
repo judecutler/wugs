@@ -28,7 +28,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::concordance::{Read, each_segment, Kind};
+use crate::concordance::{Read, Scope, each_segment, Kind};
 use crate::session::{project, Session};
 
 #[derive(Debug, Serialize)]
@@ -70,15 +70,20 @@ struct Tally {
     spellings: Vec<(String, usize)>,
 }
 
-pub fn keywords(session: &mut Session, kind: Kind, text: &str, min_count: usize) -> Result<Keywords, String> {
+pub fn keywords(session: &mut Session, kind: Kind, target: &Scope, min_count: usize) -> Result<Keywords, String> {
     if !matches!(kind, Kind::Word | Kind::Translation) {
         return Err("keywords are counted between words or translation words".into());
     }
+    if target.is_all() {
+        return Err("keywords compare a text, or the texts a detail picks, with the rest".into());
+    }
     let p = project(session)?;
+    let picked = target.picked(p)?;
+    let here_of = |text: &str| target.text.as_deref().is_none_or(|t| t == text) && picked.as_ref().is_none_or(|set| set.contains(text));
     let mut tallies: HashMap<String, Tally> = HashMap::new();
     let (mut c, mut d) = (0usize, 0usize);
-    each_segment(p, Read::of(kind), None, |seg| {
-        let here = seg.text == text;
+    each_segment(p, Read::of(kind), &Scope::all(), |seg| {
+        let here = here_of(&seg.text);
         for w in &seg.words {
             let spelling = p.proj.nfc(w);
             let key = wugs_model::fold_key(&spelling);
@@ -211,7 +216,13 @@ mod tests {
         for (i, line) in ["the fox drank", "the fox ran", "Fox slept"].iter().enumerate() {
             crate::session::add_segment(&mut session, &fox, None, Some(i as f64 * 1000.0), Some(i as f64 * 1000.0 + 900.0), line).unwrap();
         }
-        let k = keywords(&mut session, Kind::Word, &fox, 1).unwrap();
+        let k = keywords(&mut session, Kind::Word, &Scope::text(&fox), 1).unwrap();
+        // The same texts picked by a detail give the same list.
+        crate::metadata::set_text_metadata(&mut session, &fox, "genre", "fable").unwrap();
+        let by = Scope::of(None, Some(crate::concordance::Where { key: "Genre".into(), value: "fable".into() }));
+        let k2 = keywords(&mut session, Kind::Word, &by, 1).unwrap();
+        assert_eq!((k2.focus_tokens, k2.reference_tokens), (k.focus_tokens, k.reference_tokens));
+        assert!(keywords(&mut session, Kind::Word, &Scope::all(), 1).is_err(), "keywords need something to compare");
         assert_eq!(k.focus_tokens, 8);
         assert!(k.reference_tokens > 0);
         assert_eq!(k.rows[0].item.to_lowercase(), "fox", "most key first");
@@ -219,10 +230,10 @@ mod tests {
         assert!(k.rows.last().unwrap().log_likelihood < 0.0, "the sample's words are negative keywords of «Fox»");
         // The minimum applies to the side a word leans to: a word used less
         // here survives on its count in the rest.
-        let two = keywords(&mut session, Kind::Word, &fox, 2).unwrap();
+        let two = keywords(&mut session, Kind::Word, &Scope::text(&fox), 2).unwrap();
         assert!(two.rows.iter().all(|r| if r.log_likelihood >= 0.0 { r.focus >= 2 } else { r.reference >= 2 }));
         assert!(two.critical > 3.84);
-        assert!(keywords(&mut session, Kind::Gloss, &sample, 1).is_err());
+        assert!(keywords(&mut session, Kind::Gloss, &Scope::text(&sample), 1).is_err());
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

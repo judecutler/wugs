@@ -365,6 +365,16 @@ def main():
             run.shot("state-frequencies-ngrams", run.page.locator(".panel-frequencies"))
             if "nikani ŋai" not in run.page.locator(".panel-frequencies .fq-table").inner_text():
                 failures.append("two-word sequences did not show")
+            # Texts picked by a detail are offered beside the texts.
+            scope = run.page.locator(".panel-frequencies .fq-scope")
+            if "Genre: narrative (2 texts)" not in scope.inner_text():
+                failures.append("the scope picker does not offer texts by detail")
+            else:
+                scope.select_option(label="Genre: narrative (2 texts)")
+                run.page.wait_for_timeout(400)
+                run.shot("state-frequencies-detail", run.page.locator(".panel-frequencies"))
+            if "Speaker:" in scope.inner_text():
+                failures.append("a detail every text shares is offered as a scope")
             # Collocates (Scrolls): a word's company, a row opens its Concordance.
             run.front("collocates", "Collocates")
             run.page.locator(".panel-collocates .co-node").fill("nikani")

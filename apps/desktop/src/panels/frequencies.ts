@@ -1,6 +1,7 @@
 // Frequencies (Scrolls, SCROLLS.md §5 step 3): how often each word, morph,
 // gloss or translation word occurs, in the whole project or one text. A row
 // opens the Concordance on that item, so every count can be checked line by line.
+import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, frequencies } from "../api";
 import { KINDS, type ConcordanceKind } from "../concordance/logic";
@@ -33,7 +34,7 @@ export const frequenciesPanel: PanelDef = {
     let countedAt = "";
     let seq = 0;
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Count" });
-    const scopePicker = h("select", { className: "fq-scope", title: "Count in the whole project or one text" });
+    const scopePicker = h("select", { className: "fq-scope", title: "Count in the whole project, one text, or the texts with one detail (add details in the Texts panel)" });
     scopePicker.setAttribute("aria-label", "Where to count");
     let size = 1;
     const sizer = h(
@@ -75,11 +76,7 @@ export const frequenciesPanel: PanelDef = {
       );
 
     const drawScopes = () => {
-      const s = getState();
-      const texts = s.kind === "open" ? s.texts : [];
-      if (scope !== "" && !texts.some((t) => t.id === scope)) scope = "";
-      scopePicker.replaceChildren(h("option", { value: "", textContent: "Whole project" }), ...texts.map((t) => h("option", { value: t.id, textContent: t.title || t.id })));
-      scopePicker.value = scope;
+      scope = fillScopes(scopePicker, scope, drawScopes);
     };
 
     const shownRows = () => sortRows(filterRows(rankedRows, filter.value), sortBy);
@@ -111,8 +108,9 @@ export const frequenciesPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: perThousand(r.count, tokens) }),
               h("td", { className: "fq-num", textContent: String(r.texts) }),
             );
-            const text = scope === "" ? null : { id: scope, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
-            const open = () => askConcordance(r.item, kind, text);
+            const sc = scopeOf(scope);
+            const text = sc.textId === null ? null : { id: sc.textId, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
+            const open = () => askConcordance(r.item, kind, text, true, sc.within);
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
@@ -136,7 +134,8 @@ export const frequenciesPanel: PanelDef = {
       rankedRows = [];
       table.replaceChildren();
       try {
-        const r = await frequencies({ kind, textId: scope === "" ? null : scope, size: ngrams() ? size : 1 });
+        const sc = scopeOf(scope);
+        const r = await frequencies({ kind, textId: sc.textId, within: sc.within, size: ngrams() ? size : 1 });
         if (mine !== seq) return;
         data = r;
         rankedRows = ranked(r.rows);

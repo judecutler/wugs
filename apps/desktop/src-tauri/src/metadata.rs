@@ -49,6 +49,34 @@ pub fn set_text_metadata(s: &mut Session, text_id: &str, key: &str, value: &str)
     view(s, text_id)
 }
 
+/// One key's values across the project, for picking texts by a detail.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MetaValues {
+    pub key: String,
+    /// Each value with how many texts have it, most texts first, then by value.
+    pub values: Vec<(String, usize)>,
+}
+
+/// Every key the project's live texts use, by key, each with its values.
+pub fn metadata_values(s: &mut Session) -> Result<Vec<MetaValues>, String> {
+    let p = session::project(s)?;
+    let mut by: std::collections::BTreeMap<String, std::collections::BTreeMap<String, usize>> = Default::default();
+    for text in p.proj.entities_of_kind("text")? {
+        for (k, v) in p.text_metadata(&text)? {
+            *by.entry(k).or_default().entry(v).or_default() += 1;
+        }
+    }
+    Ok(by
+        .into_iter()
+        .map(|(key, values)| {
+            let mut values: Vec<(String, usize)> = values.into_iter().collect();
+            values.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+            MetaValues { key, values }
+        })
+        .collect())
+}
+
 /// What a metadata table brought in.
 #[derive(Debug, Serialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -175,6 +203,8 @@ mod tests {
         assert_eq!(v.keys.iter().find(|k| k.key == "genre").map(|k| k.texts), Some(2));
         let again = import_metadata(&mut s, &table).unwrap();
         assert_eq!((again.texts, again.fields), (0, 0), "the same table again writes nothing");
+        let values = metadata_values(&mut s).unwrap();
+        assert_eq!(values.iter().find(|m| m.key == "genre").map(|m| m.values.clone()), Some(vec![("conversation".to_string(), 1), ("narrative".to_string(), 1)]));
         let v = set_text_metadata(&mut s, &b, "Genre", "fable").unwrap();
         assert!(v.fields.contains(&MetaField { key: "genre".into(), value: "fable".into() }));
         drop(s);

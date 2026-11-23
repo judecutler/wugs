@@ -18,7 +18,7 @@
 //! session thread (about a second per 20k words in a debug build); typed
 //! tables (SCROLLS.md §2) are the fix once corpora grow.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use wugs_core::Project;
 
@@ -147,12 +147,64 @@ pub(crate) struct CorpusSegment {
 pub(crate) fn tests_word_counts(session: &mut Session) -> Vec<usize> {
     let p = project(session).unwrap();
     let mut out = Vec::new();
-    each_segment(p, Read::Words, None, |seg| {
+    each_segment(p, Read::Words, &Scope::all(), |seg| {
         out.push(seg.words.iter().filter(|w| !wugs_model::fold_key(&p.proj.nfc(w)).is_empty()).count());
         Ok(())
     })
     .unwrap();
     out
+}
+
+/// A document detail a corpus tool may pick texts by: texts whose
+/// metadata `key` (made with `metadata::key_of`) is exactly `value`.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Where {
+    pub key: String,
+    pub value: String,
+}
+
+/// Which texts a corpus tool reads: one text, the texts a detail picks,
+/// both together, or (neither) every text.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Scope {
+    pub text: Option<String>,
+    pub r#where: Option<Where>,
+}
+
+impl Scope {
+    pub fn all() -> Scope {
+        Scope::default()
+    }
+
+    pub fn text(id: &str) -> Scope {
+        Scope { text: Some(id.to_string()), r#where: None }
+    }
+
+    pub fn of(text: Option<String>, r#where: Option<Where>) -> Scope {
+        Scope { text: text.filter(|t| !t.is_empty()), r#where }
+    }
+
+    /// Whether it reads every text.
+    pub fn is_all(&self) -> bool {
+        self.text.is_none() && self.r#where.is_none()
+    }
+
+    /// The texts it keeps, worked out once: None keeps every text.
+    pub(crate) fn picked(&self, p: &Project) -> Result<Option<std::collections::HashSet<String>>, String> {
+        let Some(w) = &self.r#where else { return Ok(None) };
+        let key = wugs_core::metadata::key_of(&w.key).ok_or_else(|| format!("«{}» is not a detail's name", w.key))?;
+        let value = p.proj.nfc(w.value.trim());
+        let mut out = std::collections::HashSet::new();
+        for t in p.proj.entities_of_kind("text")? {
+            if self.text.as_ref().is_some_and(|only| *only != t) {
+                continue;
+            }
+            if p.proj.field_str(&t, &format!("{}{key}", wugs_core::metadata::PREFIX))?.map(|v| p.proj.nfc(&v)) == Some(value.clone()) {
+                out.insert(t);
+            }
+        }
+        Ok(Some(out))
+    }
 }
 
 /// What a corpus reader needs from each segment.
@@ -178,16 +230,19 @@ impl Read {
 
 /// Calls `visit` with every segment on a transcription tier (or, for
 /// `Read::Translations`, a translation tier), text by text in order (text id,
-/// then segment `pos`); `only_text` keeps one text. Words and translations
+/// then segment `pos`), within `scope`. Words and translations
 /// come from the projection's corpus index (`each_corpus_segment`), which
 /// splits words the same way; `Read::Analyses` also reads each segment's
 /// tokens from the entity tables.
 pub(crate) fn each_segment(
     p: &Project,
     read: Read,
-    only_text: Option<&str>,
+    scope: &Scope,
     mut visit: impl FnMut(&CorpusSegment) -> Result<(), String>,
 ) -> Result<(), String> {
+    let only_text = scope.text.as_deref();
+    let picked = scope.picked(p)?;
+    let keeps = |text: &str| picked.as_ref().is_none_or(|set| set.contains(text));
     let (translation_tiers, transcription_tiers) = corpus_tiers(p)?;
     let mut titles: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut title_of = |text: &str| -> Result<String, String> {
@@ -201,12 +256,15 @@ pub(crate) fn each_segment(
     if read != Read::Analyses {
         let tiers = if read == Read::Translations { &translation_tiers } else { &transcription_tiers };
         return p.proj.each_corpus_segment(tiers, only_text, read == Read::Translations, |seg, text, tier, words| {
+            if !keeps(text) {
+                return Ok(());
+            }
             let title = title_of(text)?;
             visit(&CorpusSegment { text: text.to_string(), title, id: seg.to_string(), tier: tier.to_string(), tokens: Vec::new(), words: words.to_vec() })
         });
     }
     for text in p.proj.entities_of_kind("text")? {
-        if only_text.is_some_and(|t| t != text) {
+        if only_text.is_some_and(|t| t != text) || !keeps(&text) {
             continue;
         }
         let title = title_of(&text)?;
@@ -253,7 +311,7 @@ pub(crate) fn morphs_of(p: &Project, token: &str) -> Result<Vec<CorpusMorph>, St
 }
 
 pub fn concordance(session: &mut Session, query: &str, kind: Kind) -> Result<Concordance, String> {
-    concordance_in(session, query, kind, Match::Glob, None)
+    concordance_in(session, query, kind, Match::Glob, &Scope::all())
 }
 
 /// How a query meets an item: as a pattern (`*`, `?`), or exactly (a row
@@ -266,7 +324,7 @@ pub enum Match {
     Exact,
 }
 
-pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match, only_text: Option<&str>) -> Result<Concordance, String> {
+pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match, scope: &Scope) -> Result<Concordance, String> {
     let p = project(session)?;
     let meets = |pattern: &[char], item: &[char]| if how == Match::Exact { pattern == item } else { glob(pattern, item) };
     let key = |s: &str| wugs_model::fold_key(&p.proj.nfc(s)).chars().collect::<Vec<char>>();
@@ -287,7 +345,7 @@ pub fn concordance_in(session: &mut Session, query: &str, kind: Kind, how: Match
     }
     let mut hits = Vec::new();
     let mut total = 0usize;
-    each_segment(p, Read::of(kind), only_text, |seg| {
+    each_segment(p, Read::of(kind), scope, |seg| {
         let mut found: Vec<(usize, Option<String>, Option<String>)> = Vec::new();
         match kind {
             Kind::Word | Kind::Translation if !phrase.is_empty() => {

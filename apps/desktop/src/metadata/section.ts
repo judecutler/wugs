@@ -5,6 +5,7 @@ import { errorText, importMetadata, setTextMetadata, textMetadata } from "../api
 import { h } from "../dom";
 import { showToast } from "../store";
 import { importLines, keyOf, label, queryHint, suggestions, type MetaView } from "./logic";
+import { detailsChanged } from "./scope";
 
 let shown: { text: string; view: MetaView } | null = null;
 let loading: string | null = null;
@@ -33,6 +34,7 @@ async function save(text: string, key: string, value: string) {
   try {
     const view = await setTextMetadata({ textId: text, key, value });
     if (shown?.text === text) shown = { text, view };
+    detailsChanged();
   } catch (e) {
     showToast({ tone: "error", lines: [errorText(e)] });
   }
@@ -42,6 +44,7 @@ async function save(text: string, key: string, value: string) {
 /** Bring in a table of metadata; `after` refreshes what depends on it. */
 export async function importMetadataTable(path: string) {
   const r = await importMetadata({ path });
+  detailsChanged();
   showToast({ tone: r.unmatchedCount > 0 ? "warn" : "info", lines: importLines(r) });
   if (shown !== null) await load(shown.text, true);
 }

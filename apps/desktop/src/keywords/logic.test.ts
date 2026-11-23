@@ -17,6 +17,8 @@ test("splits by side and sorts", () => {
 test("summary and table", () => {
   assert.match(summary("Fox", { rows, focusTokens: 8, referenceTokens: 0, types: 4, omitted: 0, critical: 9 }), /nothing to compare/);
   assert.match(summary("Fox", { rows, focusTokens: 8, referenceTokens: 1200, types: 4, omitted: 0, critical: 9 }), /«Fox» \(8 words\) against .* \(1,200 words\)/);
+  assert.match(summary("Texts whose genre is «fable»", { rows, focusTokens: 8, referenceTokens: 1200, types: 4, omitted: 0, critical: 9 }, true), /^Texts whose genre is «fable» \(8 words\) against/);
+  assert.equal(summary("Texts whose genre is «fable»", { rows, focusTokens: 0, referenceTokens: 1200, types: 0, omitted: 0, critical: 9 }, true), "Texts whose genre is «fable» have no words yet.");
   assert.match(summary("Fox", { rows, focusTokens: 8, referenceTokens: 1200, types: 4, omitted: 12, critical: 9.14 }), /9\.14 or more\)\. The 12 weakest are left out\./);
   assert.equal(asTsv([row("fox", 12, 4)]).split("\n")[1], "fox\t3\t1\t12.00\t4.00\t50.0\t16.000");
 });

@@ -488,7 +488,7 @@ To describe many texts at once, make a table with a row for each text: one colum
 
 Details also come in with files: a TEI file's header (author, date, genre, licence, speakers, place and more), and the `# meta::` lines of a CoNLL-U file. They go back out the same way in TEI and CoNLL-U, and as attributes of `<text>` in a CWB vertical file.
 
-Use details to search part of a corpus. See [Search with CQP queries](#search-with-cqp-queries).
+Use details to study part of a corpus. In **Frequencies**, **Collocates** and **Keywords**, the list that picks where to look also offers the texts with one detail, such as **Genre: news (12 texts)**. Keywords then compares those texts with all the others. A row you open shows its lines in the Concordance from the same texts. In a CQP query, see [Search with CQP queries](#search-with-cqp-queries).
 
 ### Publish the dictionary and examples as CLDF
 

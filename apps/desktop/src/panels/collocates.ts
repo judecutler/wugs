@@ -2,6 +2,7 @@
 // word, with the scores AntConc and Sketch Engine offer (log-likelihood,
 // mutual information, logDice, t-score). A row opens the Concordance on the node, where the pairs
 // can be read in context.
+import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { collocates, errorText } from "../api";
 import { asTsv, COLLOCATE_SORTS, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates } from "../collocates/logic";
@@ -44,7 +45,7 @@ export const collocatesPanel: PanelDef = {
     const right = picker("Words after", "How many words after it to look at", SPANS, 5, (n) => `${n} after`);
     const min = picker("Minimum together", "Leave out words met together fewer times than this", MINIMUMS, 2, (n) => (n === 1 ? "Every pair" : `Together ${n}+ times`));
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Look among" });
-    const scopePicker = h("select", { title: "Look in the whole project or one text" });
+    const scopePicker = h("select", { title: "Look in the whole project, one text, or the texts with one detail (add details in the Texts panel)" });
     scopePicker.setAttribute("aria-label", "Where to look");
     const sorter = h("select", { className: "co-sort", title: "Order of the rows. Windows stop at a segment's edge, so numbers are close to AntConc's but not equal on the same file." }, ...COLLOCATE_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
     sorter.setAttribute("aria-label", "Sort");
@@ -68,11 +69,7 @@ export const collocatesPanel: PanelDef = {
       );
 
     const drawScopes = () => {
-      const s = getState();
-      const texts = s.kind === "open" ? s.texts : [];
-      if (scope !== "" && !texts.some((t) => t.id === scope)) scope = "";
-      scopePicker.replaceChildren(h("option", { value: "", textContent: "Whole project" }), ...texts.map((t) => h("option", { value: t.id, textContent: t.title || t.id })));
-      scopePicker.value = scope;
+      scope = fillScopes(scopePicker, scope, drawScopes);
     };
 
     const drawRows = () => {
@@ -95,7 +92,8 @@ export const collocatesPanel: PanelDef = {
           ["Dice", "logDice, Sketch Engine's default: up to 14, comparable between corpora of different sizes"],
         ].map(([t, tip]) => h("th", { textContent: t, scope: "col", title: tip })),
       );
-      const text = scope === "" ? null : { id: scope, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
+      const sc = scopeOf(scope);
+      const text = sc.textId === null ? null : { id: sc.textId, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
       table.replaceChildren(
         h("thead", {}, head),
         h(
@@ -112,7 +110,7 @@ export const collocatesPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: score(r.mutualInformation) }),
               h("td", { className: "fq-num", textContent: score(r.logDice) }),
             );
-            const open = () => askConcordance(asked, kind, text, false);
+            const open = () => askConcordance(asked, kind, text, false, sc.within);
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
@@ -139,7 +137,7 @@ export const collocatesPanel: PanelDef = {
       }
       note.textContent = "Counting…";
       try {
-        const r = await collocates({ node: query, kind, left: Number(left.value), right: Number(right.value), minTogether: Number(min.value), textId: scope === "" ? null : scope });
+        const r = await collocates({ node: query, kind, left: Number(left.value), right: Number(right.value), minTogether: Number(min.value), textId: scopeOf(scope).textId, within: scopeOf(scope).within });
         if (mine !== seq) return;
         data = r;
         asked = query;

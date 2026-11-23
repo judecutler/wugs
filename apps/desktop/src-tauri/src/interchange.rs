@@ -917,7 +917,7 @@ mod tests {
         assert_eq!(fs::read_to_string(&e.path).unwrap(), original);
         assert!(e.path.ends_with("treebank.conllu"));
         // Punctuation tokens are not words for the corpus tools.
-        let f = crate::frequencies::frequencies(&mut s, crate::concordance::Kind::Word, None).unwrap();
+        let f = crate::frequencies::frequencies(&mut s, crate::concordance::Kind::Word, &crate::concordance::Scope::all()).unwrap();
         assert_eq!(f.tokens, 2, "Hello and world, not the comma and the stop");
         // The same file again adds nothing and says so.
         let again = import_file(&mut s, file.to_str().unwrap()).unwrap();

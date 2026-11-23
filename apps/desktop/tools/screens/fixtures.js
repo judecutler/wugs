@@ -611,6 +611,10 @@
     praat_status: () => ({ path: "/usr/bin/praat", version: "6.4.27", chosen: false, problem: null }),
     praat_pending: () => false,
     project_language: () => ({ name: "Kanu", glottocode: "abcd1234", iso: "" }),
+    metadata_values: () => [
+      { key: "genre", values: [["narrative", 2], ["procedural", 1]] },
+      { key: "speaker", values: [["A. Speaker (synthetic)", 3]] },
+    ],
     text_metadata: () => ({
       fields: [
         { key: "genre", value: "procedural" },

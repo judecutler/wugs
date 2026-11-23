@@ -83,3 +83,54 @@ export function importLines(r: MetaImport): string[] {
   if (r.shared > 0) lines.push(`${r.shared} ${r.shared === 1 ? "row names a title" : "rows name titles"} several texts share; each of them got the values.`);
   return lines;
 }
+
+/** Texts picked by a detail: those whose `key` is exactly `value`. */
+export type Where = { key: string; value: string };
+/** One detail's values across the project, most texts first. */
+export type MetaValues = { key: string; values: [string, number][] };
+/** What a corpus tool reads: one text, the texts a detail picks, or (neither) all. */
+export type Scope = { textId: string | null; within: Where | null };
+
+/** The most values of one detail a scope picker lists. */
+export const MAX_VALUES = 40;
+
+const WHERE = "where:";
+
+/** A scope picker's option value for a detail; a text's is its id, the whole project's "". */
+export function whereValue(w: Where): string {
+  return WHERE + JSON.stringify([w.key, w.value]);
+}
+
+/** A scope picker's value back as what the commands take. */
+export function parseScope(value: string): Scope {
+  if (value.startsWith(WHERE)) {
+    try {
+      const [key, v] = JSON.parse(value.slice(WHERE.length)) as [unknown, unknown];
+      if (typeof key === "string" && typeof v === "string") return { textId: null, within: { key, value: v } };
+    } catch {
+      // A value that does not parse reads as the whole project.
+    }
+    return { textId: null, within: null };
+  }
+  return { textId: value === "" ? null : value, within: null };
+}
+
+/** An option's words: `Genre: news (3 texts)`. */
+export function whereLabel(w: Where, texts: number): string {
+  return `${label(w.key)}: ${w.value} (${texts} ${texts === 1 ? "text" : "texts"})`;
+}
+
+/** The picked texts in a sentence: `texts whose genre is news`. */
+export function whereWords(w: Where): string {
+  return `texts whose ${label(w.key).toLowerCase()} is «${w.value}»`;
+}
+
+/** The options a scope picker offers after the texts: each detail's values, at most MAX_VALUES each, details with one value for every text left out. */
+export function whereOptions(values: MetaValues[], textCount: number): { key: string; options: { value: string; label: string }[] }[] {
+  return values
+    .filter((m) => !(m.values.length === 1 && m.values[0]![1] === textCount && textCount > 1))
+    .map((m) => ({
+      key: m.key,
+      options: m.values.slice(0, MAX_VALUES).map(([value, n]) => ({ value: whereValue({ key: m.key, value }), label: whereLabel({ key: m.key, value }, n) })),
+    }));
+}

@@ -71,15 +71,15 @@ export const openProject = (args: ProjectArgs) => invoke<ProjectInfo>("open_proj
 export const createProject = (args: ProjectArgs) => invoke<ProjectInfo>("create_project", args);
 export type ConcordanceResult = { hits: import("./concordance/logic").Hit[]; total: number };
 /** Every occurrence of a word, morph, gloss or translation word, with its segment's words (roadmap 71). */
-export const frequencies = (args: { kind: import("./concordance/logic").ConcordanceKind; textId: string | null; size?: number }) =>
+export const frequencies = (args: { kind: import("./concordance/logic").ConcordanceKind; textId: string | null; within?: import("./metadata/logic").Where | null; size?: number }) =>
   invoke<import("./frequencies/logic").Frequencies>("frequencies", args);
-export const collocates = (args: { node: string; kind: "word" | "translation"; left: number; right: number; minTogether: number; textId: string | null }) =>
+export const collocates = (args: { node: string; kind: "word" | "translation"; left: number; right: number; minTogether: number; textId: string | null; within?: import("./metadata/logic").Where | null }) =>
   invoke<import("./collocates/logic").Collocates>("collocates", args);
-export const keywords = (args: { kind: "word" | "translation"; textId: string; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
+export const keywords = (args: { kind: "word" | "translation"; textId: string | null; within?: import("./metadata/logic").Where | null; minCount: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
 /** One sentence's words, tags and dependency tree (src-tauri/src/sentence.rs); a correction returns it whole. */
 export const sentenceGet = (args: { textId: string; segmentId: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_get", args);
 export const sentenceSet = (args: { textId: string; segmentId: string; tokenId: string; column: string; value: string }) => invoke<import("./sentence/logic").SentenceView>("sentence_set", args);
-export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null }) => invoke<ConcordanceResult>("concordance", args);
+export const concordance = (args: { query: string; kind: import("./concordance/logic").QueryKind; exact?: boolean; textId?: string | null; within?: import("./metadata/logic").Where | null }) => invoke<ConcordanceResult>("concordance", args);
 /** A CQP-style query over tokens and their annotation (src-tauri/src/cqp.rs); a query that does not parse is refused with what and where. */
 export const concordanceQuery = (args: { query: string; textId?: string | null }) => invoke<ConcordanceResult>("concordance_query", args);
 /** The tutorial project (roadmap 68), built the first time in this computer's app data. */
@@ -528,6 +528,8 @@ export const sealProject = (args: { folder: string; date: string }) => invoke<Se
 export const textMetadata = (args: { textId: string }) => invoke<import("./metadata/logic").MetaView>("text_metadata", args);
 /** Set one key of a text's metadata; an empty value clears it. */
 export const setTextMetadata = (args: { textId: string; key: string; value: string }) => invoke<import("./metadata/logic").MetaView>("set_text_metadata", args);
+/** Every detail's values across the project, for picking texts by one. */
+export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
 /** Bring in a CSV or TSV of document metadata, one row per text. */
 export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
 export const projectLanguage = () => invoke<import("./cldf/logic").Language>("project_language");

@@ -30,7 +30,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
-use crate::concordance::{Read, each_segment, glob, Kind};
+use crate::concordance::{Read, Scope, each_segment, glob, Kind};
 use crate::session::{project, Session};
 
 #[derive(Debug, Serialize)]
@@ -76,7 +76,7 @@ struct Tally {
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, right: usize, min_together: usize, text: Option<&str>) -> Result<Collocates, String> {
+pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, right: usize, min_together: usize, scope: &Scope) -> Result<Collocates, String> {
     if !matches!(kind, Kind::Word | Kind::Translation) {
         return Err("collocates are counted between words or translation words".into());
     }
@@ -93,7 +93,7 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
     let mut freq: HashMap<String, usize> = HashMap::new();
     let mut near: HashMap<String, Tally> = HashMap::new();
     let (mut tokens, mut nodes, mut slots) = (0usize, 0usize, 0usize);
-    each_segment(p, Read::of(kind), text, |seg| {
+    each_segment(p, Read::of(kind), scope, |seg| {
         let words: Vec<(String, String)> = seg
             .words
             .iter()
@@ -210,25 +210,25 @@ mod tests {
             let at = 30_000.0 + i as f64 * 1000.0;
             crate::session::add_segment(&mut session, &text, None, Some(at), Some(at + 900.0), line).unwrap();
         }
-        let c = collocates(&mut session, "fox", Kind::Word, 1, 1, 1, None).unwrap();
+        let c = collocates(&mut session, "fox", Kind::Word, 1, 1, 1, &Scope::all()).unwrap();
         assert_eq!(c.node, 4);
         let old = c.rows.iter().find(|r| r.item.eq_ignore_ascii_case("old")).expect("old");
         assert_eq!((old.together, old.left, old.right), (3, 3, 0), "case folded, left only");
         assert_eq!(old.freq, 3);
         assert_eq!(c.rows[0].item.to_lowercase(), "old", "the strongest first");
         // A window never reaches into the next segment: «drank» never meets «the».
-        let two = collocates(&mut session, "drank", Kind::Word, 5, 5, 1, None).unwrap();
+        let two = collocates(&mut session, "drank", Kind::Word, 5, 5, 1, &Scope::all()).unwrap();
         assert!(two.rows.iter().all(|r| r.item != "ran" && r.item != "a"), "{:?}", two.rows.iter().map(|r| &r.item).collect::<Vec<_>>());
         // The minimum hides one-offs; patterns work.
-        assert!(collocates(&mut session, "fox", Kind::Word, 1, 1, 2, None).unwrap().rows.iter().all(|r| r.together >= 2));
-        assert_eq!(collocates(&mut session, "f?x", Kind::Word, 1, 1, 1, None).unwrap().node, 4);
-        assert_eq!(collocates(&mut session, "*", Kind::Word, 1, 1, 1, None).unwrap().node, 0);
-        assert!(collocates(&mut session, "fox", Kind::Word, 0, 0, 1, None).is_err());
-        assert!(collocates(&mut session, "fox", Kind::Gloss, 1, 1, 1, None).is_err());
+        assert!(collocates(&mut session, "fox", Kind::Word, 1, 1, 2, &Scope::all()).unwrap().rows.iter().all(|r| r.together >= 2));
+        assert_eq!(collocates(&mut session, "f?x", Kind::Word, 1, 1, 1, &Scope::all()).unwrap().node, 4);
+        assert_eq!(collocates(&mut session, "*", Kind::Word, 1, 1, 1, &Scope::all()).unwrap().node, 0);
+        assert!(collocates(&mut session, "fox", Kind::Word, 0, 0, 1, &Scope::all()).is_err());
+        assert!(collocates(&mut session, "fox", Kind::Gloss, 1, 1, 1, &Scope::all()).is_err());
         // Overlapping windows count each word once: «very» three times
         // before «good» puts «good» in the windows once, not three times.
         crate::session::add_segment(&mut session, &text, None, Some(40_000.0), Some(40_900.0), "very very very good").unwrap();
-        let v = collocates(&mut session, "very", Kind::Word, 3, 3, 1, None).unwrap();
+        let v = collocates(&mut session, "very", Kind::Word, 3, 3, 1, &Scope::all()).unwrap();
         let good = v.rows.iter().find(|r| r.item == "good").expect("good");
         assert_eq!((good.together, good.freq), (1, 1));
         let very = v.rows.iter().find(|r| r.item == "very").expect("very near very");

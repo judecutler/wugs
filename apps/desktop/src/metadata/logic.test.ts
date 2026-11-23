@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { importLines, keyOf, label, queryHint, suggestions } from "./logic.ts";
+import { importLines, keyOf, label, parseScope, queryHint, suggestions, whereOptions, whereValue, whereWords } from "./logic.ts";
 
 test("keys are made as the engine makes them", () => {
   assert.equal(keyOf("Text Genre"), "text_genre");
@@ -33,4 +33,25 @@ test("an import report says what matched and what did not", () => {
   assert.equal(lines[2], "7 rows name no text here: «a», «b», «c», «d», «e» and 2 more.");
   assert.match(lines[3], /several texts share/);
   assert.equal(importLines({ by: "title", keys: ["genre"], texts: 0, fields: 0, unmatched: [], unmatchedCount: 0, shared: 0 })[0], "Every text already had these values; nothing changed.");
+});
+
+test("a scope picker's values round-trip", () => {
+  const w = { key: "genre", value: 'news "wire"' };
+  assert.deepEqual(parseScope(whereValue(w)), { textId: null, within: w });
+  assert.deepEqual(parseScope(""), { textId: null, within: null });
+  assert.deepEqual(parseScope("txt_1"), { textId: "txt_1", within: null });
+  assert.deepEqual(parseScope("where:{broken"), { textId: null, within: null });
+});
+
+test("details with a value every text shares are not offered", () => {
+  const opts = whereOptions(
+    [
+      { key: "language", values: [["kanu", 3]] },
+      { key: "genre", values: [["news", 2], ["story", 1]] },
+    ],
+    3,
+  );
+  assert.deepEqual(opts.map((o) => o.key), ["genre"]);
+  assert.equal(opts[0]!.options[0]!.label, "Genre: news (2 texts)");
+  assert.equal(whereWords({ key: "text_genre", value: "news" }), "texts whose text genre is «news»");
 });
