@@ -16,6 +16,7 @@ import { mediaPanel } from "./media";
 import type { PanelDef } from "./panel";
 import { peoplePanel } from "./people";
 import { searchPanel } from "./search";
+import { soundsPanel } from "./sounds";
 import { sentencePanel } from "./sentence";
 import { textsPanel } from "./texts";
 import { timelinePanel } from "./timeline";
@@ -41,6 +42,7 @@ export const PANELS = {
   keywords: keywordsPanel,
   checks: checksPanel,
   vowels: vowelsPanel,
+  sounds: soundsPanel,
   assist: assistPanel,
   people: peoplePanel,
   conflicts: conflictsPanel,

@@ -550,6 +550,20 @@ Segment the recording so each vowel (or each word you want to compare) is one se
 
 The numbers come from the same analysis as the overlays and **Measure…**: your Praat when wugs finds it, else wugs's own.
 
+### See the sound inventory on the IPA chart
+
+The **Sounds** panel cuts every word of a transcription track into sounds and puts them where the IPA chart puts them: pulmonic consonants by place and manner, voiceless on the left of each cell and voiced on the right, and vowels on the vowel trapezoid, unrounded on the left of each point and rounded on the right. Affricates and double articulations, clicks, implosives and other consonants are listed under the chart. Each sound shows how many times it occurs. Open the panel from Settings (Closed panels) or with **Find an action**.
+
+A sound is a letter with every diacritic and modifier written after it, so `tʰ`, `kʼ`, `aː` and `ã` each count as one sound, beside `t`, `k` and `a`. A tie bar joins two letters into one sound (`t͡ʃ`), and a superscript nasal before a consonant marks it as prenasalized (`ᵐb`). Stress marks, tone letters and syllable dots belong to no sound.
+
+- Choose the track to read. wugs starts with a track named IPA or phonetic when there is one, else the fullest.
+- Choose the whole project or only the text on screen.
+- **Whole IPA chart** shows every row and column of the chart, not only those in use.
+- Click a sound to open the Concordance on every word that holds it.
+- **Copy table** copies each sound with its count, the number of words it occurs in, an example word and its place on the chart.
+
+**Not on the IPA chart** lists capital letters and letters the IPA does not use. These are often typing slips, or a sign that the track is written in a spelling rather than IPA. A spelling with digraphs (`ng`, `ch`) shows its letters one by one.
+
 ### Show a spectrogram
 
 Click **Spectrogram** in the Timeline toolbar to see the recording's spectrogram under the waveform: frequency from 0 at the bottom to 5000 Hz at the top, darker where louder, the way Praat draws it. Formants show as dark bands, fricatives as noise high up, and stop closures as gaps. wugs makes the spectrogram itself, so it works without Praat. Turn on **Formants** too, and the formant dots sit on the bands.

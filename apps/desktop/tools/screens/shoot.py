@@ -41,6 +41,7 @@ PANELS = [
     ("keywords", "Keywords"),
     ("checks", "Checks"),
     ("vowels", "Vowel space"),
+    ("sounds", "Sounds"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),
@@ -503,6 +504,14 @@ def main():
             run.shot("state-characters", run.page.locator(".panel-checks"))
             if run.page.locator(".panel-checks .ck-chars tbody tr").count() != 8:
                 failures.append("Every character did not list the inventory")
+            # Sounds: the IPA track's sounds on the chart.
+            run.front("sounds", "Sounds")
+            run.page.locator(".panel-sounds .sd-consonants").wait_for()
+            run.shot("state-sounds", run.page.locator(".panel-sounds"))
+            if run.page.locator(".panel-sounds .sd-vgroup").count() < 5:
+                failures.append("Sounds did not place the vowels")
+            if run.page.locator(".panel-sounds .sd-list").count() < 3:
+                failures.append("Sounds did not list affricates, clicks or unplaced letters")
             # Elicit: answers heard in the Timeline's selected segment.
             run.front("elicit", "Elicit")
             run.page.locator(".panel-elicit .el-sound input").check()
