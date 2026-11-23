@@ -661,6 +661,25 @@
     ],
     gloss_unify: () => 1,
     // The character inventory: a Cyrillic «а» typed among Latin letters, and two apostrophes.
+    grambank_profile: ({ glottocode }) => {
+      const f = (id, question, value, label, others) => ({ id, question, value, label, others: others.map(([v, l, count]) => ({ value: v, label: l, count })), othersCoded: others.reduce((n, o) => n + o[2], 0) });
+      return {
+        glottocode,
+        name: "Invented Austronesian",
+        codedAs: null,
+        codedName: null,
+        comparedWith: "Austronesian languages",
+        comparedCount: 312,
+        edition: "Grambank 1.0 (CC BY 4.0)",
+        features: [
+          f("GB020", "Are there definite or specific articles?", null, null, [["1", "present", 201], ["0", "absent", 98]]),
+          f("GB021", "Do indefinite nominals commonly have indefinite articles?", null, null, [["0", "absent", 180], ["1", "present", 110]]),
+          f("GB024", "What is the order of numeral and noun in the NP?", null, null, [["1", "Num-N", 150], ["2", "N-Num", 120], ["3", "both", 30]]),
+          f("GB025", "What is the order of adnominal demonstrative and noun?", null, null, [["2", "N-Dem", 210], ["1", "Dem-N", 70], ["3", "both", 20]]),
+          f("GB026", "Can adnominal property words occur discontinuously?", null, null, []),
+        ],
+      };
+    },
     sound_words: ({ tierId }) => ({
       tracks: [
         { id: "tier-utt", name: "utterance", words: 64 },

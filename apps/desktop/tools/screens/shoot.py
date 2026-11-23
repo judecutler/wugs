@@ -42,6 +42,7 @@ PANELS = [
     ("checks", "Checks"),
     ("vowels", "Vowel space"),
     ("sounds", "Sounds"),
+    ("typology", "Typology"),
     ("assist", "Speech assist"),
     ("people", "People"),
     ("conflicts", "Conflicts"),

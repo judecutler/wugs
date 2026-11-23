@@ -103,10 +103,29 @@ pub fn find(query: &str, limit: usize) -> Vec<Languoid> {
     hits.into_iter().take(limit).map(|(_, r)| r.item.clone()).collect()
 }
 
+fn index() -> &'static std::collections::HashMap<&'static str, usize> {
+    static INDEX: OnceLock<std::collections::HashMap<&'static str, usize>> = OnceLock::new();
+    INDEX.get_or_init(|| rows().iter().enumerate().map(|(i, r)| (r.item.glottocode, i)).collect())
+}
+
 /// One languoid by its Glottocode.
 pub fn by_glottocode(code: &str) -> Option<Languoid> {
     let code = code.trim().to_lowercase();
-    rows().iter().find(|r| r.item.glottocode == code).map(|r| r.item.clone())
+    index().get(code.as_str()).map(|i| rows()[*i].item.clone())
+}
+
+/// The language (not a dialect) of this name in this family, as a
+/// dialect's `language` column names it; None when there is none or several.
+pub fn by_name(name: &str, family: &str) -> Option<Languoid> {
+    let mut found = rows().iter().filter(|r| !r.item.dialect && r.item.name == name && r.item.family == family);
+    let first = found.next()?;
+    found.next().is_none().then(|| first.item.clone())
+}
+
+/// Every languoid, in Glottocode order.
+#[cfg(test)]
+pub fn all() -> Vec<Languoid> {
+    rows().iter().map(|r| r.item.clone()).collect()
 }
 
 #[cfg(test)]

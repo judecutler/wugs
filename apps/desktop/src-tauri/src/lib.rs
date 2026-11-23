@@ -20,6 +20,7 @@ pub mod elicit;
 pub mod feedback;
 pub mod help;
 pub mod glottolog;
+pub mod grambank;
 pub mod gloss;
 pub mod identity;
 pub mod interchange;
@@ -333,6 +334,12 @@ fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory,
 #[tauri::command(async)]
 fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option<String>) -> Result<sounds::SoundWords, String> {
     s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
+}
+
+/// What Grambank says about a language, beside its relatives (src/grambank.rs).
+#[tauri::command(async)]
+fn grambank_profile(glottocode: String) -> Result<grambank::Profile, String> {
+    grambank::profile(&glottocode)
 }
 
 /// Glottolog's languages and dialects a typed name or code fits, best first.
@@ -1821,6 +1828,7 @@ pub fn run() {
             morphosyntax_choose_spacy,
             morphosyntax_choose_stanza,
             glottolog_find,
+            grambank_profile,
             character_inventory,
             sound_words,
             sentence_check_status,
