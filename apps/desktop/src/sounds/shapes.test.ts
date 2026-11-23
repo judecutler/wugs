@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { classOf, gapsNote, positions, shapes, share } from "./shapes.ts";
+import { classOf, clustersNote, consonantClusters, gapsNote, positions, shapes, share } from "./shapes.ts";
 
 const w = (word: string, count = 1) => ({ word, count });
 
@@ -33,4 +33,26 @@ test("shares and gaps are said in words", () => {
   const rows = positions([w("taŋ"), w("kaŋ"), w("paŋa"), w("bat"), w("bak")], []);
   assert.equal(gapsNote(rows), "Consonants used at least three times but never at the start of a word: ŋ.");
   assert.equal(gapsNote([]), "");
+});
+
+test("consonant clusters by position", () => {
+  const words = [
+    { word: "stra", count: 3 },
+    { word: "apta", count: 2 },
+    { word: "kast", count: 1 },
+    { word: "pst", count: 9 },
+    { word: "aptapta", count: 1 },
+  ];
+  const c = consonantClusters(words);
+  assert.deepEqual(
+    c.map((x) => [x.cluster, x.initial, x.medial, x.final, x.words]),
+    [
+      ["pt", 0, 4, 0, 2],
+      ["str", 3, 0, 0, 1],
+      ["st", 0, 0, 1, 1],
+    ],
+  );
+  assert.equal(c[0]!.example, "apta");
+  assert.equal(clustersNote(words, c), "Words start with up to 3 consonants before the first vowel and end with up to 2 consonants after the last. 3 clusters of two or more consonants, commonest first.");
+  assert.equal(clustersNote([{ word: "ka", count: 1 }], []), "Words start with one consonant before the first vowel and end with no consonant after the last. No two consonants stand together.");
 });

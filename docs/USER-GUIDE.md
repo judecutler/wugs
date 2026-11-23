@@ -689,6 +689,8 @@ A sound is a letter with every diacritic and modifier written after it, so `tʰ`
 
 **Word shapes** shows each word as consonants (C) and vowels (V), such as `CVCV` or `CVC`, with its share of the running words. **Where sounds occur** gives, for each sound, the share of its uses at the start of a word, inside one, at the end, and as a word on its own. A note names the consonants never found at the start or at the end of a word, the gaps a phonology chapter describes.
 
+**Consonant clusters** says how many consonants a word starts with before its first vowel and ends with after its last, the syllable limits a grammar states, then lists every run of two or more consonants with how often it starts a word, stands inside one or ends one, and an example word. Click a cluster to see every word with it in the Concordance.
+
 **Not on the IPA chart** lists capital letters and letters the IPA does not use. These are often typing slips, or a sign that the track is written in a spelling rather than IPA. A spelling with digraphs (`ng`, `ch`) shows its letters one by one.
 
 ### Show a spectrogram

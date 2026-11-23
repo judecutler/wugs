@@ -75,3 +75,61 @@ export function gapsNote(rows: readonly Where[]): string {
   if (end.length > 0) parts.push(`never at the end: ${end.join(" ")}`);
   return parts.length === 0 ? "" : `Consonants used at least three times but ${parts.join("; ")}.`;
 }
+
+export type Cluster = { cluster: string; initial: number; medial: number; final: number; words: number; example: string };
+
+/** Every run of two or more consonants in the words, by where it stands
+ * (starting the word, inside it, ending it), counted in running words,
+ * commonest first. A word of consonants only is left out; a letter the
+ * chart does not place breaks a run. */
+export function consonantClusters(words: readonly { word: string; count: number }[]): Cluster[] {
+  const by = new Map<string, Cluster>();
+  for (const { word, count } of words) {
+    const s = sounds(word);
+    const cls = s.map(classOf);
+    if (!cls.includes("V")) continue;
+    const seen = new Set<string>();
+    let i = 0;
+    while (i < s.length) {
+      if (cls[i] !== "C") {
+        i += 1;
+        continue;
+      }
+      let j = i;
+      while (j < s.length && cls[j] === "C") j += 1;
+      if (j - i >= 2) {
+        const cluster = s.slice(i, j).join("");
+        const r = by.get(cluster) ?? { cluster, initial: 0, medial: 0, final: 0, words: 0, example: word };
+        if (i === 0) r.initial += count;
+        else if (j === s.length) r.final += count;
+        else r.medial += count;
+        if (!seen.has(cluster)) {
+          r.words += 1;
+          seen.add(cluster);
+        }
+        by.set(cluster, r);
+      }
+      i = j;
+    }
+  }
+  const total = (c: Cluster) => c.initial + c.medial + c.final;
+  return [...by.values()].sort((a, b) => total(b) - total(a) || a.cluster.localeCompare(b.cluster));
+}
+
+/** The most consonants a word starts and ends with, and how many clusters there are, in words. */
+export function clustersNote(words: readonly { word: string; count: number }[], clusters: readonly Cluster[]): string {
+  let onset = 0;
+  let coda = 0;
+  for (const { word } of words) {
+    const cls = sounds(word).map(classOf);
+    if (!cls.includes("V")) continue;
+    const first = cls.indexOf("V");
+    const last = cls.length - 1 - cls.lastIndexOf("V");
+    if (!cls.slice(0, first).includes("?")) onset = Math.max(onset, first);
+    if (!cls.slice(cls.length - last).includes("?")) coda = Math.max(coda, last);
+  }
+  const n = (k: number) => (k === 0 ? "no consonant" : k === 1 ? "one consonant" : `up to ${k} consonants`);
+  const head = `Words start with ${n(onset)} before the first vowel and end with ${n(coda)} after the last.`;
+  if (clusters.length === 0) return `${head} No two consonants stand together.`;
+  return `${head} ${clusters.length} ${clusters.length === 1 ? "cluster" : "clusters"} of two or more consonants, commonest first.`;
+}
