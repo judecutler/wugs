@@ -25,12 +25,18 @@ export const WEB_NOTE =
 /** Which setup rows the Tagger… section shows: what the person chose (the
  * project's pin, else this computer's choice), and for Automatic what it
  * found, or both local taggers when it found neither. */
-export function setupFor(v: { machine: string; pin: string | null; effective: string | null }): "udpipe" | "spacy" | "web" | "local" {
+export function setupFor(v: { machine: string; pin: string | null; effective: string | null }): "udpipe" | "spacy" | "stanza" | "web" | "local" {
   const chosen = v.pin ?? v.machine;
   if (chosen === "udpipe-lindat") return "web";
-  if (chosen === "spacy") return "spacy";
-  if (chosen === "udpipe") return "udpipe";
-  return v.effective === "spacy" ? "spacy" : v.effective === "udpipe" ? "udpipe" : "local";
+  if (chosen === "spacy" || chosen === "stanza" || chosen === "udpipe") return chosen;
+  const found = v.effective;
+  return found === "spacy" || found === "stanza" || found === "udpipe" ? found : "local";
+}
+
+/** The line under Stanza's fields. */
+export function stanzaNote(s: { pipeline: string | null; about: string | null } | null): string {
+  if (s?.pipeline && s.about) return `Checked: ${s.about}.`;
+  return "Stanza runs in your own Python, with models trained on Universal Dependencies for about 70 languages: install it with `python -m pip install stanza`, download a language's models once with `python -c \"import stanza; stanza.download('de')\"`, then type its code (de) and press Use.";
 }
 
 /** The line under spaCy's fields. */

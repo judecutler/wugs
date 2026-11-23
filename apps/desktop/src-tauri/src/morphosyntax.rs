@@ -12,6 +12,8 @@
 //! - **spaCy on this computer** (the person's Python with spaCy and a
 //!   pipeline they installed, `scripts/spacy_tag.py`): nothing leaves the
 //!   computer.
+//! - **Stanza on this computer** (the person's Python with Stanza and a
+//!   language's models, `scripts/stanza_tag.py`): nothing leaves the computer.
 //!
 //! The session thread gathers and writes; the tagger runs between, off it.
 
@@ -149,36 +151,85 @@ pub fn run_lindat(endpoint: &str, model: &str, lines: &[String]) -> Result<(Stri
     Ok((reply.result.ok_or("The UDPipe service sent no result.")?, reply.model.unwrap_or_else(|| model.to_string())))
 }
 
-// ---------------------------------------------------------------- spaCy on this computer
+// ---------------------------------------------------------------- spaCy and Stanza on this computer
 
-/// The adapter run inside the person's Python (`python -c`).
-const SPACY_SCRIPT: &str = include_str!("../scripts/spacy_tag.py");
+/// The Python taggers: each runs in the person's own Python with a model
+/// they installed, so nothing leaves the computer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PyTool {
+    /// spaCy with a pipeline (`en_core_web_sm`, or a folder spaCy saved one in).
+    Spacy,
+    /// Stanza (Stanford NLP) with a language's models (`en`, `de`, `grc`…),
+    /// trained on Universal Dependencies treebanks.
+    Stanza,
+}
 
-/// Loads the pipeline and says what it is, so a choice is checked when it is made.
-const SPACY_CHECK: &str = "import sys\nsys.path[:] = [p for p in sys.path if p not in ('', '.')]\nimport spacy\nnlp = spacy.load(sys.argv[1])\nm = nlp.meta\nprint('spaCy %s, %s_%s %s (%s)' % (spacy.__version__, m.get('lang', ''), m.get('name', ''), m.get('version', ''), ', '.join(nlp.pipe_names)))\n";
+impl PyTool {
+    pub fn id(self) -> &'static str {
+        match self {
+            PyTool::Spacy => "spacy",
+            PyTool::Stanza => "stanza",
+        }
+    }
+    pub fn name(self) -> &'static str {
+        match self {
+            PyTool::Spacy => "spaCy",
+            PyTool::Stanza => "Stanza",
+        }
+    }
+    /// The adapter run inside the person's Python (`python -c`).
+    fn script(self) -> &'static str {
+        match self {
+            PyTool::Spacy => include_str!("../scripts/spacy_tag.py"),
+            PyTool::Stanza => include_str!("../scripts/stanza_tag.py"),
+        }
+    }
+    /// Loads the model and says what it is, so a choice is checked when it is made.
+    fn check(self) -> &'static str {
+        match self {
+            PyTool::Spacy => "import sys\nsys.path[:] = [p for p in sys.path if p not in ('', '.')]\nimport spacy\nnlp = spacy.load(sys.argv[1])\nm = nlp.meta\nprint('spaCy %s, %s_%s %s (%s)' % (spacy.__version__, m.get('lang', ''), m.get('name', ''), m.get('version', ''), ', '.join(nlp.pipe_names)))\n",
+            PyTool::Stanza => "import sys\nsys.path[:] = [p for p in sys.path if p not in ('', '.')]\nimport stanza\nnlp = stanza.Pipeline(sys.argv[1], processors='tokenize,pos,lemma,depparse', tokenize_no_ssplit=True, download_method=None, logging_level='WARN')\nprint('Stanza %s, %s (%s)' % (stanza.__version__, sys.argv[1], ', '.join(nlp.processors)))\n",
+        }
+    }
+    fn file(self) -> &'static str {
+        match self {
+            PyTool::Spacy => "spacy.json",
+            PyTool::Stanza => "stanza.json",
+        }
+    }
+    /// What to type, when nothing is chosen yet.
+    fn needs(self) -> &'static str {
+        match self {
+            PyTool::Spacy => "spaCy needs a pipeline for the language (such as en_core_web_sm); type its name.",
+            PyTool::Stanza => "Stanza needs the language's code (such as en, de or grc); type it.",
+        }
+    }
+}
 
-/// What this computer uses to run spaCy: the Python (else `python3` or
-/// `python` on PATH) and the pipeline, kept in `<app data>/spacy.json`.
+/// What this computer uses to run a Python tagger: the Python (else
+/// `python3` or `python` on PATH) and the model (spaCy's pipeline, Stanza's
+/// language), kept in `<app data>/spacy.json` or `stanza.json`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacySettings {
     pub python: Option<String>,
     pub pipeline: Option<String>,
-    /// What the check said when the pipeline was chosen.
+    /// What the check said when the model was chosen.
     pub about: Option<String>,
 }
 
-fn spacy_path(app_data: &Path) -> PathBuf {
-    app_data.join("spacy.json")
+pub fn py_settings(app_data: &Path, tool: PyTool) -> SpacySettings {
+    std::fs::read(app_data.join(tool.file())).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
 }
 
 pub fn spacy_settings(app_data: &Path) -> SpacySettings {
-    std::fs::read(spacy_path(app_data)).ok().and_then(|b| serde_json::from_slice(&b).ok()).unwrap_or_default()
+    py_settings(app_data, PyTool::Spacy)
 }
 
-/// spaCy ready to run here.
+/// A Python tagger ready to run here.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Spacy {
+    pub tool: PyTool,
     pub python: PathBuf,
     pub pipeline: String,
 }
@@ -189,39 +240,48 @@ fn python_on_path() -> Option<PathBuf> {
     std::env::split_paths(&std::env::var_os("PATH")?).flat_map(|d| names.iter().map(move |n| d.join(n))).find(|p| p.is_file())
 }
 
-/// A pipeline is an installed package's name (`en_core_web_sm`) or a folder
-/// spaCy saved one in; it reaches Python as one argument, never through a shell.
+/// A model is an installed package's name (`en_core_web_sm`), a language
+/// code (`en`) or a folder; it reaches Python as one argument, never through a shell.
 pub fn valid_pipeline(name: &str) -> bool {
     let n = name.trim();
     !n.is_empty() && n.len() <= 300 && !n.chars().any(char::is_control) && (n.chars().all(|c| c.is_ascii_alphanumeric() || "_.-".contains(c)) || Path::new(n).is_dir())
 }
 
-fn python_of(s: &SpacySettings) -> Result<PathBuf, String> {
+fn python_of(s: &SpacySettings, tool: PyTool) -> Result<PathBuf, String> {
     match &s.python {
         Some(p) if Path::new(p).is_file() => Ok(PathBuf::from(p)),
         Some(p) => Err(format!("Python was chosen at {p}, which is not there any more.")),
-        None => python_on_path().ok_or_else(|| "Python is not installed (spaCy runs in Python: install Python and spaCy, then choose Python).".to_string()),
+        None => python_on_path().ok_or_else(|| format!("Python is not installed ({0} runs in Python: install Python and {0}, then choose Python).", tool.name())),
     }
 }
 
-/// spaCy and its pipeline as this computer has them, or why not, in words.
-pub fn spacy(app_data: &Path) -> Result<Spacy, String> {
-    let s = spacy_settings(app_data);
-    let python = python_of(&s)?;
-    let pipeline = s.pipeline.filter(|p| valid_pipeline(p)).ok_or("spaCy needs a pipeline for the language (such as en_core_web_sm); type its name.")?;
-    Ok(Spacy { python, pipeline })
+/// A Python tagger and its model as this computer has them, or why not, in words.
+pub fn py_tagger(app_data: &Path, tool: PyTool) -> Result<Spacy, String> {
+    let s = py_settings(app_data, tool);
+    let python = python_of(&s, tool)?;
+    let pipeline = s.pipeline.filter(|p| valid_pipeline(p)).ok_or(tool.needs())?;
+    Ok(Spacy { tool, python, pipeline })
 }
 
-/// What went wrong in Python, in words: the two usual cases named, else its last line.
-fn python_failure(python: &Path, pipeline: &str, stderr: &[u8]) -> String {
+pub fn spacy(app_data: &Path) -> Result<Spacy, String> {
+    py_tagger(app_data, PyTool::Spacy)
+}
+
+/// What went wrong in Python, in words: the usual cases named, else its last line.
+fn python_failure(tool: PyTool, python: &Path, pipeline: &str, stderr: &[u8]) -> String {
     let why = String::from_utf8_lossy(stderr);
     let py = python.display();
-    if why.contains("No module named 'spacy'") {
-        format!("spaCy is not installed for {py}: run `{py} -m pip install spacy`.")
-    } else if why.contains("[E050]") || why.contains("[E049]") {
-        format!("spaCy has no pipeline called {pipeline} here: run `{py} -m spacy download {pipeline}`, or type the name of one that is installed.")
-    } else {
-        format!("spaCy failed: {}", why.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("no message").trim())
+    match tool {
+        PyTool::Spacy if why.contains("No module named 'spacy'") => format!("spaCy is not installed for {py}: run `{py} -m pip install spacy`."),
+        PyTool::Spacy if why.contains("[E050]") || why.contains("[E049]") => {
+            format!("spaCy has no pipeline called {pipeline} here: run `{py} -m spacy download {pipeline}`, or type the name of one that is installed.")
+        }
+        PyTool::Stanza if why.contains("No module named 'stanza'") => format!("Stanza is not installed for {py}: run `{py} -m pip install stanza`."),
+        PyTool::Stanza if why.contains("UnsupportedProcessorError") => format!("Stanza has no part-of-speech tagger or parser for «{pipeline}»; UDPipe or the UDPipe 2 web service may have one."),
+        PyTool::Stanza if ["ResourcesFileNotFoundError", "LanguageNotDownloadedError", "FileNotFoundError", "Unsupported language"].iter().any(|m| why.contains(m)) => {
+            format!("Stanza has no models for «{pipeline}» here: run `{py} -c \"import stanza; stanza.download('{pipeline}')\"` once (it downloads them), or type a language whose models are installed.")
+        }
+        _ => format!("{} failed: {}", tool.name(), why.lines().rev().find(|l| !l.trim().is_empty()).unwrap_or("no message").trim()),
     }
 }
 
@@ -244,36 +304,43 @@ fn run_python(python: &Path, script: &str, arg: &str, input: String) -> Result<s
     Ok(out)
 }
 
-/// Check and keep this computer's spaCy choice: the pipeline is loaded once,
-/// so a missing spaCy or pipeline is said now rather than at the first run.
-/// An empty pipeline clears it.
-pub fn choose_spacy(app_data: &Path, python: Option<String>, pipeline: Option<String>) -> Result<SpacySettings, String> {
+/// Check and keep this computer's choice for a Python tagger: the model is
+/// loaded once, so a missing library or model is said now rather than at
+/// the first run. An empty model clears it; a failed check keeps the last good choice.
+pub fn choose_py(app_data: &Path, tool: PyTool, python: Option<String>, pipeline: Option<String>) -> Result<SpacySettings, String> {
     let mut s = SpacySettings { python: python.filter(|p| !p.trim().is_empty()), pipeline: pipeline.map(|p| p.trim().to_string()).filter(|p| !p.is_empty()), about: None };
     if let Some(p) = &s.pipeline {
         if !valid_pipeline(p) {
-            return Err(format!("«{p}» is not a spaCy pipeline name (such as en_core_web_sm) or a folder."));
+            return Err(match tool {
+                PyTool::Spacy => format!("«{p}» is not a spaCy pipeline name (such as en_core_web_sm) or a folder."),
+                PyTool::Stanza => format!("«{p}» is not a Stanza language code (such as en, de or grc)."),
+            });
         }
-        let py = python_of(&s)?;
-        let out = run_python(&py, SPACY_CHECK, p, String::new())?;
+        let py = python_of(&s, tool)?;
+        let out = run_python(&py, tool.check(), p, String::new())?;
         if !out.status.success() {
-            return Err(python_failure(&py, p, &out.stderr));
+            return Err(python_failure(tool, &py, p, &out.stderr));
         }
         s.about = Some(String::from_utf8_lossy(&out.stdout).trim().to_string()).filter(|a| !a.is_empty());
     }
     std::fs::create_dir_all(app_data).map_err(|e| e.to_string())?;
-    std::fs::write(spacy_path(app_data), serde_json::to_vec_pretty(&s).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    std::fs::write(app_data.join(tool.file()), serde_json::to_vec_pretty(&s).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     Ok(s)
 }
 
-/// Run spaCy on one sentence a line: the CoNLL-U and the pipeline it used.
+pub fn choose_spacy(app_data: &Path, python: Option<String>, pipeline: Option<String>) -> Result<SpacySettings, String> {
+    choose_py(app_data, PyTool::Spacy, python, pipeline)
+}
+
+/// Run a Python tagger on one sentence a line: the CoNLL-U and the model it used.
 pub fn run_spacy(sp: &Spacy, lines: &[String]) -> Result<(String, String), String> {
-    let out = run_python(&sp.python, SPACY_SCRIPT, &sp.pipeline, lines.join("\n") + "\n")?;
+    let out = run_python(&sp.python, sp.tool.script(), &sp.pipeline, lines.join("\n") + "\n")?;
     if !out.status.success() {
-        return Err(python_failure(&sp.python, &sp.pipeline, &out.stderr));
+        return Err(python_failure(sp.tool, &sp.python, &sp.pipeline, &out.stderr));
     }
     let stderr = String::from_utf8_lossy(&out.stderr);
     let used = stderr.lines().rev().find_map(|l| l.strip_prefix("wugs-pipeline: ")).map(str::trim).filter(|u| !u.is_empty()).unwrap_or(&sp.pipeline).to_string();
-    Ok((String::from_utf8(out.stdout).map_err(|_| "spaCy wrote something that is not UTF-8".to_string())?, used))
+    Ok((String::from_utf8(out.stdout).map_err(|_| format!("{} wrote something that is not UTF-8", sp.tool.name()))?, used))
 }
 
 // ---------------------------------------------------------------- the run
@@ -348,7 +415,8 @@ pub fn tag(tagger: &Tagger, lines: &[String]) -> Result<(Vec<wugs_conllu::format
             }
             Tagger::Spacy(sp) => {
                 let (c, m) = run_spacy(sp, chunk)?;
-                (c, format!("spacy {m}"))
+                // Stanza's adapter names itself with its version already.
+                (c, if sp.tool == PyTool::Spacy { format!("spacy {m}") } else { m })
             }
         };
         let sentences = wugs_conllu::format::parse(&conllu).map_err(|p| format!("The tagger's CoNLL-U could not be read: {}", p.first().map(ToString::to_string).unwrap_or_default()))?;
@@ -507,6 +575,84 @@ mod tests {
         assert!(!valid_pipeline("en core"));
         assert!(!valid_pipeline("x; rm -rf /"));
         assert!(valid_pipeline(&std::env::temp_dir().display().to_string()), "a folder spaCy saved a pipeline in");
+    }
+
+    /// The Stanza adapter against a stand-in `stanza` package (the real one
+    /// and its models are too large for CI): sentences stay one a line,
+    /// multi-word tokens become ranges, a language without them still tags,
+    /// and a missing language is said with the command that downloads it.
+    #[cfg(unix)]
+    #[test]
+    fn stanza_writes_ranges_and_keeps_a_line_one_sentence() {
+        use std::os::unix::fs::PermissionsExt;
+        let Some(real) = python_on_path() else { return eprintln!("no Python here: skipped") };
+        let dir = std::env::temp_dir().join(format!("wugs-stanza-{}", wugs_model::ulid()));
+        let lib = dir.join("lib").join("stanza");
+        std::fs::create_dir_all(&lib).unwrap();
+        std::fs::write(
+            lib.join("__init__.py"),
+            r#"__version__ = "9.9.9"
+class W:
+    def __init__(s, i, text, head, rel, upos):
+        s.id, s.text, s.lemma, s.upos, s.xpos, s.feats, s.head, s.deprel = i, text, text.lower(), upos, None, ("Number=Sing" if upos == "NOUN" else None), head, rel
+class T:
+    def __init__(s, text, words, after):
+        s.text, s.words, s.spaces_after, s.misc = text, words, after, None
+class S:
+    def __init__(s, para, mwt):
+        s.tokens, n = [], 0
+        for raw in para.split():
+            pieces = [raw[:-1], raw[-1]] if len(raw) > 1 and raw[-1] in ",." else [raw]
+            for k, p in enumerate(pieces):
+                parts = ["de", "el"] if mwt and p == "del" else [p]
+                ws = []
+                for q in parts:
+                    n += 1
+                    ws.append(W(n, q, 0 if n == 1 else 1, "root" if n == 1 else "dep", "PUNCT" if q in ",." else "NOUN"))
+                s.tokens.append(T(p, ws, "" if k + 1 < len(pieces) else " "))
+class D:
+    def __init__(s, text, mwt):
+        s.sentences = [S(p, mwt) for p in text.split("\n\n")]
+class Pipeline:
+    def __init__(s, lang, processors="", tokenize_no_ssplit=False, download_method="x", logging_level=""):
+        assert tokenize_no_ssplit and download_method is None
+        if lang not in ("es", "kk"):
+            raise FileNotFoundError("Resources file not found")
+        if "mwt" in processors and lang != "es":
+            raise ValueError("no mwt for " + lang)
+        s.mwt = "mwt" in processors
+        s.processors = {p: None for p in processors.split(",")}
+    def __call__(s, text):
+        return D(text, s.mwt)
+"#,
+        )
+        .unwrap();
+        // A Python that finds the stand-in, as a chosen Python would find the real one.
+        let python = dir.join("python");
+        std::fs::write(&python, format!("#!/bin/sh\nPYTHONPATH='{}' exec '{}' \"$@\"\n", dir.join("lib").display(), real.display())).unwrap();
+        std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let py = Some(python.display().to_string());
+        let chosen = choose_py(&dir, PyTool::Stanza, py.clone(), Some("es".into())).unwrap();
+        assert!(chosen.about.as_deref().unwrap_or_default().starts_with("Stanza 9.9.9, es"), "{chosen:?}");
+        let missing = choose_py(&dir, PyTool::Stanza, py.clone(), Some("xx".into())).unwrap_err();
+        assert!(missing.contains("stanza.download('xx')"), "{missing}");
+        assert_eq!(py_settings(&dir, PyTool::Stanza).pipeline.as_deref(), Some("es"), "a failed check keeps the last good choice");
+        assert!(spacy_settings(&dir).pipeline.is_none(), "spaCy's choice is apart");
+        let st = py_tagger(&dir, PyTool::Stanza).unwrap();
+        let lines = ["Vino del mercado, ayer.".to_string(), "Una frase. Otra".to_string()];
+        let (sentences, by) = tag(&Tagger::Spacy(st), &lines).unwrap();
+        assert_eq!(by, "stanza 9.9.9 es");
+        assert_eq!(sentences.len(), 2, "a line is one sentence");
+        let first = wugs_conllu::format::write(&sentences[..1]);
+        assert!(first.contains("2-3\tdel\t"), "{first}");
+        assert!(first.contains("\n2\tde\tde\t") && first.contains("\n3\tel\tel\t"), "{first}");
+        assert!(first.contains("\tmercado\tmercado\tNOUN\t_\tNumber=Sing\t1\tdep\t_\tSpaceAfter=No"), "{first}");
+        // Kazakh has no multi-word token model here: tagged without it.
+        choose_py(&dir, PyTool::Stanza, py, Some("kk".into())).unwrap();
+        let (sentences, by) = tag(&Tagger::Spacy(py_tagger(&dir, PyTool::Stanza).unwrap()), &["del".to_string()]).unwrap();
+        assert_eq!(by, "stanza 9.9.9 kk");
+        assert!(wugs_conllu::format::write(&sentences).contains("1\tdel\tdel\t"));
+        std::fs::remove_dir_all(dir).ok();
     }
 
     /// spaCy itself, when this computer has it with the small English
