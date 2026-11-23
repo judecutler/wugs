@@ -1376,3 +1376,4 @@ body::before {
 .tx-shortcuts .note { margin: 0; }
 .tx-shortcuts-table { font-family: var(--font-ipa); width: 100%; max-width: 28em; }
 .tx-shortcuts-actions { display: flex; gap: 6px; }
+.welcome-recent { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; justify-content: center; }

@@ -10,6 +10,8 @@ export type WelcomeActions = {
   create(): void;
   open(): void;
   reopen: { label: string; run(): void } | null;
+  /** Other project folders opened here lately, the latest first. */
+  recent: { label: string; title: string; run(): void }[];
   join(): void;
   /** Open the tutorial project: every panel already filled in, to look around. */
   sample(): void;
@@ -58,6 +60,14 @@ export function welcomeView(kit: Kit | null, a: WelcomeActions): HTMLElement {
         h("p", { className: "note", textContent: "A short recording, already transcribed, glossed and in a dictionary, with a two-minute tour. Change anything; it is yours to try things on." }),
       ),
       a.reopen === null ? null : h("button", { className: "welcome-link", textContent: a.reopen.label, onclick: a.reopen.run }),
+      a.recent.length === 0
+        ? null
+        : h(
+            "div",
+            { className: "welcome-recent" },
+            h("span", { className: "note", textContent: "Also opened here lately:" }),
+            ...a.recent.map((r) => h("button", { className: "welcome-link", textContent: r.label, title: r.title, onclick: r.run })),
+          ),
       h("button", { className: "welcome-link", textContent: "Join a project from another device", onclick: a.join }),
     ),
   );

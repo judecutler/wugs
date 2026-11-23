@@ -2,11 +2,38 @@
 // in so the policy is unit-tested without a webview (`npm test`).
 
 const LAST_PROJECT_KEY = "wugs.lastProject";
+const RECENT_KEY = "wugs.recentProjects";
+/** How many project folders the menu and the welcome card offer. */
+export const RECENT_MAX = 6;
 
 type Store = Pick<Storage, "getItem" | "setItem">;
 
 export const lastProject = (store: Store): string => store.getItem(LAST_PROJECT_KEY) ?? "";
-export const rememberProject = (store: Store, path: string) => store.setItem(LAST_PROJECT_KEY, path);
+
+/** Project folders opened on this computer, the latest first. */
+export function recentProjects(store: Store): string[] {
+  try {
+    const v: unknown = JSON.parse(store.getItem(RECENT_KEY) ?? "[]");
+    const list = Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x !== "") : [];
+    const last = lastProject(store);
+    // Older versions remembered only the last one.
+    return (last === "" || list.includes(last) ? list : [last, ...list]).slice(0, RECENT_MAX);
+  } catch {
+    return lastProject(store) === "" ? [] : [lastProject(store)];
+  }
+}
+
+export function rememberProject(store: Store, path: string): void {
+  store.setItem(LAST_PROJECT_KEY, path);
+  const list = [path, ...recentProjects(store).filter((p) => p !== path)].slice(0, RECENT_MAX);
+  store.setItem(RECENT_KEY, JSON.stringify(list));
+}
+
+/** Take a folder off the list (one that no longer opens). */
+export function forgetProject(store: Store, path: string): void {
+  store.setItem(RECENT_KEY, JSON.stringify(recentProjects(store).filter((p) => p !== path)));
+  if (lastProject(store) === path) store.setItem(LAST_PROJECT_KEY, "");
+}
 
 export type AutoOpen = { kind: "skipped" } | { kind: "opened" } | { kind: "failed"; path: string; error: string };
 

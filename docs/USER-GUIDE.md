@@ -22,7 +22,7 @@ To create your first project:
 3. Click **Create a project**.
 4. Choose an empty folder. The project lives in that folder.
 
-To open a project that already exists, click **Open a project folder** and choose its folder. wugs opens the last project again the next time it starts; if it cannot, the welcome screen offers **Reopen** with the folder's name. With a project open, the **Project** menu in the top bar opens or creates another one, and the top bar shows the project's folder and your researcher id.
+To open a project that already exists, click **Open a project folder** and choose its folder. wugs opens the last project again the next time it starts; if it cannot, the welcome screen offers **Reopen** with the folder's name. With a project open, the **Project** menu in the top bar opens or creates another one, and the top bar shows the project's folder and your researcher id. Under **Recent**, the Project menu lists the last six project folders opened on this computer, each with the folder it sits in; click one to open it. The welcome screen lists a few of them too.
 
 To start a text, open the **Texts** panel, type a title in **New text title**, and click **New text**.
 

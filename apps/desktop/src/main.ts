@@ -22,10 +22,10 @@ import { closedPanels, layoutKit, mountDock, offers, showPanel } from "./dock";
 import { setTabMode, tabMode } from "./dock-reveal";
 import type { DockviewApi } from "./dockview";
 import { h, wugArt } from "./dom";
-import { menuButton } from "./menu";
+import { menuButton, type MenuItem } from "./menu";
 import { wireVisits, type Visits } from "./wug-peek";
 import { setVisitsOn, visitsOn } from "./wug-visit";
-import { autoOpen, lastProject } from "./last-project";
+import { autoOpen, lastProject, recentProjects } from "./last-project";
 import { folderName, welcomeView } from "./welcome";
 import { onDevicesChange, relocationBanner, wireDeviceEvents } from "./panels/devices";
 import { isPanelId, PANELS, type PanelId } from "./panels/registry";
@@ -151,6 +151,7 @@ function renderTop() {
     { label: "Open another project…", run: () => void pickProject("open") },
     { label: "Create a project…", run: () => void pickProject("create") },
     { label: "Open the tutorial project", run: () => void enterSample() },
+    ...recentItems(),
   ]);
   // Settings (owner, 2026-11-12): one panel for how the workspace looks and
   // behaves and for updates, with themes and patterns shown, not named.
@@ -496,6 +497,10 @@ function renderWelcome() {
       create: () => void pickProject("create"),
       open: () => void pickProject("open"),
       sample: () => void enterSample(),
+      recent: recentProjects(localStorage)
+        .filter((p) => p !== last)
+        .slice(0, 4)
+        .map((path) => ({ label: folderName(path), title: path, run: () => openRecent(path) })),
       reopen:
         last === ""
           ? null
@@ -605,6 +610,25 @@ async function enterSample() {
     }
     if (!tourDone(localStorage)) window.setTimeout(() => startTour((id) => showOrFocus(id as PanelId)), 600);
   });
+}
+
+/** The Project menu's recent folders: every one but the project open now. */
+function recentItems(): MenuItem[] {
+  const s = getState();
+  const open = s.kind === "open" ? s.info.path : "";
+  const others = recentProjects(localStorage).filter((p) => p !== open);
+  if (others.length === 0) return [];
+  return ["separator", { heading: "Recent" }, ...others.map((path) => ({ label: folderName(path), note: path.replace(/[\\/]+$/u, "").replace(/[\\/][^\\/]*$/u, "") || path, run: () => void openRecent(path) }))];
+}
+
+/** Open a folder from the recent list, as Open a project folder would. */
+function openRecent(path: string): void {
+  if (refuseProjectChange()) return;
+  if (researcher() === "") {
+    showToast({ tone: "error", lines: ["Enter your researcher id first."] });
+    return;
+  }
+  void attempt(async () => enterProject(await openProject({ path, researcher: researcher() })));
 }
 
 async function reopenAs(path: string) {
