@@ -357,6 +357,19 @@ def main():
                     failures.append("turning Pitch on showed no voice picker")
                 run.page.locator(".panel-timeline .praat-bar button", has_text="Pitch").click()
 
+            # Find and replace in the Search panel: a live preview with the change marked.
+            run.front("search", "Search")
+            run.page.locator(".panel-search .rp-toggle").click()
+            run.page.locator(".panel-search input[type=search]").fill("θ")
+            run.page.locator(".panel-search .rp-with").fill("t")
+            run.page.locator(".panel-search .rp-changes ins").first.wait_for()
+            run.shot("state-replace", run.page.locator(".panel-search"))
+            if run.page.locator(".panel-search .rp-changes li").count() != 2:
+                failures.append("the replace preview did not list the two sentences with θ")
+            run.page.locator(".panel-search .rp-foot button", has_text="Replace in 2").click()
+            run.page.locator(".toast", has_text="Replaced in 2 sentences").wait_for()
+            run.page.locator(".panel-search .rp-toggle").click()
+
             # The kit switcher (roadmap 73): open it, then switch to Scrolls and back.
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.click(".kit-switcher")

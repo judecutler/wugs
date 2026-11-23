@@ -610,6 +610,18 @@ Type in the **Search** panel. Choose **All**, **Texts**, or **Lexicon** to narro
 
 Search ignores accents in both directions, so `e` finds `é`.
 
+### Find and replace
+
+To change a spelling everywhere, for example after you settle on an orthography, click **Replace…** beside the scope buttons. The search box is now what to find, and a second box is what to write instead.
+
+1. Type what to find. It is matched exactly as you type it: no pattern syntax, and accents count, so `e` does not find `é`.
+2. Type the replacement. Leave it empty to delete what you found.
+3. Choose **Transcriptions** or **Translations**, and tick **Whole words**, **Match case** or **Only the text on screen** if you need them. Without **Match case**, capitals do not matter.
+4. Every sentence that would change is listed with the change marked. Untick any you want to leave alone. Click a sentence to open it.
+5. Click **Replace in N sentences**. The message that follows has an **Undo** button.
+
+Each change is written as if you had typed it, so it syncs like any edit. A sentence someone changed after the preview is left alone, and the message says how many. A sentence marked **glossed** already has its words broken out: after the replace, open it in Gloss and use **Retokenize** to bring the words in line. A preview lists at most 2000 sentences; replace those, and the preview shows the rest.
+
 
 ## See every occurrence in context
 

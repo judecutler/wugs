@@ -30,6 +30,7 @@ pub mod metadata;
 pub mod morphosyntax;
 pub mod people;
 pub mod plaintext;
+pub mod replace;
 pub mod table_text;
 pub mod listen;
 pub mod praat;
@@ -910,6 +911,18 @@ fn acoustic_voice(s: State<SessionThread>, source: String) -> Result<praat_analy
 #[tauri::command(async)]
 fn set_acoustic_voice(s: State<SessionThread>, source: String, voice: String) -> Result<praat_analysis::VoiceView, String> {
     s.run(move |s| praat_analysis::set_voice(s, &source, &voice))
+}
+
+/// Every sentence a find and replace would change, before and after.
+#[tauri::command(async)]
+fn replace_preview(s: State<SessionThread>, find: replace::Find) -> Result<replace::Preview, String> {
+    s.run(move |s| replace::preview(s, &find))
+}
+
+/// Write the chosen changes, each only where its sentence still reads as previewed.
+#[tauri::command(async)]
+fn replace_apply(s: State<SessionThread>, changes: Vec<replace::Change>) -> Result<replace::Applied, String> {
+    s.run(move |s| replace::apply(s, changes))
 }
 
 /// Measure every timed segment of one track of a text against `source`'s
@@ -1794,6 +1807,8 @@ pub fn run() {
             praat_discard,
             acoustic_analysis,
             measure_track,
+            replace_preview,
+            replace_apply,
             acoustic_voice,
             set_acoustic_voice,
             measure_points,

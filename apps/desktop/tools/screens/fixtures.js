@@ -583,6 +583,24 @@
       total: 1,
       hits: [{ textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, len: 1, breakdown: null, glosses: null }],
     }),
+    // Find and replace: three invented sentences, one glossed.
+    replace_preview: ({ find }) => {
+      const sentences = [
+        ["t1", "Counting to six (tutorial)", "wʌn tuː θɹiː", true],
+        ["t1", "Counting to six (tutorial)", "fɔɹ faɪv", false],
+        ["t2", "Market day", "θɹiː kʊkiːz ænd θɹiː keɪks", false],
+      ];
+      const changes = [];
+      for (const [textId, textTitle, before, glossed] of sentences) {
+        const count = find.find === "" ? 0 : before.split(find.find).length - 1;
+        if (count === 0) continue;
+        const pieces = before.split(find.find);
+        const parts = pieces.map((keep, i) => (i < pieces.length - 1 ? { keep, removed: find.find, added: find.with } : { keep, removed: "", added: "" }));
+        changes.push({ textId, textTitle, tierId: "tier-u", segmentId: `seg-${changes.length}`, before, after: pieces.join(find.with), count, glossed, parts });
+      }
+      return { changes, total: changes.length };
+    },
+    replace_apply: ({ changes }) => ({ done: changes, skipped: 0 }),
     // A synthetic speaker's vowels: five qualities, six tokens each, spread deterministically.
     acoustic_voice: () => ({
       voice: "typical",

@@ -1,6 +1,7 @@
 import { search, type SearchRow } from "../api";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
+import { replaceSection } from "../replace/section";
 import { groupRows, moveActive, navigable, navTargets, SCOPES, whereLabel, type Scope } from "../search/logic";
 import { attempt, getState, selectSegment, selectText } from "../store";
 import { sliced, type PanelDef } from "./panel";
@@ -45,6 +46,29 @@ export const searchPanel: PanelDef = {
     );
     const paintChips = () => chips.forEach((chip, i) => chip.setAttribute("aria-pressed", String(SCOPES[i]?.scope === scope)));
     const scopes = h("div", { className: "scopes" }, ...chips);
+    // Replace mode: the field is what to find, and the preview takes the results' place.
+    const replace = replaceSection(input);
+    let replacing = false;
+    const replaceToggle = h("button", {
+      type: "button",
+      className: "rp-toggle",
+      textContent: "Replace…",
+      title: "Find and replace in transcriptions or translations across texts",
+      onclick: () => {
+        setReplacing(!replacing);
+        input.focus();
+      },
+    });
+    const setReplacing = (on: boolean) => {
+      replacing = on;
+      replaceToggle.setAttribute("aria-pressed", String(on));
+      input.placeholder = on ? "Find (exactly as typed)" : "Search texts and the lexicon";
+      for (const chip of chips) chip.hidden = on;
+      results.hidden = on;
+      replace.el.hidden = !on;
+      if (on) replace.run();
+      else void run();
+    };
 
     let seq = 0;
     let targets: SearchRow[] = [];
@@ -98,8 +122,10 @@ export const searchPanel: PanelDef = {
     input.oninput = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => void run(), 150);
+      if (replacing) replace.run();
     };
     input.onkeydown = (ev) => {
+      if (replacing) return;
       if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
         ev.preventDefault();
         active = moveActive(active, ev.key, targets.length);
@@ -124,7 +150,10 @@ export const searchPanel: PanelDef = {
       active = -1;
       paintChips();
       results.replaceChildren();
-      el.replaceChildren(input, scopes, results);
+      replace.reset();
+      scopes.append(replaceToggle);
+      setReplacing(false);
+      el.replaceChildren(input, scopes, results, replace.el);
     });
   },
 };

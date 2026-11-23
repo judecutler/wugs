@@ -674,3 +674,6 @@ export const feedbackRetry = () => invoke<FeedbackOutcome>("feedback_retry");
 /** One question to the help service (roadmap 67). `null`: this build has no service to ask. */
 export const helpAsk = (args: { question: string; history: { role: "user" | "assistant"; content: string }[]; share: boolean }) =>
   invoke<{ answer: string; sources: string[] } | null>("help_ask", args);
+/** Find and replace across texts (src-tauri/src/replace.rs). */
+export const replacePreview = (args: { find: import("./replace/logic").Find }) => invoke<import("./replace/logic").Preview>("replace_preview", args);
+export const replaceApply = (args: { changes: import("./replace/logic").Change[] }) => invoke<import("./replace/logic").Applied>("replace_apply", args);
