@@ -631,6 +631,9 @@ export type Languoid = import("./cldf/logic").Languoid;
 /** Glottolog's languages and dialects a typed name or code fits, best first (at most 8). */
 export const glottologFind = (args: { query: string }) => invoke<Languoid[]>("glottolog_find", args);
 /** Every character the project's transcriptions and lexicon use (src-tauri/src/characters.rs). */
+/** The word types on a transcription track, for the Sounds panel (src-tauri/src/sounds.rs). */
+export const soundWords = (args: { tierId: string | null; textId: string | null }) =>
+  invoke<{ tracks: { id: string; name: string; words: number }[]; words: { word: string; count: number }[]; running: number; omitted: number }>("sound_words", args);
 export const characterInventory = () => invoke<import("./checks/logic").Inventory>("character_inventory");
 export const setProjectLanguage = (args: { language: import("./cldf/logic").Language }) => invoke<import("./cldf/logic").Language>("set_project_language", args);
 /** Every text as one CWB corpus for CQPweb, NoSketch Engine or Sketch Engine (src-tauri/src/cwb.rs). */

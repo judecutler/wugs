@@ -40,6 +40,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "keywords",                      # which words set a text apart; not placed either
   "checks",                        # glosses to tidy: a morph glossed more than one way; not placed either
   "vowels",                        # vowel space: F1 against F2 per segment; not placed either
+  "sounds",                        # the sound inventory on the IPA chart; not placed either
   "assist",                        # speech assist: machine phone transcription
   "people",                        # speakers and what each agreed to (optional)
 ]

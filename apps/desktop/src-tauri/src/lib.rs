@@ -42,6 +42,7 @@ pub mod sample;
 pub mod segmentation;
 pub mod sentence;
 pub mod session;
+pub mod sounds;
 pub mod spectrogram;
 pub mod updater;
 pub mod voice_analysis;
@@ -326,6 +327,12 @@ fn sentence_mark_checked(s: State<SessionThread>, text_id: String, segment_ids: 
 #[tauri::command(async)]
 fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory, String> {
     s.run(characters::inventory)
+}
+
+/// The word types on a transcription track (or all of them), for the Sounds panel.
+#[tauri::command(async)]
+fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option<String>) -> Result<sounds::SoundWords, String> {
+    s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
 }
 
 /// Glottolog's languages and dialects a typed name or code fits, best first.
@@ -1815,6 +1822,7 @@ pub fn run() {
             morphosyntax_choose_stanza,
             glottolog_find,
             character_inventory,
+            sound_words,
             sentence_check_status,
             sentence_mark_checked,
             morphosyntax_allow_web,

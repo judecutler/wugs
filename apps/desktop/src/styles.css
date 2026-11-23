@@ -1226,6 +1226,41 @@ body::before {
 .ck-count { color: var(--muted); font-size: var(--text-sm); min-width: 3em; }
 .ck-show { border: none; background: none; color: var(--accent); padding: 0; text-decoration: underline; cursor: pointer; font-size: var(--text-sm); }
 
+/* Sounds (src/panels/sounds.ts) */
+.panel-sounds { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
+.sd-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.sd-bar label { display: inline-flex; gap: 4px; align-items: center; }
+.panel-sounds > .note { margin: 0; }
+.panel-sounds > * { flex-shrink: 0; }
+.sd-h { margin: 8px 0 2px; font-family: var(--font-display); font-weight: 400; font-size: 15px; }
+.sd-scroll { overflow-x: auto; }
+.sd-consonants { border-collapse: collapse; font-size: var(--text-sm); }
+.sd-consonants th { font-weight: 600; color: var(--muted); font-size: var(--text-xs); padding: 3px 6px; text-align: center; }
+.sd-consonants tbody th { text-align: right; white-space: nowrap; }
+.sd-consonants td { border: 1px solid var(--line); padding: 2px; min-width: 64px; vertical-align: middle; background: var(--surface-raised); }
+.sd-cell { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; }
+.sd-side { display: flex; flex-wrap: wrap; gap: 2px; justify-content: flex-end; align-content: center; }
+.sd-voiced { justify-content: flex-start; }
+.sd-sound { display: inline-flex; align-items: baseline; gap: 2px; border: 1px solid transparent; background: none; border-radius: var(--radius-sm); padding: 0 3px; cursor: pointer; color: var(--ink); }
+.sd-sound:hover, .sd-sound:focus-visible { border-color: var(--accent); background: var(--surface); }
+.sd-glyph { font-family: var(--font-ipa); font-size: 18px; line-height: 1.3; }
+.sd-n { font-size: 10px; color: var(--muted); }
+.sd-vowels { position: relative; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.sd-trapezoid { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sd-trapezoid path { fill: none; stroke: var(--line); stroke-width: 1.5; }
+.sd-vgroup { position: absolute; display: flex; gap: 1px; transform: translateY(-50%); background: var(--surface-raised); border-radius: var(--radius-sm); }
+.sd-unrounded { flex-direction: row-reverse; }
+.sd-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.sd-contrast { font-family: var(--font-ipa); border: 1px solid var(--line); background: var(--surface-raised); border-radius: var(--radius-sm); padding: 1px 8px; cursor: pointer; }
+.sd-contrast.is-open { border-color: var(--accent); background: var(--accent-soft); }
+.sd-pairs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 12px; }
+.sd-pairs li { display: flex; gap: 6px; align-items: baseline; }
+.sd-word { font-family: var(--font-ipa); font-size: 16px; border: none; background: none; color: var(--accent); padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); }
+.sd-tilde { color: var(--muted); }
+.sd-shape { font-family: var(--font-ipa); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1px 8px; background: var(--surface-raised); }
+.sd-where td.num { text-align: right; min-width: 5em; }
+.sd-where td.sd-gap { color: var(--muted); }
+
 .panel-vowels { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .vw-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .vw-bar label { display: inline-flex; gap: 4px; align-items: center; }

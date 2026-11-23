@@ -661,6 +661,15 @@
     ],
     gloss_unify: () => 1,
     // The character inventory: a Cyrillic «а» typed among Latin letters, and two apostrophes.
+    sound_words: ({ tierId }) => ({
+      tracks: [
+        { id: "tier-utt", name: "utterance", words: 64 },
+        { id: "tier-ipa", name: "IPA", words: 52 },
+      ],
+      words: (tierId === "tier-utt" ? ["kesi mopa", "tela senu"] : ["tʰaka", "ŋaːla", "t͡ʃimbo", "ᵐbeli", "kʼosu", "ɓaɾu", "ǃxoa", "ɛʔɛ", "jɔɣu", "Wiri", "łuwe", "ɲĩda", "fɪsu", "pata", "bata", "tata", "kata", "pati", "bati", "suka", "ʃuka"]).flatMap((w, i) => w.split(" ").map((word) => ({ word, count: 9 - (i % 7) }))),
+      running: tierId === "tier-utt" ? 64 : 52,
+      omitted: 0,
+    }),
     character_inventory: () => {
       const place = (context) => ({ textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u02", context });
       const row = (ch, code, name, script, kind, inTexts, inLexicon, flags = [], where = null) => ({ ch, code, name, script, kind, inTexts, inLexicon, place: where, entry: null, flags });
