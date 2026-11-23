@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addedLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
+import { addedLine, exampleGapsLine, examplesAddedLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
 
 const v = (gloss: string, count: number) => ({ gloss, count, textId: "t", textTitle: "T", tierId: "u", segmentId: "s" });
 const ka: Inconsistent = { surface: "ka", kind: "suffix", key: "ka", total: 3, variants: [v("PL", 2), v("pl.", 1)], slip: true };
@@ -44,4 +44,11 @@ test("the character inventory reads in words", () => {
   assert.equal(inventoryNote({ ...inv, rows: [row("a", "letter"), row("b", "letter")] }), "2 characters in use: 2 letters, mostly Latin. Nothing looks like a slip.");
   assert.match(inventoryNote({ ...inv, notNfc: 2 }), /2 transcriptions or headwords are stored decomposed/u);
   assert.equal(inventoryNote({ rows: [], mainScript: "", notNfc: 0 }), "No transcriptions or lexicon entries yet.");
+});
+
+test("example sentences still to find", () => {
+  assert.equal(exampleGapsLine({ without: 4, fillable: 4 }), "4 senses have no example sentence; all are glossed in a text that is open, so wugs can take one from there.");
+  assert.equal(exampleGapsLine({ without: 4, fillable: 1 }), "4 senses have no example sentence; 1 of them is glossed in a text that is open, so wugs can take one from there.");
+  assert.equal(exampleGapsLine({ without: 1, fillable: 0 }), "1 sense has no example sentence, and none is glossed in a text that is open yet.");
+  assert.equal(examplesAddedLine(2), "Added 2 example sentences from the texts, each with its translation where it has one. Edit them in the Lexicon.");
 });

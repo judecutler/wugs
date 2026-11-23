@@ -4,16 +4,16 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify, soundWords } from "../api";
+import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify, lexiconExampleGaps, lexiconExamplesFromTexts, soundWords } from "../api";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
-import { addedLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
+import { addedLine, addLabel, exampleGapsLine, examplesAddedLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { marked } from "../gloss/morphs";
 import type { MorphType } from "../gloss/morphs";
 import { provide } from "../palette/registry";
-import { dataGeneration, getState, refreshAll, selectSegment, showToast } from "../store";
+import { dataGeneration, getState, refreshAll, selectSegment, showToast, touchLexicon } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 function glossNode(gloss: string): HTMLElement {
@@ -28,6 +28,7 @@ export const checksPanel: PanelDef = {
     let missing: Missing[] = [];
     let chars: Inventory | null = null;
     let near: { pairs: NearPair[]; read: number } | null = null;
+    let gaps: { without: number; fillable: number } | null = null;
     let showAllChars = false;
     let key = "";
     let seq = 0;
@@ -39,9 +40,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null })]).then(
-        ([r, m, c, w]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps()]).then(
+        ([r, m, c, w, g]) => {
           if (mine !== seq) return;
+          gaps = g;
           rows = r;
           missing = m;
           chars = c;
@@ -205,6 +207,46 @@ export const checksPanel: PanelDef = {
       );
     };
 
+    /** Fill every sense with no example from its first use in an open text. */
+    const fillExamples = async () => {
+      busy = true;
+      paint();
+      try {
+        const n = await lexiconExamplesFromTexts();
+        showToast({ tone: "info", lines: [examplesAddedLine(n)] });
+        touchLexicon();
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      busy = false;
+      armed = null;
+      await refreshAll();
+      load();
+    };
+
+    const examplesSection = (): HTMLElement[] => {
+      if (gaps === null || gaps.without === 0) return [];
+      const fill =
+        gaps.fillable === 0
+          ? null
+          : h("button", {
+              type: "button",
+              className: armed === "examples" ? "danger" : "",
+              disabled: busy,
+              textContent: armed === "examples" ? `Add ${gaps.fillable}: sure?` : `Add ${gaps.fillable} from the texts`,
+              title: "Each sense with no example sentence gets its first use in a text that is open, with its translation, as Use as example does",
+              onclick: () => {
+                if (armed !== "examples") {
+                  armed = "examples";
+                  paint();
+                  return;
+                }
+                void fillExamples();
+              },
+            });
+      return [h("h3", { className: "ck-title", textContent: "Example sentences" }), h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: exampleGapsLine(gaps) }), fill)];
+    };
+
     const spellingSection = (): HTMLElement[] =>
       near === null
         ? []
@@ -237,6 +279,7 @@ export const checksPanel: PanelDef = {
         h("h3", { className: "ck-title", textContent: "Not in the lexicon" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
         h("ul", { className: "ck-list" }, ...missing.map(missingCard)),
+        ...examplesSection(),
         ...spellingSection(),
         ...charSection(),
       );

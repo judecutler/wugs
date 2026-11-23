@@ -751,6 +751,8 @@ const LEXICON = [
         ],
       };
     },
+    lexicon_example_gaps: () => ({ without: 6, fillable: 4 }),
+    lexicon_examples_from_texts: () => 4,
     gloss_missing: () => [
       { surface: "haru", key: "haru", total: 6, variants: [
         { gloss: "stone", count: 5, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "u01" },

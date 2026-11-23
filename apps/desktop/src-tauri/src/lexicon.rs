@@ -691,6 +691,83 @@ pub fn lexicon_example_from(session: &mut Session, sense: &str, segment: &str) -
     edit(p, &lex, &res)
 }
 
+/// A sense's first use in a text the lexicon may quote (open to everyone),
+/// as a segment with content; one with a translation is preferred.
+fn first_use(p: &Project, sense: &str) -> Result<Option<String>, String> {
+    let live = |id: &str| -> Result<bool, String> { Ok(p.proj.entity_kind(id)?.is_some() && !p.proj.is_tombstoned(id)?) };
+    let mut morphs = p.proj.children_by_ref("sense", sense, "morph")?;
+    morphs.sort();
+    let mut untranslated = None;
+    for morph in morphs {
+        let Some(token) = p.proj.field_str(&morph, "token")? else { continue };
+        let Some(segment) = p.proj.field_str(&token, "segment")? else { continue };
+        let Some(text) = p.proj.field_str(&segment, "text")? else { continue };
+        if !(live(&morph)? && live(&token)? && live(&segment)? && live(&text)?) || !p.proj.members(&token)?.contains(&morph) || !p.proj.members(&segment)?.contains(&token) {
+            continue;
+        }
+        if p.text_access(&text)? != "open" || str_field(p, &segment, "content")?.trim().is_empty() {
+            continue;
+        }
+        if crate::interchange::translations_of(p, &segment)?.into_iter().any(|(_, t)| !t.trim().is_empty()) {
+            return Ok(Some(segment));
+        }
+        untranslated.get_or_insert(segment);
+    }
+    Ok(untranslated)
+}
+
+/// Senses of live entries with no example sentence yet: how many, and how
+/// many of them are used in a text that is open, so could take one.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExampleGaps {
+    pub without: usize,
+    pub fillable: usize,
+}
+
+fn senses_without_examples(p: &Project) -> Result<Vec<String>, String> {
+    let mut out = Vec::new();
+    for lex in p.proj.entities_of_kind("lexeme")? {
+        if p.proj.is_tombstoned(&lex)? {
+            continue;
+        }
+        for sense in senses(p, &lex)? {
+            if p.examples(&sense)?.is_empty() {
+                out.push(sense);
+            }
+        }
+    }
+    Ok(out)
+}
+
+pub fn example_gaps(session: &mut Session) -> Result<ExampleGaps, String> {
+    let p = project(session)?;
+    let without = senses_without_examples(p)?;
+    let mut fillable = 0;
+    for sense in &without {
+        if first_use(p, sense)?.is_some() {
+            fillable += 1;
+        }
+    }
+    Ok(ExampleGaps { without: without.len(), fillable })
+}
+
+/// Give every sense with no example its first use in an open text (with its
+/// translation, preferring a translated sentence), as **Use as example**
+/// does one at a time. Returns how many were added.
+pub fn examples_from_texts(session: &mut Session) -> Result<usize, String> {
+    let p = project(session)?;
+    let mut added = 0;
+    for sense in senses_without_examples(p)? {
+        let Some(segment) = first_use(p, &sense)? else { continue };
+        let content = str_field(p, &segment, "content")?;
+        let translation = crate::interchange::translations_of(p, &segment)?.into_iter().map(|(_, t)| t).find(|t| !t.trim().is_empty()).unwrap_or_default();
+        p.add_example(&sense, &content, &translation, Some(&segment), None)?;
+        added += 1;
+    }
+    Ok(added)
+}
+
 /// Retype an example's `sentence` or `translation`.
 pub fn lexicon_set_example(session: &mut Session, example: &str, field: &str, text: &str) -> Result<EntryEdit, String> {
     let p = project(session)?;
@@ -922,6 +999,25 @@ pub fn lexicon_delete_form(session: &mut Session, id: &str, form: &str, axes: &[
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn senses_take_their_first_use_as_an_example() {
+        let dir = std::env::temp_dir().join(format!("wugs-ex-from-texts-{}", wugs_model::ulid()));
+        let mut s: crate::session::Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let gaps = super::example_gaps(&mut s).unwrap();
+        assert!(gaps.without >= gaps.fillable && gaps.fillable >= 5, "{gaps:?}");
+        let added = super::examples_from_texts(&mut s).unwrap();
+        assert_eq!(added, gaps.fillable);
+        let wan = super::lexicon_list(&mut s, "wʌn").unwrap()[0].id.clone();
+        let e = super::entry_view(crate::session::project(&mut s).unwrap(), &wan).unwrap();
+        let ex = &e.senses[0].examples[0];
+        assert_eq!(ex.sentence, "wʌn tuː θɹiː");
+        assert!(!ex.translation.is_empty() && ex.from.is_some(), "{ex:?}");
+        assert_eq!(super::example_gaps(&mut s).unwrap().fillable, 0, "a second run adds nothing");
+        assert_eq!(super::examples_from_texts(&mut s).unwrap(), 0);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
     use super::*;
 
     #[test]
