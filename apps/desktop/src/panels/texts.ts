@@ -1,7 +1,7 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { lexiconList, orthographyGet, projectProgress, soundWords, typologyAnswers, typologyProfile } from "../api";
 import { featuresOf, grammarSketch, graphemesOf, morphemesOf, type Feature } from "../grammar/sketch";
-import { defaultTrack, inventory } from "../sounds/ipa";
+import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
@@ -356,7 +356,7 @@ async function exportSketch() {
     const graphemes = graphemesOf(toGrid(ortho.profile));
     const html = grammarSketch({
       language,
-      sounds: track === null ? [] : inventory(words.words),
+      words: track === null ? [] : words.words,
       soundTrack: first.tracks.find((t) => t.id === track)?.name ?? "",
       graphemes,
       morphemes,

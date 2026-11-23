@@ -759,7 +759,7 @@ Press **Dictionary to print…** beside the lexicon export. wugs writes one HTML
 Press **Grammar sketch…** beside **Dictionary to print…**. wugs writes one HTML file with a grammar's usual chapters, filled with what the project already knows, for you to open in Word or LibreOffice and go on writing:
 
 - **Introduction**: the language's name and codes, and how many texts, words and entries the sketch draws on.
-- **Phonology**: the consonants in a chart by place and manner and the vowels, read from your IPA track (or your fullest track) as the Sounds panel reads them, with a table of how often each sound occurs and an example word. These are the sounds as written, not yet phonemes: say which contrast.
+- **Phonology**: the consonants in a chart by place and manner and the vowels, read from your IPA track (or your fullest track) as the Sounds panel reads them, with a table of how often each sound occurs and an example word, then the commonest word shapes (CV, CVCV…) and the consonants never found at the start or end of a word. These are the sounds as written, not yet phonemes: say which contrast.
 - **Orthography**: your orthography profile's letters beside their IPA, when the Orthography panel keeps one.
 - **Morphology**: the lexicon's prefixes, suffixes, infixes and clitics (entries written like `ni-`, `-ok`, `<um>` or `=ma`) with their glosses.
 - **Typological profile**: your own answers in the Typology panel, for Grambank or WALS, whichever has more.

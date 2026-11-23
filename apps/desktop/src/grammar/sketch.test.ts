@@ -2,15 +2,14 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { featuresOf, grammarSketch, graphemesOf, morphemeKind, morphemesOf, type SketchInput } from "./sketch.ts";
 import { toGrid } from "../orthography/logic.ts";
-import { inventory } from "../sounds/ipa.ts";
 
 const base: SketchInput = {
   language: { name: "Kalam", glottocode: "kala1397", iso: "kmh" },
-  sounds: inventory([
+  words: [
     { word: "pata", count: 3 },
     { word: "mbiku", count: 1 },
     { word: "sɨŋ", count: 2 },
-  ]),
+  ],
   soundTrack: "IPA",
   graphemes: [{ grapheme: "ng", ipa: "ŋ" }],
   morphemes: [
@@ -47,6 +46,8 @@ test("the sketch lays out what the project knows, chapter by chapter", () => {
   assert.match(html, /<th>Plosive<\/th>/);
   assert.match(html, /<td class="ipa">p<\/td>/);
   assert.match(html, /«IPA» track/);
+  // Word shapes with their share of running words.
+  assert.match(html, /<td>CVCV<\/td><td>50%<\/td><td class="ipa">pata<\/td>/);
   // Orthography and morphology.
   assert.match(html, /<td>ng<\/td><td class="ipa">ŋ<\/td>/);
   assert.ok(html.indexOf("Prefixes") < html.indexOf("Suffixes"));
@@ -60,7 +61,7 @@ test("the sketch lays out what the project knows, chapter by chapter", () => {
 });
 
 test("an empty project still gives a sketch with places to write", () => {
-  const html = grammarSketch({ ...base, language: { name: "", glottocode: "", iso: "" }, sounds: [], graphemes: [], morphemes: [], features: [], texts: [], entries: 0 });
+  const html = grammarSketch({ ...base, language: { name: "", glottocode: "", iso: "" }, words: [], graphemes: [], morphemes: [], features: [], texts: [], entries: 0 });
   assert.match(html, /A grammar sketch of the language/);
   assert.match(html, /No transcriptions to read sounds from yet/);
   assert.match(html, /orthography profile/);

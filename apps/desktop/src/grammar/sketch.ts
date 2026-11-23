@@ -6,7 +6,8 @@
 // only the linguist can write. Pure: no DOM, no commands; the Texts panel
 // gathers the data and saves the file.
 
-import { chart, gridOf, MANNER_NAMES, PLACE_NAMES, type Sound } from "../sounds/ipa.ts";
+import { chart, gridOf, inventory, MANNER_NAMES, PLACE_NAMES, type Sound } from "../sounds/ipa.ts";
+import { gapsNote, positions, shapes, share } from "../sounds/shapes.ts";
 import type { Grid } from "../orthography/logic.ts";
 import type { Answer, Ours } from "../typology/logic.ts";
 
@@ -17,8 +18,9 @@ export type SketchText = { title: string; sentences: number; words: number; glos
 
 export type SketchInput = {
   language: { name: string; glottocode: string; iso: string };
-  /** The project's sounds, from one transcription track (`inventory`). */
-  sounds: Sound[];
+  /** The word types of one transcription track with their counts, as
+   * `sound_words` gives them; sounds and word shapes are read from them. */
+  words: { word: string; count: number }[];
   /** The track they came from, named in the sketch. */
   soundTrack: string;
   graphemes: Grapheme[];
@@ -123,15 +125,29 @@ export function grammarSketch(d: SketchInput): string {
   );
 
   parts.push(`<h2>2. Phonology</h2>`);
-  if (d.sounds.length === 0) {
+  const sounds = inventory(d.words);
+  if (sounds.length === 0) {
     parts.push(`<p>No transcriptions to read sounds from yet.</p>`);
   } else {
     parts.push(`<p>The sounds below are read from the «${esc(d.soundTrack)}» track as written, so they are phones of the transcription, not yet a phonemic analysis.</p>`);
-    parts.push(`<h3>2.1 Consonants</h3>`, consonantTable(d.sounds), todo("Which of these contrast, and their allophones"));
-    parts.push(`<h3>2.2 Vowels</h3>`, vowelList(d.sounds), todo("Vowel contrasts, length, nasality, harmony"));
-    parts.push(`<h3>2.3 Frequency</h3>`, soundTable(d.sounds));
+    parts.push(`<h3>2.1 Consonants</h3>`, consonantTable(sounds), todo("Which of these contrast, and their allophones"));
+    parts.push(`<h3>2.2 Vowels</h3>`, vowelList(sounds), todo("Vowel contrasts, length, nasality, harmony"));
+    parts.push(`<h3>2.3 Frequency</h3>`, soundTable(sounds));
   }
-  parts.push(`<h3>2.4 Syllables and stress</h3>`, todo("Syllable structure, stress or tone"));
+  parts.push(`<h3>2.4 Word shapes, syllables and stress</h3>`);
+  const shaped = shapes(d.words);
+  if (shaped.length > 0) {
+    const running = shaped.reduce((n, x) => n + x.count, 0);
+    parts.push(
+      `<p>The commonest consonant–vowel shapes of words (C a consonant, V a vowel):</p><table><tr><th>Shape</th><th>Share of words</th><th>Example</th></tr>${shaped
+        .slice(0, 12)
+        .map((x) => `<tr><td>${esc(x.shape)}</td><td>${share(x.count, running)}</td><td class="ipa">${esc(x.example)}</td></tr>`)
+        .join("")}</table>`,
+    );
+    const gaps = gapsNote(positions(d.words, sounds.map((x) => x.sound)));
+    if (gaps !== "") parts.push(`<p>${esc(gaps)}</p>`);
+  }
+  parts.push(todo("Syllable structure, stress or tone"));
 
   parts.push(`<h2>3. Orthography</h2>`);
   if (d.graphemes.length === 0) {
