@@ -35,6 +35,8 @@ pub struct Dictionary {
     pub clips: Vec<Clip>,
     /// Senses printed with their picture.
     pub pictures: usize,
+    /// Semantic domains in the "Words by topic" index.
+    pub topics: usize,
     /// With pictures as files: each file the page shows and the blob it copies.
     #[serde(skip)]
     pub picture_files: Vec<(String, String)>,
@@ -162,7 +164,8 @@ h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; ma
 .ps { font-style: italic; } .rel { font-variant: small-caps; } .pr { font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
 .gl2 { color: #333; } .ex { font-style: italic; } .tr { }
 .pic { display: block; max-width: 12em; max-height: 9em; margin: .3em 0 .2em 1.2em; border-radius: 3px; }
-.reversal p { margin: 0 0 .25em; } h2 { break-after: avoid; }
+.reversal p { margin: 0 0 .25em; }
+.topics { column-count: 2; column-gap: 2em; } h3.topic { font-size: 11pt; margin: .8em 0 .2em; break-after: avoid; } .topics p { margin: 0 0 .4em; } h2 { break-after: avoid; }
 .entry:target { background: #fff3c4; }
 @media print { body { margin: 0; max-width: none; } a { color: inherit; text-decoration: none; } }
 ";
@@ -376,6 +379,35 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
             }
         }
     }
+    // Words by topic: each semantic domain a sense is in, in outline order,
+    // with its headwords and glosses, for a thematic word list.
+    let mut topics: BTreeMap<(Vec<u32>, String), (String, Vec<String>)> = BTreeMap::new();
+    for e in &entries {
+        for s in &e.senses {
+            for d in &s.domains {
+                let order: Vec<u32> = d.code.split('.').map(|n| n.trim().parse().unwrap_or(u32::MAX)).collect();
+                let slot = topics.entry((order, d.code.clone())).or_insert_with(|| (format!("{} {}", d.code, d.label).trim().to_string(), Vec::new()));
+                let gloss = s.gloss.trim();
+                let item = format!(
+                    "<a href=\"#{}\">{}{}</a>{}",
+                    esc(&e.id),
+                    esc(&e.lemma),
+                    e.homograph.map(|n| format!("<span class=\"hn\">{n}</span>")).unwrap_or_default(),
+                    if gloss.is_empty() { String::new() } else { format!(" ‘{}’", esc(gloss)) }
+                );
+                if !slot.1.contains(&item) {
+                    slot.1.push(item);
+                }
+            }
+        }
+    }
+    if !topics.is_empty() {
+        body.push_str("<h2>Words by topic</h2>\n<div class=\"topics\">\n");
+        for (heading, items) in topics.values() {
+            body.push_str(&format!("<h3 class=\"topic\">{}</h3>\n<p>{}</p>\n", esc(heading), items.join("; ")));
+        }
+        body.push_str("</div>\n");
+    }
     if !reversal.is_empty() {
         body.push_str("<h2>Index of glosses</h2>\n<div class=\"reversal\">\n");
         for (gloss, words) in reversal.values() {
@@ -408,13 +440,14 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
             glosses: e.senses.iter().map(|s| s.gloss.trim()).filter(|g| !g.is_empty()).collect::<Vec<_>>().join("; "),
         })
         .collect();
-    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords, clips: cut, pictures: shown.len(), picture_files };
+    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords, clips: cut, pictures: shown.len(), topics: topics.len(), picture_files };
     Ok((title, html, d))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::lexicon::{domains_list, domains_load_sil, lexicon_assign_domain};
 
     #[test]
     fn letters_follow_the_alphabet() {
@@ -446,12 +479,30 @@ mod tests {
         assert!(html.contains("<span class=\"hw\">wʌn</span>") && html.contains("<span class=\"ex\">wʌn tuː θɹiː</span> ‘<span class=\"tr\">"), "{html}");
         assert!(html.contains("Index of glosses") && html.contains("one — <a href=\"#"), "{html}");
         assert_eq!(html.matches("<span class=\"rel\">See also:</span> <a href=\"#").count(), 2, "under both entries: {html}");
+        assert!(!html.contains("Words by topic") && d.topics == 0, "no domains, no topic index");
+        // Two senses in SIL's Number domains: a topic index in outline order.
+        domains_load_sil(&mut s).unwrap();
+        let doms = domains_list(&mut s).unwrap();
+        let find = |code: &str| doms.iter().find(|d| d.code == code).unwrap().id.clone();
+        let sense_of = |s: &mut Session, lemma: &str| crate::lexicon::lexicon_entry(s, &entries.iter().find(|r| r.lemma == lemma).unwrap().id).unwrap().senses[0].id.clone();
+        let one = sense_of(&mut s, "wʌn");
+        let three = sense_of(&mut s, "θɹiː");
+        lexicon_assign_domain(&mut s, &three, &find("8.1.1")).unwrap();
+        lexicon_assign_domain(&mut s, &one, &find("8.1.1")).unwrap();
+        lexicon_assign_domain(&mut s, &one, &find("1.1")).unwrap();
+        let topical = export_dictionary(&mut s, &out, "2026-11-23", false).unwrap();
+        assert_eq!(topical.topics, 2);
+        let html = std::fs::read_to_string(&topical.path).unwrap();
+        let index = &html[html.find("Words by topic").expect("a topic index")..];
+        let (sky, number) = (index.find("<h3 class=\"topic\">1.1 ").unwrap(), index.find("<h3 class=\"topic\">8.1.1 ").unwrap());
+        assert!(sky < number, "outline order: {index}");
+        assert!(index[number..].contains(">wʌn</a> ‘one’") && index[number..].contains(">θɹiː</a>"), "{index}");
         // The tutorial text is restricted: its examples stay out unless included.
         let text = session::list_texts(&mut s).unwrap()[0].id.clone();
         session::project(&mut s).unwrap().set_access(&text, "restricted").unwrap();
         let closed = export_dictionary(&mut s, &out, "2026-11-23", false).unwrap();
         assert_eq!(closed.examples, 0);
-        assert!(closed.restricted_left_out >= 5 && closed.path.ends_with(" (2).html"));
+        assert!(closed.restricted_left_out >= 5 && closed.path.ends_with(" (3).html"));
         // An example chosen in the lexicon is printed in place of the first use.
         let p = session::project(&mut s).unwrap();
         let wan = p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "lemma").unwrap().as_deref() == Some("wʌn")).unwrap();

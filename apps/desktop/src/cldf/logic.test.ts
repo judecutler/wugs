@@ -44,7 +44,7 @@ test("a corpus export says where it went and what was left out", () => {
 test("a dictionary export says how to print it", () => {
   const lines = dictionaryLines({ path: "/x/Kanu dictionary.html", entries: 120, senses: 150, examples: 1, restrictedLeftOut: 2 });
   assert.equal(lines[0], "Saved the dictionary as /x/Kanu dictionary.html: 120 entries, 150 senses, 1 example from the texts.");
-  assert.equal(lines[2], "2 examples were left out because their texts are not open.");
+  assert.equal(lines[2], "2 examples were left out because their texts are not open.");  assert.equal(dictionaryLines({ path: "/x", entries: 1, senses: 1, examples: 0, restrictedLeftOut: 0, topics: 12 })[2], "Words by topic lists the entries under 12 semantic domains.");
 });
 
 test("a Glottolog match reads as what and where it is", () => {
