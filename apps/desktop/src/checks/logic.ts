@@ -104,6 +104,14 @@ export function exampleGapsLine(g: { without: number; fillable: number }): strin
   return `${senses} no example sentence; ${can} glossed in a text that is open, so wugs can take one from there.`;
 }
 
+/** The line over the dependency trees with a problem. */
+export function treesLine(total: number, annotated: number, shown: number): string {
+  if (total === 0) return `All ${annotated === 1 ? "1 parsed sentence has" : `${annotated} parsed sentences have`} a well-formed tree: one root, no cycles, every head a word of the sentence.`;
+  const of = `${total} of ${annotated} parsed ${annotated === 1 ? "sentence" : "sentences"} ${total === 1 ? "has" : "have"}`;
+  const more = total > shown ? ` The first ${shown} are listed.` : "";
+  return `${of} a tree problem. Click one to correct it in the Sentence panel.${more}`;
+}
+
 /** The toast after Add from the texts. */
 export const examplesAddedLine = (n: number): string =>
   n === 0 ? "No sentence was added." : `Added ${n === 1 ? "an example sentence" : `${n} example sentences`} from the texts, each with its translation where it has one. Edit them in the Lexicon.`;
