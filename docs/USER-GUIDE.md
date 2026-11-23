@@ -903,6 +903,8 @@ Click a line to open its segment on the Timeline and in Transcribe and Gloss. Cl
 
 **Copy as examples** copies the sentences the lines come from, each once and in the order shown, as numbered glossed examples with their translations, ready to paste into a paper. It uses the format last chosen for **Copy example** in the Gloss panel (Word or Google Docs, LaTeX gb4e or ExPex, or plain text). A line from a translation brings the sentence it translates. At most 50 sentences are copied at once.
 
+**Clusters** (AntConc's Clusters tool) counts the word sequences that hold what you searched for: choose how many words (2 to 5) and whether the item comes first, last or anywhere in them. `kani` with 2 words, item first, lists `kani ŋai`, `kani haru` and so on, commonest first, with how many lines and texts each is in. Click a cluster to see its lines. Clusters are counted over the lines found (at most 2000); **Copy rows** copies them as a table.
+
 ### See where it occurs across your texts
 
 Click **Plot** beside the search box to see, text by text, where the word, morph or gloss occurs, as AntConc's Plot does. Each text gets a bar as long as the text, with a mark at every occurrence, its count and its rate per 1000 words.

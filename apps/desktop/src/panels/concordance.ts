@@ -5,6 +5,7 @@ import { whereWords, type Where } from "../metadata/logic";
 import { concordance, concordanceQuery, dispersion, errorText, getText, glossGet, type TextDetail } from "../api";
 import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
+import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { marks, per1000, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
 import { asTsv, clip, countLine, isRtl, keyword, left, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
@@ -117,6 +118,11 @@ export const concordancePanel: PanelDef = {
     let plotOn = false;
     let plot: Dispersion | null = null;
     let plotSort: PlotSort = "text";
+    /** The Clusters view (AntConc's Clusters): word sequences that hold the item. */
+    let clustersOn = false;
+    let clusterSize = 2;
+    let clusterSide: ClusterSide = "right";
+    let shownClusters: Cluster[] = [];
     const input = h("input", { type: "search", className: "cc-query", placeholder: PANEL_KINDS[0]!.hint, spellcheck: false });
     input.setAttribute("aria-label", "Find");
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Look in" });
@@ -128,6 +134,12 @@ export const concordancePanel: PanelDef = {
     plotToggle.setAttribute("aria-pressed", "false");
     const plotSorter = h("select", { className: "cc-sort", title: "Order of the texts" }, ...PLOT_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
     plotSorter.setAttribute("aria-label", "Order of the texts");
+    const clusterToggle = h("button", { type: "button", textContent: "Clusters", title: "Count the word sequences that hold it: the item and the words after or before it (AntConc's Clusters)" });
+    clusterToggle.setAttribute("aria-pressed", "false");
+    const sizePicker = h("select", { className: "cc-sort", title: "Words in a cluster" }, ...CLUSTER_SIZES.map((n) => h("option", { value: String(n), textContent: `${n} words` })));
+    sizePicker.setAttribute("aria-label", "Words in a cluster");
+    const sidePicker = h("select", { className: "cc-sort", title: "Where the item stands in the cluster" }, ...CLUSTER_SIDES.map((x) => h("option", { value: x.id, textContent: x.label })));
+    sidePicker.setAttribute("aria-label", "Where the item stands");
     const count = h("p", { className: "note cc-count" });
     const rows = h("div", { className: "cc-rows", role: "list" });
 
@@ -200,7 +212,56 @@ export const concordancePanel: PanelDef = {
       );
     };
 
+    const drawClusters = () => {
+      shownClusters = clusters(hits, clusterSize, clusterSide);
+      count.textContent = clusterLine(shownClusters, hits.length, total, clusterSize);
+      rows.replaceChildren(
+        ...shownClusters.slice(0, 500).map((c) => {
+          const phrase = c.words.join(" ");
+          const row = h(
+            "div",
+            { className: "cc-cluster", role: "listitem", tabIndex: 0, title: `Show the lines with «${phrase}»` },
+            h("span", { className: "cc-cluster-words" }, ...c.words.flatMap((w, i) => [i > 0 ? " " : "", i >= c.at && i < c.at + c.len ? h("strong", { textContent: w }) : w])),
+            h("span", { className: "cc-plot-count", textContent: `${c.count === 1 ? "1 line" : `${c.count} lines`} · ${c.texts === 1 ? "1 text" : `${c.texts} texts`}` }),
+          );
+          const show = () => {
+            // The cluster as words in a row, met exactly in the same text and texts as before.
+            const prior = exactFor !== null && exactFor.query === asked && exactFor.kind === kind ? exactFor : null;
+            if (kind !== "translation") kind = "word";
+            exactFor = { query: phrase, kind: kind as ConcordanceKind, text: prior?.text ?? null, exact: true, within: prior?.within ?? null };
+            input.value = phrase;
+            input.placeholder = PANEL_KINDS.find((k) => k.id === kind)!.hint;
+            setClusters(false);
+            drawChips();
+            run();
+          };
+          row.onclick = show;
+          row.onkeydown = (e) => {
+            if (e.key === "Enter") show();
+            else if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+              e.preventDefault();
+              const next = e.key === "ArrowDown" ? row.nextElementSibling : row.previousElementSibling;
+              if (next instanceof HTMLElement) next.focus();
+            }
+          };
+          return row;
+        }),
+      );
+    };
+
+    const setClusters = (on: boolean) => {
+      clustersOn = on;
+      if (on && plotOn) setPlot(false);
+      clusterToggle.setAttribute("aria-pressed", String(on));
+      clusterToggle.classList.toggle("active", on);
+      sizePicker.hidden = !on;
+      sidePicker.hidden = !on;
+      sorter.hidden = on || plotOn;
+      copyExamples.hidden = on || plotOn;
+    };
+
     const setPlot = (on: boolean) => {
+      if (on && clustersOn) setClusters(false);
       plotOn = on;
       plotToggle.setAttribute("aria-pressed", String(on));
       plotToggle.classList.toggle("active", on);
@@ -212,6 +273,10 @@ export const concordancePanel: PanelDef = {
     const drawRows = () => {
       if (plotOn && asked !== "") {
         drawPlot();
+        return;
+      }
+      if (clustersOn && asked !== "") {
+        drawClusters();
         return;
       }
       if (asked === "") {
@@ -330,11 +395,30 @@ export const concordancePanel: PanelDef = {
       if (plotOn && asked !== "") run();
       else drawRows();
     };
+    clusterToggle.onclick = () => {
+      setClusters(!clustersOn);
+      drawRows();
+    };
+    sizePicker.onchange = () => {
+      clusterSize = Number(sizePicker.value);
+      drawRows();
+    };
+    sidePicker.onchange = () => {
+      clusterSide = sidePicker.value as ClusterSide;
+      drawRows();
+    };
     plotSorter.onchange = () => {
       plotSort = plotSorter.value as PlotSort;
       drawRows();
     };
     copy.onclick = () => {
+      if (clustersOn && asked !== "") {
+        void writeText(clustersTsv(shownClusters)).then(
+          () => showToast({ tone: "info", lines: [`Copied ${shownClusters.length} clusters. Paste them into a spreadsheet.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+        return;
+      }
       if (plotOn && plot !== null) {
         void writeText(plotTsv(plot)).then(
           () => showToast({ tone: "info", lines: [`Copied the plot of ${plot?.texts.length ?? 0} texts. Paste it into a spreadsheet.`] }),
@@ -384,7 +468,8 @@ export const concordancePanel: PanelDef = {
       drawChips();
       drawRows();
       setPlot(plotOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, plotSorter, plotToggle, copy, copyExamples), chips, count, rows);
+      setClusters(clustersOn);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, plotSorter, sizePicker, sidePicker, plotToggle, clusterToggle, copy, copyExamples), chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */

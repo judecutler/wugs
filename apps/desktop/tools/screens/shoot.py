@@ -509,6 +509,17 @@ def main():
             if run.page.locator(".panel-concordance .cc-plot-row").count() != 3:
                 failures.append("the concordance plot did not show one row per text with words")
             run.page.locator(".panel-concordance .cc-bar button", has_text="Plot").click()
+            # Clusters: the word sequences that hold the item.
+            run.page.locator(".panel-concordance .cc-bar button", has_text="Clusters").click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-concordance-clusters", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance .cc-cluster").count() == 0:
+                failures.append("Clusters listed nothing")
+            run.page.locator(".panel-concordance .cc-cluster").first.click()
+            run.page.wait_for_timeout(500)
+            if " " not in run.page.locator(".panel-concordance .cc-query").input_value():
+                failures.append("a cluster did not open its lines")
+            run.page.fill(".panel-concordance .cc-query", "")
             # A word never analysed gets a guess read from known morphs.
             run.front("gloss", "Gloss")
             run.page.evaluate("async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u10' })")
