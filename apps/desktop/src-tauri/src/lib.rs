@@ -52,6 +52,7 @@ pub mod segmentation;
 pub mod sentence;
 pub mod notes_overview;
 pub mod growth;
+pub mod wordsketch;
 pub mod session;
 pub mod sounds;
 pub mod typology;
@@ -373,6 +374,11 @@ fn sentence_mark_checked(s: State<SessionThread>, text_id: String, segment_ids: 
 }
 
 /// Every character the project's transcriptions and lexicon use, with what may be a slip.
+#[tauri::command(async)]
+fn word_sketch(s: State<SessionThread>, lemma: String) -> Result<wordsketch::WordSketch, String> {
+    s.run(move |session| wordsketch::word_sketch(session, &lemma))
+}
+
 #[tauri::command(async)]
 fn vocabulary_growth(s: State<SessionThread>) -> Result<growth::Growth, String> {
     s.run(growth::vocabulary_growth)
@@ -2057,6 +2063,7 @@ pub fn run() {
             character_inventory,
         all_notes,
         vocabulary_growth,
+        word_sketch,
             tree_problems,
             sound_words,
             sentence_check_status,

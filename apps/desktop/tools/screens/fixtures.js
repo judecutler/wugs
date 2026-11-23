@@ -755,6 +755,18 @@ const LEXICON = [
       };
     },
     lexicon_example_gaps: () => ({ without: 6, fillable: 4 }),
+    word_sketch: ({ lemma }) => ({
+      lemma: lemma.trim().toLowerCase(),
+      count: 214,
+      parsed: 1180,
+      groups: [
+        { relation: "obj", direction: "dependent", total: 96, items: [["bread", 31, 11.2, 31], ["fish", 22, 10.6, 22], ["rice", 14, 9.9, 14], ["meat", 9, 9.1, 9], ["fruit", 6, 8.4, 6]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
+        { relation: "nsubj", direction: "dependent", total: 71, items: [["child", 18, 10.1, 0], ["dog", 12, 9.6, 0], ["they", 15, 8.2, 0], ["we", 11, 7.9, 0]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
+        { relation: "advmod", direction: "dependent", total: 23, items: [["quickly", 8, 9.4, 7], ["together", 6, 9.0, 6], ["already", 5, 8.1, 1]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
+        { relation: "xcomp", direction: "head", total: 17, items: [["want", 9, 9.8, 0], ["go", 5, 7.7, 0], ["start", 3, 7.2, 0]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
+        { relation: "obl:tmod", direction: "dependent", total: 7, items: [["morning", 4, 8.8, 4], ["night", 3, 8.3, 3]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
+      ],
+    }),
     gloss_sense_drift: () => [
       { senseId: "sense-lx-tela1-0", entryId: "lx-tela1", headword: "tela", homograph: 1, senseGloss: "river", textGloss: "stream", count: 3, first: { gloss: "stream", count: 3, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03" } },
     ],
