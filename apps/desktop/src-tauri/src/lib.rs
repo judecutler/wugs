@@ -1147,6 +1147,18 @@ fn export_website(s: State<SessionThread>, folder: String, date: String, include
     s.run(move |s| website::export_website(s, std::path::Path::new(&folder), &date, include_restricted, audio))
 }
 
+/// Senses with no example sentence, and how many could take one from a text.
+#[tauri::command(async)]
+fn lexicon_example_gaps(s: State<SessionThread>) -> Result<lexicon::ExampleGaps, String> {
+    s.run(lexicon::example_gaps)
+}
+
+/// Give each sense with no example its first use in an open text.
+#[tauri::command(async)]
+fn lexicon_examples_from_texts(s: State<SessionThread>) -> Result<usize, String> {
+    s.run(lexicon::examples_from_texts)
+}
+
 /// The project's typing shortcuts (`typing.rs`).
 #[tauri::command(async)]
 fn typing_shortcuts(s: State<SessionThread>) -> Result<String, String> {
@@ -2126,6 +2138,8 @@ pub fn run() {
             export_flashcards,
             export_archive_sheet,
             typing_shortcuts,
+            lexicon_example_gaps,
+            lexicon_examples_from_texts,
             set_typing_shortcuts,
             save_clips,
             replace_preview,

@@ -458,6 +458,7 @@ Each sense can have example sentences with their translations, as a printed dict
 
 - To type one, fill in **Add an example sentence** and **Its translation** under the sense, then press **Enter**.
 - To take one from your texts, click **used in N words** under the sense, then **Use as example** beside an occurrence. The sentence and its first translation are copied in, with a link back: **from «text»** opens the sentence, and ▶ plays it.
+- To give every sense that has none an example at once, open the **Checks** panel: **Example sentences** says how many senses have none and how many are glossed in a text that is open, and **Add N from the texts** (click twice) takes each one's first use, a translated sentence when there is one. Texts that are not open are never used. Edit or delete the examples in the Lexicon as usual.
 
 Each example's sentence and translation are fields you can edit like any other. Editing an example does not change the text it came from. Click × and then **Delete?** to remove one.
 

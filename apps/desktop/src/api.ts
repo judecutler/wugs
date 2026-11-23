@@ -487,6 +487,8 @@ export const lexiconDeleteRelation = (args: { id: string; relationId: string }) 
 export const lexiconDeletePronunciation = (args: { id: string; pronunciationId: string }) => invoke<EntryEdit>("lexicon_delete_pronunciation", args);
 export const lexiconAddExample = (args: { senseId: string; sentence: string; translation: string }) => invoke<EntryEdit>("lexicon_add_example", args);
 export const lexiconExampleFrom = (args: { senseId: string; segmentId: string }) => invoke<EntryEdit>("lexicon_example_from", args);
+export const lexiconExampleGaps = () => invoke<{ without: number; fillable: number }>("lexicon_example_gaps");
+export const lexiconExamplesFromTexts = () => invoke<number>("lexicon_examples_from_texts");
 export const lexiconSetExample = (args: { exampleId: string; field: "sentence" | "translation"; text: string }) => invoke<EntryEdit>("lexicon_set_example", args);
 export const lexiconDeleteExample = (args: { exampleId: string }) => invoke<EntryEdit>("lexicon_delete_example", args);
 export const lexiconDeleteSense = (args: { senseId: string }) => invoke<EntryEdit>("lexicon_delete_sense", args);

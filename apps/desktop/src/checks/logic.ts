@@ -95,3 +95,15 @@ export function inventoryNote(inv: Inventory): string {
   if (inv.notNfc > 0) parts.push(`${n(inv.notNfc, "transcription or headword is", "transcriptions or headwords are")} stored decomposed (from an older import); they still match, but other tools may count them apart.`);
   return parts.join(" ");
 }
+
+/** The Example sentences line: how many senses lack one, how many the texts can give one. */
+export function exampleGapsLine(g: { without: number; fillable: number }): string {
+  const senses = g.without === 1 ? "1 sense has" : `${g.without} senses have`;
+  if (g.fillable === 0) return `${senses} no example sentence, and none is glossed in a text that is open yet.`;
+  const can = g.fillable === g.without ? (g.without === 1 ? "it is" : "all are") : `${g.fillable} of them ${g.fillable === 1 ? "is" : "are"}`;
+  return `${senses} no example sentence; ${can} glossed in a text that is open, so wugs can take one from there.`;
+}
+
+/** The toast after Add from the texts. */
+export const examplesAddedLine = (n: number): string =>
+  n === 0 ? "No sentence was added." : `Added ${n === 1 ? "an example sentence" : `${n} example sentences`} from the texts, each with its translation where it has one. Edit them in the Lexicon.`;

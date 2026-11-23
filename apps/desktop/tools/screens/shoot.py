@@ -532,6 +532,11 @@ def main():
             # Checks: the character inventory, a Cyrillic letter among Latin ones flagged.
             run.front("checks", "Checks")
             run.page.locator(".panel-checks .ck-char").first.wait_for()
+            examples = run.page.locator(".panel-checks .ck-title", has_text="Example sentences")
+            examples.scroll_into_view_if_needed()
+            run.shot("state-checks-examples", run.page.locator(".panel-checks"))
+            if "Add 4 from the texts" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not offer examples from the texts")
             spelling = run.page.locator(".panel-checks .ck-title", has_text="Spellings to check")
             spelling.scroll_into_view_if_needed()
             run.shot("state-spellings", run.page.locator(".panel-checks"))
