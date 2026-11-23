@@ -2,16 +2,19 @@
 // `morphosyntax` capability's chooser), what it still needs, and one button
 // that tags the text's untagged sentences.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { capabilityChoose, errorText, morphosyntaxAllowWeb, morphosyntaxChoose, morphosyntaxRun, morphosyntaxSetup, type CapabilityView, type MorphosyntaxSetup } from "../api";
+import { capabilityChoose, errorText, morphosyntaxAllowWeb, morphosyntaxChoose, morphosyntaxChooseSpacy, morphosyntaxRun, morphosyntaxSetup, type CapabilityView, type MorphosyntaxSetup } from "../api";
 import { choiceOptions, statusLine } from "../capability/logic";
 import { h } from "../dom";
 import { capability, getState, refreshAll, refreshCapabilities, showToast } from "../store";
-import { taggedLines, WEB_NOTE } from "./logic";
+import { setupFor, spacyNote, taggedLines, WEB_NOTE } from "./logic";
 
 let setup: { project: string; value: MorphosyntaxSetup } | null = null;
 let loading = false;
 let running: string | null = null;
 let model = "";
+/** The spaCy pipeline field's text while it is typed (null: show the chosen one). */
+let pipelineDraft: string | null = null;
+let checking = false;
 let open = false;
 let redraw: () => void = () => {};
 
@@ -21,7 +24,7 @@ async function loadSetup(project: string, force = false) {
   try {
     setup = { project, value: await morphosyntaxSetup() };
   } catch {
-    setup = { project, value: { local: { program: null, model: null }, webOk: false } };
+    setup = { project, value: { local: { program: null, model: null }, spacy: { python: null, pipeline: null, about: null }, webOk: false } };
   }
   loading = false;
   redraw();
@@ -45,6 +48,46 @@ async function choose(project: string, what: "program" | "model") {
   if (typeof path !== "string") return;
   const now = setup?.value.local ?? { program: null, model: null };
   await act(project, () => morphosyntaxChoose(what === "program" ? { program: path, model: now.model } : { program: now.program, model: path }));
+}
+
+async function chooseSpacy(project: string, python: string | null, pipeline: string | null) {
+  checking = true;
+  redraw();
+  await act(project, async () => {
+    await morphosyntaxChooseSpacy({ python, pipeline });
+    pipelineDraft = null;
+  });
+  checking = false;
+  redraw();
+}
+
+async function pickPython(project: string) {
+  const path = await pickFile({ title: "Choose the Python that has spaCy (a virtual environment's python works too)" });
+  if (typeof path !== "string") return;
+  const now = setup?.value.spacy ?? { python: null, pipeline: null, about: null };
+  await chooseSpacy(project, path, now.pipeline);
+}
+
+/** spaCy's rows: its Python, the pipeline's name with Use, and what the check found. */
+function spacyRows(project: string): HTMLElement[] {
+  const sp = setup?.project === project ? setup.value.spacy : null;
+  const field = h("input", { value: pipelineDraft ?? sp?.pipeline ?? "", placeholder: "Pipeline, such as en_core_web_sm", spellcheck: false, size: 30, disabled: checking });
+  field.setAttribute("aria-label", "spaCy pipeline");
+  field.oninput = () => (pipelineDraft = field.value);
+  const use = () => void chooseSpacy(project, sp?.python ?? null, field.value.trim() === "" ? null : field.value.trim());
+  field.onkeydown = (e) => {
+    if (e.key === "Enter" && !e.isComposing) use();
+  };
+  return [
+    h(
+      "div",
+      { className: "st-tag-row" },
+      h("button", { type: "button", textContent: sp?.python ? "Python…" : "Choose Python…", title: sp?.python ?? "python3 or python on PATH when not chosen", disabled: checking, onclick: () => void pickPython(project) }),
+      field,
+      h("button", { type: "button", textContent: checking ? "Checking…" : "Use", title: "Load the pipeline once to check it, then use it", disabled: checking, onclick: use }),
+    ),
+    h("p", { className: "note", textContent: spacyNote(sp) }),
+  ];
 }
 
 async function run(textId: string, title: string) {
@@ -83,15 +126,15 @@ export function tagBar(text: { id: string; title: string }, draw: () => void): H
   if (v !== null && (open || v.effective === null)) {
     const picker = h(
       "select",
-      { disabled: v.pin !== null || running !== null, title: v.pin !== null ? "This project is pinned to a tagger." : "Automatic uses UDPipe on this computer when it is set up; the web service runs only when chosen." },
+      { disabled: v.pin !== null || running !== null, title: v.pin !== null ? "This project is pinned to a tagger." : "Automatic uses UDPipe on this computer when it is set up, else spaCy; the web service runs only when chosen." },
       ...choiceOptions(v).map((o) => h("option", { value: o.value, textContent: o.label, selected: o.value === v.machine })),
     );
     picker.setAttribute("aria-label", "Tagger");
     picker.onchange = () => void act(project, () => capabilityChoose({ capability: "morphosyntax", choice: picker.value }));
     parts.push(h("div", { className: "st-tag-row" }, picker), h("p", { className: v.problem === null ? "note" : "note st-problem", textContent: statusLine(v) }));
-    const usesWeb = v.machine === "udpipe-lindat" || v.pin === "udpipe-lindat";
+    const rows = setupFor(v);
     const local = setup?.project === project ? setup.value.local : null;
-    if (!usesWeb) {
+    if (rows === "udpipe" || rows === "local") {
       parts.push(
         h(
           "div",
@@ -100,7 +143,9 @@ export function tagBar(text: { id: string; title: string }, draw: () => void): H
           h("button", { type: "button", textContent: local?.model ? "Model…" : "Choose a model…", title: local?.model ?? "A .udpipe model for the language, from the UDPipe models page", onclick: () => void choose(project, "model") }),
         ),
       );
-    } else {
+    }
+    if (rows === "spacy" || rows === "local") parts.push(...spacyRows(project));
+    if (rows === "web") {
       const webOk = setup?.project === project && setup.value.webOk;
       const allow = h("input", { type: "checkbox", checked: webOk, onchange: () => void act(project, () => morphosyntaxAllowWeb({ allow: allow.checked })) });
       const modelField = h("input", { value: model, placeholder: "Language or model (else the project's)", spellcheck: false, size: 28, title: "A UDPipe model name or prefix (english-ewt), or a language name or code (en, tur, Turkish). Empty: the project's language from the Texts panel." });

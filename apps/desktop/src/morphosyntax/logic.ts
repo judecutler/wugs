@@ -21,3 +21,20 @@ export function taggedLines(r: Tagged, title: string): string[] {
 /** The note beside the web service's allow box. */
 export const WEB_NOTE =
   "Sends this project's open texts to ÚFAL's UDPipe service in Prague. Its terms let ÚFAL keep what is sent, and its models are for non-commercial use. Texts that are not open are never sent.";
+
+/** Which setup rows the Tagger… section shows: what the person chose (the
+ * project's pin, else this computer's choice), and for Automatic what it
+ * found, or both local taggers when it found neither. */
+export function setupFor(v: { machine: string; pin: string | null; effective: string | null }): "udpipe" | "spacy" | "web" | "local" {
+  const chosen = v.pin ?? v.machine;
+  if (chosen === "udpipe-lindat") return "web";
+  if (chosen === "spacy") return "spacy";
+  if (chosen === "udpipe") return "udpipe";
+  return v.effective === "spacy" ? "spacy" : v.effective === "udpipe" ? "udpipe" : "local";
+}
+
+/** The line under spaCy's fields. */
+export function spacyNote(s: { pipeline: string | null; about: string | null } | null): string {
+  if (s?.pipeline && s.about) return `Checked: ${s.about}.`;
+  return "spaCy runs in your own Python: install it with `python -m pip install spacy`, a pipeline for the language with `python -m spacy download en_core_web_sm` (or another from spacy.io/models), then type the pipeline's name and press Use.";
+}
