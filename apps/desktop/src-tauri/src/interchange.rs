@@ -394,6 +394,8 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             (Some(r.text), false)
         }
         Format::Lift => {
+            // FLEx writes each sense's semantic domains as SIL outline codes.
+            let sil = if input.contains("semantic-domain-ddp4") { crate::lexicon::sil_domains_if_none(p)? } else { 0 };
             let r = wugs_flex::import_lift(p, input).map_err(|e| e.to_string())?;
             lines.push(format!(
                 "{} and {} added, {} already here.",
@@ -411,6 +413,16 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 .flatten()
                 .collect();
                 lines.push(format!("With them came {}.", parts.join(" and ")));
+            }
+            if r.domains_linked > 0 {
+                let loaded = if sil > 0 { " (the SIL Semantic Domains were loaded for them)" } else { "" };
+                lines.push(format!("{} in a semantic domain{loaded}.", plural(r.domains_linked, "sense was put", "senses were put")));
+            }
+            if r.domains_unmatched > 0 {
+                lines.push(format!(
+                    "{} the project does not have; kept for the next LIFT export.",
+                    plural(r.domains_unmatched, "semantic domain names a code", "semantic domains name codes")
+                ));
             }
             if !r.illustrations.is_empty() {
                 let (attached, missing) = attach_lift_pictures(p, Path::new(path), &r.illustrations)?;
@@ -1346,6 +1358,29 @@ mod tests {
         assert_eq!(session::list_texts(&mut s).unwrap().len(), 1);
         drop(s);
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn lift_semantic_domains_load_the_sil_list_and_link_each_sense() {
+        let dir = std::env::temp_dir().join(format!("wugs-lift-domains-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let lift = dir.join("animals.lift");
+        fs::write(
+            &lift,
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<lift version="0.13">
+  <entry id="kesi_1"><lexical-unit><form lang="kan"><text>kesi</text></form></lexical-unit>
+    <sense id="s1"><gloss lang="en"><text>sky</text></gloss><trait name="semantic-domain-ddp4" value="1.1 Sky"/></sense></entry>
+</lift>"#,
+        )
+        .unwrap();
+        let r = import_file(&mut s, lift.to_str().unwrap()).unwrap();
+        assert!(r.lines.iter().any(|l| l.starts_with("1 sense was put in a semantic domain (the SIL")), "{:?}", r.lines);
+        let kesi = crate::lexicon::lexicon_list(&mut s, "kesi").unwrap()[0].id.clone();
+        let e = crate::lexicon::entry_view(session::project(&mut s).unwrap(), &kesi).unwrap();
+        assert_eq!(e.senses[0].domains.iter().map(|d| d.code.as_str()).collect::<Vec<_>>(), ["1.1"]);
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

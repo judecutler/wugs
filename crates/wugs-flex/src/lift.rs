@@ -1,9 +1,9 @@
 //! LIFT 0.13 lexicons (FLEx's lexicon interchange format).
 //!
 //! Carried: entries (lexical-unit, citation, homograph `order`,
-//! pronunciations with their media file names, notes), senses (gloss,
-//! definition, grammatical-info, notes, examples with their translations),
-//! variants, and
+//! pronunciations with their media file names, notes, traits), senses
+//! (gloss, definition, grammatical-info, notes, traits, semantic domains,
+//! examples with their translations), variants, and
 //! relations between entries and senses, in every writing system, plus
 //! every attribute of entries, pronunciations, senses, examples, variants
 //! and relations. Everything else is counted in
@@ -40,6 +40,12 @@ const F_PICTURE_LABEL: &str = "x.lift.picture-label";
 /// An entry's or sense's `<note>`s, each `{attrs, forms}`; the first one's
 /// first form is its `notes`, the rest written back as they came.
 const F_NOTES: &str = "x.lift.notes";
+/// An entry's or sense's `<trait>`s as they came (each its attributes),
+/// written back on export; a sense's semantic-domain traits that matched a
+/// domain of the project are links instead, and go out from those.
+const F_TRAITS: &str = "x.lift.traits";
+/// FLEx's trait naming a sense's semantic domain (`value="1.1 Sky"`).
+const DOMAIN_TRAIT: &str = "semantic-domain-ddp4";
 
 #[derive(Debug, Default)]
 pub struct ImportReport {
@@ -52,6 +58,10 @@ pub struct ImportReport {
     pub relations_created: usize,
     /// `<note>`s on entries and senses.
     pub notes: usize,
+    /// Senses put in a semantic domain from a `semantic-domain-ddp4` trait.
+    pub domains_linked: usize,
+    /// Semantic-domain traits naming no domain of the project (kept as written).
+    pub domains_unmatched: usize,
     /// Each `<illustration>`: the sense it belongs to and its `href`, for the
     /// caller to look for beside the file (`attach_illustration`).
     pub illustrations: Vec<(String, String)>,
@@ -79,6 +89,8 @@ struct Entry {
     relations: Vec<Value>,
     /// Each `<note>`: `{attrs, forms}`.
     notes: Vec<Value>,
+    /// Each `<trait>`'s attributes.
+    traits: Vec<Value>,
 }
 
 struct Sense {
@@ -94,6 +106,7 @@ struct Sense {
     /// Each `<illustration>`: `{attrs, label}`.
     illustrations: Vec<Value>,
     notes: Vec<Value>,
+    traits: Vec<Value>,
 }
 
 struct Example {
@@ -154,6 +167,7 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
     let mut report = ImportReport::default();
     let entries = parse_lift(lift, &mut report)?;
     let index = origin_index(project, "lexeme")?;
+    let domains = domain_codes(project)?;
     // Relations wait until every entry is in, since they point at each other.
     let mut pending: Vec<(String, Value)> = Vec::new();
 
@@ -180,6 +194,9 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
         push_opt(&mut fields, F_ID, &e.id);
         push_opt(&mut fields, F_GUID, &e.guid);
         push_notes(&mut fields, &e.notes, &mut report);
+        if !e.traits.is_empty() {
+            fields.push((F_TRAITS, Value::Arr(e.traits.clone())));
+        }
         let lex = t.create("lexeme", "lex", SCOPE_LEXICON, fields);
         pending.extend(e.relations.iter().map(|r| (lex.clone(), r.clone())));
 
@@ -205,7 +222,34 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
                 fields.push((F_ILLUSTRATIONS, Value::Arr(s.illustrations.clone())));
             }
             push_notes(&mut fields, &s.notes, &mut report);
+            // A semantic-domain trait naming a domain the project has becomes a link.
+            let mut linked: Vec<String> = Vec::new();
+            let mut kept = Vec::new();
+            for tr in &s.traits {
+                let domain = (tr.get_str("name") == Some(DOMAIN_TRAIT)).then(|| tr.get_str("value").and_then(domain_code)).flatten();
+                match domain {
+                    Some(code) => match domains.get(code) {
+                        Some(dom) => {
+                            if !linked.contains(dom) {
+                                linked.push(dom.clone());
+                            }
+                        }
+                        None => {
+                            report.domains_unmatched += 1;
+                            kept.push(tr.clone());
+                        }
+                    },
+                    None => kept.push(tr.clone()),
+                }
+            }
+            if !kept.is_empty() {
+                fields.push((F_TRAITS, Value::Arr(kept)));
+            }
             let sen = t.create("sense", "sen", SCOPE_LEXICON, fields);
+            for dom in &linked {
+                t.create("sense-domain", "sdm", SCOPE_LEXICON, vec![("sense", Value::str(&sen)), ("domain", Value::str(dom))]);
+                report.domains_linked += 1;
+            }
             for ill in &s.illustrations {
                 if let Some(href) = ill.get("attrs").and_then(|a| a.get_str("href")) {
                     report.illustrations.push((sen.clone(), href.to_string()));
@@ -320,6 +364,43 @@ fn push_notes<'a>(fields: &mut Vec<(&'a str, Value)>, notes: &[Value], report: &
     report.notes += notes.len();
 }
 
+/// Every live semantic domain by its outline code (`1.1.1`).
+fn domain_codes(project: &Project) -> Result<std::collections::HashMap<String, String>, String> {
+    let mut out = std::collections::HashMap::new();
+    for id in project.proj.entities_of_kind("domain")? {
+        if project.proj.is_tombstoned(&id)? {
+            continue;
+        }
+        if let Some(code) = project.proj.field_str(&id, "code")? {
+            out.entry(code).or_insert(id);
+        }
+    }
+    Ok(out)
+}
+
+/// The outline code a semantic-domain trait's value starts with
+/// (`1.1 Sky` → `1.1`), when it starts with one.
+fn domain_code(value: &str) -> Option<&str> {
+    let code = value.split_whitespace().next()?;
+    (code.split('.').all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))).then_some(code)
+}
+
+/// `<trait name value>`: its attributes; what it holds is not carried.
+fn parse_trait(node: &XmlNode, report: &mut ImportReport) -> Value {
+    for c in &node.children {
+        report.not_carried.add(&format!("trait/{}", c.name));
+    }
+    attrs_value(node)
+}
+
+/// The stored traits, as they came.
+fn trait_nodes(project: &Project, id: &str) -> Result<Vec<XmlNode>, String> {
+    Ok(match field_value(project, id, F_TRAITS)? {
+        Some(Value::Arr(items)) => items.into_iter().map(|a| with_attrs(XmlNode::new("trait"), Some(a), &[])).collect(),
+        _ => Vec::new(),
+    })
+}
+
 /// `<note type><form lang><text>…</text></form></note>`: `{attrs, forms}`.
 fn parse_note(node: &XmlNode, report: &mut ImportReport) -> Value {
     for c in node.children.iter().filter(|c| c.name != "form") {
@@ -413,6 +494,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
         pronunciations: Vec::new(),
         relations: Vec::new(),
         notes: Vec::new(),
+        traits: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -446,6 +528,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
             }
             "relation" => e.relations.push(parse_relation(c, report)),
             "note" => e.notes.push(parse_note(c, report)),
+            "trait" => e.traits.push(parse_trait(c, report)),
             other => report.not_carried.add(&format!("entry/{other}")),
         }
     }
@@ -474,6 +557,7 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
         relations: Vec::new(),
         illustrations: Vec::new(),
         notes: Vec::new(),
+        traits: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -497,6 +581,7 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
             "example" => s.examples.push(parse_example(c, report)),
             "relation" => s.relations.push(parse_relation(c, report)),
             "note" => s.notes.push(parse_note(c, report)),
+            "trait" => s.traits.push(parse_trait(c, report)),
             "illustration" => {
                 let label = c.child("label").map(|l| read_multi(l, report)).unwrap_or_default();
                 for ic in c.children.iter().filter(|ic| ic.name != "label") {
@@ -630,6 +715,7 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
         if !cit.is_empty() {
             entry.children.push(multi_node("citation", &cit));
         }
+        entry.children.extend(trait_nodes(project, lex)?);
         for prn in ordered_children(project, "lexeme", lex, "pronunciation")? {
             // A pronunciation typed in wugs is written in the entry's language, as an IPA form.
             let forms = with_primary(field_multi(project, &prn, F_FORMS)?, p.field_str(&prn, "form")?.filter(|f| !f.is_empty()), &format!("{lang}-fonipa"));
@@ -666,6 +752,15 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
                 sense.children.push(multi_node("definition", &def));
             }
             sense.children.extend(note_nodes(project, &sen, "en")?);
+            sense.children.extend(trait_nodes(project, &sen)?);
+            for (_, dom) in project.sense_domains(&sen)? {
+                let code = p.field_str(&dom, "code")?.unwrap_or_default();
+                let label = p.field_str(&dom, "label")?.unwrap_or_default();
+                let value = [code, label].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" ");
+                if !value.is_empty() {
+                    sense.children.push(XmlNode::new("trait").with_attr("name", DOMAIN_TRAIT).with_attr("value", &value));
+                }
+            }
             for exm in ordered_children(project, "sense", &sen, "example")? {
                 let forms = with_primary(field_multi(project, &exm, F_FORMS)?, p.field_str(&exm, "sentence")?, &lang);
                 let mut x = with_attrs(multi_node("example", &forms), field_value(project, &exm, F_ATTRS)?, &[("source", p.field_str(&exm, "reference")?.filter(|r| !r.is_empty()))]);

@@ -886,6 +886,18 @@ pub fn sil_domain_rows() -> Result<Vec<DomainRow>, String> {
     Ok(rows)
 }
 
+/// The bundled SIL list loaded into a project that holds no domains yet, so
+/// an imported file's domain codes have something to link to. How many
+/// domains it made (0 when the project had some already).
+pub fn sil_domains_if_none(p: &mut wugs_core::Project) -> Result<usize, String> {
+    for id in p.proj.entities_of_kind("domain")? {
+        if !p.proj.is_tombstoned(&id)? {
+            return Ok(0);
+        }
+    }
+    Ok(p.import_semantic_domains(SIL_ORIGIN, &sil_domain_rows()?)?.created)
+}
+
 /// "Load SIL Semantic Domains": every domain of the bundled list the project
 /// does not hold yet, into the project config, in one txn.
 pub fn domains_load_sil(session: &mut Session) -> Result<DomainsLoaded, String> {
