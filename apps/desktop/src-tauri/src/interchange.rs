@@ -27,6 +27,9 @@ pub enum Format {
     /// A `.txt` that is not Toolbox or Praat: a written text, a segment per
     /// sentence in, a segment per line out (`plaintext`).
     PlainText,
+    /// A `.txt` of glossed examples as papers print them (a morpheme line, a
+    /// gloss line and a quoted translation per example; `igt_text`). Import only.
+    GlossedExamples,
     /// A `.csv` or `.tsv` with a header row: one text per document column
     /// value, a segment per row, other columns kept (`table_text`). Import only.
     Table { tabs: bool },
@@ -64,7 +67,7 @@ impl Format {
             Format::FlexText => "flextext",
             Format::TextGrid => "TextGrid",
             Format::Lift => "lift",
-            Format::Toolbox | Format::ToolboxText | Format::PlainText => "txt",
+            Format::Toolbox | Format::ToolboxText | Format::PlainText | Format::GlossedExamples => "txt",
             Format::Table { tabs: true } => "tsv",
             Format::Table { tabs: false } => "csv",
             Format::Conllu => "conllu",
@@ -83,6 +86,7 @@ impl Format {
             Format::Toolbox => "Toolbox lexicon",
             Format::ToolboxText => "Toolbox interlinear text",
             Format::PlainText => "plain text",
+            Format::GlossedExamples => "glossed examples",
             Format::Table { .. } => "table of sentences",
             Format::Conllu => "CoNLL-U",
             Format::Tei => "TEI",
@@ -132,6 +136,9 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
     } else if ext == "txt" && tab_table(head) {
         // Excel's "Unicode text": tab-separated columns saved as .txt.
         Some(Format::Table { tabs: true })
+    } else if ext == "txt" && wugs_legacy::igt_text::is_glossed_examples(&sniff(&bytes[..bytes.len().min(1 << 20)])) {
+        // Leipzig examples copied from a paper or handout: words, glosses, a translation.
+        Some(Format::GlossedExamples)
     } else if ext == "txt" {
         Some(Format::PlainText)
     } else {
@@ -272,7 +279,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::Conllu | Format::Tei => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei => decode_xml(&bytes, file_name)?,
         Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
@@ -376,6 +383,44 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 });
                 (Some(text), false)
             }
+        }
+        Format::GlossedExamples => {
+            let tier = session::utterance_tier(p)?;
+            let translation = if wugs_legacy::igt_text::has_translations(input) { Some(session::translation_track(p, &tier, None)?) } else { None };
+            let title = p.proj.nfc(&stem);
+            let r = wugs_legacy::import_glossed_examples(p, input, &title, &tier, translation.as_deref()).map_err(|e| format!("{file_name}: {e}"))?;
+            if !r.texts.is_empty() {
+                lines.push(format!(
+                    "A new text with {}, {} and {}.",
+                    plural(r.sentences, "example", "examples"),
+                    plural(r.words, "word", "words"),
+                    plural(r.morphs, "glossed morph", "glossed morphs")
+                ));
+                let mut extra = Vec::new();
+                if r.translations > 0 {
+                    extra.push(plural(r.translations, "translation", "translations"));
+                }
+                if r.notes > 0 {
+                    extra.push(plural(r.notes, "note", "notes"));
+                }
+                if !extra.is_empty() {
+                    lines.push(format!("Also brought in: {} (lines above an example and sources after its translation are notes).", extra.join(" and ")));
+                }
+                if r.linked > 0 {
+                    lines.push(format!("{} linked to the lexicon entry with the same form and gloss.", plural(r.linked, "root was", "roots were")));
+                }
+            } else {
+                lines.push("It matched a text already here; nothing was added.".into());
+            }
+            let skipped = r.not_carried.total();
+            if skipped > 0 {
+                lines.push(format!(
+                    "{} not read as {}: an example needs a morpheme line and a gloss line whose words and pieces match one for one.",
+                    plural(skipped, "block of lines was", "blocks of lines were"),
+                    if skipped == 1 { "an example" } else { "examples" }
+                ));
+            }
+            (r.texts.first().or(r.matched.first()).cloned(), false)
         }
         Format::Table { tabs } => {
             if input.contains('\0') {
@@ -653,6 +698,7 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
     let mut notes = Vec::new();
     let contents = match format {
         Format::Table { .. } => return Err("export a text as plain text or ELAN; table export is not built yet".into()),
+        Format::GlossedExamples => return Err("use Glossed examples for, which writes them for Word, LaTeX or plain text".into()),
         Format::Elan => wugs_elan::export_eaf(p, text_id)?,
         Format::FlexText => wugs_flex::export_flextext(p, text_id)?,
         Format::TextGrid => {
@@ -803,7 +849,7 @@ pub fn export_lexicon(s: &mut Session, format: Format, folder: &Path) -> Result<
     outside_project(s, folder)?;
     let p = session::project(s)?;
     let contents = match format {
-        Format::PlainText => return Err("plain text holds texts, not a lexicon".into()),
+        Format::PlainText | Format::GlossedExamples => return Err("plain text holds texts, not a lexicon".into()),
         Format::Table { .. } => return Err("a table of sentences holds texts, not a lexicon".into()),
         Format::Lift => wugs_flex::export_lift(p)?,
         Format::Toolbox => wugs_legacy::export_toolbox(p)?,
@@ -1143,6 +1189,27 @@ mod tests {
     }
 
     #[test]
+    fn glossed_examples_from_a_handout_come_in_glossed() {
+        let dir = std::env::temp_dir().join(format!("wugs-igt-desktop-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("handout.txt");
+        fs::write(&file, "(1) ni-kani ŋai\n    1SG-count one\n    'I count one.'\n\n(2) kani=ma\n    count=FOC\n    'Count!'\n\nA closing remark.\n").unwrap();
+        let r = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert_eq!(r.format, "glossed examples");
+        assert!(r.lines[0].starts_with("A new text with 2 examples, 3 words and 5 glossed morphs"), "{:?}", r.lines);
+        assert!(r.lines.iter().any(|l| l.starts_with("1 block of lines was not read")), "{:?}", r.lines);
+        let text = r.text.unwrap();
+        let shown = session::get_text(&mut s, &text).unwrap();
+        assert_eq!(shown.segments.iter().filter(|x| x.parent.is_none()).count(), 2);
+        assert_eq!(shown.segments.iter().filter(|x| x.parent.is_some()).count(), 2, "translations paired with their sentences");
+        let again = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert!(again.lines.iter().any(|l| l.contains("matched")), "{:?}", again.lines);
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn a_tagged_text_goes_to_cqpweb_and_antconc() {
         let dir = std::env::temp_dir().join(format!("wugs-vert-{}", wugs_model::ulid()));
         let mut s: Session = None;
@@ -1190,6 +1257,7 @@ mod tests {
         assert_eq!(detect(Path::new("dict.txt"), b"\\_sh v3.0  400  Dictionary\n"), Some(Format::Toolbox));
         assert_eq!(detect(Path::new("x.txt"), b"File type = \"ooTextFile\"\n"), Some(Format::TextGrid));
         assert_eq!(detect(Path::new("notes.txt"), b"hello"), Some(Format::PlainText));
+        assert_eq!(detect(Path::new("handout.txt"), "(1) ni-kani \u{14b}ai\n    1SG-count one\n    'I count one.'\n".as_bytes()), Some(Format::GlossedExamples));
         assert_eq!(detect(Path::new("sheet.txt"), b"text\tspeaker\nhello\tMaria\n"), Some(Format::Table { tabs: true }), "Excel's Unicode text");
         assert_eq!(detect(Path::new("corpus.CSV"), b"a,b\n"), Some(Format::Table { tabs: false }));
         assert_eq!(detect(Path::new("story.txt"), b"Kesi mopa toru.\tThe dog came home.\nToru mopa.\tIt ran.\n"), Some(Format::PlainText), "sentence-tab-translation lines are a story");

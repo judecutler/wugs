@@ -438,3 +438,32 @@ fn interlinear_texts_come_in_word_by_word() {
     assert_eq!((again.texts.len(), again.matched.len()), (0, 2));
     fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn glossed_examples_from_a_paper_come_in_glossed() {
+    use wugs_legacy::igt_text::{has_translations, import_glossed_examples, is_glossed_examples};
+    let input = "(1) ni-kani ŋai\n    1SG-count one\n    'I count one.'\n\n(2) kani=ma toru\n    count=FOC two\n    'Count two!' (notes)\n";
+    assert!(is_glossed_examples(input) && has_translations(input));
+    let (root, mut p) = temp_project();
+    let (utt, _) = p.add_tier("utterance", "time-aligned", Some("transcription"), None).unwrap();
+    let (tr, _) = p.add_translation_tier("translation", &utt).unwrap();
+    let ((_, count), _) = p.add_lexeme("kani", "count").unwrap();
+    let r = import_glossed_examples(&mut p, input, "Handout", &utt, Some(&tr)).unwrap();
+    assert_eq!((r.texts.len(), r.sentences, r.words, r.morphs, r.translations, r.notes, r.linked), (1, 2, 4, 6, 2, 1, 2));
+    let segs: Vec<String> = p.proj.ordered_children("text", &r.texts[0], "segment").unwrap().into_iter().filter(|s| p.proj.field_str(s, "tier").unwrap().as_deref() == Some(utt.as_str())).collect();
+    assert_eq!(p.proj.field_str(&segs[0], "content").unwrap().as_deref(), Some("nikani ŋai"));
+    assert_eq!(p.proj.field_str(&segs[0], "x.igt.number").unwrap().as_deref(), Some("1"));
+    let toks = p.proj.members(&segs[0]).unwrap();
+    let first: Vec<(String, String, Option<String>)> = p
+        .proj
+        .members(&toks[0])
+        .unwrap()
+        .iter()
+        .map(|m| (p.proj.field_str(m, "surface").unwrap().unwrap(), p.proj.field_str(m, "type").unwrap().unwrap(), p.proj.field_str(m, "sense").unwrap()))
+        .collect();
+    assert_eq!(first, vec![("ni".into(), "prefix".into(), None), ("kani".into(), "root".into(), Some(count))]);
+    assert_eq!(p.segment_notes(&segs[1]).unwrap()[0].1, "(notes)");
+    let again = import_glossed_examples(&mut p, input, "Handout", &utt, Some(&tr)).unwrap();
+    assert_eq!((again.texts.len(), again.matched.len()), (0, 1));
+    fs::remove_dir_all(root).ok();
+}
