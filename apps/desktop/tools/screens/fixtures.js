@@ -266,6 +266,7 @@ const LEXICON = [
         citation: "kani",
         posOfSpeech: "v",
         homograph: null,
+        notes: "Perhaps related to kan 'hand'; ask Mosa about the long vowel.",
         sameLemma,
         allomorphs: [["frm-kan", "kan"], ["frm-hani", "hani"]],
         pronunciations: [
@@ -283,6 +284,7 @@ const LEXICON = [
             glossesByLang: { es: "contar" },
             definition: "To say numbers in order, aloud or under one's breath, or to find how many things there are.",
             usage: "With ni- when the speaker counts aloud: nikani ŋai toɾu.",
+            notes: "",
             domains: [domainRef("dom-8.1.1"), domainRef("dom-8.1.1.1")],
             occurrences: 3,
             examples: [
@@ -297,7 +299,7 @@ const LEXICON = [
             ],
             picture: { blob: "blake3:" + "ab".repeat(32), name: "counting.svg", path: "/project/blobs/counting.svg" },
           },
-          { id: "sense-kani-2", gloss: "reckon", glossesByLang: {}, definition: "To think something likely.", usage: "", domains: [], occurrences: 1, examples: [] },
+          { id: "sense-kani-2", gloss: "reckon", glossesByLang: {}, definition: "To think something likely.", usage: "", notes: "Only heard from younger speakers.", domains: [], occurrences: 1, examples: [] },
         ],
       };
     }
@@ -307,11 +309,12 @@ const LEXICON = [
       citation: row.lemma,
       posOfSpeech: row.posOfSpeech,
       homograph: row.homograph,
+      notes: "",
       sameLemma,
       allomorphs: [],
       pronunciations: [],
       relations: [],
-      senses: row.glosses.map((g, i) => ({ id: `sense-${row.id}-${i}`, gloss: g, glossesByLang: {}, definition: "", usage: "", domains: row.posOfSpeech === "num" ? [domainRef("dom-8.1.1.1")] : [], occurrences: i === 0 ? 2 : 0, examples: [] })),
+      senses: row.glosses.map((g, i) => ({ id: `sense-${row.id}-${i}`, gloss: g, glossesByLang: {}, definition: "", usage: "", notes: "", domains: row.posOfSpeech === "num" ? [domainRef("dom-8.1.1.1")] : [], occurrences: i === 0 ? 2 : 0, examples: [] })),
     };
   }
 

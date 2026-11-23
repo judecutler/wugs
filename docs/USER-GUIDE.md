@@ -409,7 +409,7 @@ To find an entry, type part of its lemma or gloss in **Find an entry by lemma or
 
 The list beside it shows **Every entry**, or only the entries with work left: **Needs a gloss** (a sense with no gloss yet, such as a word added from the Frequencies list), **Needs a category**, or **Not in any text** (no glossed word in a text is linked to it yet). Each choice shows how many entries it would list.
 
-In the entry editor you can set the lemma, the citation form, the category (part of speech), and the homograph number. Each sense has a gloss, an optional gloss in the Gloss panel's second language, a definition, and a usage note. Click **Add a sense** for another sense. Fields save when you press **Enter** or leave the field.
+In the entry editor you can set the lemma, the citation form, the category (part of speech), and the homograph number. Each sense has a gloss, an optional gloss in the Gloss panel's second language, a definition, a usage note and your own notes. The entry has a **Notes** field too, for etymology, doubts or what to ask next time. Notes come in from LIFT (`<note>`) and Toolbox (`\nt`) files and go back out with your edits. Click **Add a sense** for another sense. Fields save when you press **Enter** or leave the field (the larger fields save when you leave them, or on **Ctrl+Enter**).
 
 When two entries share a lemma, the editor says so. Click **Number them** to give each one a homograph number. If they are really one word, entered twice (by two imports, say), click **Merge … into this one** and then click again: the other entry's senses, other forms, pronunciations and related words move into the entry on screen, and the other entry is removed. Words in your texts glossed with its senses stay linked to them.
 

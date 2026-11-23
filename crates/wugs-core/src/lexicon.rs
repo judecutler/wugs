@@ -115,6 +115,15 @@ impl Project {
         t.commit()
     }
 
+    /// An entry's `notes` (DATA-MODEL §3 Lexeme): the linguist's own remarks
+    /// on the whole entry, collaborative text like a sense's definition.
+    pub fn set_lexeme_notes(&mut self, lexeme: &str, text: &str) -> Result<CommitResult, String> {
+        self.require(lexeme, "lexeme")?;
+        let mut t = self.intent("edit-lexeme").resolving();
+        t.text_edit("lexeme", lexeme, SCOPE_LEXICON, "notes", text)?;
+        t.commit()
+    }
+
     /// Number an entry as a homograph (1, 2, …), or clear the number with None.
     pub fn set_homograph(&mut self, lexeme: &str, number: Option<u32>) -> Result<CommitResult, String> {
         self.require(lexeme, "lexeme")?;
@@ -267,11 +276,11 @@ impl Project {
         t.commit()
     }
 
-    /// A sense's `definition` or `usage` note: collaborative text
+    /// A sense's `definition`, `usage` or `notes`: collaborative text
     /// (DATA-MODEL §3), so two devices editing one definition merge.
     pub fn set_sense_text(&mut self, sense: &str, field: &str, text: &str) -> Result<CommitResult, String> {
         self.require(sense, "sense")?;
-        if !matches!(field, "definition" | "usage") {
+        if !matches!(field, "definition" | "usage" | "notes") {
             return Err(format!("{field} is not a sense text field"));
         }
         let mut t = self.intent("edit-sense").resolving();
@@ -559,6 +568,12 @@ mod tests {
         assert_eq!(p.proj.field_str(&s1, "gloss:es").unwrap().as_deref(), Some("sol"));
         p.set_sense_text(&s1, "definition", "the star the earth goes round").unwrap();
         assert_eq!(p.proj.field_str(&s1, "definition").unwrap().as_deref(), Some("the star the earth goes round"));
+        p.set_sense_text(&s1, "notes", "check with the elders").unwrap();
+        assert_eq!(p.proj.field_str(&s1, "notes").unwrap().as_deref(), Some("check with the elders"));
+        assert!(p.set_sense_text(&s1, "gloss", "x").is_err());
+        p.set_lexeme_notes(&lex, "borrowed from Persian?").unwrap();
+        assert_eq!(p.proj.field_str(&lex, "notes").unwrap().as_deref(), Some("borrowed from Persian?"));
+        assert!(p.set_lexeme_notes(&s1, "x").is_err(), "only an entry");
         p.set_lexeme_field(&lex, "pos-of-speech", "n").unwrap();
         assert!(p.set_lexeme_field(&lex, "ws", "ws_x").is_err());
         assert!(p.set_lexeme_field(&lex, "lemma", "  ").is_err());
