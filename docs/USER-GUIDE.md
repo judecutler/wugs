@@ -697,6 +697,14 @@ wugs names the file after the text's title and never replaces a file that exists
 
 At the top of **Import and export**, type the language's name and, if you know them, its Glottocode (from [glottolog.org](https://glottolog.org), like `stan1293`) and ISO 639-3 code (three letters, like `tur`). Each field saves when you press Enter or leave it. You do not need to look the codes up: as you type a name (or a code) in the first two fields, wugs lists the languages and dialects in Glottolog that fit, with their family and region, and clicking one fills in both codes. If you had already named the language yourself, such as by the name its speakers use, and you search from the Glottocode field, your name stays. The list comes from Glottolog 5.4, kept inside the app, so it works offline and sends nothing. Archive packages and CLDF datasets carry them, so the data can be found and joined with other datasets. Everyone on the project sees the same language.
 
+### See how far the project has come
+
+The **Progress** panel counts what a grant report, an archive deposit or a supervisor asks for. In Tongues, press **Ctrl+K** and choose **Show Progress**.
+
+It lists how much is recorded, how many sentences are transcribed and how much speech they cover, how many words are glossed and how many sentences are translated, and the size of the lexicon. A table gives the same figures text by text, with the totals under it. Click a text to open it. **Copy table** copies the table, with lengths in minutes, to paste into a spreadsheet or a report.
+
+A sentence is a segment on a transcription track. A word counts as glossed once it is broken into morphs. A recording that is not on this computer is not counted, and the panel says how many there are.
+
 ### See what typology says about the language
 
 The **Typology** panel shows what [Grambank](https://grambank.clld.org) or the [World Atlas of Language Structures](https://wals.info) (WALS) says about the project's language. Choose **Grambank** (195 questions such as "Are there definite or specific articles?") or **WALS** (192 features such as "Order of Subject, Object and Verb") at the top; the choice is remembered. Each feature shows the dataset's answer for the language. Beside each answer it shows how the other coded languages of the same family answer, as a share of each answer and a bar. When the family has fewer than three coded languages, it compares with the languages of the same region instead. Open the panel from Settings (Closed panels) or with **Find an action**. It needs the project's Glottocode (see above).

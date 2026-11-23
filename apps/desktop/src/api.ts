@@ -613,6 +613,7 @@ export const exportLexicon = (args: { format: LexiconFormat; folder: string }) =
 /** A spreadsheet of the lexicon in (a row per sense) and out (`src-tauri/src/lexicon_table.rs`). */
 export const importLexiconTable = (args: { path: string }) => invoke<import("./lexicon/logic").TableImport>("import_lexicon_table", args);
 export const exportLexiconTable = (args: { folder: string }) => invoke<string>("export_lexicon_table", args);
+export const projectProgress = () => invoke<import("./progress/logic").Progress>("project_progress");
 /** `date`: today on this computer's calendar (YYYY-MM-DD), which names the package folder. */
 export const sealProject = (args: { folder: string; date: string }) => invoke<Sealed>("seal_project", args);
 /** A text's document metadata and every key the project uses (src-tauri/src/metadata.rs). */
