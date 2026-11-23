@@ -652,10 +652,13 @@ const LEXICON = [
         for (let j = 0; j < 6; j++) {
           const w = Math.sin(++k * 1.7);
           const v = Math.cos(k * 2.3);
-          points.push({ segment: `v${k}`, label, startMs: k * 400, endMs: k * 400 + 180, f0: 120 + 10 * w, f1: f1 + 40 * w, f2: f2 + 120 * v + 60 * w, f3: 2700 });
+          // Its pitch: a tone per vowel quality, so the Pitch contours panel draws shapes.
+          const shape = { i: [1, 0], e: [-1, 0], a: [0, 0], o: [0, 1], u: [1, -1] }[label];
+          const contour = Array.from({ length: 10 }, (_, t) => (k % 7 === 0 && t > 7 ? null : 150 + 30 * shape[0] * (t / 9 - 0.5) + 25 * shape[1] * Math.sin((t / 9) * Math.PI) + 4 * w));
+          points.push({ segment: `v${k}`, label, startMs: k * 400, endMs: k * 400 + 180, f0: 120 + 10 * w, f1: f1 + 40 * w, f2: f2 + 120 * v + 60 * w, f3: 2700, contour });
         }
       }
-      points.push({ segment: "v-silent", label: "a", startMs: 13000, endMs: 13200, f0: null, f1: null, f2: null, f3: null });
+      points.push({ segment: "v-silent", label: "a", startMs: 13000, endMs: 13200, f0: null, f1: null, f2: null, f3: null, contour: Array(10).fill(null) });
       return { points, untimed: 1, analysedBy: "Acoustic analysis (built in)" };
     },
     gloss_consistency: () => [

@@ -44,11 +44,14 @@ export function standalone(shown: SVGSVGElement): string {
     target.removeAttribute("class");
     target.removeAttribute("tabindex");
   });
+  // The plot's own size, from its viewBox (every chart wugs saves draws in one).
+  const [, , vw, vh] = (shown.getAttribute("viewBox") ?? `0 0 ${W} ${H}`).split(/\s+/).map(Number);
+  const [width, height] = [vw ?? W, vh ?? H];
   copy.setAttribute("xmlns", SVG);
-  copy.setAttribute("width", String(W));
-  copy.setAttribute("height", String(H));
+  copy.setAttribute("width", String(width));
+  copy.setAttribute("height", String(height));
   const bg = document.createElementNS(SVG, "rect");
-  for (const [k, v] of Object.entries({ x: 0, y: 0, width: W, height: H, fill: "#ffffff" })) bg.setAttribute(k, String(v));
+  for (const [k, v] of Object.entries({ x: 0, y: 0, width, height, fill: "#ffffff" })) bg.setAttribute(k, String(v));
   copy.insertBefore(bg, copy.firstChild);
   return `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(copy)}\n`;
 }
