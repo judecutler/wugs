@@ -1,15 +1,20 @@
 // A whole text as numbered interlinear examples, for a grammar, a paper or
 // a handout (roadmap 43, publishing): the same builders as Copy example, so
 // an example reads the same pasted alone or in the document. Pure: no DOM.
-import { asExpex, asGb4e, asHtml, asText, latexEscape, type Example, type ExampleFormat } from "./example.ts";
+import type { Abbreviation } from "./abbreviations.ts";
+import { asExpex, asGb4e, asHtml, asText, latexEscape, width, type Example, type ExampleFormat } from "./example.ts";
 
 export type Document = { extension: "tex" | "html" | "txt"; contents: string };
 
 const htmlEscape = (s: string): string => s.replace(/[&<>"]/gu, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] ?? c);
 
-/** The examples as one file in the chosen format. LaTeX files compile with
- * XeLaTeX or LuaLaTeX, which read IPA and every script as typed. */
-export function textDocument(title: string, examples: readonly Example[], format: ExampleFormat): Document {
+const UNEXPLAINED = "?";
+
+/** The examples as one file in the chosen format, followed by the list of
+ * the abbreviations they use (when given). LaTeX files compile with XeLaTeX
+ * or LuaLaTeX, which read IPA and every script as typed. */
+export function textDocument(title: string, examples: readonly Example[], format: ExampleFormat, abbreviations: readonly Abbreviation[] = []): Document {
+  const listed = abbreviations.length > 0;
   switch (format) {
     case "expex":
     case "gb4e": {
@@ -29,6 +34,15 @@ export function textDocument(title: string, examples: readonly Example[], format
           "",
           body,
           "",
+          ...(listed
+            ? [
+                "\\section*{Abbreviations}",
+                "\\begin{tabular}{@{}ll@{}}",
+                ...abbreviations.map((a) => `\\textsc{${latexEscape(a.abbr.toLowerCase())}} & ${latexEscape(a.meaning ?? UNEXPLAINED)} \\\\`),
+                "\\end{tabular}",
+                "",
+              ]
+            : []),
           "\\end{document}",
           "",
         ].join("\n"),
@@ -45,12 +59,25 @@ export function textDocument(title: string, examples: readonly Example[], format
           "</head><body>",
           `<h1>${htmlEscape(title)}</h1>`,
           ...examples.map(asHtml),
+          ...(listed
+            ? [
+                "<h2>Abbreviations</h2>",
+                '<table style="border-collapse: collapse; border: none">',
+                ...abbreviations.map(
+                  (a) => `<tr><td style="padding: 0 1.2em 0 0; border: none"><span style="font-size: 80%">${htmlEscape(a.abbr)}</span></td><td style="border: none">${htmlEscape(a.meaning ?? UNEXPLAINED)}</td></tr>`,
+                ),
+                "</table>",
+              ]
+            : []),
           "</body></html>",
           "",
         ].join("\n"),
       };
-    case "text":
-      return { extension: "txt", contents: `${title}\n\n${examples.map(asText).join("\n\n")}\n` };
+    case "text": {
+      const col = Math.max(0, ...abbreviations.map((a) => width(a.abbr))) + 2;
+      const list = listed ? `\n\nAbbreviations\n\n${abbreviations.map((a) => `${a.abbr}${" ".repeat(col - width(a.abbr))}${a.meaning ?? UNEXPLAINED}`).join("\n")}` : "";
+      return { extension: "txt", contents: `${title}\n\n${examples.map(asText).join("\n\n")}${list}\n` };
+    }
   }
 }
 

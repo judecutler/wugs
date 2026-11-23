@@ -559,6 +559,8 @@
       total: 1,
       hits: [{ textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, len: 1, breakdown: null, glosses: null }],
     }),
+    abbreviation_meanings: ({ abbreviations }) => abbreviations.map((a) => (a === "INCL" ? "inclusive (speaker and hearer)" : null)),
+    set_abbreviation_meaning: () => null,
     dispersion: () => ({
       words: 1240,
       hits: 14,

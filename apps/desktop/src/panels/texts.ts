@@ -1,7 +1,8 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { createText, errorText, exportCldf, exportCorpus, exportDictionary, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { abbreviationMeanings, createText, errorText, exportCldf, exportCorpus, exportDictionary, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, publishedLines, type Language } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
+import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
 import { detailsSection, importMetadataTable } from "../metadata/section";
@@ -249,7 +250,11 @@ async function exportExamples(text: TextDetail) {
       showToast({ tone: "warn", lines: ["No sentence of this text is glossed yet. Break a sentence into morphs in the Gloss panel first."] });
       return;
     }
-    const doc = textDocument(text.title || "Examples", examples, exampleFormat);
+    const used = abbreviationsOf(examples);
+    const meanings = used.length === 0 ? [] : await abbreviationMeanings(used);
+    const abbreviations = abbreviationList(used, new Map(used.flatMap((a, i) => (meanings[i] ? [[a, meanings[i]!] as [string, string]] : []))));
+    const unexplained = abbreviations.filter((a) => a.source === "none").length;
+    const doc = textDocument(text.title || "Examples", examples, exampleFormat, abbreviations);
     const r = await saveDocument({ folder, title: `${text.title || "text"} examples`, extension: doc.extension, contents: doc.contents });
     const label = EXAMPLE_FORMATS.find((f) => f.id === exampleFormat)?.label ?? "";
     showToast({
@@ -257,6 +262,8 @@ async function exportExamples(text: TextDetail) {
       lines: [
         `Saved ${examples.length} glossed ${examples.length === 1 ? "example" : "examples"} for ${label} in ${r.path}.`,
         ...(skipped > 0 ? [`${skipped} ${skipped === 1 ? "sentence is" : "sentences are"} not glossed yet and left out.`] : []),
+        ...(abbreviations.length > 0 ? [`The ${abbreviations.length} ${abbreviations.length === 1 ? "abbreviation" : "abbreviations"} the glosses use are listed after the examples.`] : []),
+        ...(unexplained > 0 ? [`${unexplained} of them ${unexplained === 1 ? "has" : "have"} no meaning yet and ${unexplained === 1 ? "shows" : "show"} “?”: write ${unexplained === 1 ? "it" : "them"} under Abbreviations in the Interlinear panel.`] : []),
         ...(doc.extension === "tex" ? ["Compile it with XeLaTeX or LuaLaTeX, which read IPA and every script."] : []),
       ],
     });

@@ -1,3 +1,4 @@
+pub mod abbreviations;
 pub mod assist;
 pub mod capability;
 pub mod capture;
@@ -151,6 +152,18 @@ fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, 
 fn dispersion(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>, within: Option<concordance::Where>) -> Result<dispersion::Dispersion, String> {
     let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
     s.run(move |s| dispersion::dispersion(s, &query, kind, how, &concordance::Scope::of(text_id, within)))
+}
+
+/// The project's own meanings of these gloss abbreviations (`src/abbreviations.rs`).
+#[tauri::command(async)]
+fn abbreviation_meanings(s: State<SessionThread>, abbreviations: Vec<String>) -> Result<Vec<Option<String>>, String> {
+    s.run(move |s| abbreviations::meanings(s, &abbreviations))
+}
+
+/// Write (or clear, when empty) what a gloss abbreviation means in this project.
+#[tauri::command(async)]
+fn set_abbreviation_meaning(s: State<SessionThread>, abbreviation: String, meaning: String) -> Result<(), String> {
+    s.run(move |s| abbreviations::set(s, &abbreviation, &meaning))
 }
 
 /// A CQP-style query over the sentences' tokens and their annotation (`src/cqp.rs`).
@@ -1589,6 +1602,8 @@ pub fn run() {
             concordance,
             concordance_query,
             dispersion,
+            abbreviation_meanings,
+            set_abbreviation_meaning,
             text_metadata,
             set_text_metadata,
             import_metadata,

@@ -339,6 +339,12 @@ The **Interlinear** tab, beside Gloss, shows the selected text the way you would
 - Click a sentence, or move to it with the arrow keys and press Enter, to open it in the Gloss panel.
 - Click ▶ to hear a sentence that has times.
 
+Click **Abbreviations** to list every grammatical abbreviation the text's glosses use (`SG`, `PST`, `3` in `3SG`), the list a paper prints with its examples. Each one has a field for what it means:
+
+- An empty field uses the meaning from the Leipzig Glossing Rules' standard list, shown in grey. `N` before a listed abbreviation reads as "non-" (`NPST` nonpast).
+- Type a meaning and press Enter (or leave the field) to use your own. It is kept for the whole project and syncs to everyone in it. Empty the field to go back to the Leipzig meaning.
+- An abbreviation that is not in the Leipzig list and has no meaning yet is marked, and a note names it. That is also how a typing slip shows up, such as `PLU` beside `PL`.
+
 To get the whole text into a paper or handout, use **Glossed examples for** under the Texts panel (see "Export a text or the lexicon").
 
 ## Build the lexicon
@@ -490,7 +496,7 @@ To export every glossed sentence of a text as numbered examples for a grammar, a
 - **Word / Google Docs** writes an `.html` file. Open it in Word, or upload it to Google Docs, and save it as a document there.
 - **Plain text** writes aligned columns.
 
-Sentences not glossed yet are left out, and the message says how many.
+Sentences not glossed yet are left out, and the message says how many. After the examples comes the list of abbreviations their glosses use, with the meanings from the Interlinear panel's **Abbreviations**. An abbreviation with no meaning yet shows "?".
 
 To export the lexicon, choose LIFT or Toolbox beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT.
 

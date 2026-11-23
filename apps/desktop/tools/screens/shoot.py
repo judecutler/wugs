@@ -448,6 +448,13 @@ def main():
             if run.page.locator(".panel-interlinear .il-selected").count() != 1:
                 failures.append("Next to gloss selected no sentence")
             run.page.locator(".panel-interlinear .il-only input").uncheck()
+            # The abbreviations the text's glosses use, with Leipzig meanings and the project's own.
+            run.page.locator(".panel-interlinear .il-bar button", has_text="Abbreviations").click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-interlinear-abbreviations", run.page.locator(".panel-interlinear"))
+            if run.page.locator(".panel-interlinear .il-abbr-row").count() == 0:
+                failures.append("the Abbreviations list showed none")
+            run.page.locator(".panel-interlinear .il-bar button", has_text="Abbreviations").click()
 
             # Media bin (roadmap 66): a card dragged onto the Timeline is used for the text on screen.
             run.front("media", "Media")
