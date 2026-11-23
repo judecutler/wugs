@@ -90,10 +90,14 @@ export function toggle(): void {
   ctl.toggle();
 }
 
-/** Play from startMs and stop at endMs. A no-op without a recording. */
-export function playRange(startMs: number, endMs: number): void {
+/** The pause between two plays of a looped segment, long enough to type in. */
+export const LOOP_GAP_MS = 600;
+
+/** Play from startMs and stop at endMs, or over and over with `loop`.
+ * A no-op without a recording. */
+export function playRange(startMs: number, endMs: number, loop = false): void {
   if (!hasSource()) return;
   rangePlaying = true;
   audio.muted = false;
-  ctl.playRange(startMs, endMs);
+  ctl.playRange(startMs, endMs, loop ? LOOP_GAP_MS : null);
 }

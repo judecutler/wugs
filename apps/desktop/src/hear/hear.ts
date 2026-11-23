@@ -22,8 +22,9 @@ export function recordingForShown(): string | null {
 
 /** Open the segment (selecting its text if another is shown) and play it.
  * `select: false` plays without selecting (a panel that already did);
- * `quiet` says nothing when there is no recording (a keystroke's replay). */
-export async function hear(seg: Heard, select = true, quiet = false): Promise<void> {
+ * `quiet` says nothing when there is no recording (a keystroke's replay);
+ * `loop` plays it over and over until anything else plays or pauses. */
+export async function hear(seg: Heard, select = true, quiet = false, loop = false): Promise<void> {
   const s = getState();
   if (s.kind !== "open") return;
   if (select) {
@@ -56,7 +57,7 @@ export async function hear(seg: Heard, select = true, quiet = false): Promise<vo
       return;
     }
   }
-  playback.playRange(seg.startMs, seg.endMs);
+  playback.playRange(seg.startMs, seg.endMs, loop);
 }
 
 // A headword's pronunciation plays on its own audio element, so hearing a

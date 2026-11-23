@@ -129,6 +129,8 @@ The row under the Timeline toolbar works like the transport in a video editor. I
 
 To hear fast speech word by word, choose a slower speed in the menu beside the clock: **0.5× speed** or **0.75× speed**. Speech keeps its pitch, so voices sound like themselves, only slower. The same menu is in the Transcribe toolbar; both show the one speed, which every segment, replay and play button in the window uses. wugs remembers it on this computer. Pronunciations in the Lexicon always play at normal speed.
 
+To hear a segment over and over while you write it down, turn on **Loop** in the Transcribe toolbar. Each segment you play then repeats, with a short pause between plays, until you move to another segment (**Enter** or **Shift+Enter**), play something else, or pause. Turn **Loop** off to stop at once. wugs remembers the choice on this computer.
+
 Click the ruler or the waveform to move the playhead there. While the timeline has focus, these keys also work:
 
 | Key | Action |

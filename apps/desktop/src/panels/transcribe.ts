@@ -22,6 +22,9 @@ import type { PanelDef, PanelView } from "./panel";
 const WINDOW_ROWS = 200;
 const PALETTE_KEY = "wugs.ipa-palette";
 
+/** Whether Transcribe plays each segment over and over, on this computer. */
+const LOOP_KEY = "wugs.transcribe.loop";
+
 export const transcribePanel: PanelDef = {
   title: "Transcribe",
   create(): PanelView {
@@ -37,8 +40,15 @@ export const transcribePanel: PanelDef = {
       xsampaToggle.setAttribute("aria-pressed", String(xsampa));
     };
     showXsampa();
+    const loopToggle = h("button", { type: "button", textContent: "Loop", title: "Play each segment over and over, with a short pause between, until you move on (Enter, Shift+Enter) or pause it" });
+    let looping = localStorage.getItem(LOOP_KEY) === "on";
+    const showLoop = () => {
+      loopToggle.classList.toggle("active", looping);
+      loopToggle.setAttribute("aria-pressed", String(looping));
+    };
+    showLoop();
     const shortcutsToggle = h("button", { type: "button", textContent: "Shortcuts…", title: "Typing shortcuts for this project's letters, such as ;n for ŋ, the same for everyone on the project" });
-    const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, paletteToggle, xsampaToggle, shortcutsToggle, playback.rateSelect(), keys, hint);
+    const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, paletteToggle, xsampaToggle, shortcutsToggle, playback.rateSelect(), loopToggle, keys, hint);
     /** The project's typing shortcuts (`src/typing.ts`), shared with the other panels. */
     const shortcutsBox = h("div", { className: "tx-shortcuts" });
     shortcutsBox.hidden = true;
@@ -226,6 +236,13 @@ export const transcribePanel: PanelDef = {
       void ctl?.commit();
     };
     xsampaToggle.onmousedown = (ev) => ev.preventDefault();
+    loopToggle.onclick = () => {
+      looping = !looping;
+      localStorage.setItem(LOOP_KEY, looping ? "on" : "off");
+      showLoop();
+      if (!looping) playback.pause();
+      else if (ctl?.segmentId != null) play(stored(ctl.segmentId), false);
+    };
     xsampaToggle.onclick = () => {
       xsampa = !xsampa;
       localStorage.setItem(XSAMPA_KEY, xsampa ? "on" : "off");
@@ -243,7 +260,7 @@ export const transcribePanel: PanelDef = {
     /** Plays from the text's own recording, loading it if another is loaded (roadmap 72). */
     function play(seg: SegmentRow | undefined, quiet = true): void {
       if (seg?.startMs == null || seg.endMs == null) return;
-      void hear({ textId, tierId: seg.tier, segmentId: seg.id, startMs: seg.startMs, endMs: seg.endMs }, false, quiet);
+      void hear({ textId, tierId: seg.tier, segmentId: seg.id, startMs: seg.startMs, endMs: seg.endMs }, false, quiet, looping);
     }
 
     function go(step: 1 | -1): void {

@@ -189,3 +189,42 @@ test("M2: toggling drops the stop, so resuming plays on", async () => {
   sched.advance(60000);
   assert.equal(m.paused, false);
 });
+
+test("a looped range plays again after its gap, until something else plays or pauses", async () => {
+  const { m, pending, sched, pb } = setup();
+  pb.playRange(1000, 2000, 400);
+  pending.shift()?.resolve();
+  await tick();
+  m.currentTime = 2.01;
+  sched.frame();
+  assert.equal(m.paused, true, "it stops at its end");
+  sched.advance(399);
+  assert.equal(m.paused, true, "and waits for the gap");
+  sched.advance(1);
+  assert.equal(m.paused, false, "then plays again");
+  assert.equal(m.currentTime, 1, "from its start");
+  pending.shift()?.resolve();
+  await tick();
+  // A person pausing it ends the loop.
+  m.pause();
+  sched.frame();
+  sched.advance(1000);
+  assert.equal(m.paused, true, "a pause is not looped over");
+});
+
+test("a looped range ends when another range starts", async () => {
+  const { m, pending, sched, pb } = setup();
+  pb.playRange(1000, 2000, 400);
+  pending.shift()?.resolve();
+  await tick();
+  m.currentTime = 2.01;
+  sched.frame();
+  pb.playRange(5000, 6000);
+  pending.shift()?.resolve();
+  await tick();
+  m.currentTime = 6.01;
+  sched.frame();
+  sched.advance(1000);
+  assert.equal(m.paused, true, "the new range does not loop, and the old one's restart never fires");
+  assert.equal(m.currentTime, 6.01);
+});
