@@ -662,7 +662,7 @@
     gloss_unify: () => 1,
     // The character inventory: a Cyrillic «а» typed among Latin letters, and two apostrophes.
     typology_profile: ({ glottocode }) => {
-      const f = (id, question, value, label, others) => ({ id, question, value, label, others: others.map(([v, l, count]) => ({ value: v, label: l, count })), othersCoded: others.reduce((n, o) => n + o[2], 0) });
+      const f = (id, question, value, label, others) => ({ id, question, value, label, others: others.map(([v, l, count]) => ({ value: v, label: l, count })), othersCoded: others.reduce((n, o) => n + o[2], 0), codes: others.map(([v, l]) => ({ value: v, label: l })).sort((x, y) => x.value.localeCompare(y.value)) });
       return {
         glottocode,
         name: "Invented Austronesian",
@@ -681,6 +681,12 @@
         ],
       };
     },
+    typology_answers: () => [
+      { id: "GB020", value: "1", note: "«ang» before common nouns (Kanu notebook 3, p. 12)" },
+      { id: "GB024", value: "2", note: "" },
+      { id: "GB026", value: "?", note: "ask about colour words" },
+    ],
+    set_typology_answer: ({ id, value, note }) => ({ id, value, note }),
     sound_words: ({ tierId }) => ({
       tracks: [
         { id: "tier-utt", name: "utterance", words: 64 },

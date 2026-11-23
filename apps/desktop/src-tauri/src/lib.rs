@@ -342,6 +342,18 @@ fn typology_profile(glottocode: String, source: typology::Source) -> Result<typo
     typology::profile(&glottocode, source)
 }
 
+/// The project's own answers to Grambank or WALS features (src/typology.rs).
+#[tauri::command(async)]
+fn typology_answers(s: State<SessionThread>, source: typology::Source) -> Result<Vec<typology::Ours>, String> {
+    s.run(move |s| typology::answers(s, source))
+}
+
+/// Write (or clear) the project's answer to one feature.
+#[tauri::command(async)]
+fn set_typology_answer(s: State<SessionThread>, source: typology::Source, id: String, value: String, note: String) -> Result<typology::Ours, String> {
+    s.run(move |s| typology::set_answer(s, source, &id, &value, &note))
+}
+
 /// Glottolog's languages and dialects a typed name or code fits, best first.
 #[tauri::command(async)]
 fn glottolog_find(query: String) -> Vec<glottolog::Languoid> {
@@ -1829,6 +1841,8 @@ pub fn run() {
             morphosyntax_choose_stanza,
             glottolog_find,
             typology_profile,
+            typology_answers,
+            set_typology_answer,
             character_inventory,
             sound_words,
             sentence_check_status,

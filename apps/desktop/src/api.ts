@@ -631,6 +631,10 @@ export type Languoid = import("./cldf/logic").Languoid;
 /** Glottolog's languages and dialects a typed name or code fits, best first (at most 8). */
 /** What Grambank or WALS says about a language, beside its relatives (src-tauri/src/typology.rs). */
 export const typologyProfile = (args: { glottocode: string; source: import("./typology/logic").Source }) => invoke<import("./typology/logic").Profile>("typology_profile", args);
+/** The project's own answers to Grambank or WALS features. */
+export const typologyAnswers = (args: { source: import("./typology/logic").Source }) => invoke<import("./typology/logic").Ours[]>("typology_answers", args);
+/** Write (or clear, with an empty value and note) the project's answer to one feature. */
+export const setTypologyAnswer = (args: { source: import("./typology/logic").Source; id: string; value: string; note: string }) => invoke<import("./typology/logic").Ours>("set_typology_answer", args);
 export const glottologFind = (args: { query: string }) => invoke<Languoid[]>("glottolog_find", args);
 /** Every character the project's transcriptions and lexicon use (src-tauri/src/characters.rs). */
 /** The word types on a transcription track, for the Sounds panel (src-tauri/src/sounds.rs). */
