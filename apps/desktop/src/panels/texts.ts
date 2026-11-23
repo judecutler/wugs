@@ -37,6 +37,7 @@ const TEXT_FORMATS: [TextFormat, string][] = [
   ["antconc", "AntConc, words tagged word_TAG (.txt)"],
   ["toolboxtext", "Toolbox interlinear text (.txt)"],
   ["plaintext", "Plain text, a line per segment (.txt)"],
+  ["table", "Spreadsheet, a row per sentence (.csv)"],
 ];
 const LEXICON_FORMATS: [LexiconFormat | "table", string][] = [
   ["lift", "LIFT (FLEx, WeSay)"],

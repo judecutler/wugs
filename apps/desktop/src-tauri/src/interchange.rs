@@ -53,6 +53,7 @@ impl Format {
             "toolbox" => Format::Toolbox,
             "toolboxtext" => Format::ToolboxText,
             "plaintext" => Format::PlainText,
+            "table" => Format::Table { tabs: false },
             "conllu" => Format::Conllu,
             "tei" => Format::Tei,
             "vertical" => Format::Vertical,
@@ -697,7 +698,10 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
     let title = p.proj.field_str(text_id, "title")?.unwrap_or_default();
     let mut notes = Vec::new();
     let contents = match format {
-        Format::Table { .. } => return Err("export a text as plain text or ELAN; table export is not built yet".into()),
+        Format::Table { .. } => {
+            let segments = one_track(p, text_id, &mut notes, "A table")?;
+            crate::table_text::export(p, &segments)?
+        }
         Format::GlossedExamples => return Err("use Glossed examples for, which writes them for Word, LaTeX or plain text".into()),
         Format::Elan => wugs_elan::export_eaf(p, text_id)?,
         Format::FlexText => wugs_flex::export_flextext(p, text_id)?,
@@ -1184,6 +1188,33 @@ mod tests {
         let again = import_file(&mut s, file.to_str().unwrap()).unwrap();
         assert!(again.lines.iter().any(|l| l.contains("matched")), "{:?}", again.lines);
         assert_eq!(session::list_texts(&mut s).unwrap().len(), 1);
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_table_of_sentences_goes_back_out_as_a_table() {
+        let dir = std::env::temp_dir().join(format!("wugs-table-out-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("stories.csv");
+        fs::write(&file, "sentence,translation,speaker\nnikani ŋai,\"I count one, then\",Ana\nkesi toru,Two dogs,Ben\n").unwrap();
+        let text = import_file(&mut s, file.to_str().unwrap()).unwrap().text.unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let e = export_text(&mut s, &text, Format::Table { tabs: false }, &out).unwrap();
+        assert!(e.path.ends_with("stories.csv"), "{}", e.path);
+        let written = fs::read_to_string(&e.path).unwrap();
+        assert_eq!(written, "\u{feff}sentence,translation,speaker\nnikani ŋai,\"I count one, then\",Ana\nkesi toru,Two dogs,Ben\n");
+        // A glossed sentence gains its morphemes and glosses.
+        let p = session::project(&mut s).unwrap();
+        let seg = p.proj.ordered_children("text", &text, "segment").unwrap().into_iter().find(|x| p.proj.field_str(x, "content").unwrap().as_deref() == Some("nikani ŋai")).unwrap();
+        let (toks, _) = p.tokenize(&text, &seg, &["nikani", "ŋai"]).unwrap();
+        let spec = |surface: &str, morph_type: &str, gloss: &str| wugs_core::MorphSpec { surface: surface.into(), morph_type: morph_type.into(), gloss: Some(gloss.into()), ..Default::default() };
+        p.apply_analysis(&text, &toks[0], &[spec("ni", "prefix", "1SG"), spec("kani", "root", "count")]).unwrap();
+        let again = export_text(&mut s, &text, Format::Table { tabs: false }, &out).unwrap();
+        let written = fs::read_to_string(&again.path).unwrap();
+        assert!(written.starts_with("\u{feff}sentence,translation,morphemes,glosses,speaker\nnikani ŋai,\"I count one, then\",ni-kani ŋai,1SG-count ?,Ana\nkesi toru,Two dogs,,,Ben\n"), "{written}");
         drop(s);
         fs::remove_dir_all(dir).ok();
     }

@@ -232,6 +232,93 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
     Ok(Table { text_column: raw[text_at].clone(), group_column: group_at.map(|g| raw[g].clone()), translation_column: translation_at.map(|c| raw[c].clone()), documents, kept: kept.iter().map(|&c| raw[c].clone()).collect(), delimiter: delim, ungrouped })
 }
 
+/// One text's sentences as a table a spreadsheet opens: a row per sentence
+/// with its transcription, translation, the words cut into morphemes and
+/// their glosses Leipzig-style (when any word is glossed), its times in
+/// seconds (when any is timed) and every column a table import kept
+/// (`x.csv.*`), under their stored names. UTF-8 with a BOM, so Excel reads
+/// the IPA. Read back by the table import: `sentence` is the text column,
+/// `translation` the translation, the rest kept again.
+pub fn export(p: &wugs_core::Project, segments: &[String]) -> Result<String, String> {
+    struct Row {
+        sentence: String,
+        translation: String,
+        morphemes: String,
+        glosses: String,
+        start: Option<f64>,
+        end: Option<f64>,
+        extras: Vec<(String, String)>,
+    }
+    let mut rows = Vec::new();
+    let mut extra_names: Vec<String> = Vec::new();
+    for seg in segments {
+        let mut words = Vec::new();
+        let mut glossed = false;
+        for tok in p.proj.members(seg)? {
+            if p.proj.is_tombstoned(&tok)? || p.proj.is_punct_token(&tok) {
+                continue;
+            }
+            let morphs = crate::concordance::morphs_of(p, &tok)?;
+            if morphs.is_empty() {
+                let form = p.proj.field_str(&tok, "form")?.unwrap_or_default();
+                words.push((form, "?".to_string()));
+            } else {
+                glossed = true;
+                let surfaces: Vec<(String, String)> = morphs.iter().map(|m| (crate::concordance::bare(&m.surface).to_string(), m.kind.clone())).collect();
+                let glosses: Vec<(String, String)> = morphs.iter().map(|m| (if m.gloss.is_empty() { "?".to_string() } else { m.gloss.clone() }, m.kind.clone())).collect();
+                words.push((crate::concordance::joined(&surfaces), crate::concordance::joined(&glosses)));
+            }
+        }
+        let mut extras = Vec::new();
+        for (field, value) in p.proj.fields_of(seg)? {
+            if let Some(name) = field.strip_prefix("x.csv.") {
+                let value = value.as_str().map(str::to_string).unwrap_or_default();
+                if !extra_names.iter().any(|n| n == name) {
+                    extra_names.push(name.to_string());
+                }
+                extras.push((name.to_string(), value));
+            }
+        }
+        rows.push(Row {
+            sentence: p.proj.field_str(seg, "content")?.unwrap_or_default(),
+            translation: crate::interchange::translations_of(p, seg)?.into_iter().next().map(|t| t.1).unwrap_or_default(),
+            morphemes: if glossed { words.iter().map(|w| w.0.as_str()).collect::<Vec<_>>().join(" ") } else { String::new() },
+            glosses: if glossed { words.iter().map(|w| w.1.as_str()).collect::<Vec<_>>().join(" ") } else { String::new() },
+            start: p.proj.field_num(seg, "start")?,
+            end: p.proj.field_num(seg, "end")?,
+            extras,
+        });
+    }
+    let glossed = rows.iter().any(|r| !r.morphemes.is_empty());
+    let timed = rows.iter().any(|r| r.start.is_some());
+    let mut head = vec!["sentence".to_string(), "translation".to_string()];
+    if glossed {
+        head.extend(["morphemes".to_string(), "glosses".to_string()]);
+    }
+    if timed {
+        head.extend(["start".to_string(), "end".to_string()]);
+    }
+    let taken: Vec<String> = head.clone();
+    let extra_names: Vec<String> = extra_names.into_iter().filter(|n| !taken.contains(n)).collect();
+    head.extend(extra_names.iter().cloned());
+    let secs = |ms: Option<f64>| ms.map(|v| format!("{:.3}", v / 1000.0)).unwrap_or_default();
+    let mut w = csv::WriterBuilder::new().from_writer(Vec::new());
+    w.write_record(&head).map_err(|e| e.to_string())?;
+    for r in &rows {
+        let mut rec = vec![r.sentence.clone(), r.translation.clone()];
+        if glossed {
+            rec.extend([r.morphemes.clone(), r.glosses.clone()]);
+        }
+        if timed {
+            rec.extend([secs(r.start), secs(r.end)]);
+        }
+        rec.extend(extra_names.iter().map(|n| r.extras.iter().find(|e| &e.0 == n).map(|e| e.1.clone()).unwrap_or_default()));
+        w.write_record(&rec).map_err(|e| e.to_string())?;
+    }
+    let bytes = w.into_inner().map_err(|e| e.to_string())?;
+    Ok(format!("\u{feff}{}", String::from_utf8(bytes).map_err(|e| e.to_string())?))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
