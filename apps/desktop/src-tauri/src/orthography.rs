@@ -174,6 +174,47 @@ impl Profile {
         out
     }
 
+    /// A word as sound segments through the profile: each matched
+    /// grapheme's value in `column` (a value with spaces, as profiles write
+    /// `t s` for a sequence, gives one segment each; NULL gives none), and
+    /// an unmatched character with its marks as one segment.
+    pub fn segments(&self, word: &str, column: usize, ignore_case: bool) -> Vec<String> {
+        let word = nfc(word);
+        let word = if ignore_case { word.to_lowercase() } else { word };
+        let mut out = Vec::new();
+        for w in word.split_whitespace() {
+            let chars: Vec<char> = w.chars().collect();
+            let n = chars.len();
+            let mut i = 0;
+            while i < n {
+                let found = self.by_first.get(&chars[i]).and_then(|list| {
+                    list.iter().map(|k| &self.rules[*k]).find(|r| {
+                        let len = r.grapheme.len();
+                        i + len <= n && chars[i..i + len] == r.grapheme[..] && (!r.initial || i == 0) && (!r.last || i + len == n)
+                    })
+                });
+                if let Some(r) = found {
+                    match &r.outputs[column] {
+                        Some(v) => out.extend(v.split_whitespace().map(str::to_string)),
+                        None => out.push(r.grapheme.iter().collect()),
+                    }
+                    i += r.grapheme.len();
+                    continue;
+                }
+                let mut j = i + 1;
+                while j < n && is_combining_mark(chars[j]) {
+                    j += 1;
+                }
+                let cluster: String = chars[i..j].iter().collect();
+                if !cluster.chars().all(|c| c.is_ascii_punctuation() || is_other_punctuation(c)) {
+                    out.push(cluster);
+                }
+                i = j;
+            }
+        }
+        out
+    }
+
     /// A transcription through the profile, word by word (spaces as they
     /// were, collapsed to one), with the characters no row matched.
     pub fn convert(&self, text: &str, column: usize, ignore_case: bool) -> (String, Vec<String>) {
@@ -188,6 +229,37 @@ impl Profile {
             .collect();
         (words.join(" "), unknown)
     }
+}
+
+/// How the project cuts a form into sound segments: through its
+/// orthography profile's IPA column (or first column) when it has one, else
+/// letter by letter with each letter's combining marks and any modifier
+/// letters after it. Says which in its second value.
+pub fn segmenter(p: &wugs_core::Project) -> Result<(Box<dyn Fn(&str) -> Vec<String>>, bool), String> {
+    let text = p.setting(SETTING)?.unwrap_or_default();
+    let profile = Profile::parse(&text);
+    let column = profile.columns.iter().position(|c| c.eq_ignore_ascii_case("ipa")).or(if profile.columns.is_empty() { None } else { Some(0) });
+    if let (Some(column), false) = (column, profile.rules.is_empty()) {
+        return Ok((Box::new(move |w: &str| profile.segments(w, column, true)), true));
+    }
+    Ok((Box::new(|w: &str| letters(w)), false))
+}
+
+/// A word as letters, each with its combining marks and the modifier
+/// letters (length, aspiration, palatalization) written after it.
+pub fn letters(word: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for c in nfc(word).chars() {
+        let modifier = matches!(c, 'ː' | 'ˑ' | 'ʰ' | 'ʲ' | 'ʷ' | 'ˠ' | 'ˤ' | 'ⁿ' | 'ˡ' | 'ʼ');
+        if c.is_whitespace() || c.is_ascii_punctuation() || is_other_punctuation(c) {
+            continue;
+        }
+        match out.last_mut() {
+            Some(last) if is_combining_mark(c) || modifier => last.push(c),
+            _ => out.push(c.to_string()),
+        }
+    }
+    out
 }
 
 /// Punctuation outside ASCII a transcription commonly carries.
@@ -470,6 +542,15 @@ mod tests {
         assert_eq!(twice.rules.len(), 1);
         assert_eq!(twice.problems.len(), 2, "{:?}", twice.problems);
         assert!(twice.problems[0].contains("Line 3"));
+    }
+
+    #[test]
+    fn forms_cut_into_segments_by_profile_or_by_letter() {
+        let p = Profile::parse(PROFILE);
+        let ipa = p.column("IPA").unwrap();
+        assert_eq!(p.segments("Shangax", ipa, true), vec!["ʃ", "a", "ŋ", "a"]);
+        assert_eq!(Profile::parse("Grapheme\tIPA\nts\tt s\n").segments("tsa", 0, false), vec!["t", "s", "a"]);
+        assert_eq!(letters("tʰaːe\u{301}, ka"), vec!["tʰ", "aː", "é", "k", "a"]);
     }
 
     #[test]

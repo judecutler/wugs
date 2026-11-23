@@ -23,6 +23,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use wugs_core::Project;
 use wugs_model::Value;
 
+pub mod wordlist;
+pub use wordlist::{export_wordlist, Wordlist, WordlistOptions};
+
 const TERMS: &str = "http://cldf.clld.org/v1.0/terms.rdf#";
 
 /// What the caller decides: which tiers hold sentences and translations

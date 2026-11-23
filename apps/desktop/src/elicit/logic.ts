@@ -70,3 +70,15 @@ export function soundLine(seg: SegmentLike | null, clock: (ms: number) => string
   const what = seg.content.trim() === "" ? "" : ` «${seg.content.trim()}»`;
   return `The next answer takes its sound from ${clock(seg.startMs ?? 0)}–${clock(seg.endMs ?? 0)}${what}.`;
 }
+
+/** What exporting the word lists wrote (src-tauri/src/wordlist.rs). */
+export type WordlistExport = { path: string; lists: number; concepts: number; answered: number; forms: number; skipped: number; byProfile: boolean; notes: string[] };
+
+/** The toast after exporting the word lists. */
+export function wordlistLines(r: WordlistExport): string[] {
+  const n = (k: number, one: string, many: string) => `${k.toLocaleString()} ${k === 1 ? one : many}`;
+  const lines = [`${n(r.forms, "form", "forms")} for ${r.answered} of ${n(r.concepts, "concept", "concepts")} written as a CLDF Wordlist, with edictor.tsv for EDICTOR and LingPy, in ${r.path}`];
+  lines.push(r.byProfile ? "Segments were cut by the project's orthography profile." : "Segments were cut letter by letter; an orthography profile (the Orthography panel) cuts groups such as «ng» as one sound.");
+  if (r.skipped > 0) lines.push(r.skipped === 1 ? "1 concept is marked not applicable and has no form." : `${r.skipped.toLocaleString()} concepts are marked not applicable and have no form.`);
+  return [...lines, ...r.notes];
+}
