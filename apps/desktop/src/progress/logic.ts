@@ -14,6 +14,8 @@ export type TextProgress = {
   /** The morphs of the glossed words. */
   morphs: number;
   translated: number;
+  /** The text's details, `[key, value]`, when read from the project. */
+  meta?: [string, string][];
 };
 
 export type Progress = {
