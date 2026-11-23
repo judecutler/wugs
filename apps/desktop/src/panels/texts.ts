@@ -1,5 +1,8 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { createText, errorText, exportLexicon, exportText, importFile, sealProject, type LexiconFormat, type TextFormat } from "../api";
+import { createText, errorText, exportLexicon, exportText, glossGet, importFile, saveDocument, sealProject, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { glossed, numbering, textDocument } from "../gloss/document";
+import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
+import { translationLines } from "../gloss/translation";
 import { megabytes } from "../assist/logic";
 import { localDay } from "../dates";
 import { emptyState, h } from "../dom";
@@ -30,6 +33,7 @@ const LEXICON_FORMATS: [LexiconFormat, string][] = [
 let textFormat: TextFormat = "elan";
 let lexiconFormat: LexiconFormat = "lift";
 let busy: string | null = null;
+let exampleFormat: ExampleFormat = "expex";
 // Every open copy of the panel, so the one showing when work ends redraws,
 // even if the panel was closed and reopened while it ran.
 const live = new Set<() => void>();
@@ -106,6 +110,46 @@ async function seal() {
         `Sealed ${r.texts} text${r.texts === 1 ? "" : "s"} and ${r.lexemes} lexicon entr${r.lexemes === 1 ? "y" : "ies"} into ${r.path} (${r.files} files, ${megabytes(r.bytes)}).`,
         "It holds ELAN, FLEx and LIFT copies, archive metadata, every recording and the full history, with checksums (BagIt), ready to deposit.",
         ...(r.restricted ? ["Some of the project is restricted, and the package holds it too: treat the package as restricted."] : []),
+      ],
+    });
+  });
+}
+
+/** The text's glossed sentences as numbered examples, read through the Gloss panel's own view. */
+async function examplesOf(text: TextDetail): Promise<{ examples: Example[]; skipped: number }> {
+  const sentences = text.tiers.find((t) => t.utterance)?.id ?? text.segments.find((s) => !s.parent)?.tier ?? "";
+  const segs = text.segments.filter((s) => s.tier === sentences && !s.parent);
+  const numbers = numbering(segs);
+  const examples: Example[] = [];
+  let skipped = 0;
+  for (const seg of [...segs].sort((a, b) => (numbers.get(a.id) ?? 0) - (numbers.get(b.id) ?? 0))) {
+    const v = await glossGet({ textId: text.id, segmentId: seg.id });
+    const translation = translationLines(seg, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
+    const ex: Example = { number: numbers.get(seg.id) ?? 0, translation, words: v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) })) };
+    if (glossed(ex)) examples.push(ex);
+    else skipped += 1;
+  }
+  return { examples, skipped };
+}
+
+async function exportExamples(text: TextDetail) {
+  const folder = await chooseFolder("Choose where the glossed examples go");
+  if (folder === null) return;
+  await work("examples", async () => {
+    const { examples, skipped } = await examplesOf(text);
+    if (examples.length === 0) {
+      showToast({ tone: "warn", lines: ["No sentence of this text is glossed yet. Break a sentence into morphs in the Gloss panel first."] });
+      return;
+    }
+    const doc = textDocument(text.title || "Examples", examples, exampleFormat);
+    const r = await saveDocument({ folder, title: `${text.title || "text"} examples`, extension: doc.extension, contents: doc.contents });
+    const label = EXAMPLE_FORMATS.find((f) => f.id === exampleFormat)?.label ?? "";
+    showToast({
+      tone: "info",
+      lines: [
+        `Saved ${examples.length} glossed ${examples.length === 1 ? "example" : "examples"} for ${label} in ${r.path}.`,
+        ...(skipped > 0 ? [`${skipped} ${skipped === 1 ? "sentence is" : "sentences are"} not glossed yet and left out.`] : []),
+        ...(doc.extension === "tex" ? ["Compile it with XeLaTeX or LuaLaTeX, which read IPA and every script."] : []),
       ],
     });
   });
@@ -189,6 +233,21 @@ export const textsPanel: PanelDef = {
                 onclick: () => void exportOne(text.id),
               }),
         ),
+        text === null
+          ? null
+          : h(
+              "div",
+              { className: "share-row" },
+              h("span", { className: "share-label", textContent: "Glossed examples for" }),
+              select(EXAMPLE_FORMATS.map((f) => [f.id, f.label] as [ExampleFormat, string]), exampleFormat, (v) => (exampleFormat = v)),
+              h("button", {
+                type: "button",
+                textContent: busy === "examples" ? "Exporting…" : "Export…",
+                title: "Every glossed sentence of this text as numbered interlinear examples, in one file for a grammar, a paper or a handout",
+                disabled: busy !== null,
+                onclick: () => void exportExamples(text),
+              }),
+            ),
         h(
           "div",
           { className: "share-row" },

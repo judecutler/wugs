@@ -565,6 +565,18 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
     Ok(Exported { path: path.display().to_string(), notes })
 }
 
+/// Save a document the app built (a text's interlinear examples as LaTeX,
+/// HTML or plain text) as `<title>.<ext>` in `folder`, never replacing a
+/// file and never inside the project.
+pub fn save_document(s: &mut Session, folder: &Path, title: &str, extension: &str, contents: &str) -> Result<Exported, String> {
+    if !matches!(extension, "tex" | "html" | "txt") {
+        return Err(format!("wugs does not save .{extension} documents"));
+    }
+    outside_project(s, folder)?;
+    let path = write_new(folder, &file_stem(title, "examples"), extension, contents.as_bytes())?;
+    Ok(Exported { path: path.display().to_string(), notes: Vec::new() })
+}
+
 /// Export the whole lexicon as LIFT or Toolbox into `folder`.
 pub fn export_lexicon(s: &mut Session, format: Format, folder: &Path) -> Result<Exported, String> {
     outside_project(s, folder)?;
@@ -620,6 +632,22 @@ pub fn seal_project(s: &mut Session, folder: &Path, date: &str) -> Result<Sealed
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn documents_are_saved_beside_others_never_over_them() {
+        let dir = std::env::temp_dir().join(format!("wugs-doc-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let a = save_document(&mut s, &out, "Counting: examples", "tex", "\\documentclass{article}").unwrap();
+        let b = save_document(&mut s, &out, "Counting: examples", "tex", "x").unwrap();
+        assert!(a.path.ends_with("Counting_ examples.tex") && b.path.ends_with("Counting_ examples (2).tex"), "{a:?} {b:?}");
+        assert!(save_document(&mut s, &out, "x", "exe", "x").is_err());
+        assert!(save_document(&mut s, &dir.join("p"), "x", "txt", "x").is_err(), "not inside the project");
+        drop(s);
+        fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn stems_are_safe_file_names() {
