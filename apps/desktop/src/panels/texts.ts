@@ -5,7 +5,7 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
@@ -14,6 +14,7 @@ import { translationLines } from "../gloss/translation";
 import { detailsSection, importMetadataTable } from "../metadata/section";
 import { megabytes } from "../assist/logic";
 import { localDay } from "../dates";
+import { readerDetails, readerHtml, type ReaderSentence } from "../reader/booklet";
 import { emptyState, h } from "../dom";
 import { attempt, getState, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { tableImportLines } from "../lexicon/logic";
@@ -429,6 +430,48 @@ async function exportExamples(text: TextDetail) {
   });
 }
 
+let readerLayout: "beside" | "under" = "beside";
+
+/** The text read aloud on paper: its sentences in order with their translations, for a reader or a class handout. */
+async function exportReader(text: TextDetail) {
+  const sentences = text.tiers.find((t) => t.utterance)?.id ?? text.segments.find((s) => !s.parent)?.tier ?? "";
+  const segs = text.segments.filter((s) => s.tier === sentences && !s.parent && s.content.trim() !== "");
+  if (segs.length === 0) {
+    showToast({ tone: "warn", lines: ["This text has no transcribed sentences yet."] });
+    return;
+  }
+  const folder = await chooseFolder("Choose where the reader goes");
+  if (folder === null) return;
+  await work("reader", async () => {
+    const numbers = numbering(segs);
+    const rows: ReaderSentence[] = [...segs]
+      .sort((a, b) => (numbers.get(a.id) ?? 0) - (numbers.get(b.id) ?? 0))
+      .map((seg) => ({
+        number: numbers.get(seg.id) ?? 0,
+        text: seg.content,
+        translation: translationLines(seg, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null,
+      }));
+    const [language, meta] = await Promise.all([projectLanguage(), textMetadata({ textId: text.id })]);
+    const html = readerHtml({
+      title: text.title || "Untitled",
+      language: language.name,
+      details: readerDetails(meta.fields.map((f) => [f.key, f.value] as [string, string])),
+      sentences: rows,
+      layout: readerLayout,
+      date: localDay(new Date()),
+    });
+    const r = await saveDocument({ folder, title: `${text.title || "text"} reader`, extension: "html", contents: html });
+    const missing = rows.filter((x) => x.translation === null || x.translation.trim() === "").length;
+    showToast({
+      tone: "info",
+      lines: [
+        `Saved a reader of ${rows.length} ${rows.length === 1 ? "sentence" : "sentences"} in ${r.path}. Open it in a browser or Word to print it.`,
+        ...(missing > 0 ? [`${missing} ${missing === 1 ? "sentence has" : "sentences have"} no translation yet and ${missing === 1 ? "prints" : "print"} alone.`] : []),
+      ],
+    });
+  });
+}
+
 function select<T extends string>(options: [T, string][], value: T, onchange: (v: T) => void): HTMLSelectElement {
   const el = h("select", {}, ...options.map(([id, label]) => h("option", { value: id, textContent: label, selected: id === value })));
   el.onchange = () => onchange(el.value as T);
@@ -535,6 +578,28 @@ export const textsPanel: PanelDef = {
                 title: "Every glossed sentence of this text as numbered interlinear examples, in one file for a grammar, a paper or a handout",
                 disabled: busy !== null,
                 onclick: () => void exportExamples(text),
+              }),
+            ),
+        text === null
+          ? null
+          : h(
+              "div",
+              { className: "share-row" },
+              h("span", { className: "share-label", textContent: "Reader to print," }),
+              select(
+                [
+                  ["beside", "translation beside"],
+                  ["under", "translation under"],
+                ],
+                readerLayout,
+                (v) => (readerLayout = v),
+              ),
+              h("button", {
+                type: "button",
+                textContent: busy === "reader" ? "Saving…" : "Save…",
+                title: "This text sentence by sentence with its translation, in large type with no glosses: for the people who told it, a literacy class or a community booklet",
+                disabled: busy !== null,
+                onclick: () => void exportReader(text),
               }),
             ),
         h(

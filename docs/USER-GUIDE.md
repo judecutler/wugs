@@ -715,6 +715,8 @@ To export every glossed sentence of a text as numbered examples for a grammar, a
 
 Sentences not glossed yet are left out, and the message says how many. After the examples comes the list of abbreviations their glosses use, with the meanings from the Interlinear panel's **Abbreviations**. An abbreviation with no meaning yet shows "?".
 
+To give a text back to the people who told it, or to use it in a literacy class, select the text and click **Save…** beside **Reader to print**. wugs writes one `.html` file with the text's title, the language's name, who told it, where and when (from the text's **Details**), then each sentence in large type with its translation. Choose **translation beside** for two columns, or **translation under** for a narrow page or a phone. There are no glosses and no linguistic terms. Open the file in a browser or Word to print it or save it as a PDF. A sentence with no translation yet prints alone, and the message says how many.
+
 To export the lexicon, choose LIFT, Toolbox or **Spreadsheet** beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT. A spreadsheet is a `.csv` file with a row per sense: lemma, homograph, category, citation, sense number, gloss, a column for each other gloss language, definition, usage and semantic domains. Excel, LibreOffice and Google Sheets open it.
 
 To bring in a dictionary you keep in a spreadsheet, save it as `.csv` or `.tsv` and click **Import a lexicon table…**. Each row is a sense. wugs finds the columns by their names:
