@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:lang="es">
+  <teiHeader>
+    <fileDesc>
+      <titleStmt><title>Sesión de prueba</title></titleStmt>
+      <publicationStmt><p>Synthetic test data for wugs.</p></publicationStmt>
+      <sourceDesc><p>Written by hand.</p></sourceDesc>
+    </fileDesc>
+    <profileDesc><langUsage><language ident="es">Spanish</language></langUsage></profileDesc>
+  </teiHeader>
+  <text>
+    <body>
+      <div type="debateSection">
+        <note type="speaker">Presidenta:</note>
+        <u who="#Ana" xml:id="u1">
+          <s xml:id="u1.s1">
+            <w lemma="buen" msd="UPosTag=ADJ|Gender=Masc|Number=Plur">Buenos</w>
+            <w lemma="día" msd="UPosTag=NOUN|Gender=Masc|Number=Plur" join="right">días</w>
+            <pc>.</pc>
+          </s>
+          <s xml:id="u1.s2">
+            <w lemma="empezar" pos="VERB" msd="Mood=Ind|Person=1">Empezamos</w>
+            <note>(Aplausos)</note>
+            <w lemma="ya" pos="ADV" join="right">ya</w>
+            <pc>.</pc>
+          </s>
+        </u>
+        <u who="#Luis">
+          <s><w lemma="gracias" msd="Ncfp000">Gracias</w></s>
+        </u>
+        <p>Un párrafo sin<lb/>frases marcadas.</p>
+      </div>
+    </body>
+  </text>
+</TEI>

@@ -23,6 +23,7 @@ members = [
     "crates/wugs-kit",
     "crates/wugs-package",
     "crates/wugs-conllu",
+    "crates/wugs-tei",
 ]
 
 [workspace.package]

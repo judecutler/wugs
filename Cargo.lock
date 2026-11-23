@@ -3194,6 +3194,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wugs-tei"
+version = "0.0.1"
+dependencies = [
+ "wugs-conllu",
+ "wugs-core",
+ "wugs-model",
+ "wugs-projection",
+ "wugs-xml",
+]
+
+[[package]]
 name = "wugs-text"
 version = "0.0.1"
 dependencies = [
