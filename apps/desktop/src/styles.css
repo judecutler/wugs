@@ -1249,6 +1249,26 @@ body::before {
 .ty-seg { background: var(--muted); opacity: 0.35; }
 .ty-seg.is-own { background: var(--accent); opacity: 1; }
 .ty-credit { font-size: var(--text-xs); }
+.panel-orthography { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.panel-orthography > * { flex-shrink: 0; }
+.or-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.or-check { display: inline-flex; gap: 4px; align-items: center; }
+.or-title { margin: 6px 0 0; font-family: var(--font-display); font-weight: 400; }
+.or-problems { margin: 0; padding-left: 1.2em; color: var(--attention); font-size: var(--text-sm); }
+.or-scroll { max-height: 28em; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); }
+.or-grid { border-collapse: collapse; width: 100%; }
+.or-grid th { position: sticky; top: 0; background: var(--surface-raised); text-align: left; font-size: var(--text-xs); color: var(--muted); padding: 4px 6px; border-bottom: 1px solid var(--line); }
+.or-grid td { padding: 1px 4px; }
+.or-grid input { width: 100%; min-width: 4em; font-family: var(--font-ipa); border: 1px solid transparent; background: transparent; padding: 2px 4px; }
+.or-grid input:focus { border-color: var(--accent); background: var(--surface); }
+.or-del { border: none; background: none; color: var(--muted); cursor: pointer; }
+.or-text { width: 100%; font-family: var(--font-ipa); tab-size: 12; }
+.or-target { width: 10em; }
+.or-unknown { color: var(--attention); font-size: var(--text-sm); margin: 0; }
+.or-changes { border-collapse: collapse; width: 100%; font-family: var(--font-ipa); }
+.or-changes th { text-align: left; font-family: var(--font-ui); font-size: var(--text-xs); color: var(--muted); padding: 2px 8px; }
+.or-changes td { padding: 2px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+.or-after { color: var(--accent); }
 .ty-item.is-differs { border-right: 3px solid var(--accent); }
 .ty-ours { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--line); }
 .ty-ours-label { font-size: var(--text-xs); color: var(--accent); font-weight: 600; }

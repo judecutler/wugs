@@ -681,6 +681,28 @@
         ],
       };
     },
+    orthography_get: () => ({
+      profile: "# Kanu practical spelling\nGrapheme\tIPA\tFrequency\nsh\tʃ\t12\nng\tŋ\t9\nch\tt͡ʃ\t7\nj\tdʒ\t4\ny\tj\t6\n^h\tʔ\t3\ne\tɛ\t20\no\tɔ\t18\nx\tNULL\t1\n",
+      check: { columns: ["IPA"], rules: 9, problems: [] },
+      tracks: [
+        { id: "tier-utt", name: "utterance", segments: 64 },
+        { id: "tier-ipa", name: "IPA", segments: 52 },
+      ],
+    }),
+    orthography_save: () => ({ columns: ["IPA"], rules: 9, problems: [] }),
+    orthography_draft: () => "Grapheme\tIPA\tFrequency\na\ta\t30\ne\te\t20\n",
+    orthography_preview: () => ({
+      check: { columns: ["IPA"], rules: 9, problems: [] },
+      segments: 64,
+      changes: [
+        { before: "Kesi mopa", after: "kɛsi mɔpa" },
+        { before: "shanga yeho", after: "ʃaŋa jɛhɔ" },
+        { before: "Hachi jolo", after: "ʔat͡ʃi dʒɔlɔ" },
+        { before: "tela senu", after: "tɛla sɛnu" },
+      ],
+      unknown: [{ text: "q", count: 2, example: "qelo" }],
+    }),
+    orthography_convert: () => ({ track: "tier-ipa2", trackName: "IPA (converted)", texts: 3, created: 60, updated: 0, unchanged: 0, kept: 0, empty: 4, unknown: [] }),
     typology_answers: () => [
       { id: "GB020", value: "1", note: "«ang» before common nouns (Kanu notebook 3, p. 12)" },
       { id: "GB024", value: "2", note: "" },

@@ -550,6 +550,25 @@ Segment the recording so each vowel (or each word you want to compare) is one se
 
 The numbers come from the same analysis as the overlays and **Measure…**: your Praat when wugs finds it, else wugs's own.
 
+### Write a track in IPA from a practical spelling
+
+Many projects transcribe in a practical orthography. The **Orthography** panel writes such a track in another spelling, usually IPA, with an *orthography profile*: a table that lists the letters and letter groups of the spelling in a **Grapheme** column and what each is in IPA in an **IPA** column. These are the profiles of *The Unicode Cookbook for Linguists* (Moran & Cysouw 2018), which the `segments` package and CLDF datasets also read, so a profile made here works there too. Open the panel from Settings (Closed panels) or with **Find an action**.
+
+1. Choose the **Track** to convert, and **Every text** or only the text on screen.
+2. Press **Start from this track's letters**. The table then lists every letter the track uses, commonest first, each written as itself, with how often it occurs.
+3. Correct the **IPA** column where the spelling differs, such as `y` → `j`. Press **Add a row** for letter groups, such as `sh` → `ʃ` or `ng` → `ŋ`. Longer groups win, so `sh` is used before `s` and `h`.
+4. Press **Preview** to see the first sentences before and after. The preview also lists any letter that no row covers. Those letters stay as written until you add a row for them.
+5. Press **Write the «IPA» track**. The converted text goes on a new transcription track, which the Timeline, Transcribe, the Sounds panel and the corpus tools read like any other.
+
+Some rules for the table:
+
+- Write `^` before a grapheme for "only at the start of a word" (`^h` → `ʔ`), and `$` after it for "only at the end".
+- `NULL` writes nothing.
+- An empty cell keeps the letter as it is.
+- **Read capitals as small letters** (on by default) reads a capital as its small letter, so `Sh` at the start of a sentence converts like `sh`.
+
+The profile is kept with the project and syncs to its members. **Edit as text** shows the profile as text, so you can paste one from a spreadsheet or a `.tsv` file. **Copy profile** copies it back out. You can correct the converted track by hand. When you change the profile and convert again, only segments that nobody has edited since the last conversion are rewritten, and the report says how many were kept. wugs never writes into a track that someone transcribed by hand.
+
 ### See the sound inventory on the IPA chart
 
 The **Sounds** panel cuts every word of a transcription track into sounds and puts them where the IPA chart puts them: pulmonic consonants by place and manner, voiceless on the left of each cell and voiced on the right, and vowels on the vowel trapezoid, unrounded on the left of each point and rounded on the right. Affricates and double articulations, clicks, implosives and other consonants are listed under the chart. Each sound shows how many times it occurs. Open the panel from Settings (Closed panels) or with **Find an action**.
