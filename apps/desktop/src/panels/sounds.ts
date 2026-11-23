@@ -10,6 +10,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, soundWords } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
+import { gapsNote, positions, shapes, share, type Shape, type Where } from "../sounds/shapes";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
 import { dataGeneration, getState, showToast } from "../store";
@@ -24,7 +25,7 @@ const PAD = 26;
 /** Room on the left for unrounded vowels with several spellings (i ĩ iː). */
 const PADX = 72;
 
-type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[] };
+type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[] };
 
 export const soundsPanel: PanelDef = {
   title: "Sounds",
@@ -59,7 +60,7 @@ export const soundsPanel: PanelDef = {
         }
         if (mine !== seq) return;
         const sounds = inventory(r.words);
-        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words) };
+        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words), where: positions(r.words, sounds.map((x) => x.sound)), shapes: shapes(r.words) };
         problem = null;
       } catch (e) {
         if (mine !== seq) return;
@@ -136,6 +137,30 @@ export const soundsPanel: PanelDef = {
       const b = h("button", { type: "button", className: "sd-word", textContent: word, title: `«${word}», ${count.toLocaleString()} ${count === 1 ? "time" : "times"}. Click for its lines.` });
       b.onclick = () => askConcordance(word, "word", onlyThisText ? shownText() : null, true);
       return b;
+    };
+
+    const whereSection = (l: Loaded): HTMLElement[] => {
+      if (l.where.length === 0) return [];
+      const cell = (n: number, total: number) => h("td", { className: `num${n === 0 ? " sd-gap" : ""}`, textContent: n === 0 ? "–" : share(n, total), title: n.toLocaleString() });
+      const rows = l.where.map((r) => {
+        const total = r.initial + r.medial + r.final + r.alone;
+        return h("tr", {}, h("td", {}, soundButton(l.sounds.find((x) => x.sound === r.sound) ?? { sound: r.sound, count: total, words: 0, example: "" })), cell(r.initial, total), cell(r.medial, total), cell(r.final, total), cell(r.alone, total));
+      });
+      const gaps = gapsNote(l.where);
+      const running = l.shapes.reduce((n, x) => n + x.count, 0);
+      const shapeChips = l.shapes.slice(0, 16).map((x) => h("span", { className: "sd-shape", title: `e.g. «${x.example}», ${x.words} ${x.words === 1 ? "word" : "words"}` }, h("strong", { textContent: x.shape }), ` ${share(x.count, running)}`));
+      return [
+        h("h4", { className: "sd-h", textContent: "Word shapes" }),
+        h("p", { className: "note", textContent: "Each word as consonants (C) and vowels (V), by share of running words. ? is a letter the chart does not place." }),
+        h("div", { className: "sd-list" }, ...shapeChips),
+        h("h4", { className: "sd-h", textContent: "Where sounds occur" }),
+        ...(gaps === "" ? [] : [h("p", { className: "note", textContent: gaps })]),
+        h(
+          "div",
+          { className: "sd-scroll" },
+          h("table", { className: "fq-table sd-where" }, h("thead", {}, h("tr", {}, ...["Sound", "Word-initial", "Inside", "Word-final", "Alone"].map((t) => h("th", { textContent: t })))), h("tbody", {}, ...rows)),
+        ),
+      ];
     };
 
     const pairsSection = (l: Loaded): HTMLElement[] => {
@@ -258,6 +283,7 @@ export const soundsPanel: PanelDef = {
         ...listed("Affricates and double articulations", c.affricates),
         ...[...c.others].flatMap(([group, sounds]) => listed(group, sounds)),
         ...pairsSection(loaded),
+        ...whereSection(loaded),
         ...listed("Not on the IPA chart", c.unplaced.map((u) => u.sound), [...new Set(c.unplaced.map((u) => u.why))].join("; ").replace(/^./u, (x) => x.toUpperCase()) + ". Often a spelling slip, or a spelling rather than IPA."),
       );
     };

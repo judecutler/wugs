@@ -1257,6 +1257,9 @@ body::before {
 .sd-pairs li { display: flex; gap: 6px; align-items: baseline; }
 .sd-word { font-family: var(--font-ipa); font-size: 16px; border: none; background: none; color: var(--accent); padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); }
 .sd-tilde { color: var(--muted); }
+.sd-shape { font-family: var(--font-ipa); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1px 8px; background: var(--surface-raised); }
+.sd-where td.num { text-align: right; min-width: 5em; }
+.sd-where td.sd-gap { color: var(--muted); }
 
 .panel-vowels { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .vw-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }

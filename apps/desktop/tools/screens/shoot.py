@@ -517,6 +517,10 @@ def main():
             run.shot("state-sounds-pairs", run.page.locator(".panel-sounds"))
             if run.page.locator(".panel-sounds .sd-pairs li").count() < 2:
                 failures.append("Minimal pairs did not list the pairs of the first contrast")
+            run.page.locator(".panel-sounds .sd-where").scroll_into_view_if_needed()
+            run.shot("state-sounds-where", run.page.locator(".panel-sounds"))
+            if run.page.locator(".panel-sounds .sd-shape").count() < 3:
+                failures.append("Sounds did not show word shapes")
             # Elicit: answers heard in the Timeline's selected segment.
             run.front("elicit", "Elicit")
             run.page.locator(".panel-elicit .el-sound input").check()
