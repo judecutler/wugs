@@ -2,8 +2,8 @@
 // glossed more than one way across the project (src-tauri/src/consistency.rs),
 // each with its glosses, how often each is used, where one occurs, and a
 // button that makes one gloss the only one.
-import { errorText, glossConsistency, glossUnify } from "../api";
-import { cardNote, summary, unifiedLine, useLabel, type Inconsistent } from "../checks/logic";
+import { errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify } from "../api";
+import { addedLine, addLabel, cardNote, missingSummary, summary, unifiedLine, useLabel, type Inconsistent, type Missing } from "../checks/logic";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { marked } from "../gloss/morphs";
@@ -21,6 +21,7 @@ export const checksPanel: PanelDef = {
   create(): PanelView {
     const el = h("div", { className: "panel panel-checks" });
     let rows: Inconsistent[] | null = null;
+    let missing: Missing[] = [];
     let key = "";
     let seq = 0;
     let busy = false;
@@ -31,10 +32,11 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      glossConsistency().then(
-        (r) => {
+      Promise.all([glossConsistency(), glossMissing()]).then(
+        ([r, m]) => {
           if (mine !== seq) return;
           rows = r;
+          missing = m;
           paint();
         },
         (e) => {
@@ -57,6 +59,38 @@ export const checksPanel: PanelDef = {
       armed = null;
       await refreshAll();
       load();
+    };
+
+    /** Make lexicon entries for these roots (all of them when `keys` is empty). */
+    const add = async (keys: string[]) => {
+      busy = true;
+      paint();
+      try {
+        const r = await glossAddMissing({ keys });
+        showToast({ tone: "info", lines: [addedLine(r)] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      busy = false;
+      armed = null;
+      await refreshAll();
+      load();
+    };
+
+    const missingCard = (r: Missing): HTMLElement => {
+      const glosses = r.variants.map((v) => {
+        const show = h("button", { type: "button", className: "ck-show", textContent: `in «${v.textTitle || "(untitled)"}»`, title: "Open a sentence where it is glossed this way" });
+        show.onclick = () => selectSegment({ textId: v.textId, tierId: v.tierId, segmentId: v.segmentId });
+        return h("li", { className: "ck-variant" }, glossNode(v.gloss), h("span", { className: "ck-count", textContent: `× ${v.count}` }), show);
+      });
+      const addOne = h("button", { type: "button", textContent: addLabel(r), disabled: busy, title: `A lexicon entry «${r.surface}» with a sense per gloss, every use of it linked` });
+      addOne.onclick = () => void add([r.key]);
+      return h(
+        "li",
+        { className: "ck-card" },
+        h("div", { className: "ck-head" }, h("span", { className: "ck-morph", textContent: r.surface }), h("span", { className: "ck-kind", textContent: `root · ${r.total}×` }), addOne),
+        h("ul", { className: "ck-variants" }, ...glosses),
+      );
     };
 
     const card = (r: Inconsistent): HTMLElement => {
@@ -91,10 +125,22 @@ export const checksPanel: PanelDef = {
       }
       const again = h("button", { type: "button", textContent: "Check again", disabled: busy });
       again.onclick = load;
+      const addAll = h("button", { type: "button", className: armed === "add-all" ? "danger" : "", disabled: busy, textContent: armed === "add-all" ? `Add ${missing.length}: sure?` : `Add all ${missing.length}` });
+      addAll.onclick = () => {
+        if (armed !== "add-all") {
+          armed = "add-all";
+          paint();
+          return;
+        }
+        void add([]);
+      };
       el.replaceChildren(
         h("h3", { className: "ck-title", textContent: "Glosses" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: summary(rows) }), again),
         h("ul", { className: "ck-list" }, ...rows.map(card)),
+        h("h3", { className: "ck-title", textContent: "Not in the lexicon" }),
+        h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
+        h("ul", { className: "ck-list" }, ...missing.map(missingCard)),
       );
     };
 
@@ -112,7 +158,7 @@ export const checksPanel: PanelDef = {
       if (!busy) load();
     };
 
-    const unprovide = provide("checks", () => [{ id: "checks:again", title: "Check glosses again", group: "Checks", words: ["consistency", "typo", "inconsistent"], run: load }]);
+    const unprovide = provide("checks", () => [{ id: "checks:again", title: "Check glosses again", group: "Checks", words: ["consistency", "typo", "inconsistent", "lexicon", "missing", "word list"], run: load }]);
     return { element: el, render: draw, dispose: unprovide };
   },
 };

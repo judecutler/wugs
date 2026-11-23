@@ -139,6 +139,141 @@ pub fn unify(session: &mut Session, key: &str, kind: &str, from: &str, to: &str)
     Ok(targets.len())
 }
 
+/// A root glossed in the texts with no lexicon entry of its form: what a
+/// dictionary is still missing, as FLEx's word list shows.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Missing {
+    /// The spelling met most often.
+    pub surface: String,
+    /// `wugs_model::lexicon_key` of the surface.
+    pub key: String,
+    pub total: usize,
+    /// Each gloss it carries, most used first; each would be a sense.
+    pub variants: Vec<Variant>,
+}
+
+/// A live lexicon entry whose lemma or other form has this key.
+fn known(p: &wugs_core::Project, key: &str) -> Result<bool, String> {
+    if !p.proj.by_lookup_key("lexeme", key)?.is_empty() {
+        return Ok(true);
+    }
+    for form in p.proj.by_lookup_key("form", key)? {
+        if let Some(lex) = p.proj.field_str(&form, "lexeme")? {
+            if p.proj.entity_kind(&lex)?.as_deref() == Some("lexeme") && !p.proj.is_tombstoned(&lex)? {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
+/// The glossed roots with no sense link and no entry of their form, by
+/// key: `(key, surfaces by use, gloss → variant, morphs as (text, morph, gloss))`.
+type Unlisted = BTreeMap<String, (BTreeMap<String, usize>, BTreeMap<String, Variant>, Vec<(String, String, String)>)>;
+
+fn unlisted(p: &wugs_core::Project) -> Result<Unlisted, String> {
+    let mut found: Unlisted = BTreeMap::new();
+    let mut known_keys: BTreeMap<String, bool> = BTreeMap::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            for m in p.proj.members(tok)? {
+                if !matches!(p.proj.field_str(&m, "type")?.as_deref(), None | Some("root") | Some("")) {
+                    continue;
+                }
+                let gloss = p.proj.field_str(&m, "gloss")?.unwrap_or_default().trim().to_string();
+                if gloss.is_empty() {
+                    continue;
+                }
+                if let Some(sense) = p.proj.field_str(&m, "sense")?.filter(|s| !s.is_empty()) {
+                    if p.proj.entity_kind(&sense)?.as_deref() == Some("sense") && !p.proj.is_tombstoned(&sense)? {
+                        continue;
+                    }
+                }
+                let surface = p.proj.nfc(&p.proj.field_str(&m, "surface")?.unwrap_or_default());
+                let key = wugs_model::lexicon_key(&surface);
+                if key.is_empty() {
+                    continue;
+                }
+                let is_known = match known_keys.get(&key) {
+                    Some(k) => *k,
+                    None => {
+                        let k = known(p, &key)?;
+                        known_keys.insert(key.clone(), k);
+                        k
+                    }
+                };
+                if is_known {
+                    continue;
+                }
+                let e = found.entry(key).or_default();
+                *e.0.entry(surface).or_default() += 1;
+                let v = e.1.entry(gloss.clone()).or_insert_with(|| Variant { gloss: gloss.clone(), count: 0, text_id: seg.text.clone(), text_title: seg.title.clone(), tier_id: seg.tier.clone(), segment_id: seg.id.clone() });
+                v.count += 1;
+                e.2.push((seg.text.clone(), m, gloss));
+            }
+        }
+        Ok(())
+    })?;
+    Ok(found)
+}
+
+/// Every glossed root with no entry in the lexicon, most used first.
+pub fn missing(session: &mut Session) -> Result<Vec<Missing>, String> {
+    let p = session::project(session)?;
+    let mut out: Vec<Missing> = unlisted(p)?
+        .into_iter()
+        .map(|(key, (surfaces, glosses, _))| {
+            let mut variants: Vec<Variant> = glosses.into_values().collect();
+            variants.sort_by(|a, b| b.count.cmp(&a.count).then(a.gloss.cmp(&b.gloss)));
+            let surface = surfaces.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))).map(|(s, _)| s.clone()).unwrap_or_default();
+            Missing { surface, key, total: variants.iter().map(|v| v.count).sum(), variants }
+        })
+        .collect();
+    out.sort_by(|a, b| b.total.cmp(&a.total).then(a.key.cmp(&b.key)));
+    out.truncate(LIMIT);
+    Ok(out)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Added {
+    pub entries: usize,
+    pub senses: usize,
+    /// Morphs now linked to the new senses.
+    pub linked: usize,
+}
+
+/// Make an entry for each of these roots (`keys`; all of them when empty):
+/// its most used spelling as the lemma, a sense per gloss it carries, and
+/// every one of its morphs linked to the sense of its gloss.
+pub fn add_missing(session: &mut Session, keys: &[String]) -> Result<Added, String> {
+    let p = session::project(session)?;
+    let mut added = Added { entries: 0, senses: 0, linked: 0 };
+    for (key, (surfaces, glosses, morphs)) in unlisted(p)? {
+        if !keys.is_empty() && !keys.contains(&key) {
+            continue;
+        }
+        let lemma = surfaces.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))).map(|(s, _)| s.clone()).unwrap_or_default();
+        let mut by_use: Vec<(&String, usize)> = glosses.iter().map(|(g, v)| (g, v.count)).collect();
+        by_use.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+        let mut sense_of: BTreeMap<String, String> = BTreeMap::new();
+        let ((lex, first), _) = p.add_lexeme(&lemma, by_use[0].0)?;
+        sense_of.insert(by_use[0].0.clone(), first);
+        for (gloss, _) in &by_use[1..] {
+            let (sen, _) = p.add_sense(&lex, gloss)?;
+            sense_of.insert((*gloss).clone(), sen);
+        }
+        added.entries += 1;
+        added.senses += sense_of.len();
+        for (text, morph, gloss) in &morphs {
+            p.link_sense(text, morph, &sense_of[gloss])?;
+            added.linked += 1;
+        }
+    }
+    Ok(added)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,7 +313,25 @@ mod tests {
         assert_eq!(unify(&mut s, "ka", "suffix", "pl.", "PL").unwrap(), 1);
         assert!(glosses(&mut s).unwrap().iter().all(|i| i.key != "ka"), "unified");
         assert_eq!(unify(&mut s, "ka", "root", "PL", "X").unwrap(), 0, "another type is another morph");
+        // Roots glossed in the texts with no entry: to, re, se, and mi with its two meanings.
+        let missing = missing(&mut s).unwrap();
+        let keys: Vec<&str> = missing.iter().map(|m| m.key.as_str()).collect();
+        assert_eq!(keys, ["mi", "re", "se", "to"], "most used first; the tutorial's own roots are linked: {keys:?}");
+        assert_eq!(missing[0].variants.iter().map(|v| (v.gloss.as_str(), v.count)).collect::<Vec<_>>(), [("water", 2), ("drink", 1)]);
+        let one = add_missing(&mut s, &["mi".to_string()]).unwrap();
+        assert_eq!((one.entries, one.senses, one.linked), (1, 2, 3), "one entry, a sense per meaning, every use linked");
+        let p = session::project(&mut s).unwrap();
+        let lex = p.proj.by_lookup_key("lexeme", "mi").unwrap()[0].clone();
+        let senses = p.proj.ordered_children("lexeme", &lex, "sense").unwrap();
+        assert_eq!(senses.iter().map(|x| p.proj.field_str(x, "gloss").unwrap().unwrap()).collect::<Vec<_>>(), ["water", "drink"]);
+        let rest = add_missing(&mut s, &[]).unwrap();
+        assert_eq!((rest.entries, rest.linked), (3, 3));
+        assert!(missing_is_empty(&mut s));
         drop(s);
         std::fs::remove_dir_all(dir).ok();
+    }
+
+    fn missing_is_empty(s: &mut Session) -> bool {
+        missing(s).unwrap().is_empty()
     }
 }

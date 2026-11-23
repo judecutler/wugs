@@ -331,6 +331,16 @@ It lists every morph glossed more than one way across the project, the ones that
 
 Two morphs that sound alike but mean different things (a plural `-s` and a third-person `-s`) show up too. Leave them, or link each one to its own lexicon entry in the Gloss panel, and they drop off the list.
 
+### Grow the lexicon from your glossed texts
+
+Under **Not in the lexicon**, the Checks panel lists every root you have glossed in your texts that has no lexicon entry yet, most used first. Each shows its glosses with how often each is used, and a link to a sentence that uses it. This happens a lot after importing glossed texts from Toolbox or FLEx without their lexicon.
+
+- Click **Add to lexicon** to make its entry: the spelling used most often becomes the headword, and the gloss becomes the sense. A root glossed two ways gets a sense for each (**Add with 2 senses**).
+- Every use of the root in your texts is linked to its new sense, so **used in N words**, the Concordance and the dictionary see them.
+- **Add all**, then a second click, does this for every root on the list.
+
+Then fill in the entries in the Lexicon panel: part of speech, definitions, examples.
+
 ### Copy an example into a paper
 
 Click **Copy example** at the top of the Gloss panel. The segment is copied as a numbered example: the words split into morphs, the glosses under them with grammatical glosses in small capitals, and the free translation in quotes. Then paste it into your paper.

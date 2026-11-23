@@ -172,6 +172,18 @@ fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String,
     s.run(move |s| consistency::unify(s, &key, &kind, &from, &to))
 }
 
+/// Glossed roots with no lexicon entry (the Checks panel).
+#[tauri::command(async)]
+fn gloss_missing(s: State<SessionThread>) -> Result<Vec<consistency::Missing>, String> {
+    s.run(consistency::missing)
+}
+
+/// Make entries for these roots (every one when `keys` is empty) and link their morphs.
+#[tauri::command(async)]
+fn gloss_add_missing(s: State<SessionThread>, keys: Vec<String>) -> Result<consistency::Added, String> {
+    s.run(move |s| consistency::add_missing(s, &keys))
+}
+
 /// The project's own meanings of these gloss abbreviations (`src/abbreviations.rs`).
 #[tauri::command(async)]
 fn abbreviation_meanings(s: State<SessionThread>, abbreviations: Vec<String>) -> Result<Vec<Option<String>>, String> {
@@ -1725,6 +1737,8 @@ pub fn run() {
             abbreviation_meanings,
             gloss_consistency,
             gloss_unify,
+            gloss_missing,
+            gloss_add_missing,
             set_abbreviation_meaning,
             text_metadata,
             set_text_metadata,

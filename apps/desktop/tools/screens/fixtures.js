@@ -644,6 +644,14 @@
       ] },
     ],
     gloss_unify: () => 1,
+    gloss_missing: () => [
+      { surface: "haru", key: "haru", total: 6, variants: [
+        { gloss: "stone", count: 5, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "u01" },
+        { gloss: "hill", count: 1, textId: "t-greet", textTitle: "Greetings at the market", tierId: "tier-utt", segmentId: "u01" },
+      ] },
+      { surface: "pelu", key: "pelu", total: 2, variants: [{ gloss: "fox", count: 2, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "u01" }] },
+    ],
+    gloss_add_missing: () => ({ entries: 2, senses: 3, linked: 8 }),
     abbreviation_meanings: ({ abbreviations }) => abbreviations.map((a) => (a === "INCL" ? "inclusive (speaker and hearer)" : null)),
     set_abbreviation_meaning: () => null,
     dispersion: () => ({

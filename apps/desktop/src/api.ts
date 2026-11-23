@@ -89,6 +89,8 @@ export const spectrogramChunk = (args: { source: string; index: number }) => inv
 /** Morphs glossed more than one way across the project (src-tauri/src/consistency.rs). */
 export const glossConsistency = () => invoke<import("./checks/logic").Inconsistent[]>("gloss_consistency");
 /** Gloss every morph of `key` and `kind` that reads `from` as `to`; returns how many changed. */
+export const glossMissing = () => invoke<import("./checks/logic").Missing[]>("gloss_missing");
+export const glossAddMissing = (args: { keys: string[] }) => invoke<import("./checks/logic").Added>("gloss_add_missing", args);
 export const glossUnify = (args: { key: string; kind: string; from: string; to: string }) => invoke<number>("gloss_unify", args);
 export const abbreviationMeanings = (abbreviations: string[]) => invoke<(string | null)[]>("abbreviation_meanings", { abbreviations });
 export const setAbbreviationMeaning = (abbreviation: string, meaning: string) => invoke<void>("set_abbreviation_meaning", { abbreviation, meaning });
