@@ -33,7 +33,8 @@ export function typesLine(rows: number, unbrokenSentences: number, unbrokenWords
 }
 
 /** The toast after an analysis went to every use. */
-export function appliedLine(form: string, applied: number, texts: number): string {
+export function appliedLine(form: string, applied: number, texts: number, linked = 0): string {
   if (applied === 0) return `No use of «${form}» was left to analyse.`;
-  return `Analysed ${applied === 1 ? "1 use" : `${applied} uses`} of «${form}» in ${texts === 1 ? "1 text" : `${texts} texts`}.`;
+  const link = linked === 0 ? "" : ` ${linked === 1 ? "1 morph is" : `${linked} morphs are`} linked to the lexicon entry with that spelling and gloss.`;
+  return `Analysed ${applied === 1 ? "1 use" : `${applied} uses`} of «${form}» in ${texts === 1 ? "1 text" : `${texts} texts`}.${link}`;
 }

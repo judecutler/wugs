@@ -21,4 +21,5 @@ test("the words around the list", () => {
   assert.equal(typesLine(0, 2, 7), "Every word broken into words is analysed. 2 sentences (7 words) are not broken into words yet, so their words are not listed.");
   assert.equal(appliedLine("kani", 3, 1), "Analysed 3 uses of «kani» in 1 text.");
   assert.equal(appliedLine("kani", 0, 0), "No use of «kani» was left to analyse.");
+  assert.equal(appliedLine("nikani", 2, 1, 1), "Analysed 2 uses of «nikani» in 1 text. 1 morph is linked to the lexicon entry with that spelling and gloss.");
 });

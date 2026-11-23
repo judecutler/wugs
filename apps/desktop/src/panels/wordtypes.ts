@@ -40,7 +40,7 @@ export const wordTypesPanel: PanelDef = {
       try {
         const r = await glossApplyType({ form: row.form, morphs });
         drafts.delete(row.form);
-        showToast({ tone: "info", lines: [appliedLine(row.form, r.applied, r.texts)] });
+        showToast({ tone: "info", lines: [appliedLine(row.form, r.applied, r.texts, r.linked)] });
       } catch (e) {
         showToast({ tone: "error", lines: [errorText(e)] });
       }

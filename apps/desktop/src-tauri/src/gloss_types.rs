@@ -107,14 +107,48 @@ pub fn break_all(session: &mut Session, text: Option<&str>) -> Result<usize, Str
 pub struct TypeApplied {
     pub applied: usize,
     pub texts: usize,
+    /// Morphs of the analysis linked to a lexicon sense they name.
+    pub linked: usize,
 }
 
-/// One analysis for every unanalysed use of `form`.
+/// The one live sense whose entry is spelled like `surface` (markers aside)
+/// and whose gloss is `gloss` (case-blind), if exactly one is.
+fn sense_named(p: &Project, surface: &str, gloss: &str) -> Result<Option<String>, String> {
+    let key = wugs_model::lexicon_key(&p.proj.nfc(surface));
+    let want = wugs_model::fold_key(gloss.trim());
+    let mut found: Vec<String> = Vec::new();
+    for lex in p.proj.by_lookup_key("lexeme", &key)? {
+        if p.proj.is_tombstoned(&lex)? {
+            continue;
+        }
+        for sen in p.proj.ordered_children("lexeme", &lex, "sense")? {
+            if wugs_model::fold_key(p.proj.field_str(&sen, "gloss")?.unwrap_or_default().trim()) == want {
+                found.push(sen);
+            }
+        }
+    }
+    Ok(if found.len() == 1 { found.pop() } else { None })
+}
+
+/// One analysis for every unanalysed use of `form`. A morph typed with no
+/// sense is linked to the lexicon when exactly one sense has its spelling
+/// and gloss, as the Gloss panel's lexicon autocomplete would link it.
 pub fn apply_type(session: &mut Session, form: &str, morphs: Vec<MorphSpecView>) -> Result<TypeApplied, String> {
     let p: &mut Project = project(session)?;
-    let specs: Vec<MorphSpec> = morphs.into_iter().map(Into::into).collect();
+    let mut specs: Vec<MorphSpec> = morphs.into_iter().map(Into::into).collect();
+    let mut linked = 0;
+    for spec in specs.iter_mut() {
+        if spec.sense.is_some() {
+            continue;
+        }
+        let Some(gloss) = spec.gloss.clone().filter(|g| !g.trim().is_empty()) else { continue };
+        if let Some(sense) = sense_named(p, &spec.surface, &gloss)? {
+            spec.sense = Some(sense);
+            linked += 1;
+        }
+    }
     let r = p.apply_analysis_to_unanalysed(form, &specs)?;
-    Ok(TypeApplied { applied: r.applied, texts: r.texts })
+    Ok(TypeApplied { applied: r.applied, texts: r.texts, linked })
 }
 
 #[cfg(test)]
@@ -142,8 +176,14 @@ mod tests {
         assert_eq!((kanu.unanalysed, kanu.uses), (3, 3));
         assert_eq!(after.rows[0].form, "kanu", "most unanalysed uses first");
         let spec = |surface: &str, t: &str, g: &str| MorphSpecView { surface: surface.into(), morph_type: t.into(), gloss: Some(g.into()), glosses_by_lang: Default::default(), sense: None };
-        let r = apply_type(&mut s, "kanu", vec![spec("ka", "prefix", "PST"), spec("nu", "root", "sing")]).unwrap();
-        assert_eq!(r.applied, 3);
+        // A root the lexicon has, with that gloss, is linked to its sense.
+        let p = project(&mut s).unwrap();
+        let ((_, sing), _) = p.add_lexeme("nu", "sing").unwrap();
+        let r = apply_type(&mut s, "kanu", vec![spec("ka", "prefix", "PST"), spec("nu", "root", "Sing")]).unwrap();
+        assert_eq!((r.applied, r.linked), (3, 1));
+        let p = project(&mut s).unwrap();
+        let linked = p.proj.children_by_ref("sense", &sing, "morph").unwrap();
+        assert_eq!(linked.len(), 3, "every use's root links to the sense");
         let last = word_types(&mut s, None).unwrap();
         assert!(!last.rows.iter().any(|r| r.form == "kanu"));
         std::fs::remove_dir_all(&dir).ok();
