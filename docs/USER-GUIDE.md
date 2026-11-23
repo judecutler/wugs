@@ -562,7 +562,7 @@ The choice is saved with the recording for everyone on the project. **Measure…
 
 Click **Measure…** in the Timeline toolbar to measure every timed segment of a track and save the numbers as a CSV table, ready for R, Python or a spreadsheet. wugs measures the track of the selected segment, or the utterance track when nothing is selected. Choose a folder outside the project, and the table goes there.
 
-Each row is one segment: its label, start and end, duration, mean, lowest and highest pitch, how much of it is voiced, mean intensity, F1 to F3 at its middle, and F1 to F3 averaged over its middle half (the steady part of a vowel). A value is left empty where there is nothing to measure, such as pitch in a voiceless stretch. The last column says what analysed it: your Praat when wugs finds it, else wugs's own analysis. The numbers are the same ones the Pitch, Intensity and Formants overlays draw.
+Each row is one segment: its label, start and end, duration, mean, lowest and highest pitch, how much of it is voiced, mean intensity, F1 to F3 at its middle, F1 to F3 averaged over its middle half (the steady part of a vowel), and its pitch at ten points spread evenly through it (5% to 95% of the way), for drawing tone and intonation contours. A value is left empty where there is nothing to measure, such as pitch in a voiceless stretch. The last column says what analysed it: your Praat when wugs finds it, else wugs's own analysis. The numbers are the same ones the Pitch, Intensity and Formants overlays draw.
 
 Segments without times are left out, and the message after measuring says how many.
 
@@ -585,6 +585,17 @@ Segment the recording so each vowel (or each word you want to compare) is one se
 - **Every token** shows or hides the dots, leaving only the means and ellipses.
 - Click a dot to hear its segment and open it on the Timeline.
 - **Copy table** copies every segment's label, times, pitch and F1 to F3 for a spreadsheet or R.
+
+### Draw pitch contours
+
+The **Pitch contours** panel draws how the pitch of each timed segment moves from its start to its end, the picture tone and intonation studies draw. Open it from Settings (Closed panels) or with **Find an action**.
+
+Segment the recording one syllable, word or phrase to a segment, and label each segment with its tone or tune, such as `H`, `L`, `HL` or `rise`. Choose the track and click **Draw**. wugs measures each segment's pitch at ten points spread evenly through it (5%, 15% … 95% of the way), so short and long segments line up, and draws:
+
+- a faint line for every segment, broken where the voice stops; click one to hear it;
+- each label's mean contour in a heavy line, named at its right end with how many segments it averages.
+
+**Units** shows semitones from the speaker's median pitch, which lets you compare speakers with different voices, or plain Hz. **Copy table** copies each segment's label, times and the ten pitch values in Hz for R or a spreadsheet, and **Save picture…** saves the plot as an SVG file. **Measure…** on the Timeline writes the same ten values into its table, in the columns `f0_05pct_hz` to `f0_95pct_hz`.
 - **Save picture…** saves the plot as an SVG file for a paper or slides. Word, Inkscape, Illustrator and web browsers open it.
 
 The numbers come from the same analysis as the overlays and **Measure…**: your Praat when wugs finds it, else wugs's own.

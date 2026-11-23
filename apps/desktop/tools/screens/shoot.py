@@ -41,6 +41,7 @@ PANELS = [
     ("keywords", "Keywords"),
     ("checks", "Checks"),
     ("vowels", "Vowel space"),
+    ("contours", "Pitch contours"),
     ("sounds", "Sounds"),
     ("typology", "Typology"),
     ("progress", "Progress"),
@@ -245,6 +246,9 @@ def prepare(run, panel_id):
         # The picture Save picture… writes, beside the shots, to look at by itself.
         svg = page.evaluate("async () => (await import('/src/panels/vowels.ts')).standalone(document.querySelector('.panel-vowels .vw-plot'))")
         (run.out / "vowels-picture.svg").write_text(svg, encoding="utf-8")
+    elif panel_id == "contours":
+        page.locator(".panel-contours button", has_text="Draw").click()
+        page.locator(".panel-contours .ct-plot").wait_for()
     elif panel_id == "kits":
         # The user kit, so the shot shows the editor and the wug picker.
         page.locator(".panel-kits .kit-name", has_text="Word-list sprint").click()

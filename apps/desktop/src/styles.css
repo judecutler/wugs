@@ -1331,6 +1331,13 @@ body::before {
 .vw-dot.is-selected { fill: var(--error); fill-opacity: 1; }
 .vw-label { font-family: var(--font-ipa); font-size: 18px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface-raised); stroke-width: 4px; pointer-events: none; }
 .vw-problem { color: var(--error); }
+.panel-contours { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
+.ct-frame { fill: none; stroke: var(--line); stroke-width: 1; }
+.ct-token { fill: none; stroke: var(--accent-bright); stroke-opacity: 0.35; stroke-width: 1.2; cursor: pointer; }
+.ct-token:hover, .ct-token:focus { stroke: var(--ink); stroke-opacity: 1; outline: none; }
+.ct-token.is-selected { stroke: var(--error); stroke-opacity: 1; }
+.ct-mean { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; pointer-events: none; }
+.ct-label { font-family: var(--font-ipa); font-size: 13px; font-weight: 600; fill: var(--ink); }
 
 .pg-summary { margin: 8px 0; padding-left: 18px; font-size: var(--text-sm); }
 .pg-summary li { margin: 2px 0; }

@@ -37,7 +37,15 @@ pub struct Measured {
     pub mid: [Option<f64>; 3],
     /// F1–F3 averaged over the middle half (the steady part of a vowel).
     pub middle_half: [Option<f64>; 3],
+    /// The pitch contour at ten points spread evenly through the segment
+    /// (5%, 15% … 95% of the way), each from the voiced frame nearest that
+    /// point within a twentieth of the segment (at least one frame); None
+    /// where the voice is off there. What tone and intonation studies plot.
+    pub contour: [Option<f64>; CONTOUR_POINTS],
 }
+
+/// How many time-normalized pitch points each segment gets.
+pub const CONTOUR_POINTS: usize = 10;
 
 fn mean(v: &[f64]) -> Option<f64> {
     (!v.is_empty()).then(|| v.iter().sum::<f64>() / v.len() as f64)
@@ -90,6 +98,18 @@ pub fn measure(target: &Target, chunks: &[Chunk]) -> Measured {
         let v: Vec<f64> = middle.iter().filter_map(|f| f.f[k].map(f64::from)).collect();
         mean(&v)
     };
+    let span = target.end_ms - target.start_ms;
+    let step = chunks.first().map_or(10.0, |c| c.step_ms);
+    let reach = (span / (2.0 * CONTOUR_POINTS as f64)).max(step);
+    let contour = std::array::from_fn(|i| {
+        let at = target.start_ms + span * (i as f64 + 0.5) / CONTOUR_POINTS as f64;
+        frames
+            .iter()
+            .filter_map(|f| Some(((f.t - at).abs(), f.pitch?)))
+            .filter(|(d, _)| *d <= reach)
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(_, p)| f64::from(p))
+    });
     Measured {
         frames: frames.len(),
         f0_mean: mean(&pitch),
@@ -99,6 +119,7 @@ pub fn measure(target: &Target, chunks: &[Chunk]) -> Measured {
         intensity_db: mean(&energy).map(|e| 10.0 * e.log10()),
         mid: nearest.f.map(|v| v.map(f64::from)),
         middle_half: [formant_mean(0), formant_mean(1), formant_mean(2)],
+        contour,
     }
 }
 
@@ -113,7 +134,8 @@ fn num(v: Option<f64>, places: usize) -> String {
 
 pub const COLUMNS: &[&str] = &[
     "text", "track", "segment", "label", "start_s", "end_s", "duration_ms", "f0_mean_hz", "f0_min_hz", "f0_max_hz", "voiced_percent", "intensity_db", "f1_mid_hz", "f2_mid_hz",
-    "f3_mid_hz", "f1_mean_hz", "f2_mean_hz", "f3_mean_hz", "frames", "analysed_by",
+    "f3_mid_hz", "f1_mean_hz", "f2_mean_hz", "f3_mean_hz", "f0_05pct_hz", "f0_15pct_hz", "f0_25pct_hz", "f0_35pct_hz", "f0_45pct_hz", "f0_55pct_hz", "f0_65pct_hz",
+    "f0_75pct_hz", "f0_85pct_hz", "f0_95pct_hz", "frames", "analysed_by",
 ];
 
 /// The table: a header, then a row per target in time order.
@@ -121,7 +143,7 @@ pub fn table(text: &str, track: &str, analysed_by: &str, rows: &[(Target, Measur
     let mut out = COLUMNS.join(",");
     out.push('\n');
     for (t, m) in rows {
-        let cells = [
+        let mut cells = vec![
             cell(text),
             cell(track),
             cell(&t.segment),
@@ -140,9 +162,9 @@ pub fn table(text: &str, track: &str, analysed_by: &str, rows: &[(Target, Measur
             num(m.middle_half[0], 0),
             num(m.middle_half[1], 0),
             num(m.middle_half[2], 0),
-            m.frames.to_string(),
-            cell(analysed_by),
         ];
+        cells.extend(m.contour.iter().map(|v| num(*v, 1)));
+        cells.extend([m.frames.to_string(), cell(analysed_by)]);
         out.push_str(&cells.join(","));
         out.push('\n');
     }
@@ -233,7 +255,7 @@ pub fn run(p: Prepared, app_data: &Path, folder: &Path) -> Result<MeasureReport,
     Ok(MeasureReport { path: path.display().to_string(), measured: rows.len(), untimed: p.untimed, unvoiced, analysed_by })
 }
 
-/// One measured segment for the Vowel space panel.
+/// One measured segment for the Vowel space and Pitch contours panels.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PointView {
@@ -246,6 +268,8 @@ pub struct PointView {
     pub f1: Option<f64>,
     pub f2: Option<f64>,
     pub f3: Option<f64>,
+    /// F0 at 5%, 15% … 95% of the segment (`Measured::contour`), for the Pitch contours panel.
+    pub contour: Vec<Option<f64>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -262,7 +286,7 @@ pub fn points(p: &Prepared, app_data: &Path) -> Result<PointsView, String> {
         .into_iter()
         .map(|(t, m)| {
             let f = |k: usize| m.middle_half[k].or(m.mid[k]);
-            PointView { segment: t.segment, label: t.label, start_ms: t.start_ms, end_ms: t.end_ms, f0: m.f0_mean, f1: f(0), f2: f(1), f3: f(2) }
+            PointView { segment: t.segment, label: t.label, start_ms: t.start_ms, end_ms: t.end_ms, f0: m.f0_mean, f1: f(0), f2: f(1), f3: f(2), contour: m.contour.to_vec() }
         })
         .collect();
     Ok(PointsView { points, untimed: p.untimed, analysed_by })
@@ -310,6 +334,8 @@ mod tests {
         assert_eq!(m.mid, [Some(504.0), Some(1500.0), None]);
         // The middle half is 25–75 ms: frames at 25, 35, 45, 55, 65.
         assert_eq!(m.middle_half, [Some(504.0), Some(1500.0), None]);
+        // The contour: tenths of 100 ms at 5, 15 … 95 ms; the voice stops after 45 ms.
+        assert_eq!(m.contour, [Some(100.0), Some(110.0), Some(120.0), Some(130.0), Some(140.0), Some(140.0), None, None, None, None]);
         // A stretch past the frames measures nothing.
         assert_eq!(measure(&target(200.0, 300.0), &c), Measured::default());
     }
@@ -327,7 +353,7 @@ mod tests {
         let t = table("Text, one", "utterance", "Acoustic analysis (built in)", &rows);
         let mut lines = t.lines();
         assert_eq!(lines.next().unwrap().split(',').count(), COLUMNS.len());
-        assert_eq!(lines.next().unwrap(), "\"Text, one\",utterance,s1,\"a, \"\"b\"\"\",1.000,1.250,250,118.2,,,80,,,,,,,,25,Acoustic analysis (built in)");
+        assert_eq!(lines.next().unwrap(), "\"Text, one\",utterance,s1,\"a, \"\"b\"\"\",1.000,1.250,250,118.2,,,80,,,,,,,,,,,,,,,,,,25,Acoustic analysis (built in)");
     }
 
     /// The tutorial project's utterance track, measured end to end with the
@@ -352,6 +378,9 @@ mod tests {
         let pts = points(&p, &dir.join("app-data")).unwrap();
         assert_eq!(pts.points.len(), timed);
         assert!(pts.points.iter().filter(|x| x.f1.is_some() && x.f2.is_some()).count() >= 2);
+        // And their pitch contours: ten points each, voiced in the counted words.
+        assert!(pts.points.iter().all(|x| x.contour.len() == CONTOUR_POINTS));
+        assert!(pts.points.iter().any(|x| x.contour.iter().filter(|v| v.is_some()).count() >= 5), "a spoken word has a contour");
         let report = run(p, &dir.join("app-data"), &out).unwrap();
         assert_eq!(report.measured, timed);
         let csv = std::fs::read_to_string(&report.path).unwrap();
