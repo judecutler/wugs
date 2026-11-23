@@ -84,6 +84,8 @@ export const concordance = (args: { query: string; kind: import("./concordance/l
 export const dispersion = (args: { query: string; kind: import("./concordance/logic").ConcordanceKind; exact?: boolean; textId?: string | null; within?: import("./metadata/logic").Where | null }) =>
   invoke<import("./concordance/plot").Dispersion>("dispersion", args);
 /** The project's own meanings of these gloss abbreviations, in the order asked (null where nobody wrote one). */
+/** Ten seconds of a recording's spectrogram as raw bytes (src-tauri/src/spectrogram.rs; layout in src/timeline/spectro.ts). */
+export const spectrogramChunk = (args: { source: string; index: number }) => invoke<ArrayBuffer>("spectrogram", args);
 export const abbreviationMeanings = (abbreviations: string[]) => invoke<(string | null)[]>("abbreviation_meanings", { abbreviations });
 export const setAbbreviationMeaning = (abbreviation: string, meaning: string) => invoke<void>("set_abbreviation_meaning", { abbreviation, meaning });
 /** A CQP-style query over tokens and their annotation (src-tauri/src/cqp.rs); a query that does not parse is refused with what and where. */

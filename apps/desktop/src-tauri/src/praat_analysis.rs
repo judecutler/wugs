@@ -51,7 +51,7 @@ pub struct Chunk {
 
 /// Where a request's audio and cache are, found on the session thread.
 pub struct Job {
-    wav: PathBuf,
+    pub(crate) wav: PathBuf,
     dir: PathBuf,
 }
 

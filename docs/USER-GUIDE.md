@@ -448,6 +448,12 @@ Praat analyses at most one minute of view at a time. If more is on screen, zoom 
 
 The analysis uses Praat's standard speech settings. Pitch is tracked between 75 and 600 Hz, so a voice outside that range shows no pitch.
 
+### Show a spectrogram
+
+Click **Spectrogram** in the Timeline toolbar to see the recording's spectrogram under the waveform: frequency from 0 at the bottom to 5000 Hz at the top, darker where louder, the way Praat draws it. Formants show as dark bands, fricatives as noise high up, and stop closures as gaps. wugs makes the spectrogram itself, so it works without Praat. Turn on **Formants** too, and Praat's formant dots sit on the bands.
+
+Like Praat's analysis, the spectrogram shows at most one minute of view at a time. Zoom in to see it. Click **Spectrogram** again to hide it.
+
 ### Edit in Praat and bring the changes back
 
 1. Select a segment, or scroll to the part you want.
