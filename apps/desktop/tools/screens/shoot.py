@@ -349,6 +349,13 @@ def main():
                 if "active" not in (run.page.locator(".panel-timeline .tl-toolbar button", has_text="Spectrogram").get_attribute("class") or ""):
                     failures.append("the Spectrogram toggle did not turn on")
                 run.page.locator(".panel-timeline .tl-toolbar button", has_text="Spectrogram").click()
+                # Pitch on: the voice picker shows beside the overlay toggles.
+                run.page.locator(".panel-timeline .praat-bar button", has_text="Pitch").click()
+                run.page.wait_for_timeout(700)
+                run.shot("state-pitch-voice", run.page.locator(".panel-timeline"))
+                if run.page.locator(".panel-timeline .praat-voice").count() != 1:
+                    failures.append("turning Pitch on showed no voice picker")
+                run.page.locator(".panel-timeline .praat-bar button", has_text="Pitch").click()
 
             # The kit switcher (roadmap 73): open it, then switch to Scrolls and back.
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")

@@ -647,6 +647,10 @@ export const measureTrack = (args: { textId: string; tierId: string; source: str
 /** F1/F2 of every timed segment of a track, for the Vowel space panel. */
 export const measurePoints = (args: { textId: string; tierId: string; source: string }) =>
   invoke<{ points: import("./vowels/logic").Point[]; untimed: number; analysedBy: string }>("measure_points", args);
+/** A recording's voice for acoustic analysis, and the choices (src-tauri/src/praat_analysis.rs). */
+export type VoiceView = { voice: string; voices: import("./praat/analysis").Voice[] };
+export const acousticVoice = (args: { source: string }) => invoke<VoiceView>("acoustic_voice", args);
+export const setAcousticVoice = (args: { source: string; voice: string }) => invoke<VoiceView>("set_acoustic_voice", args);
 export const acousticAnalysis = (args: { source: string; chunks: number[] }) =>
   invoke<import("./praat/analysis").Chunk[]>("acoustic_analysis", args);
 

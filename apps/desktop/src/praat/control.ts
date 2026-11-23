@@ -11,12 +11,15 @@ import {
   praatPending,
   praatSetPath,
   praatStatus,
+  acousticVoice,
+  setAcousticVoice,
+  type VoiceView,
   type PraatReturn,
   type PraatStatus,
 } from "../api";
 import { h } from "../dom";
 import { refreshText, showToast } from "../store";
-import { KINDS, type Kind } from "./analysis";
+import { KINDS, type Kind, type Voice } from "./analysis";
 import { changeSummary, notBroughtBack, overlayTitle, praatRange, type Range } from "./logic";
 
 export type PraatContext = {
@@ -28,7 +31,7 @@ export type PraatContext = {
 
 /** `element` goes in the toolbar; `review` is a row of its own under it. */
 /** What the analysis toggles switch: the Timeline's overlay layer. */
-export type Overlays = { enabled: (kind: Kind) => boolean; toggle: (kind: Kind) => void };
+export type Overlays = { enabled: (kind: Kind) => boolean; toggle: (kind: Kind) => void; setVoice: (voice: Voice) => void };
 
 const KIND_LABEL: Record<Kind, string> = { pitch: "Pitch", intensity: "Intensity", formants: "Formants" };
 
@@ -45,6 +48,15 @@ export function praatControls(
   let armedReopen = false;
   let busy = false;
   let checkedText = "";
+  /** The loaded recording's voice (pitch range, formant ceiling), asked once per recording. */
+  let voice: { source: string; view: VoiceView } | null = null;
+  let askedVoice = "";
+
+  const pushVoice = () => {
+    const v = voice?.view.voices.find((x) => x.id === voice?.view.voice);
+    const layer = overlays();
+    if (v !== undefined && layer !== null) layer.setVoice(v);
+  };
 
   const fail = (e: unknown) => showToast({ tone: "error", lines: [errorText(e)] });
 
@@ -162,6 +174,7 @@ export function praatControls(
               textContent: KIND_LABEL[kind],
               title: overlayTitle(kind, praatFound),
               onclick: () => {
+                pushVoice();
                 layer.toggle(kind);
                 draw();
               },
@@ -171,6 +184,7 @@ export function praatControls(
       const why = status?.problem ?? "Looking for Praat…";
       element.replaceChildren(
         ...toggles,
+        ...voicePicker(ctx),
         h("button", {
           textContent: "Praat…",
           title: `${why} Click to choose where Praat is.`,
@@ -187,7 +201,7 @@ export function praatControls(
       disabled: busy || ctx.sourceId === null,
       onclick: () => openInPraat(),
     });
-    const parts: Node[] = [...toggles, open];
+    const parts: Node[] = [...toggles, ...voicePicker(ctx), open];
     if (pendingFor === ctx.textId) {
       parts.push(
         h("button", {
@@ -220,8 +234,40 @@ export function praatControls(
     element.replaceChildren(...parts);
   }
 
+  /** The voice choice, shown once any overlay is on. */
+  function voicePicker(ctx: PraatContext): Node[] {
+    const layer = overlays();
+    const shown = voice !== null && ctx.sourceId !== null && voice.source === ctx.sourceId ? voice : null;
+    if (shown === null || layer === null || !KINDS.some((k) => layer.enabled(k))) return [];
+    const select = h(
+      "select",
+      { className: "praat-voice", title: "The speaker's voice in this recording: the pitch range and formant ceiling the analysis uses. Saved with the recording, for everyone on the project." },
+      ...shown.view.voices.map((v) => h("option", { value: v.id, textContent: v.name })),
+    );
+    select.value = shown.view.voice;
+    select.onchange = () => {
+      const source = shown.source;
+      setAcousticVoice({ source, voice: select.value }).then((view) => {
+        voice = { source, view };
+        pushVoice();
+        draw();
+      }, fail);
+    };
+    return [select];
+  }
+
   function refresh() {
     const ctx = context();
+    const src = ctx?.sourceId ?? null;
+    if (src !== null && src !== askedVoice) {
+      askedVoice = src;
+      acousticVoice({ source: src }).then((view) => {
+        if (context()?.sourceId !== src) return;
+        voice = { source: src, view };
+        pushVoice();
+        draw();
+      }, fail);
+    }
     if (status === null) {
       praatStatus().then((st) => {
         status = st;

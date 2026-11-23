@@ -456,7 +456,14 @@ Without Praat, all three still work: wugs analyses the recording itself with Pra
 
 The analysis covers at most one minute of view at a time. If more is on screen, zoom in. wugs keeps the results, so a part you already viewed shows at once next time.
 
-The analysis uses Praat's standard speech settings. Pitch is tracked between 75 and 600 Hz, so a voice outside that range shows no pitch.
+The analysis uses Praat's standard speech settings unless you choose otherwise. Once an overlay is on, a **voice** menu appears beside the toggles. Choose the one that fits the speaker in this recording:
+
+- **Typical**: pitch 75–600 Hz, formants up to 5500 Hz (Praat's defaults).
+- **Low voice**: pitch 50–300 Hz, formants up to 5000 Hz, for a deep or creaky voice.
+- **High voice**: pitch 100–600 Hz, formants up to 5500 Hz.
+- **Child**: pitch 150–800 Hz, formants up to 8000 Hz.
+
+The choice is saved with the recording for everyone on the project. **Measure…** and the **Vowel space** panel use it too, and the table names it in its last column. A voice outside the chosen pitch range shows no pitch, so try another voice when the pitch line has gaps or jumps an octave.
 
 ### Measure a track
 

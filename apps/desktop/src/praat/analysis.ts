@@ -40,9 +40,18 @@ export const RANGES: Record<Kind, { lo: number; hi: number; unit: string }> = {
   formants: { lo: 0, hi: 5500, unit: "Hz" },
 };
 
+/** A recording's voice settings (src-tauri/src/praat_analysis.rs `Voice`). */
+export type Voice = { id: string; name: string; pitchFloor: number; pitchCeiling: number; formantCeiling: number };
+
+/** The ranges drawn for a voice: its pitch range and formant ceiling. */
+export function rangesFor(v: Voice | null): Record<Kind, { lo: number; hi: number; unit: string }> {
+  if (v === null) return RANGES;
+  return { pitch: { lo: v.pitchFloor, hi: v.pitchCeiling, unit: "Hz" }, intensity: RANGES.intensity, formants: { lo: 0, hi: v.formantCeiling, unit: "Hz" } };
+}
+
 /** Height of a value in a band from `top` to `top + height`; null outside the range. */
-export function yFor(kind: Kind, value: number, top: number, height: number): number | null {
-  const { lo, hi } = RANGES[kind];
+export function yFor(kind: Kind, value: number, top: number, height: number, ranges = RANGES): number | null {
+  const { lo, hi } = ranges[kind];
   if (value < lo || value > hi) return null;
   return top + height - ((value - lo) / (hi - lo)) * height;
 }

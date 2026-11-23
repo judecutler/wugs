@@ -26,10 +26,8 @@ use std::path::Path;
 use realfft::num_complex::Complex;
 use realfft::RealFftPlanner;
 
-use crate::praat_analysis::{Chunk, CHUNK_MS, MAX_CHUNKS, STEP_MS};
+use crate::praat_analysis::{Chunk, Voice, CHUNK_MS, MAX_CHUNKS, STEP_MS};
 
-const MIN_PITCH: f64 = 75.0;
-const MAX_PITCH: f64 = 600.0;
 const VOICING_THRESHOLD: f64 = 0.45;
 const SILENCE_THRESHOLD: f64 = 0.03;
 const OCTAVE_COST: f64 = 0.01;
@@ -62,8 +60,9 @@ struct Candidate {
 }
 
 /// Every frame's candidates, the unvoiced one first.
-fn candidates(samples: &[f64], rate: f64, centres: &[usize]) -> Vec<Vec<Candidate>> {
-    let win = (3.0 / MIN_PITCH * rate).round() as usize;
+fn candidates(samples: &[f64], rate: f64, centres: &[usize], v: &Voice) -> Vec<Vec<Candidate>> {
+    let (min_pitch, max_pitch) = (v.pitch_floor, v.pitch_ceiling);
+    let win = (3.0 / min_pitch * rate).round() as usize;
     let window = hann(win);
     let size = (2 * win).next_power_of_two();
     let mut planner = RealFftPlanner::<f64>::new();
@@ -87,8 +86,8 @@ fn candidates(samples: &[f64], rate: f64, centres: &[usize]) -> Vec<Vec<Candidat
     let mut rw = Vec::new();
     auto(&window, &mut rw);
     let global_peak = samples.iter().fold(0f64, |m, v| m.max(v.abs())).max(1e-12);
-    let min_lag = (rate / MAX_PITCH).floor().max(2.0) as usize;
-    let max_lag = ((rate / MIN_PITCH).ceil() as usize).min(win / 2);
+    let min_lag = (rate / max_pitch).floor().max(2.0) as usize;
+    let max_lag = ((rate / min_pitch).ceil() as usize).min(win / 2);
     let mut ra = Vec::new();
     let mut frame = vec![0f64; win];
     centres
@@ -117,8 +116,8 @@ fn candidates(samples: &[f64], rate: f64, centres: &[usize]) -> Vec<Vec<Candidat
                     let peak_lag = lag as f64 + d;
                     let peak = (b - 0.25 * (a - c) * d).min(1.0);
                     let hz = rate / peak_lag;
-                    if (MIN_PITCH..=MAX_PITCH).contains(&hz) {
-                        out.push(Candidate { hz, strength: peak - OCTAVE_COST * (MIN_PITCH / hz).log2() });
+                    if (min_pitch..=max_pitch).contains(&hz) {
+                        out.push(Candidate { hz, strength: peak - OCTAVE_COST * (min_pitch / hz).log2() });
                     }
                 }
             }
@@ -169,8 +168,8 @@ fn best_path(frames: &[Vec<Candidate>]) -> Vec<Option<f64>> {
 }
 
 /// Each frame's intensity in dB, None in digital silence.
-fn intensity(samples: &[f64], rate: f64, centres: &[usize]) -> Vec<Option<f64>> {
-    let win = (3.2 / MIN_PITCH * rate).round() as usize;
+fn intensity(samples: &[f64], rate: f64, centres: &[usize], floor: f64) -> Vec<Option<f64>> {
+    let win = (3.2 / floor * rate).round() as usize;
     let window = hann(win);
     let sum_w: f64 = window.iter().sum();
     centres
@@ -188,7 +187,6 @@ fn intensity(samples: &[f64], rate: f64, centres: &[usize]) -> Vec<Option<f64>> 
         .collect()
 }
 
-const FORMANT_CEILING: f64 = 5500.0;
 const POLES: usize = 10;
 const FORMANT_WINDOW: f64 = 0.025;
 const PRE_EMPHASIS_FROM: f64 = 50.0;
@@ -307,8 +305,8 @@ fn roots(coef: &[f64]) -> Vec<Complex<f64>> {
 
 /// Each frame's first three formants (Hz), as Praat's To Formant (burg)
 /// finds them; `times` are seconds into `samples`.
-fn formants(samples: &[f64], rate: f64, times: &[f64]) -> Vec<[Option<f64>; 3]> {
-    let to = 2.0 * FORMANT_CEILING;
+fn formants(samples: &[f64], rate: f64, times: &[f64], ceiling: f64) -> Vec<[Option<f64>; 3]> {
+    let to = 2.0 * ceiling;
     let mut x = resample(samples, rate, to);
     let factor = (-std::f64::consts::TAU * PRE_EMPHASIS_FROM / to).exp();
     for i in (1..x.len()).rev() {
@@ -360,17 +358,17 @@ fn formants(samples: &[f64], rate: f64, times: &[f64]) -> Vec<[Option<f64>; 3]> 
 }
 
 /// One chunk's pitch, intensity and formants.
-pub fn chunk(wav: &Path, index: u32) -> Result<Chunk, String> {
+pub fn chunk(wav: &Path, index: u32, v: &Voice) -> Result<Chunk, String> {
     let start_ms = f64::from(index) * f64::from(CHUNK_MS);
-    let pad_ms = 3.2 / MIN_PITCH * 1000.0;
+    let pad_ms = 3.2 / v.pitch_floor * 1000.0;
     let (samples, rate, total_ms) = read(wav, start_ms - pad_ms, start_ms + f64::from(CHUNK_MS) + pad_ms)?;
     let step = f64::from(STEP_MS);
     let frames = (((total_ms - start_ms) / step).floor().max(0.0) as usize).min((CHUNK_MS / STEP_MS) as usize);
     let centres: Vec<usize> = (0..frames).map(|i| ((pad_ms + (i as f64 + 0.5) * step) / 1000.0 * rate).round() as usize).collect();
-    let pitch = best_path(&candidates(&samples, rate, &centres));
-    let db = intensity(&samples, rate, &centres);
+    let pitch = best_path(&candidates(&samples, rate, &centres, v));
+    let db = intensity(&samples, rate, &centres, v.pitch_floor);
     let times: Vec<f64> = (0..frames).map(|i| (pad_ms + (i as f64 + 0.5) * step) / 1000.0).collect();
-    let formant = formants(&samples, rate, &times);
+    let formant = formants(&samples, rate, &times, v.formant_ceiling);
     let f = |k: usize| formant.iter().map(|v| v[k].map(|x| x as f32)).collect();
     Ok(Chunk {
         index,
@@ -384,16 +382,18 @@ pub fn chunk(wav: &Path, index: u32) -> Result<Chunk, String> {
     })
 }
 
-pub fn analyse(wav: &Path, chunks: &[u32]) -> Result<Vec<Chunk>, String> {
+pub fn analyse(wav: &Path, voice: &Voice, chunks: &[u32]) -> Result<Vec<Chunk>, String> {
     if chunks.len() > MAX_CHUNKS {
         return Err(format!("at most {MAX_CHUNKS} chunks at a time"));
     }
-    chunks.iter().map(|&n| chunk(wav, n)).collect()
+    chunks.iter().map(|&n| chunk(wav, n, voice)).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TYPICAL: Voice = crate::praat_analysis::VOICES[0];
 
     /// A mono 16-bit WAV: a voice-like buzz (harmonics with falling
     /// amplitude) at `f0[i]` for each second `i`, 0 Hz meaning silence.
@@ -441,7 +441,7 @@ mod tests {
         for rate in [16_000u32, 44_100] {
             let wav = dir.join(format!("v-{rate}.wav"));
             voice(&wav, rate, &[120.0, 220.0, 0.0, 400.0], 0.5);
-            let c = chunk(&wav, 0).unwrap();
+            let c = chunk(&wav, 0, &TYPICAL).unwrap();
             assert_eq!(c.pitch.len(), 400, "four seconds of 10 ms frames, no more");
             let at = |s: f64| c.pitch[(s * 100.0) as usize];
             for (s, want) in [(0.5, 120.0), (1.5, 220.0), (3.5, 400.0)] {
@@ -454,6 +454,21 @@ mod tests {
             assert!(db(0.5).unwrap() > 70.0, "{:?}", db(0.5));
             assert_eq!(db(2.5), None);
         }
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_low_voice_needs_the_low_range() {
+        let dir = std::env::temp_dir().join(format!("wugs-voice-low-{}", wugs_model::ulid()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let wav = dir.join("low.wav");
+        voice(&wav, 16_000, &[60.0, 60.0], 0.5);
+        let low = chunk(&wav, 0, &Voice::of("low")).unwrap();
+        let got = f64::from(low.pitch[100].expect("the low range hears 60 Hz"));
+        assert!((got - 60.0).abs() < 1.5, "{got}");
+        // Praat's default floor is 75 Hz: 60 Hz is out of range there.
+        let typical = chunk(&wav, 0, &TYPICAL).unwrap();
+        assert!(typical.pitch[100].is_none_or(|p| (f64::from(p) - 60.0).abs() > 5.0), "{:?}", typical.pitch[100]);
         std::fs::remove_dir_all(dir).ok();
     }
 
@@ -487,7 +502,7 @@ mod tests {
             w.extend_from_slice(&s.to_le_bytes());
         }
         std::fs::write(&wav, w).unwrap();
-        let c = chunk(&wav, 0).unwrap();
+        let c = chunk(&wav, 0, &TYPICAL).unwrap();
         let mid = f64::from(c.intensity[50].unwrap());
         assert!((mid - 84.9).abs() < 0.5, "{mid}");
         std::fs::remove_dir_all(dir).ok();
@@ -514,7 +529,7 @@ mod tests {
                 (v.next().flatten(), v.next().flatten())
             })
             .collect();
-        let ours = chunk(&wav, 0).unwrap();
+        let ours = chunk(&wav, 0, &TYPICAL).unwrap();
         let (mut pitch, mut db, mut voicing, mut frames) = (Vec::new(), Vec::new(), 0, 0);
         // Leave out the first and last 0.1 s, where the windows run off the recording.
         for k in 10..praat.len().saturating_sub(10).min(ours.pitch.len()) {
@@ -572,7 +587,7 @@ mod tests {
             }
             let peak = x.iter().fold(0f64, |m, v| m.max(v.abs()));
             x.iter_mut().for_each(|v| *v *= 0.5 / peak);
-            let got = formants(&x, rate, &[0.25]);
+            let got = formants(&x, rate, &[0.25], 5500.0);
             for (k, want) in [700.0, 1220.0, 2600.0].into_iter().enumerate() {
                 let f = got[0][k].unwrap_or_else(|| panic!("{rate}: no F{}", k + 1));
                 assert!((f - want).abs() < want * 0.03, "{rate}: F{} {f} against {want}", k + 1);
@@ -599,7 +614,7 @@ mod tests {
         let rows: Vec<Vec<f64>> = String::from_utf8_lossy(&out.stdout).lines().map(|l| l.split(' ').map(|x| x.parse().unwrap_or(f64::NAN)).collect()).collect();
         let times: Vec<f64> = rows.iter().map(|r| r[0]).collect();
         let (samples, rate, _) = read(&wav, 0.0, 6000.0).unwrap();
-        let ours = formants(&samples, rate, &times);
+        let ours = formants(&samples, rate, &times, 5500.0);
         assert!(rows.len() > 200, "{} loud frames", rows.len());
         for k in 0..3 {
             let mut err: Vec<f64> = rows.iter().zip(&ours).filter_map(|(r, o)| Some((o[k]? - r[k + 1]).abs() / r[k + 1]).filter(|e| e.is_finite())).collect();
