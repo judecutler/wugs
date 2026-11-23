@@ -584,6 +584,14 @@ def main():
             if "Analysed 4 uses of «wuno»" not in " ".join(run.toasts()):
                 failures.append("Words to gloss did not apply an analysis")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            # Progress: the vocabulary growth curve under the table.
+            run.front("progress", "Progress")
+            growth = run.page.locator(".panel-progress .pg-chart")
+            growth.wait_for()
+            growth.scroll_into_view_if_needed()
+            run.shot("state-growth", run.page.locator(".panel-progress"))
+            if "flattening" not in run.page.locator(".panel-progress .pg-growth").inner_text():
+                failures.append("Progress did not describe the vocabulary growth")
             # Notes: every note in one list, questions only.
             run.front("notes", "Notes")
             run.page.locator(".panel-notes .nt-item").first.wait_for()

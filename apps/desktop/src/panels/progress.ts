@@ -2,7 +2,8 @@
 // report, a deposit form or a supervisor (src-tauri/src/progress.rs). Words
 // and sums in ../progress/logic.ts. Read-only; a row opens its text.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, projectProgress } from "../api";
+import { errorText, projectProgress, vocabularyGrowth } from "../api";
+import { growthNote, growthPath, ticks, type Box, type Growth } from "../progress/growth";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { COLUMNS, progressTsv, rowCells, summaryLines, totals, type Progress } from "../progress/logic";
@@ -19,6 +20,8 @@ export const progressPanel: PanelDef = {
     const summary = h("ul", { className: "pg-summary" });
     const table = h("table", { className: "pg-table" });
     const note = h("p", { className: "note" });
+    let growth: Growth | null = null;
+    const growthBox = h("div", { className: "pg-growth" });
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every text's figures and the totals, to paste into a spreadsheet or a report" });
     const recount = h("button", { type: "button", textContent: "Count again" });
 
@@ -48,8 +51,64 @@ export const progressPanel: PanelDef = {
         "A sentence is a segment on a transcription track; a word is glossed once it is broken into morphs; speech transcribed adds up the timed sentences that have a transcription.";
     };
 
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = (tag: string, attrs: Record<string, string | number>, text?: string): SVGElement => {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+      if (text !== undefined) e.textContent = text;
+      return e;
+    };
+
+    const drawGrowth = () => {
+      if (growth === null) {
+        growthBox.replaceChildren();
+        return;
+      }
+      const g = growth;
+      const parts: Node[] = [h("h3", { className: "pg-head", textContent: "Vocabulary growth" })];
+      if (g.tokens > 0) {
+        const box: Box = { width: 420, height: 204, left: 46, right: 10, top: 10, bottom: 34 };
+        const w = box.width - box.left - box.right;
+        const ht = box.height - box.top - box.bottom;
+        const chart = svg("svg", { viewBox: `0 0 ${box.width} ${box.height}`, class: "pg-chart", role: "img" });
+        chart.setAttribute("aria-label", "Different words met against running words, texts in the order they were made");
+        for (const t of ticks(g.tokens)) {
+          const x = box.left + (t * w) / g.tokens;
+          chart.append(svg("line", { x1: x, x2: x, y1: box.top, y2: box.top + ht, class: "grid" }), svg("text", { x, y: box.height - 19, class: "tick", "text-anchor": "middle" }, t.toLocaleString("en")));
+        }
+        for (const t of ticks(g.types)) {
+          const y = box.top + ht - (g.types === 0 ? 0 : (t * ht) / g.types);
+          chart.append(svg("line", { x1: box.left, x2: box.left + w, y1: y, y2: y, class: "grid" }), svg("text", { x: box.left - 6, y: y + 4, class: "tick", "text-anchor": "end" }, t.toLocaleString("en")));
+        }
+        for (const t of g.texts.slice(1)) {
+          const x = box.left + (t.at * w) / g.tokens;
+          const mark = svg("line", { x1: x, x2: x, y1: box.top, y2: box.top + ht, class: "text-start" });
+          mark.append(svg("title", {}, `«${t.title}» starts here`));
+          chart.append(mark);
+        }
+        chart.append(svg("path", { d: growthPath(g, box), class: "curve" }));
+        chart.append(svg("text", { x: box.left + w / 2, y: box.height - 3, class: "axis", "text-anchor": "middle" }, "running words"));
+        chart.append(svg("text", { x: 0, y: 0, class: "axis", "text-anchor": "middle", transform: `translate(10 ${box.top + ht / 2}) rotate(-90)` }, "different words"));
+        parts.push(chart);
+      }
+      parts.push(h("p", { className: "note", textContent: `${growthNote(g)}${g.texts.length > 1 ? " Dashed lines mark where each text starts, in the order the texts were made." : ""}` }));
+      growthBox.replaceChildren(...parts);
+    };
+
     async function load() {
       const mine = ++seq;
+      vocabularyGrowth().then(
+        (g) => {
+          if (mine !== seq) return;
+          growth = g;
+          drawGrowth();
+        },
+        () => {
+          if (mine !== seq) return;
+          growth = null;
+          drawGrowth();
+        },
+      );
       try {
         const r = await projectProgress();
         if (mine !== seq) return;
@@ -86,7 +145,7 @@ export const progressPanel: PanelDef = {
         el.replaceChildren(emptyState("Progress", "Open a project to see how far it has come.", "The wug is keeping score."));
         return;
       }
-      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note);
+      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, growthBox);
       void load();
     };
     return { element: el, render, dispose: unprovide };

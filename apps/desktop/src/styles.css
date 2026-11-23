@@ -1080,6 +1080,12 @@ body::before {
 .cc-plot-title { grid-area: title; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cc-plot-count { grid-area: count; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 .cc-plot-bar { grid-area: bar; position: relative; height: 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); }
+.pg-growth .pg-head { font-family: var(--font-display); font-size: 15px; margin: 14px 0 4px; }
+.pg-chart { width: 100%; max-width: 520px; height: auto; display: block; }
+.pg-chart .grid { stroke: var(--line); stroke-width: 1; }
+.pg-chart .text-start { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.pg-chart .curve { fill: none; stroke: var(--accent); stroke-width: 2; }
+.pg-chart .tick, .pg-chart .axis { font-size: 10px; fill: var(--muted); }
 .panel-notes .nt-list { overflow: auto; flex: 1; min-height: 0; }
 .panel-notes .nt-head { font-family: var(--font-display); font-size: 15px; margin: 12px 0 4px; }
 .panel-notes .nt-item { padding: 6px 0; border-bottom: 1px solid var(--line); }
