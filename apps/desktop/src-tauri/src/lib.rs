@@ -18,6 +18,7 @@ pub mod drops;
 pub mod elicit;
 pub mod feedback;
 pub mod help;
+pub mod glottolog;
 pub mod gloss;
 pub mod identity;
 pub mod interchange;
@@ -306,6 +307,12 @@ fn project_language(s: State<SessionThread>) -> Result<interchange::LanguageDto,
 #[tauri::command(async)]
 fn set_project_language(s: State<SessionThread>, language: interchange::LanguageDto) -> Result<interchange::LanguageDto, String> {
     s.run(move |s| interchange::set_project_language(s, &language))
+}
+
+/// Glottolog's languages and dialects a typed name or code fits, best first.
+#[tauri::command(async)]
+fn glottolog_find(query: String) -> Vec<glottolog::Languoid> {
+    glottolog::find(&query, 8)
 }
 
 /// The lexicon as a dictionary to print or share (one HTML file in `folder`).
@@ -1787,6 +1794,7 @@ pub fn run() {
             morphosyntax_choose,
             morphosyntax_choose_spacy,
             morphosyntax_choose_stanza,
+            glottolog_find,
             morphosyntax_allow_web,
             morphosyntax_run,
             sentence_get,

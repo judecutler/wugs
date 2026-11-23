@@ -599,7 +599,7 @@ wugs names the file after the text's title and never replaces a file that exists
 
 ### Say which language the project documents
 
-At the top of **Import and export**, type the language's name and, if you know them, its Glottocode (from [glottolog.org](https://glottolog.org), like `stan1293`) and ISO 639-3 code (three letters, like `tur`). Each field saves when you press Enter or leave it. Archive packages and CLDF datasets carry them, so the data can be found and joined with other datasets. Everyone on the project sees the same language.
+At the top of **Import and export**, type the language's name and, if you know them, its Glottocode (from [glottolog.org](https://glottolog.org), like `stan1293`) and ISO 639-3 code (three letters, like `tur`). Each field saves when you press Enter or leave it. You do not need to look the codes up: as you type a name (or a code) in the first two fields, wugs lists the languages and dialects in Glottolog that fit, with their family and region, and clicking one fills in both codes. If you had already named the language yourself, such as by the name its speakers use, and you search from the Glottocode field, your name stays. The list comes from Glottolog 5.4, kept inside the app, so it works offline and sends nothing. Archive packages and CLDF datasets carry them, so the data can be found and joined with other datasets. Everyone on the project sees the same language.
 
 ### Describe each text
 
