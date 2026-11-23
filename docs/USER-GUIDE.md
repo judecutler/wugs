@@ -341,6 +341,10 @@ Under **Not in the lexicon**, the Checks panel lists every root you have glossed
 
 Then fill in the entries in the Lexicon panel: part of speech, definitions, examples.
 
+### Find spelling slips
+
+Under **Spellings to check**, the Checks panel lists rare words that look like slips for a common word: a word used once or twice beside one used at least four times as often that has the same letters with other accents (`kési` beside `kesi`), or one letter added, left out or changed (`tekma` beside `tekama`, for words of four letters or more). Capitals do not count as a difference. Click either word to see its lines in the Concordance. Some pairs are real words, such as a rare minimal pair, so check each one, and fix the slips with **Replace…** in the Search panel.
+
 ### Check the characters you type
 
 Many typing slips are invisible: a Cyrillic «а» from the wrong keyboard among Latin letters, an ASCII apostrophe `'` beside the glottal stop's `ʼ`, `g` beside IPA `ɡ`, or a no-break space pasted from a document. Words with them look right but never match in a search or the lexicon.

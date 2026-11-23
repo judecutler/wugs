@@ -525,6 +525,11 @@ def main():
             # Checks: the character inventory, a Cyrillic letter among Latin ones flagged.
             run.front("checks", "Checks")
             run.page.locator(".panel-checks .ck-char").first.wait_for()
+            spelling = run.page.locator(".panel-checks .ck-title", has_text="Spellings to check")
+            spelling.scroll_into_view_if_needed()
+            run.shot("state-spellings", run.page.locator(".panel-checks"))
+            if "tʰakka" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Spellings to check did not list a rare word beside a common one")
             run.page.locator(".panel-checks button", has_text="Every character").click()
             run.page.locator(".panel-checks .ck-chars").scroll_into_view_if_needed()
             run.shot("state-characters", run.page.locator(".panel-checks"))
