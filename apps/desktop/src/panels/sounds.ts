@@ -11,6 +11,7 @@ import { errorText, soundWords } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { clustersNote, consonantClusters, gapsNote, positions, shapes, share, type Cluster, type Shape, type Where } from "../sounds/shapes";
+import { distributionNote, envLabel, environments, environmentsTsv, type NeighbourRow } from "../sounds/environments";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
 import { dataGeneration, getState, showToast } from "../store";
@@ -25,7 +26,7 @@ const PAD = 26;
 /** Room on the left for unrounded vowels with several spellings (i ĩ iː). */
 const PADX = 72;
 
-type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[]; clusters: Cluster[]; clustersNote: string };
+type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[]; clusters: Cluster[]; clustersNote: string; words: { word: string; count: number }[] };
 
 const clustersOf = (words: readonly { word: string; count: number }[]) => {
   const clusters = consonantClusters(words);
@@ -48,6 +49,9 @@ export const soundsPanel: PanelDef = {
     /** The sound whose contrasts are listed (null: every sound), and the contrast opened. */
     let pairSound: string | null = null;
     let openContrast: string | null = null;
+    /** The two sounds whose environments are compared (null: the two commonest). */
+    let envA: string | null = null;
+    let envB: string | null = null;
 
     const shownText = (): { id: string; title: string } | null => {
       const s = getState();
@@ -65,7 +69,7 @@ export const soundsPanel: PanelDef = {
         }
         if (mine !== seq) return;
         const sounds = inventory(r.words);
-        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words), where: positions(r.words, sounds.map((x) => x.sound)), shapes: shapes(r.words), ...clustersOf(r.words) };
+        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words), where: positions(r.words, sounds.map((x) => x.sound)), shapes: shapes(r.words), ...clustersOf(r.words), words: r.words };
         problem = null;
       } catch (e) {
         if (mine !== seq) return;
@@ -185,6 +189,60 @@ export const soundsPanel: PanelDef = {
       ];
     };
 
+    const envSection = (l: Loaded): HTMLElement[] => {
+      if (l.sounds.length < 2) return [];
+      const known = new Set(l.sounds.map((x) => x.sound));
+      const a = envA !== null && known.has(envA) ? envA : l.sounds[0]!.sound;
+      const b = envB !== null && known.has(envB) ? envB : l.sounds.find((x) => x.sound !== a)!.sound;
+      const pick = (value: string, label: string, set: (v: string) => void) => {
+        const sel = h("select", { className: "sd-env-pick" });
+        sel.setAttribute("aria-label", label);
+        for (const x of l.sounds) sel.append(new Option(x.sound, x.sound, false, x.sound === value));
+        sel.onchange = () => {
+          set(sel.value);
+          paint();
+        };
+        return sel;
+      };
+      const e = environments(l.words, a, b);
+      const num = (n: number) => h("td", { className: `num${n === 0 ? " sd-gap" : ""}`, textContent: n === 0 ? "–" : n.toLocaleString() });
+      const side = (title: string, rows: NeighbourRow[]) =>
+        h(
+          "table",
+          { className: "fq-table sd-env-side" },
+          h("thead", {}, h("tr", {}, h("th", { textContent: title }), h("th", { className: "ipa", textContent: a }), h("th", { className: "ipa", textContent: b }))),
+          h("tbody", {}, ...rows.slice(0, 30).map((r) => h("tr", { className: r.a > 0 && r.b > 0 ? "sd-env-both" : "" }, h("td", { className: "ipa", textContent: r.neighbour }), num(r.a), num(r.b)))),
+        );
+      const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every environment of the two sounds with counts and examples" });
+      copy.onclick = () =>
+        writeText(environmentsTsv(e)).then(
+          () => showToast({ tone: "info", lines: [`${e.whole.length} environments of «${a}» and «${b}» copied.`] }),
+          (err) => showToast({ tone: "error", lines: [errorText(err)] }),
+        );
+      const rows = e.whole.slice(0, 40).map((r) =>
+        h(
+          "tr",
+          { className: r.a > 0 && r.b > 0 ? "sd-env-both" : "" },
+          h("td", { className: "ipa", textContent: envLabel(r) }),
+          num(r.a),
+          num(r.b),
+          h("td", {}, r.exampleA === "" ? "" : wordButton(r.exampleA, r.a)),
+          h("td", {}, r.exampleB === "" ? "" : wordButton(r.exampleB, r.b)),
+        ),
+      );
+      return [
+        h("h4", { className: "sd-h", textContent: "Environments" }),
+        h("div", { className: "sd-bar" }, pick(a, "First sound", (v) => (envA = v)), h("span", { className: "sd-tilde", textContent: "and" }), pick(b, "Second sound", (v) => (envB = v)), copy),
+        h("p", { className: "note sd-env-note", textContent: distributionNote(e) }),
+        h("div", { className: "sd-env-sides" }, side("Before", e.before), side("After", e.after)),
+        h(
+          "div",
+          { className: "sd-scroll" },
+          h("table", { className: "fq-table sd-env" }, h("thead", {}, h("tr", {}, ...["Environment", a, b, `e.g. ${a}`, `e.g. ${b}`].map((t) => h("th", { textContent: t })))), h("tbody", {}, ...rows)),
+        ),
+      ];
+    };
+
     const pairsSection = (l: Loaded): HTMLElement[] => {
       const keyOf = (c: Contrast) => `${c.a}\u001F${c.b}`;
       const shown = contrastsOf(l.pairs, pairSound);
@@ -218,8 +276,15 @@ export const soundsPanel: PanelDef = {
             (e) => showToast({ tone: "error", lines: [errorText(e)] }),
           );
         const more = picked.total > picked.pairs.length ? [h("p", { className: "note", textContent: `The ${picked.pairs.length} with the commonest words of ${picked.total}.` })] : [];
+        const env = h("button", { type: "button", textContent: "Environments", title: `Compare where «${picked.a}» and «${picked.b}» occur, under Environments` });
+        env.onclick = () => {
+          envA = picked.a;
+          envB = picked.b;
+          paint();
+          el.querySelector(".sd-env-note")?.scrollIntoView({ block: "center" });
+        };
         detail.push(
-          h("div", { className: "sd-bar" }, h("strong", { className: "sd-glyph", textContent: `${picked.a} ~ ${picked.b}` }), copy),
+          h("div", { className: "sd-bar" }, h("strong", { className: "sd-glyph", textContent: `${picked.a} ~ ${picked.b}` }), copy, env),
           ...more,
           h("ul", { className: "sd-pairs" }, ...picked.pairs.map((p) => h("li", {}, wordButton(p.wordA, p.countA), h("span", { className: "sd-tilde", textContent: "~" }), wordButton(p.wordB, p.countB)))),
         );
@@ -305,6 +370,7 @@ export const soundsPanel: PanelDef = {
         ...listed("Affricates and double articulations", c.affricates),
         ...[...c.others].flatMap(([group, sounds]) => listed(group, sounds)),
         ...pairsSection(loaded),
+        ...envSection(loaded),
         ...whereSection(loaded),
         ...listed("Not on the IPA chart", c.unplaced.map((u) => u.sound), [...new Set(c.unplaced.map((u) => u.why))].join("; ").replace(/^./u, (x) => x.toUpperCase()) + ". Often a spelling slip, or a spelling rather than IPA."),
       );

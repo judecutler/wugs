@@ -1347,6 +1347,8 @@ body::before {
 .ty-ours input[type="text"] { flex: 1; min-width: 12em; }
 
 /* Sounds (src/panels/sounds.ts) */
+.panel-sounds .sd-env-sides { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; margin-bottom: 8px; }
+.panel-sounds .sd-env-both td { background: var(--accent-soft); }
 .panel-sounds { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
 .sd-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .sd-bar label { display: inline-flex; gap: 4px; align-items: center; }
