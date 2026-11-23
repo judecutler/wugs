@@ -30,6 +30,7 @@ PANELS = [
     ("texts", "Texts"),
     ("transcribe", "Transcribe"),
     ("gloss", "Gloss"),
+    ("sentence", "Sentence"),
     ("lexicon", "Lexicon"),
     ("elicit", "Elicit"),
     ("search", "Search"),
