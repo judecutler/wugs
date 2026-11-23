@@ -31,6 +31,23 @@ export function unifiedLine(changed: number, gloss: string): string {
   return changed === 0 ? "Nothing needed changing any more." : `${n(changed, "morph now reads", "morphs now read")} «${gloss}».`;
 }
 
+/** Words glossed in the texts unlike the lexicon sense they link to
+ * (src-tauri/src/consistency.rs `sense_drift`). */
+export type Drift = { senseId: string; entryId: string; headword: string; homograph: number | null; senseGloss: string; textGloss: string; count: number; first: Variant };
+
+/** The line over the glosses that differ from their sense. */
+export function driftSummary(rows: readonly Drift[]): string {
+  if (rows.length === 0) return "Every word linked to the lexicon is glossed as its sense is.";
+  const uses = rows.reduce((t, r) => t + r.count, 0);
+  return `${n(uses, "linked word is", "linked words are")} glossed in the texts unlike the lexicon sense ${uses === 1 ? "it links" : "they link"} to (${n(rows.length, "gloss", "glosses")}). Keep one of the two for each.`;
+}
+
+/** What settling a drift did. */
+export function settledLine(changed: number, useLexicon: boolean, gloss: string): string {
+  if (!useLexicon) return `The lexicon now glosses this sense «${gloss}».`;
+  return changed === 0 ? "Nothing needed changing any more." : `${n(changed, "word now reads", "words now read")} «${gloss}», as in the lexicon.`;
+}
+
 /** A glossed root with no lexicon entry (src-tauri/src/consistency.rs `missing`). */
 export type Missing = { surface: string; key: string; total: number; variants: Variant[] };
 export type Added = { entries: number; senses: number; linked: number };

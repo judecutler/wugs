@@ -366,6 +366,14 @@ Under **Not in the lexicon**, the Checks panel lists every root you have glossed
 
 Then fill in the entries in the Lexicon panel: part of speech, definitions, examples.
 
+### Keep the texts and the lexicon agreeing
+
+A word linked to a lexicon sense keeps its own gloss in the text, so the two can drift apart: a gloss retyped in one sentence, or a sense renamed in the Lexicon after the texts were glossed. Under **Unlike the lexicon**, the Checks panel lists each sense whose linked words are glossed otherwise, with the gloss the texts use, how often, and a sentence that uses it. A gloss that is one of several the sense lists (`hound` for a sense glossed `dog; hound`) is not counted as different.
+
+- **Use «river» in the texts** glosses those words as the lexicon does (click twice when there are several).
+- **Make «stream» the lexicon's gloss** changes the sense in the lexicon instead.
+- Click the headword to open the entry in the Lexicon.
+
 ### Find spelling slips
 
 Under **Spellings to check**, the Checks panel lists rare words that look like slips for a common word: a word used once or twice beside one used at least four times as often that has the same letters with other accents (`kési` beside `kesi`), or one letter added, left out or changed (`tekma` beside `tekama`, for words of four letters or more). Capitals do not count as a difference. Click either word to see its lines in the Concordance. Some pairs are real words, such as a rare minimal pair, so check each one, and fix the slips with **Replace…** in the Search panel.
