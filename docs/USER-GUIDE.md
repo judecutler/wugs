@@ -566,6 +566,15 @@ Each row is one segment: its label, start and end, duration, mean, lowest and hi
 
 Segments without times are left out, and the message after measuring says how many.
 
+### Save segments as sound files
+
+Click **Save clips…** in the Timeline toolbar to save every timed segment of a track as its own WAV file, the way Praat's "Extract all intervals" does. wugs uses the same track as **Measure…**. Choose a folder outside the project. wugs makes a folder named after the text and track, and puts these files in it:
+
+- one WAV per segment, at the recording's own quality, numbered in time order and named after its transcription, such as `007 kesi mopa.wav`;
+- `clips.csv`, with each file's name, start, end, duration, transcription and translation.
+
+Use the clips in a Praat script that runs over a folder, as stimuli for a listening task, in flash cards, or to send a speaker the words to check. Saving again makes a second folder beside the first.
+
 ### Plot the vowel space
 
 The **Vowel space** panel puts every timed segment of a track at its F1 and F2, the chart phoneticians draw for a vowel system: F2 runs from right to left and F1 from top to bottom, so front vowels sit on the left and high vowels at the top. Open it from Settings (Closed panels) or with **Find an action**.

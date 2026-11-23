@@ -1,6 +1,7 @@
 pub mod abbreviations;
 pub mod assist;
 pub mod capability;
+pub mod clips;
 pub mod capture;
 pub mod characters;
 pub mod concordance;
@@ -1158,6 +1159,18 @@ async fn measure_track(s: State<'_, SessionThread>, dir: State<'_, AppData>, tex
     tauri::async_runtime::spawn_blocking(move || measure::run(prepared, &app_data, &into)).await.map_err(|e| e.to_string())?
 }
 
+/// Save each timed segment of a track as its own WAV, with a `clips.csv`
+/// index, in a new folder inside `folder`; the cutting runs off the session thread.
+#[tauri::command]
+async fn save_clips(s: State<'_, SessionThread>, text_id: String, tier_id: String, source: String, folder: String) -> Result<clips::ClipsReport, String> {
+    let into = std::path::PathBuf::from(&folder);
+    let prepared = s.run(move |s| {
+        interchange::outside_project(s, std::path::Path::new(&folder))?;
+        clips::prepare(s, &text_id, &tier_id, &source)
+    })?;
+    tauri::async_runtime::spawn_blocking(move || clips::write(prepared, &into)).await.map_err(|e| e.to_string())?
+}
+
 /// The F1/F2 of every timed segment of a track, for the Vowel space panel.
 #[tauri::command]
 async fn measure_points(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, tier_id: String, source: String) -> Result<measure::PointsView, String> {
@@ -2071,6 +2084,7 @@ pub fn run() {
             praat_discard,
             acoustic_analysis,
             measure_track,
+            save_clips,
             replace_preview,
             export_website,
             replace_apply,

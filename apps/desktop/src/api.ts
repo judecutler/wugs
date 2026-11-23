@@ -731,6 +731,8 @@ export const praatBringBack = (args: { text: string }) => invoke<PraatReturn>("p
 export const praatApply = (args: { text: string }) => invoke<{ changes: number; findings: string[] }>("praat_apply", args);
 export const praatDiscard = (args: { text: string }) => invoke<void>("praat_discard", args);
 /** Measure every timed segment of a track into a CSV table in `folder` (src-tauri/src/measure.rs). */
+export const saveClips = (args: { textId: string; tierId: string; source: string; folder: string }) =>
+  invoke<import("./measure/logic").ClipsReport>("save_clips", args);
 export const measureTrack = (args: { textId: string; tierId: string; source: string; folder: string }) =>
   invoke<import("./measure/logic").MeasureReport>("measure_track", args);
 /** F1/F2 of every timed segment of a track, for the Vowel space panel. */

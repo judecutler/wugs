@@ -4,8 +4,8 @@
 // tier gutter, the editing buttons (Auto-segment, Split, Merge, Undo, Redo)
 // and the perf toggle.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { addTier, importMedia, linkRecording, listSources, measureTrack, peaksInfo, type SourceRow, type TierTemplate } from "../api";
-import { measuredLines, trackToMeasure } from "../measure/logic";
+import { addTier, importMedia, linkRecording, listSources, measureTrack, peaksInfo, saveClips, type SourceRow, type TierTemplate } from "../api";
+import { clipsLines, measuredLines, trackToMeasure } from "../measure/logic";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
 import { attempt, dataGeneration, getSelection, getState, mediaSource, refreshText, reloadTexts, showToast, takeWantedMedia } from "../store";
@@ -91,7 +91,9 @@ export const timelinePanel: PanelDef = {
     spectroButton.setAttribute("aria-pressed", "false");
     const MEASURE_TITLE = "Measure every segment of the selected segment's track (else the utterance track): duration, pitch, intensity and formants, saved as a CSV table for R or a spreadsheet";
     const measureButton = h("button", { textContent: "Measure…", title: MEASURE_TITLE });
-    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, measureButton, perfButton, praat.element);
+    const CLIPS_TITLE = "Save every timed segment of that track as its own sound file, named after its transcription, with a clips.csv list of them (for Praat scripts, stimulus lists, flash cards or sharing)";
+    const clipsButton = h("button", { textContent: "Save clips…", title: CLIPS_TITLE });
+    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, measureButton, clipsButton, perfButton, praat.element);
 
     const updateEditButtons = () => {
       const stack = view?.history() ?? null;
@@ -106,6 +108,9 @@ export const timelinePanel: PanelDef = {
       measureButton.disabled = measureButton.dataset.busy === "1" || view === null || selectedSource === null || track === null;
       measureButton.title =
         selectedSource === null ? `${MEASURE_TITLE}. Load a recording first.` : track === null ? `${MEASURE_TITLE}. No track has timed segments yet.` : `${MEASURE_TITLE}. Now: «${track.name}».`;
+      clipsButton.disabled = clipsButton.dataset.busy === "1" || view === null || selectedSource === null || track === null;
+      clipsButton.title =
+        selectedSource === null ? `${CLIPS_TITLE}. Load a recording first.` : track === null ? `${CLIPS_TITLE}. No track has timed segments yet.` : `${CLIPS_TITLE}. Now: «${track.name}».`;
       syncSpectro();
       byPicker.disabled = autoButton.disabled;
       // The same rule as the S and M keys; the title says why when disabled.
@@ -151,6 +156,29 @@ export const timelinePanel: PanelDef = {
         } finally {
           measureButton.dataset.busy = "";
           measureButton.textContent = "Measure…";
+          updateEditButtons();
+        }
+      });
+    };
+    clipsButton.onclick = () => {
+      const s = getState();
+      const source = selectedSource;
+      if (s.kind !== "open" || s.text === null || source === null) return;
+      const track = trackToMeasure(s.text.tiers, s.text.segments, getSelection()?.segmentId ?? null);
+      if (track === null) return;
+      const textId = s.text.id;
+      void attempt(async () => {
+        const folder = await pickFile({ directory: true, title: `Where should the clips of «${track.name}» go?` });
+        if (typeof folder !== "string") return;
+        clipsButton.dataset.busy = "1";
+        clipsButton.textContent = "Saving clips…";
+        updateEditButtons();
+        try {
+          const report = await saveClips({ textId, tierId: track.id, source, folder });
+          showToast({ tone: report.untimed > 0 ? "warn" : "info", lines: clipsLines(track.name, report) });
+        } finally {
+          clipsButton.dataset.busy = "";
+          clipsButton.textContent = "Save clips…";
           updateEditButtons();
         }
       });
@@ -228,6 +256,7 @@ export const timelinePanel: PanelDef = {
       { id: "timeline:undo", title: "Undo a timeline edit", group: "Timeline", keys: "Ctrl+Z", disabled: () => needsView() ?? (undoButton.disabled ? "Nothing to undo" : null), run: () => void view?.undo() },
       { id: "timeline:redo", title: "Redo a timeline edit", group: "Timeline", keys: "Ctrl+Shift+Z", disabled: () => needsView() ?? (redoButton.disabled ? "Nothing to redo" : null), run: () => void view?.redo() },
       { id: "timeline:measure", title: "Measure a track: pitch, intensity, formants…", group: "Timeline", words: ["phonetics", "vowel", "formant", "pitch", "f0", "csv", "duration", "acoustic"], disabled: () => needsRecording() ?? asButton(measureButton)(), run: () => measureButton.click() },
+      { id: "timeline:clips", title: "Save a track's segments as sound files…", group: "Timeline", words: ["clips", "wav", "extract", "intervals", "stimuli", "audio", "export", "cut"], disabled: () => needsRecording() ?? asButton(clipsButton)(), run: () => clipsButton.click() },
       { id: "timeline:import", title: "Import audio…", group: "Timeline", words: ["recording", "wav", "mp3", "m4a"], disabled: () => needsView() ?? (importButton.disabled ? "An import is running" : null), run: () => importButton.click() },
     ];
     const unprovide = provide("timeline", timelineCommands);
