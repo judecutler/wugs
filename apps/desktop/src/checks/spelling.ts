@@ -15,8 +15,8 @@ export type NearPair = {
 };
 
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
-const units = (w: string): string[] => Array.from(graphemes.segment(w), (g) => g.segment);
-const bare = (w: string): string => w.normalize("NFD").replace(/\p{M}/gu, "").normalize("NFC");
+export const units = (w: string): string[] => Array.from(graphemes.segment(w), (g) => g.segment);
+export const bare = (w: string): string => w.normalize("NFD").replace(/\p{M}/gu, "").normalize("NFC");
 
 /** Whether two grapheme lists are one insertion, deletion or substitution apart. */
 export function oneApart(a: readonly string[], b: readonly string[]): boolean {

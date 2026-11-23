@@ -374,6 +374,12 @@ A word linked to a lexicon sense keeps its own gloss in the text, so the two can
 - **Make «stream» the lexicon's gloss** changes the sense in the lexicon instead.
 - Click the headword to open the entry in the Lexicon.
 
+### Find entries typed twice
+
+A lexicon gathered from imports, quick elicitation and several people often holds one word twice. Under **Entries that may be one word**, the Checks panel lists pairs of entries that share a meaning (a gloss, or one part of a gloss written with `;` or `,`, with a leading "to" ignored) and whose headwords are the same, differ only in accents (`kesi`, `kési`), or are one letter apart (`liwa`, `lima`, for headwords of four letters or more). Two numbered homographs of one headword are taken as told apart on purpose and left out.
+
+Click a headword to open its entry. If the two are one word, **Merge «…» into «…»** (click twice) moves the second entry's senses, forms, pronunciations and relations to the first and deletes the second; the one used in a text is kept. Two different words that happen to look alike, such as a real minimal pair, are left as they are.
+
 ### Find spelling slips
 
 Under **Spellings to check**, the Checks panel lists rare words that look like slips for a common word: a word used once or twice beside one used at least four times as often that has the same letters with other accents (`kési` beside `kesi`), or one letter added, left out or changed (`tekma` beside `tekama`, for words of four letters or more). Capitals do not count as a difference. Click either word to see its lines in the Concordance. Some pairs are real words, such as a rare minimal pair, so check each one, and fix the slips with **Replace…** in the Search panel.
