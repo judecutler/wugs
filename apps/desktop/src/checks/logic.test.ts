@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addedLine, exampleGapsLine, examplesAddedLine, treesLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
+import { addedLine, driftSummary, settledLine, exampleGapsLine, examplesAddedLine, treesLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
 
 const v = (gloss: string, count: number) => ({ gloss, count, textId: "t", textTitle: "T", tierId: "u", segmentId: "s" });
 const ka: Inconsistent = { surface: "ka", kind: "suffix", key: "ka", total: 3, variants: [v("PL", 2), v("pl.", 1)], slip: true };
@@ -58,4 +58,14 @@ test("dependency trees with a problem", () => {
   assert.equal(treesLine(2, 12, 2), "2 of 12 parsed sentences have a tree problem. Click one to correct it in the Sentence panel.");
   assert.equal(treesLine(1, 4, 1), "1 of 4 parsed sentences has a tree problem. Click one to correct it in the Sentence panel.");
   assert.equal(treesLine(600, 900, 500), "600 of 900 parsed sentences have a tree problem. Click one to correct it in the Sentence panel. The first 500 are listed.");
+});
+
+test("glosses unlike their sense", () => {
+  assert.equal(driftSummary([]), "Every word linked to the lexicon is glossed as its sense is.");
+  const v = { gloss: "uno", count: 3, textId: "t", textTitle: "T", tierId: "u", segmentId: "s" };
+  const d = { senseId: "s1", entryId: "e1", headword: "wan", homograph: null, senseGloss: "one", textGloss: "uno", count: 3, first: v };
+  assert.equal(driftSummary([d]), "3 linked words are glossed in the texts unlike the lexicon sense they link to (1 gloss). Keep one of the two for each.");
+  assert.equal(driftSummary([{ ...d, count: 1 }]), "1 linked word is glossed in the texts unlike the lexicon sense it links to (1 gloss). Keep one of the two for each.");
+  assert.equal(settledLine(3, true, "one"), "3 words now read «one», as in the lexicon.");
+  assert.equal(settledLine(1, false, "uno"), "The lexicon now glosses this sense «uno».");
 });

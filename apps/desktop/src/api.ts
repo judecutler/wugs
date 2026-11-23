@@ -93,6 +93,8 @@ export const spectrogramChunk = (args: { source: string; index: number }) => inv
 export const glossConsistency = () => invoke<import("./checks/logic").Inconsistent[]>("gloss_consistency");
 /** Gloss every morph of `key` and `kind` that reads `from` as `to`; returns how many changed. */
 export const glossMissing = () => invoke<import("./checks/logic").Missing[]>("gloss_missing");
+export const glossSenseDrift = () => invoke<import("./checks/logic").Drift[]>("gloss_sense_drift");
+export const glossSettleDrift = (args: { senseId: string; textGloss: string; useLexicon: boolean }) => invoke<number>("gloss_settle_drift", args);
 export const glossAddMissing = (args: { keys: string[] }) => invoke<import("./checks/logic").Added>("gloss_add_missing", args);
 export const glossUnify = (args: { key: string; kind: string; from: string; to: string }) => invoke<number>("gloss_unify", args);
 export const abbreviationMeanings = (abbreviations: string[]) => invoke<(string | null)[]>("abbreviation_meanings", { abbreviations });

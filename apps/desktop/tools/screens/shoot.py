@@ -558,6 +558,11 @@ def main():
             run.shot("state-checks-examples", run.page.locator(".panel-checks"))
             if "Add 4 from the texts" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not offer examples from the texts")
+            unlike = run.page.locator(".panel-checks .ck-title", has_text="Unlike the lexicon")
+            unlike.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
+            run.shot("state-checks-unlike", run.page.locator(".panel-checks"))
+            if "Use «river» in the texts" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not offer the lexicon's gloss")
             trees = run.page.locator(".panel-checks .ck-title", has_text="Dependency trees")
             trees.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
             run.shot("state-checks-trees", run.page.locator(".panel-checks"))

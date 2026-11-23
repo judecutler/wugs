@@ -755,6 +755,10 @@ const LEXICON = [
       };
     },
     lexicon_example_gaps: () => ({ without: 6, fillable: 4 }),
+    gloss_sense_drift: () => [
+      { senseId: "sense-lx-tela1-0", entryId: "lx-tela1", headword: "tela", homograph: 1, senseGloss: "river", textGloss: "stream", count: 3, first: { gloss: "stream", count: 3, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03" } },
+    ],
+    gloss_settle_drift: (a) => (a.useLexicon ? 3 : 1),
     all_notes: () => ({
       sentences: [
         { noteId: "n1", body: "Is wu- the third person or a plural? Ask again.", textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01", content: "wu no" },

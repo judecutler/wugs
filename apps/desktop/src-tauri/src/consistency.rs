@@ -274,6 +274,119 @@ pub fn add_missing(session: &mut Session, keys: &[String]) -> Result<Added, Stri
     Ok(added)
 }
 
+/// Words glossed in the texts one way while the lexicon sense they are
+/// linked to says another: the gloss in a text was retyped, or the entry
+/// was edited after the text was glossed.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Drift {
+    pub sense_id: String,
+    pub entry_id: String,
+    pub headword: String,
+    pub homograph: Option<u32>,
+    /// The sense's gloss in the lexicon (may be empty).
+    pub sense_gloss: String,
+    /// The gloss the linked morphs carry in the texts.
+    pub text_gloss: String,
+    pub count: usize,
+    /// Where it first occurs.
+    pub first: Variant,
+}
+
+/// Does a gloss written in a text agree with its sense's gloss? Equal, or
+/// one of the sense gloss's parts when it lists several (`dog; hound`).
+pub fn fits(sense_gloss: &str, text_gloss: &str) -> bool {
+    let s = sense_gloss.trim();
+    let t = text_gloss.trim();
+    s == t || s.split([';', ',']).any(|part| part.trim() == t)
+}
+
+/// Every linked morph's gloss that its sense does not have, grouped by
+/// sense and gloss, most used first.
+pub fn sense_drift(session: &mut Session) -> Result<Vec<Drift>, String> {
+    let p = session::project(session)?;
+    let mut groups: BTreeMap<(String, String), Drift> = BTreeMap::new();
+    let mut senses: BTreeMap<String, Option<(String, String)>> = BTreeMap::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            for m in p.proj.members(tok)? {
+                let Some(sense) = p.proj.field_str(&m, "sense")?.filter(|s| !s.is_empty()) else { continue };
+                let gloss = p.proj.field_str(&m, "gloss")?.unwrap_or_default().trim().to_string();
+                if gloss.is_empty() {
+                    continue;
+                }
+                // The sense's gloss and entry, once per sense; none when either is gone.
+                if !senses.contains_key(&sense) {
+                    let live = p.proj.entity_kind(&sense)?.as_deref() == Some("sense") && !p.proj.is_tombstoned(&sense)?;
+                    let entry = if live { p.proj.field_str(&sense, "lexeme")?.filter(|l| p.proj.is_tombstoned(l).map(|t| !t).unwrap_or(false)) } else { None };
+                    let found = entry.map(|e| (e, p.proj.field_str(&sense, "gloss").ok().flatten().unwrap_or_default().trim().to_string()));
+                    senses.insert(sense.clone(), found);
+                }
+                let Some(Some((entry, sense_gloss))) = senses.get(&sense) else { continue };
+                if fits(sense_gloss, &gloss) {
+                    continue;
+                }
+                let d = groups.entry((sense.clone(), gloss.clone())).or_insert_with(|| Drift {
+                    sense_id: sense.clone(),
+                    entry_id: entry.clone(),
+                    headword: String::new(),
+                    homograph: None,
+                    sense_gloss: sense_gloss.clone(),
+                    text_gloss: gloss.clone(),
+                    count: 0,
+                    first: Variant { gloss: gloss.clone(), count: 0, text_id: seg.text.clone(), text_title: seg.title.clone(), tier_id: seg.tier.clone(), segment_id: seg.id.clone() },
+                });
+                d.count += 1;
+                d.first.count += 1;
+            }
+        }
+        Ok(())
+    })?;
+    let mut out: Vec<Drift> = groups.into_values().collect();
+    for d in &mut out {
+        d.headword = crate::lexicon::str_field(p, &d.entry_id, "lemma")?;
+        d.homograph = crate::lexicon::homograph(p, &d.entry_id)?;
+    }
+    out.sort_by(|a, b| b.count.cmp(&a.count).then(wugs_model::fold_key(&a.headword).cmp(&wugs_model::fold_key(&b.headword))).then(a.text_gloss.cmp(&b.text_gloss)));
+    out.truncate(LIMIT);
+    Ok(out)
+}
+
+/// Settle one drift: either every morph linked to `sense` and glossed
+/// `text_gloss` takes the sense's gloss (`use_lexicon`), or the sense takes
+/// `text_gloss`. Each write is a person's choice. Returns how many morphs
+/// changed, or 1 for the lexicon edit.
+pub fn settle_drift(session: &mut Session, sense: &str, text_gloss: &str, use_lexicon: bool) -> Result<usize, String> {
+    let p = session::project(session)?;
+    let text_gloss = text_gloss.trim();
+    if !use_lexicon {
+        if text_gloss.is_empty() {
+            return Err("Say which gloss the lexicon should have.".into());
+        }
+        p.set_sense_gloss(sense, text_gloss, None)?;
+        return Ok(1);
+    }
+    let to = p.proj.field_str(sense, "gloss")?.unwrap_or_default().trim().to_string();
+    if to.is_empty() {
+        return Err("The lexicon has no gloss for this sense yet: use the gloss from the texts instead.".into());
+    }
+    let mut targets: Vec<(String, String)> = Vec::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            for m in p.proj.members(tok)? {
+                if p.proj.field_str(&m, "sense")?.as_deref() == Some(sense) && p.proj.field_str(&m, "gloss")?.unwrap_or_default().trim() == text_gloss {
+                    targets.push((seg.text.clone(), m));
+                }
+            }
+        }
+        Ok(())
+    })?;
+    for (text, m) in &targets {
+        p.set_gloss(text, m, &to, None)?;
+    }
+    Ok(targets.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,6 +440,49 @@ mod tests {
         let rest = add_missing(&mut s, &[]).unwrap();
         assert_eq!((rest.entries, rest.linked), (3, 3));
         assert!(missing_is_empty(&mut s));
+        drop(s);
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn glosses_unlike_their_sense_are_found_and_settled() {
+        assert!(fits("dog; hound", "hound") && fits("one", " one ") && !fits("one", "One"));
+        let dir = std::env::temp_dir().join(format!("wugs-drift-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        assert!(sense_drift(&mut s).unwrap().is_empty(), "the tutorial agrees with its lexicon");
+        // Retype one linked word's gloss in the text.
+        let p = session::project(&mut s).unwrap();
+        let mut first = None;
+        each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+            for tok in &seg.tokens {
+                for m in p.proj.members(tok)? {
+                    if first.is_none() && p.proj.field_str(&m, "sense")?.is_some() {
+                        first = Some((seg.text.clone(), m));
+                    }
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+        let (text, morph) = first.expect("a linked morph");
+        let sense = p.proj.field_str(&morph, "sense").unwrap().unwrap();
+        let was = p.proj.field_str(&sense, "gloss").unwrap().unwrap();
+        p.set_gloss(&text, &morph, "uno", None).unwrap();
+        let d = sense_drift(&mut s).unwrap();
+        assert_eq!(d.len(), 1);
+        assert_eq!((d[0].sense_gloss.as_str(), d[0].text_gloss.as_str(), d[0].count), (was.as_str(), "uno", 1));
+        assert!(!d[0].headword.is_empty());
+        // The lexicon's gloss back into the text.
+        assert_eq!(settle_drift(&mut s, &sense, "uno", true).unwrap(), 1);
+        assert!(sense_drift(&mut s).unwrap().is_empty());
+        // Or the text's gloss into the lexicon.
+        let p = session::project(&mut s).unwrap();
+        p.set_gloss(&text, &morph, "uno", None).unwrap();
+        assert_eq!(settle_drift(&mut s, &sense, "uno", false).unwrap(), 1);
+        let p = session::project(&mut s).unwrap();
+        assert_eq!(p.proj.field_str(&sense, "gloss").unwrap().as_deref(), Some("uno"));
+        assert!(sense_drift(&mut s).unwrap().is_empty());
         drop(s);
         std::fs::remove_dir_all(dir).ok();
     }

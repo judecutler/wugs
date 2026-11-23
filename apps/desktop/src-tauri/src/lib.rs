@@ -192,6 +192,16 @@ fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String,
 
 /// Glossed roots with no lexicon entry (the Checks panel).
 #[tauri::command(async)]
+fn gloss_sense_drift(s: State<SessionThread>) -> Result<Vec<consistency::Drift>, String> {
+    s.run(consistency::sense_drift)
+}
+
+#[tauri::command(async)]
+fn gloss_settle_drift(s: State<SessionThread>, sense_id: String, text_gloss: String, use_lexicon: bool) -> Result<usize, String> {
+    s.run(move |session| consistency::settle_drift(session, &sense_id, &text_gloss, use_lexicon))
+}
+
+#[tauri::command(async)]
 fn gloss_missing(s: State<SessionThread>) -> Result<Vec<consistency::Missing>, String> {
     s.run(consistency::missing)
 }
@@ -2022,6 +2032,8 @@ pub fn run() {
             gloss_consistency,
             gloss_unify,
             gloss_missing,
+            gloss_sense_drift,
+            gloss_settle_drift,
             gloss_add_missing,
             set_abbreviation_meaning,
             text_metadata,

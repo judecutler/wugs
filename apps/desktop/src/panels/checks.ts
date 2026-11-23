@@ -4,16 +4,17 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossUnify, lexiconExampleGaps, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { characterInventory, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
-import { addedLine, addLabel, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
+import { addedLine, addLabel, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
+import { headwordOf } from "../notes/logic";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { marked } from "../gloss/morphs";
 import type { MorphType } from "../gloss/morphs";
 import { provide } from "../palette/registry";
-import { dataGeneration, getState, refreshAll, selectSegment, selectText, showToast, touchLexicon } from "../store";
+import { dataGeneration, getState, openEntry, refreshAll, selectSegment, selectText, showToast, touchLexicon } from "../store";
 import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
 function glossNode(gloss: string): HTMLElement {
@@ -26,6 +27,7 @@ export const checksPanel: PanelDef = {
     const el = h("div", { className: "panel panel-checks" });
     let rows: Inconsistent[] | null = null;
     let missing: Missing[] = [];
+    let drift: Drift[] = [];
     let chars: Inventory | null = null;
     let near: { pairs: NearPair[]; read: number } | null = null;
     let gaps: { without: number; fillable: number } | null = null;
@@ -41,9 +43,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems()]).then(
-        ([r, m, c, w, g, t]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift()]).then(
+        ([r, m, c, w, g, t, d]) => {
           if (mine !== seq) return;
+          drift = d;
           gaps = g;
           trees = t;
           rows = r;
@@ -88,6 +91,61 @@ export const checksPanel: PanelDef = {
       armed = null;
       await refreshAll();
       load();
+    };
+
+    const settle = async (d: Drift, useLexicon: boolean) => {
+      busy = true;
+      paint();
+      try {
+        const changed = await glossSettleDrift({ senseId: d.senseId, textGloss: d.textGloss, useLexicon });
+        showToast({ tone: "info", lines: [settledLine(changed, useLexicon, useLexicon ? d.senseGloss : d.textGloss)] });
+        if (!useLexicon) touchLexicon();
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      busy = false;
+      armed = null;
+      await refreshAll();
+      load();
+    };
+
+    const driftCard = (d: Drift): HTMLElement => {
+      const id = `drift\u0001${d.senseId}\u0001${d.textGloss}`;
+      const entry = h("button", { type: "button", className: "link-button ck-morph", textContent: headwordOf(d), title: "Open this entry in the Lexicon" });
+      entry.onclick = () => {
+        openEntry(d.entryId);
+        window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "lexicon" }));
+      };
+      const show = h("button", { type: "button", className: "ck-show", textContent: `in «${d.first.textTitle || "(untitled)"}»`, title: "Open a sentence where it is glossed this way" });
+      show.onclick = () => selectSegment({ textId: d.first.textId, tierId: d.first.tierId, segmentId: d.first.segmentId });
+      const inTexts =
+        d.senseGloss === ""
+          ? null
+          : h("button", {
+              type: "button",
+              className: armed === id ? "danger" : "",
+              disabled: busy,
+              textContent: armed === id ? `Change ${d.count}: sure?` : `Use «${d.senseGloss}» in the texts`,
+              title: `Gloss ${d.count === 1 ? "this word" : `these ${d.count} words`} as the lexicon does`,
+            });
+      if (inTexts !== null)
+        inTexts.onclick = () => {
+          if (d.count > 1 && armed !== id) {
+            armed = id;
+            paint();
+            return;
+          }
+          void settle(d, true);
+        };
+      const inLexicon = h("button", { type: "button", disabled: busy, textContent: `Make «${d.textGloss}» the lexicon's gloss`, title: "Change the sense's gloss in the lexicon to the one the texts use" });
+      inLexicon.onclick = () => void settle(d, false);
+      return h(
+        "li",
+        { className: "ck-card" },
+        h("div", { className: "ck-head" }, entry, h("span", { className: "ck-kind", textContent: d.senseGloss === "" ? "the lexicon has no gloss" : "lexicon: " }), d.senseGloss === "" ? null : glossNode(d.senseGloss)),
+        h("div", { className: "ck-variant" }, h("span", { className: "note", textContent: "texts: " }), glossNode(d.textGloss), h("span", { className: "ck-count", textContent: `× ${d.count}` }), show),
+        h("div", { className: "ck-bar" }, inTexts, inLexicon),
+      );
     };
 
     const missingCard = (r: Missing): HTMLElement => {
@@ -300,6 +358,9 @@ export const checksPanel: PanelDef = {
         h("h3", { className: "ck-title", textContent: "Not in the lexicon" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
         h("ul", { className: "ck-list" }, ...missing.map(missingCard)),
+        h("h3", { className: "ck-title", textContent: "Unlike the lexicon" }),
+        h("p", { className: "note", textContent: driftSummary(drift) }),
+        h("ul", { className: "ck-list" }, ...drift.map(driftCard)),
         ...examplesSection(),
         ...treesSection(),
         ...spellingSection(),
