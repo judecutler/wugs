@@ -747,7 +747,7 @@ Sentences imported from CoNLL-U or TEI arrive with their tags and tree. A senten
 
 ### Tag and parse a text automatically
 
-A tagger can fill in lemmas, parts of speech, features and a tree for every sentence, ready for you to check. wugs works with three taggers you may know: UDPipe, made at Charles University with models for over a hundred languages, spaCy, and Stanza, made at Stanford with models for about seventy languages trained on Universal Dependencies. Select a sentence of the text, then press **Tag and parse this text** at the top of the **Sentence** panel.
+A tagger can fill in lemmas, parts of speech, features and a tree for every sentence, ready for you to check. wugs works with three taggers you may know: UDPipe, made at Charles University with models for over a hundred languages, spaCy, and Stanza, made at Stanford with models for about seventy languages trained on Universal Dependencies. Select a sentence of the text, then press **Tag and parse this text** at the top of the **Sentence** panel. To tag a whole corpus, press **Every text** beside it: wugs tags one text after another with the same tagger, each written as soon as it is done, and **Stop** halts it after the text it is on. A text that cannot be tagged (one that is not open, for the web service) is named at the end and the rest go on; if two texts in a row fail the same way, the tagger itself is not working, so wugs stops and says why.
 
 Choose the tagger under **Tagger…**. **Automatic** uses UDPipe on this computer when it is set up, else spaCy, else Stanza. It never uses the web service unless you choose it.
 
