@@ -1,13 +1,13 @@
 // The transcription loop (TONGUES-UI build order step 3): one tier's
 // segments in time order, the selected one editable in place. Enter saves
 // and plays the next, so hearing and typing never leave the keyboard.
-import { assistSuggest, editSegmentContent, errorText, type SegmentRow, type TierRow } from "../api";
+import { assistSuggest, characterInventory, editSegmentContent, errorText, type SegmentRow, type TierRow } from "../api";
 import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
 import { hear, playButton, recordingForShown } from "../hear/hear";
 import { activeKit, capability, getSelection, getState, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
-import { IPA_GROUPS } from "../transcribe/ipa";
+import { IPA_GROUPS, projectGroup, type IpaGroup } from "../transcribe/ipa";
 import { createFieldController, type FieldController } from "../transcribe/field";
 import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, neighbor, renderWindow, tierSegments } from "../transcribe/logic";
 import type { PanelDef, PanelView } from "./panel";
@@ -161,9 +161,27 @@ export const transcribePanel: PanelDef = {
       el.replaceChildren(emptyState(title, body, caption));
     }
 
+    /** The project's own letters (the palette's first row), read once per project. */
+    let ownLetters: IpaGroup | null = null;
+    let lettersFor = "";
+    function loadOwnLetters(projectId: string): void {
+      if (projectId === lettersFor) return;
+      lettersFor = projectId;
+      ownLetters = null;
+      buildPalette();
+      characterInventory().then(
+        (inv) => {
+          if (lettersFor !== projectId) return;
+          ownLetters = projectGroup(inv.rows, inv.mainScript);
+          buildPalette();
+        },
+        () => {},
+      );
+    }
+
     function buildPalette(): void {
       palette.replaceChildren(
-        ...IPA_GROUPS.map((g) =>
+        ...(ownLetters ? [ownLetters, ...IPA_GROUPS] : IPA_GROUPS).map((g) =>
           h(
             "div",
             { className: "tx-group" },
@@ -214,6 +232,7 @@ export const transcribePanel: PanelDef = {
         empty("No project open", "Open a project to transcribe. The Timeline panel shows what it looks like.", "The wug is waiting for its first recording.");
         return;
       }
+      loadOwnLetters(s.info.projectId);
       const text = s.text;
       if (text === null) {
         empty("Transcribe", s.texts.length === 0 ? "Create a text, then mark segments on the Timeline." : "Select a text to transcribe it.", "The wug cocked its head and waited.");

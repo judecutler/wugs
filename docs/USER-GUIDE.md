@@ -200,7 +200,7 @@ If a save fails, the segment is marked and your typing stays. Select the segment
 
 ### Type IPA symbols
 
-Click **IPA** in the Transcribe panel to show or hide the IPA palette. It has groups for vowels, consonants, diacritics, suprasegmentals, and tone. Click a symbol to insert it.
+Click **IPA** in the Transcribe panel to show or hide the IPA palette. It has groups for vowels, consonants, diacritics, suprasegmentals, and tone. Click a symbol to insert it. Its first row, **This project**, holds the letters and accents your project already uses that a plain keyboard does not type, commonest first, so the special letters of a practical orthography are one click away too. A letter of another script (such as a Cyrillic «а» typed among Latin letters) is left out of that row, since it is usually a mistake; the Checks panel's Characters lists those.
 
 ### Get machine suggestions
 

@@ -68,3 +68,24 @@ export const IPA_GROUPS: IpaGroup[] = [
     ],
   },
 ];
+
+/** The most of a project's own letters the palette offers. */
+export const PROJECT_LETTERS = 32;
+
+/**
+ * The letters and marks the project's own transcriptions and headwords use
+ * that a plain keyboard does not type (anything outside ASCII), commonest
+ * first, as the palette's first row; null when there are none. A letter
+ * of another script than the project's main one is left out, since it is
+ * usually a look-alike typed by mistake (Cyrillic «а» for Latin «a»). Rows
+ * come from the character inventory (src-tauri/src/characters.rs).
+ */
+export function projectGroup(rows: { ch: string; name: string; kind: string; script: string; inTexts: number; inLexicon: number }[], mainScript: string): IpaGroup | null {
+  const ownScript = (s: string) => s === mainScript || s === "Common" || s === "Inherited" || mainScript === "";
+  const symbols = rows
+    .filter((r) => (r.kind === "letter" || r.kind === "mark") && r.inTexts + r.inLexicon > 0 && ownScript(r.script) && [...r.ch].some((c) => c.codePointAt(0)! > 0x7f))
+    .sort((a, b) => b.inTexts + b.inLexicon - (a.inTexts + a.inLexicon) || a.ch.localeCompare(b.ch))
+    .slice(0, PROJECT_LETTERS)
+    .map((r): IpaSymbol => (r.kind === "mark" ? { ch: r.ch, name: r.name, combining: true } : { ch: r.ch, name: r.name }));
+  return symbols.length === 0 ? null : { id: "project", label: "This project", symbols };
+}
