@@ -35,12 +35,14 @@ export function perThousand(count: number, tokens: number): string {
   return v >= 10 ? Math.round(v).toLocaleString("en") : v.toFixed(1);
 }
 
-export function summary(title: string, k: Keywords): string {
+/** The summary line; `title` is a text's title, or with `named` already words (`Texts whose genre is «news»`). */
+export function summary(title: string, k: Keywords, named = false): string {
   const n = (x: number) => x.toLocaleString("en");
-  if (k.focusTokens === 0) return `«${title}» has no words yet.`;
+  const who = named ? title : `«${title}»`;
+  if (k.focusTokens === 0) return `${who} ${named ? "have" : "has"} no words yet.`;
   if (k.referenceTokens === 0) return "There is nothing to compare with yet: keywords compare a text with the project's other texts.";
   const cut = k.omitted > 0 ? ` The ${n(k.omitted)} weakest are left out.` : "";
-  return `«${title}» (${n(k.focusTokens)} words) against the project's other texts (${n(k.referenceTokens)} words). Rows marked • are significant at p < 0.05 after Bonferroni correction (log-likelihood ${k.critical.toFixed(2)} or more).${cut}`;
+  return `${who} (${n(k.focusTokens)} words) against the project's other texts (${n(k.referenceTokens)} words). Rows marked • are significant at p < 0.05 after Bonferroni correction (log-likelihood ${k.critical.toFixed(2)} or more).${cut}`;
 }
 
 export function asTsv(rows: readonly KeywordRow[]): string {

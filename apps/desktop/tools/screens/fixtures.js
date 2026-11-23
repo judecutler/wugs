@@ -611,6 +611,18 @@
     praat_status: () => ({ path: "/usr/bin/praat", version: "6.4.27", chosen: false, problem: null }),
     praat_pending: () => false,
     project_language: () => ({ name: "Kanu", glottocode: "abcd1234", iso: "" }),
+    metadata_values: () => [
+      { key: "genre", values: [["narrative", 2], ["procedural", 1]] },
+      { key: "speaker", values: [["A. Speaker (synthetic)", 3]] },
+    ],
+    text_metadata: () => ({
+      fields: [
+        { key: "genre", value: "procedural" },
+        { key: "speaker", value: "A. Speaker (synthetic)" },
+        { key: "date", value: "2024-06-12" },
+      ],
+      keys: [{ key: "genre", texts: 3 }, { key: "speaker", texts: 3 }, { key: "date", texts: 2 }, { key: "place", texts: 1 }],
+    }),
     update_check: () => ({ currentVersion: "0.0.1", available: null }),
     gloss_get: ({ segmentId }) => glossView(segmentId),
     // A tagged sentence for the Sentence panel: ni-kani ŋai toɾu-ma kesi, "I count one, two, three".

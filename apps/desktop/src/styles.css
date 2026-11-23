@@ -1101,3 +1101,15 @@ body::before {
 .st-table .st-num { color: var(--muted); text-align: right; }
 .st-table .st-form-cell { font-family: var(--font-ipa); white-space: nowrap; }
 .st-table tr.st-picked td { background: var(--highlight); }
+
+/* Texts: a text's details (document metadata for the corpus tools). */
+.meta { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.meta h3 { margin: 0 0 2px; font-family: var(--font-display); font-weight: 400; font-size: 15px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta-rows { display: flex; flex-direction: column; gap: 4px; }
+.meta-row { display: flex; align-items: center; gap: 6px; }
+.meta-key { flex: 0 0 8.5em; color: var(--muted); font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta-value { flex: 1 1 auto; min-width: 6em; }
+.meta-remove { flex: none; border: none; background: none; color: var(--muted); padding: 0 6px; font-size: 16px; line-height: 1; cursor: pointer; }
+.meta-remove:hover { color: var(--error); }
+.meta-add input:first-child { flex: 0 0 8.5em; min-width: 0; }
+.meta-note { margin: 0; color: var(--muted); font-size: var(--text-sm); }

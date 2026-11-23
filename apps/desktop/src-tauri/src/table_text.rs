@@ -139,7 +139,10 @@ fn numeric(cells: &[&str]) -> bool {
     !non_empty.is_empty() && non_empty.iter().all(|c| c.chars().all(|ch| ch.is_ascii_digit() || matches!(ch, '.' | ':' | ',' | '-' | '+')))
 }
 
-pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
+/// A table's header (trimmed, as written) and its rows, each padded to
+/// the header's length, line breaks in a cell as spaces, empty rows left
+/// out. The separator is found as `parse` documents it.
+pub fn records(input: &str, tabs: bool) -> Result<(Vec<String>, Vec<Vec<String>>, u8), String> {
     let input = input.trim_start_matches('\u{feff}');
     let (delim, body) = delimiter(input, tabs);
     let mut reader = csv::ReaderBuilder::new()
@@ -152,18 +155,6 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
     let raw: Vec<String> = reader.headers().map_err(|e| format!("the header row cannot be read: {e}"))?.iter().map(|h| h.trim().to_string()).collect();
     if raw.iter().all(String::is_empty) {
         return Err("the file has no header row; the first row must name the columns".into());
-    }
-    // Repeated or empty names get their own field: `note`, `note-2`, `col3`.
-    let mut names: Vec<String> = Vec::new();
-    for (i, h) in raw.iter().enumerate() {
-        let base = if slug(h).is_empty() { format!("col{}", i + 1) } else { slug(h) };
-        let mut name = base.clone();
-        let mut n = 2;
-        while names.contains(&name) {
-            name = format!("{base}-{n}");
-            n += 1;
-        }
-        names.push(name);
     }
     let mut records: Vec<Vec<String>> = Vec::new();
     for (i, r) in reader.records().enumerate() {
@@ -180,6 +171,23 @@ pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
         if cells.iter().any(|c| !c.is_empty()) {
             records.push(cells);
         }
+    }
+    Ok((raw, records, delim))
+}
+
+pub fn parse(input: &str, tabs: bool) -> Result<Table, String> {
+    let (raw, records, delim) = records(input, tabs)?;
+    // Repeated or empty names get their own field: `note`, `note-2`, `col3`.
+    let mut names: Vec<String> = Vec::new();
+    for (i, h) in raw.iter().enumerate() {
+        let base = if slug(h).is_empty() { format!("col{}", i + 1) } else { slug(h) };
+        let mut name = base.clone();
+        let mut n = 2;
+        while names.contains(&name) {
+            name = format!("{base}-{n}");
+            n += 1;
+        }
+        names.push(name);
     }
     let column = |c: usize| records.iter().map(|r| r[c].as_str()).collect::<Vec<_>>();
     let named = |wanted: &str| raw.iter().position(|h| h.to_lowercase() == wanted);

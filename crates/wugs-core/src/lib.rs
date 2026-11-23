@@ -23,6 +23,7 @@ pub mod conflicts;
 mod elicitation;
 mod gloss;
 pub mod language;
+pub mod metadata;
 mod lexicon;
 pub mod paradigms;
 pub mod people;
@@ -2189,6 +2190,28 @@ mod tests {
         assert!(p.proj.field_str(&id, "role").unwrap().is_none(), "role and language are optional");
         assert!(p.add_tier("x", "freeform", None, None).is_err());
         assert!(p.add_tier("  ", "time-aligned", None, None).is_err());
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
+    fn document_metadata_is_set_cleared_and_imported_once() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let a = p.create_text("News one").unwrap();
+        let b = p.create_text("Story").unwrap();
+        let (key, _) = p.set_text_metadata(&a, "Text Genre", " news\n wire ").unwrap();
+        assert_eq!(key, "text_genre");
+        assert_eq!(p.text_metadata(&a).unwrap(), vec![("text_genre".to_string(), "news wire".to_string())]);
+        assert!(p.set_text_metadata(&a, "2020", "x").is_err(), "a key needs a letter first");
+        let rows = vec![
+            (a.clone(), "author".to_string(), "A. Writer".to_string()),
+            (b.clone(), "Text Genre".to_string(), "story".to_string()),
+            (b.clone(), "date".to_string(), String::new()),
+        ];
+        assert_eq!(p.import_text_metadata(&rows).unwrap().0, 2);
+        assert_eq!(p.import_text_metadata(&rows).unwrap().0, 0, "the same table again writes nothing");
+        assert_eq!(p.metadata_keys().unwrap(), vec![("author".to_string(), 1), ("text_genre".to_string(), 2)]);
+        p.set_text_metadata(&a, "text_genre", "").unwrap();
+        assert_eq!(p.text_metadata(&a).unwrap(), vec![("author".to_string(), "A. Writer".to_string())], "an empty value clears");
         fs::remove_dir_all(root).ok();
     }
 

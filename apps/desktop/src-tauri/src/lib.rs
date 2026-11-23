@@ -20,6 +20,7 @@ pub mod kits;
 pub mod layout;
 pub mod lexicon;
 pub mod media_bin;
+pub mod metadata;
 pub mod people;
 pub mod plaintext;
 pub mod table_text;
@@ -136,15 +137,39 @@ fn open_sample(app: AppHandle, s: State<SessionThread>, reach: State<Reachable>,
 
 /// Every occurrence of a word, morph, gloss or translation word, in context (roadmap 71).
 #[tauri::command(async)]
-fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>) -> Result<concordance::Concordance, String> {
+fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, exact: Option<bool>, text_id: Option<String>, within: Option<concordance::Where>) -> Result<concordance::Concordance, String> {
     let how = if exact == Some(true) { concordance::Match::Exact } else { concordance::Match::Glob };
-    s.run(move |s| concordance::concordance_in(s, &query, kind, how, text_id.as_deref()))
+    s.run(move |s| concordance::concordance_in(s, &query, kind, how, &concordance::Scope::of(text_id, within)))
 }
 
 /// A CQP-style query over the sentences' tokens and their annotation (`src/cqp.rs`).
 #[tauri::command(async)]
 fn concordance_query(s: State<SessionThread>, query: String, text_id: Option<String>) -> Result<concordance::Concordance, String> {
     s.run(move |s| cqp::run(s, &query, text_id.as_deref()))
+}
+
+/// A text's document metadata and the keys the project uses.
+#[tauri::command(async)]
+fn text_metadata(s: State<SessionThread>, text_id: String) -> Result<metadata::MetaView, String> {
+    s.run(move |s| metadata::text_metadata(s, &text_id))
+}
+
+/// Set one metadata key of a text; an empty value clears it.
+#[tauri::command(async)]
+fn set_text_metadata(s: State<SessionThread>, text_id: String, key: String, value: String) -> Result<metadata::MetaView, String> {
+    s.run(move |s| metadata::set_text_metadata(s, &text_id, &key, &value))
+}
+
+/// Every detail's values across the project, for picking texts by one.
+#[tauri::command(async)]
+fn metadata_values(s: State<SessionThread>) -> Result<Vec<metadata::MetaValues>, String> {
+    s.run(metadata::metadata_values)
+}
+
+/// Bring in a table of document metadata (one row per text).
+#[tauri::command(async)]
+fn import_metadata(s: State<SessionThread>, path: String) -> Result<metadata::MetaImport, String> {
+    s.run(move |s| metadata::import_metadata(s, std::path::Path::new(&path)))
 }
 
 /// One sentence's words, tags and tree, for the Sentence panel.
@@ -161,20 +186,20 @@ fn sentence_set(s: State<SessionThread>, text_id: String, segment_id: String, to
 
 /// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
 #[tauri::command(async)]
-fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, size: Option<usize>) -> Result<frequencies::Frequencies, String> {
-    s.run(move |s| frequencies::frequencies_of(s, kind, text_id.as_deref(), size.unwrap_or(1)))
+fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, within: Option<concordance::Where>, size: Option<usize>) -> Result<frequencies::Frequencies, String> {
+    s.run(move |s| frequencies::frequencies_of(s, kind, &concordance::Scope::of(text_id, within), size.unwrap_or(1)))
 }
 
-/// Which words one text uses more or less than the rest (Scrolls' keywords).
+/// Which words one text, or the texts a detail picks, use more or less than the rest (Scrolls' keywords).
 #[tauri::command(async)]
-fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: String, min_count: usize) -> Result<keywords::Keywords, String> {
-    s.run(move |s| keywords::keywords(s, kind, &text_id, min_count))
+fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, within: Option<concordance::Where>, min_count: usize) -> Result<keywords::Keywords, String> {
+    s.run(move |s| keywords::keywords(s, kind, &concordance::Scope::of(text_id, within), min_count))
 }
 
 /// Which words keep company with a word (Scrolls' collocates).
 #[tauri::command(async)]
-fn collocates(s: State<SessionThread>, node: String, kind: concordance::Kind, left: usize, right: usize, min_together: usize, text_id: Option<String>) -> Result<collocates::Collocates, String> {
-    s.run(move |s| collocates::collocates(s, &node, kind, left, right, min_together, text_id.as_deref()))
+fn collocates(s: State<SessionThread>, node: String, kind: concordance::Kind, left: usize, right: usize, min_together: usize, text_id: Option<String>, within: Option<concordance::Where>) -> Result<collocates::Collocates, String> {
+    s.run(move |s| collocates::collocates(s, &node, kind, left, right, min_together, &concordance::Scope::of(text_id, within)))
 }
 
 /// Remember which recording a text was transcribed from, or forget it (roadmap 72).
@@ -1463,6 +1488,10 @@ pub fn run() {
             open_sample,
             concordance,
             concordance_query,
+            text_metadata,
+            set_text_metadata,
+            import_metadata,
+            metadata_values,
             sentence_get,
             sentence_set,
             list_texts,

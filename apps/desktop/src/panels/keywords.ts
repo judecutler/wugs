@@ -2,6 +2,8 @@
 // or less, than the project's other texts, scored by log-likelihood and log
 // ratio as AntConc's Keyword List and Sketch Engine's keywords do. A row
 // opens the Concordance on that word in the text.
+import { fillScopes, scopeOf } from "../metadata/scope";
+import { whereWords } from "../metadata/logic";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, keywords } from "../api";
 import { emptyState, h } from "../dom";
@@ -25,7 +27,7 @@ export const keywordsPanel: PanelDef = {
     let textId = "";
     let data: Keywords | null = null;
     let seq = 0;
-    const textPicker = h("select", { title: "The text to compare with the project's other texts" });
+    const textPicker = h("select", { title: "The text, or the texts with one detail (add details in the Texts panel), to compare with the project's other texts" });
     textPicker.setAttribute("aria-label", "Text");
     const min = h("select", { title: "Leave out rare words: one used more here needs this many uses here, one used less needs this many in the other texts" }, ...MINIMUMS.map((n) => h("option", { value: String(n), textContent: n === 1 ? "Every word" : `Seen ${n}+ times` })));
     min.setAttribute("aria-label", "Minimum");
@@ -64,11 +66,20 @@ export const keywordsPanel: PanelDef = {
     const drawTexts = () => {
       const s = getState();
       const texts = s.kind === "open" ? s.texts : [];
-      if (!texts.some((t) => t.id === textId)) textId = (s.kind === "open" && s.text !== null ? s.text.id : texts[0]?.id) ?? "";
-      textPicker.replaceChildren(...texts.map((t) => h("option", { value: t.id, textContent: t.title || t.id })));
+      const fallback = (s.kind === "open" && s.text !== null ? s.text.id : texts[0]?.id) ?? "";
+      // One text, or the texts with one detail; never the whole project, which has nothing to be compared with.
+      textId = fillScopes(textPicker, textId === "" ? fallback : textId, drawTexts);
+      textPicker.querySelector('option[value=""]')?.remove();
+      if (textId === "") textId = fallback;
       textPicker.value = textId;
     };
-    const title = () => textPicker.selectedOptions[0]?.textContent ?? "";
+    const within = () => scopeOf(textId).within;
+    const title = () => {
+      const w = within();
+      if (w === null) return textPicker.selectedOptions[0]?.textContent ?? "";
+      const words = whereWords(w);
+      return words.charAt(0).toUpperCase() + words.slice(1);
+    };
     const shown = () => (data === null ? [] : keywordRows(data.rows, side, sortBy));
 
     const drawRows = () => {
@@ -77,7 +88,7 @@ export const keywordsPanel: PanelDef = {
         return;
       }
       const rows = shown();
-      note.textContent = summary(title(), data) + (rows.length === 0 && data.referenceTokens > 0 ? ` No word is used ${side === "more" ? "more" : "less"} here.` : "") + (rows.length > DRAWN ? ` The first ${DRAWN} are drawn.` : "");
+      note.textContent = summary(title(), data, within() !== null) + (rows.length === 0 && data.referenceTokens > 0 ? ` No word is used ${side === "more" ? "more" : "less"} here.` : "") + (rows.length > DRAWN ? ` The first ${DRAWN} are drawn.` : "");
       const head = h(
         "tr",
         {},
@@ -89,7 +100,8 @@ export const keywordsPanel: PanelDef = {
           ["Ratio", "Log ratio: 1 means twice as often here, −1 half as often (an absent word counts as 0.5)"],
         ].map(([t, tip]) => h("th", { textContent: t, scope: "col", title: tip })),
       );
-      const text = { id: textId, title: title() };
+      const sc = scopeOf(textId);
+      const text = sc.textId === null ? null : { id: sc.textId, title: title() };
       table.replaceChildren(
         h("thead", {}, head),
         h(
@@ -98,14 +110,14 @@ export const keywordsPanel: PanelDef = {
           ...rows.slice(0, DRAWN).map((r) => {
             const tr = h(
               "tr",
-              { tabIndex: 0, title: `${perThousand(r.focus, data!.focusTokens)} per 1000 here, ${perThousand(r.reference, data!.referenceTokens)} in the rest; %DIFF ${r.percentDiff.toFixed(0)}; simple maths ${r.simpleMaths.toFixed(2)}. Show every «${r.item}» ${r.focus > 0 ? "in this text" : "in the whole project"} in the Concordance` },
+              { tabIndex: 0, title: `${perThousand(r.focus, data!.focusTokens)} per 1000 here, ${perThousand(r.reference, data!.referenceTokens)} in the rest; %DIFF ${r.percentDiff.toFixed(0)}; simple maths ${r.simpleMaths.toFixed(2)}. Show every «${r.item}» ${r.focus > 0 ? (sc.within !== null ? "in these texts" : "in this text") : "in the whole project"} in the Concordance` },
               h("td", { className: "fq-item", textContent: (significant(r, data!.critical) ? "• " : "") + r.item }),
               h("td", { className: "fq-num", textContent: r.focus.toLocaleString("en") }),
               h("td", { className: "fq-num", textContent: r.reference.toLocaleString("en") }),
               h("td", { className: "fq-num", textContent: r.logLikelihood.toFixed(2) }),
               h("td", { className: "fq-num", textContent: r.logRatio.toFixed(2) }),
             );
-            const open = () => askConcordance(r.item, kind, r.focus > 0 ? text : null);
+            const open = () => (r.focus > 0 ? askConcordance(r.item, kind, text, true, sc.within) : askConcordance(r.item, kind, null));
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
@@ -131,7 +143,8 @@ export const keywordsPanel: PanelDef = {
       }
       note.textContent = "Counting…";
       try {
-        const r = await keywords({ kind, textId, minCount: Number(min.value) });
+        const sc = scopeOf(textId);
+        const r = await keywords({ kind, textId: sc.textId, within: sc.within, minCount: Number(min.value) });
         if (mine !== seq) return;
         data = r;
         drawRows();

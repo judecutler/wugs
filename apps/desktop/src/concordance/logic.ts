@@ -34,7 +34,7 @@ export const PANEL_KINDS: { id: PanelKind; label: string; hint: string }[] = [..
 
 /** The reminder under the chips while a CQP query is chosen. */
 export const QUERY_HELP =
-  'Tokens in [ ]: word, lemma, upos, xpos, feats or gloss = "a regular expression" (whole value; %c ignores case, %d diacritics), joined with & | !. [] is any token; ? * + {1,3} repeat it. "dog" is [word="dog"].';
+  'Tokens in [ ]: word, lemma, upos, xpos, feats or gloss = "a regular expression" (whole value; %c ignores case, %d diacritics), joined with & | !. [] is any token; ? * + {1,3} repeat it. "dog" is [word="dog"]. End with :: match.text_genre="news" to search only texts with that detail.';
 
 export type SortBy = "text" | "left" | "right";
 

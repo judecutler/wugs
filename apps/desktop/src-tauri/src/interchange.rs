@@ -136,7 +136,7 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
 /// Excel's ordinary CSV is Windows-1252, which differs from Latin-1 only in
 /// 0x80–0x9F (curly quotes, dashes, …, €): when the bytes were not UTF-8 or
 /// UTF-16, those characters are mapped to what Excel meant.
-fn windows_1252(text: String, bytes: &[u8]) -> String {
+pub(crate) fn windows_1252(text: String, bytes: &[u8]) -> String {
     if std::str::from_utf8(bytes).is_ok() || bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
         return text;
     }
@@ -917,7 +917,7 @@ mod tests {
         assert_eq!(fs::read_to_string(&e.path).unwrap(), original);
         assert!(e.path.ends_with("treebank.conllu"));
         // Punctuation tokens are not words for the corpus tools.
-        let f = crate::frequencies::frequencies(&mut s, crate::concordance::Kind::Word, None).unwrap();
+        let f = crate::frequencies::frequencies(&mut s, crate::concordance::Kind::Word, &crate::concordance::Scope::all()).unwrap();
         assert_eq!(f.tokens, 2, "Hello and world, not the comma and the stop");
         // The same file again adds nothing and says so.
         let again = import_file(&mut s, file.to_str().unwrap()).unwrap();

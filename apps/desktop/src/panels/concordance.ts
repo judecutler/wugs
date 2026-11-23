@@ -1,6 +1,7 @@
 // Concordance (roadmap 71): every occurrence of a word, morph, gloss or
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
+import { whereWords, type Where } from "../metadata/logic";
 import { concordance, concordanceQuery, errorText } from "../api";
 import { asTsv, clip, countLine, isRtl, keyword, left, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
@@ -11,17 +12,17 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
 /** A query another panel asked for (Frequencies), taken by the panel once it is open. */
-type Asked = { query: string; kind: ConcordanceKind; text: { id: string; title: string } | null; exact: boolean };
+type Asked = { query: string; kind: ConcordanceKind; text: { id: string; title: string } | null; exact: boolean; within: Where | null };
 let pending: (Asked & { project: string }) | null = null;
 const askers = new Set<() => void>();
 
 /** Show the Concordance for this item, in one text or the whole project,
  * opening the panel if it is closed: met exactly (a Frequencies row, whose
  * spelling may hold a `?` glottal stop) or as a pattern (`walk*` from Collocates). */
-export function askConcordance(query: string, kind: ConcordanceKind, text: { id: string; title: string } | null = null, exact = true): void {
+export function askConcordance(query: string, kind: ConcordanceKind, text: { id: string; title: string } | null = null, exact = true, within: Where | null = null): void {
   const s = getState();
   if (s.kind !== "open") return;
-  pending = { query, kind, text, exact, project: s.info.projectId };
+  pending = { query, kind, text, exact, within, project: s.info.projectId };
   window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "concordance" }));
   for (const take of askers) take();
 }
@@ -85,8 +86,9 @@ export const concordancePanel: PanelDef = {
         return;
       }
       const texts = new Set(hits.map((x) => x.textId)).size;
-      const scoped = exactFor !== null && exactFor.query === asked && exactFor.kind === kind ? exactFor.text : null;
-      count.textContent = countLine(hits.length, total, texts) + (scoped !== null ? ` Only in «${scoped.title}».` : "");
+      const scoped = exactFor !== null && exactFor.query === asked && exactFor.kind === kind ? exactFor : null;
+      const only = [scoped?.text ? `«${scoped.text.title}»` : null, scoped?.within ? whereWords(scoped.within) : null].filter((x) => x !== null);
+      count.textContent = countLine(hits.length, total, texts) + (only.length > 0 ? ` Only in ${only.join(", among ")}.` : "");
       rows.replaceChildren(
         ...sortHits(hits, sortBy).map((hit) => {
           const play = playButton("Open this segment and play it", () => void open(hit, true));
@@ -140,7 +142,7 @@ export const concordancePanel: PanelDef = {
         const asking =
           kind === "query"
             ? concordanceQuery({ query, textId: exactAsk?.text?.id ?? null })
-            : concordance({ query, kind, exact: exactAsk?.exact ?? false, textId: exactAsk?.text?.id ?? null });
+            : concordance({ query, kind, exact: exactAsk?.exact ?? false, textId: exactAsk?.text?.id ?? null, within: exactAsk?.within ?? null });
         asking.then(
           (r) => {
             if (mine !== seq) return;
@@ -218,7 +220,7 @@ export const concordancePanel: PanelDef = {
         return;
       }
       ({ kind } = pending);
-      exactFor = { query: pending.query, kind: pending.kind, text: pending.text, exact: pending.exact };
+      exactFor = { query: pending.query, kind: pending.kind, text: pending.text, exact: pending.exact, within: pending.within };
       input.value = pending.query;
       input.placeholder = PANEL_KINDS.find((k) => k.id === kind)?.hint ?? "";
       pending = null;
