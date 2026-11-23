@@ -40,6 +40,22 @@ export function corpusLines(r: { path: string; corpus: string; texts: number; se
   return [...lines, ...r.notes];
 }
 
+/** What "Publish as a website" wrote (src-tauri/src/website.rs). */
+export type Site = { path: string; texts: number; sentences: number; entries: number; clips: number; restrictedLeftOut: number; clipsMissing: number };
+
+export function siteLines(r: Site): string[] {
+  const holds = [
+    r.texts > 0 ? `${plural(r.texts, "text", "texts")} (${plural(r.sentences, "sentence", "sentences")})` : null,
+    r.entries > 0 ? `a dictionary of ${plural(r.entries, "entry", "entries")}` : null,
+  ].filter((x) => x !== null);
+  const lines = [`Saved a website in ${r.path}: ${holds.join(" and ")}. Open index.html in a browser, copy the folder to a USB stick, or put it on any web host.`];
+  if (r.clips > 0) lines.push(`${plural(r.clips, "sentence plays", "sentences play")} from ${r.clips === 1 ? "its" : "their"} recording.`);
+  if (r.clipsMissing > 0) lines.push(`${plural(r.clipsMissing, "timed sentence has", "timed sentences have")} no sound: the recording is not on this computer, not linked, or not open.`);
+  if (r.restrictedLeftOut > 0) lines.push(`${plural(r.restrictedLeftOut, "text that is not open was", "texts that are not open were")} left out.`);
+  lines.push("Notes are never published. Check that the speakers agreed before you share it.");
+  return lines;
+}
+
 export function publishedLines(r: Published): string[] {
   return [
     `Saved a CLDF dataset in ${r.path}.`,

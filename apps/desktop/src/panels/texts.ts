@@ -1,6 +1,6 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { abbreviationMeanings, createText, errorText, exportCldf, exportCorpus, exportDictionary, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, publishedLines, type Language } from "../cldf/logic";
+import { abbreviationMeanings, createText, errorText, exportCldf, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportText, glossGet, importFile, projectLanguage, saveDocument, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { corpusLines, dictionaryLines, glottocodeProblem, isoProblem, publishedLines, siteLines, type Language } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
@@ -234,6 +234,15 @@ async function publishCldf() {
   });
 }
 
+async function publishSite() {
+  const folder = await chooseFolder("Choose where the website goes");
+  if (folder === null) return;
+  await work("site", async () => {
+    const r = await exportWebsite({ folder, date: localDay(new Date()), includeRestricted, audio: cldfAudio });
+    showToast({ tone: r.restrictedLeftOut > 0 || r.clipsMissing > 0 ? "warn" : "info", lines: siteLines(r) });
+  });
+}
+
 /** The text's glossed sentences as numbered examples, read through the Gloss panel's own view. */
 async function examplesOf(text: TextDetail): Promise<{ examples: Example[]; skipped: number }> {
   const sentences = text.tiers.find((t) => t.utterance)?.id ?? text.segments.find((s) => !s.parent)?.tier ?? "";
@@ -409,6 +418,13 @@ export const textsPanel: PanelDef = {
             title: "The lexicon and every glossed sentence as a CLDF Dictionary dataset (CSV files with metadata), what Zenodo, pycldf and CLLD dictionaries read",
             disabled: busy !== null,
             onclick: () => void publishCldf(),
+          }),
+          h("button", {
+            type: "button",
+            textContent: busy === "site" ? "Publishing…" : "Publish as a website…",
+            title: "Every text sentence by sentence, glossed, with its translation and a button that plays it, and the dictionary: a folder of web pages that open from disk, a USB stick or any web host, for the community",
+            disabled: busy !== null,
+            onclick: () => void publishSite(),
           }),
           h(
             "label",
