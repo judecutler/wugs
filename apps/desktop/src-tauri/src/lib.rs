@@ -45,6 +45,7 @@ pub mod session;
 pub mod sounds;
 pub mod typology;
 pub mod orthography;
+pub mod paradigm_templates;
 pub mod wordlist;
 pub mod spectrogram;
 pub mod updater;
@@ -748,6 +749,24 @@ fn lexicon_list(s: State<SessionThread>, query: String) -> Result<Vec<lexicon::E
 #[tauri::command(async)]
 fn lexicon_entry(s: State<SessionThread>, id: String) -> Result<lexicon::EntryView, String> {
     s.run(move |s| lexicon::lexicon_entry(s, &id))
+}
+
+/// The project's own paradigm templates (`src/paradigm_templates.rs`).
+#[tauri::command(async)]
+fn paradigm_templates(s: State<SessionThread>) -> Result<Vec<paradigm_templates::Template>, String> {
+    s.run(paradigm_templates::templates)
+}
+
+/// Keep a paradigm template for the project; the whole list back.
+#[tauri::command(async)]
+fn save_paradigm_template(s: State<SessionThread>, template: paradigm_templates::Template) -> Result<Vec<paradigm_templates::Template>, String> {
+    s.run(move |s| paradigm_templates::save(s, template))
+}
+
+/// Remove one of the project's paradigm templates; the whole list back.
+#[tauri::command(async)]
+fn delete_paradigm_template(s: State<SessionThread>, id: String) -> Result<Vec<paradigm_templates::Template>, String> {
+    s.run(move |s| paradigm_templates::delete(s, &id))
 }
 
 #[tauri::command(async)]
@@ -1984,6 +2003,9 @@ pub fn run() {
             lexicon_assign_domain,
             lexicon_unassign_domain,
             lexicon_paradigm,
+            paradigm_templates,
+            save_paradigm_template,
+            delete_paradigm_template,
             lexicon_fill_cell,
             lexicon_delete_form,
             domains_list,

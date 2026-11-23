@@ -415,6 +415,19 @@ The **Pronunciation** row under an entry's category holds how the word is said, 
 
 Empty a pronunciation's field to delete it, or click × and then **Delete?**. Pronunciations print after the headword in **Dictionary to print…**, and on a published website the dictionary plays each headword heard in a recording that is open. LIFT files carry them both ways (`<pronunciation>`, with its media file name kept as written), and so do Toolbox files (`\ph`).
 
+### Fill in a paradigm
+
+The **Paradigm** section at the bottom of an entry lays out its inflected forms as a grid. Choose a template: **Person × number**, **Tense × person** or **Singular and plural** are built in. Type a form in a cell and press **Enter** or leave the field. The line beside the template says how many cells are filled. Forms that fit no cell of the grid are listed under it.
+
+To make a grid for your language, such as case × number or noun class × number, choose **New template…** in the template list:
+
+1. Give it a name, such as `Case × number`.
+2. Under **Rows: feature**, name what the rows stand for (`Case`). Under **Rows: values**, list the values separated by commas. Write `value=meaning` to show the meaning in the grid: `nom=nominative, acc=accusative, gen`.
+3. Fill in the columns the same way, or leave them empty for a grid of one column.
+4. Click **Add template**.
+
+The template is kept with the project, so everyone working on it can choose it. Choose it and click **Edit template** to change it, or **Delete template** and then click again to remove it. Removing a template keeps the forms: they show in any grid with the same features, and under the grid otherwise.
+
 ### Relate entries to each other
 
 The **Related** row links an entry to its synonyms, antonyms and other words a reader should see. Pick a type (**Synonym**, **Antonym**, **See also**, **Part of**, **Has part**), type the other entry's headword and press **Enter**. When several entries share a headword, add the homograph number: `tela2`.

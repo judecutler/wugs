@@ -7,7 +7,7 @@
 // template and returned whole by every form edit.
 import {
   concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
-  lexiconDeleteForm, lexiconFillCell, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
+  deleteParadigmTemplate, lexiconDeleteForm, lexiconFillCell, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
   lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
   type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
@@ -15,7 +15,7 @@ import {
 import { emptyState, h } from "../dom";
 import { normalizeLangTag } from "../gloss/lang";
 import { filterDomains, glossLine, headword, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
-import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, layout, otherFormLine, TEMPLATES, templateById, type Features, type Template } from "../lexicon/paradigms";
+import { axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { keyword, type Hit } from "../concordance/logic";
@@ -27,6 +27,8 @@ const SELECT_FIRST = "Select the segment where the word is said (on the Timeline
 const LANG_KEY = "wugs.gloss-lang";
 /** The paradigm template last chosen on this machine. */
 const PARADIGM_KEY = "wugs.lexicon.paradigm";
+/** The template picker's choice that opens the form for a new one. */
+const NEW_TEMPLATE = "\u0000new";
 const ATTRIBUTION = "SIL Semantic Domains v4 · © SIL Global · semdom.org · licensed CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0)";
 
 /** Occurrences listed under a sense; the Concordance has the rest. */
@@ -57,6 +59,11 @@ export const lexiconPanel: PanelDef = {
     let template: Template = templateById(localStorage.getItem(PARADIGM_KEY));
     /** The selected entry's paradigm for `template`; null until it loads. */
     let paradigm: ParadigmView | null = null;
+    /** The project's own paradigm templates (shared through the project). */
+    let ownTemplates: Template[] = [];
+    /** The template form, while it is open: the template being edited (null
+     * for a new one), what is typed, and what is missing in words. */
+    let templateForm: { editing: Template | null; draft: TemplateDraft; error: string | null } | null = null;
     /** The sense whose domain picker is open, and what was typed in it. */
     let picker: { senseId: string; query: string; active: number } | null = null;
     /** The sense whose occurrences are listed (roadmap 72), and the hits once they came. */
@@ -116,6 +123,73 @@ export const lexiconPanel: PanelDef = {
         selected = null;
       }
       keepFocus(drawAll);
+    }
+
+    /** Fetch the project's own templates; the one chosen on this machine
+     * last time is taken up once it is among them. */
+    async function loadOwnTemplates() {
+      const gen = projectGen;
+      try {
+        const own = await paradigmTemplates();
+        if (gen !== projectGen) return;
+        ownTemplates = own;
+      } catch {
+        return;
+      }
+      // An own template changed or deleted elsewhere shows the grid it now
+      // describes (or the first built-in one); the one chosen here last
+      // time is taken up once the project's templates have arrived.
+      const wanted = localStorage.getItem(PARADIGM_KEY);
+      let next = template;
+      if (isOwn(template)) next = ownTemplates.find((t) => t.id === template.id) ?? TEMPLATES[0]!;
+      else if (wanted !== null && wanted !== template.id && ownTemplates.some((t) => t.id === wanted)) next = templateById(wanted, ownTemplates);
+      if (JSON.stringify(next) !== JSON.stringify(template)) {
+        template = next;
+        paradigm = null;
+        void loadParadigm();
+      }
+      keepFocus(drawEditor);
+    }
+
+    function useTemplate(t: Template) {
+      template = t;
+      localStorage.setItem(PARADIGM_KEY, t.id);
+      paradigm = null;
+      keepFocus(drawEditor);
+      void loadParadigm();
+    }
+
+    async function saveTemplate() {
+      const form = templateForm;
+      if (form === null) return;
+      const taken = ownTemplates.map((t) => t.id);
+      const made = templateFromDraft(form.draft, form.editing?.id ?? null, taken);
+      if (typeof made === "string") {
+        form.error = made;
+        keepFocus(drawEditor);
+        return;
+      }
+      try {
+        ownTemplates = await saveParadigmTemplate({ template: made });
+      } catch (e) {
+        form.error = errorText(e);
+        keepFocus(drawEditor);
+        return;
+      }
+      templateForm = null;
+      useTemplate(ownTemplates.find((t) => t.id === made.id) ?? made);
+    }
+
+    async function deleteTemplate(t: Template) {
+      try {
+        ownTemplates = await deleteParadigmTemplate({ id: t.id });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+        return;
+      }
+      templateForm = null;
+      showToast({ tone: "info", lines: [`Removed the template «${t.label}». Its forms stay in the lexicon.`] });
+      useTemplate(TEMPLATES[0]!);
     }
 
     /** Fetch the selected entry's paradigm for the current template. */
@@ -508,24 +582,47 @@ export const lexiconPanel: PanelDef = {
 
     function paradigmBlock(e: EntryView) {
       const t = template;
-      const select = h("select", { ariaLabel: "Paradigm template" }, ...TEMPLATES.map((x) => h("option", { value: x.id, textContent: x.label, selected: x.id === t.id })));
+      const option = (x: Template) => h("option", { value: x.id, textContent: x.label, selected: x.id === t.id });
+      const select = h(
+        "select",
+        { ariaLabel: "Paradigm template" },
+        ...TEMPLATES.map(option),
+        ownTemplates.length === 0 ? null : h("optgroup", { label: "This project" }, ...ownTemplates.map(option)),
+        h("option", { value: NEW_TEMPLATE, textContent: "New template…" }),
+      );
       select.dataset.key = `pdg-template:${e.id}`;
       select.onchange = () => {
-        template = templateById(select.value);
-        localStorage.setItem(PARADIGM_KEY, template.id);
-        paradigm = null;
-        keepFocus(drawEditor);
-        void loadParadigm();
+        if (select.value === NEW_TEMPLATE) {
+          templateForm = { editing: null, draft: draftOf(null), error: null };
+          drawThenFocus("pdg-form:name");
+          return;
+        }
+        templateForm = null;
+        useTemplate(templateById(select.value, ownTemplates));
       };
       const pd = paradigm !== null && paradigm.lexeme === e.id ? paradigm : null;
+      const own = isOwn(t);
       const head = h(
         "div",
         { className: "lx-pdg-head" },
         h("h2", { textContent: "Paradigm" }),
         select,
+        own
+          ? h("button", {
+              type: "button",
+              textContent: "Edit template",
+              title: "Change this template's name, features or values; every project member sees the change",
+              onclick: () => {
+                templateForm = { editing: t, draft: draftOf(t), error: null };
+                drawThenFocus("pdg-form:name");
+              },
+            })
+          : null,
+        own ? confirmButton(`pdg-del:${t.id}`, "Delete template", () => void deleteTemplate(t), { title: "Remove this template from the project; the forms stay in the lexicon" }) : null,
         h("span", { className: "note", textContent: pd === null ? "Loading…" : coverageLine(t, pd.cells) }),
       );
-      if (pd === null) return h("section", { className: "lx-paradigm" }, head);
+      const form = templateForm === null ? null : templateFormBlock(templateForm);
+      if (pd === null) return h("section", { className: "lx-paradigm" }, head, form);
       const grid = layout(t, pd.cells);
       const cols = t.cols === null ? [null] : t.cols.values;
       const table = h(
@@ -560,7 +657,63 @@ export const lexiconPanel: PanelDef = {
                 ),
               ),
             );
-      return h("section", { className: "lx-paradigm" }, head, table, others);
+      return h("section", { className: "lx-paradigm" }, head, form, table, others);
+    }
+
+    /** The template form: a name, the rows' feature and values, and
+     * optionally the columns'. Drafts live in `templateForm`, so a redraw
+     * from another device's edit keeps what is typed. */
+    function templateFormBlock(f: NonNullable<typeof templateForm>) {
+      const field = (key: keyof TemplateDraft, label: string, placeholder: string) => {
+        const input = h("input", { value: f.draft[key], placeholder, ariaLabel: label });
+        input.dataset.key = `pdg-form:${key}`;
+        input.oninput = () => {
+          f.draft[key] = input.value;
+        };
+        input.onkeydown = (ev) => {
+          if (ev.key === "Enter" && !ev.isComposing) {
+            ev.preventDefault();
+            void saveTemplate();
+          } else if (ev.key === "Escape") {
+            templateForm = null;
+            keepFocus(drawEditor);
+          }
+        };
+        return h("label", {}, h("span", { textContent: label }), input);
+      };
+      return h(
+        "div",
+        { className: "lx-pdg-template", role: "group", ariaLabel: f.editing === null ? "New paradigm template" : `Edit template ${f.editing.label}` },
+        field("name", "Name", "Case × number"),
+        field("rows", "Rows: feature", "Case"),
+        field("rowValues", "Rows: values", "nom=nominative, acc=accusative, gen"),
+        field("cols", "Columns: feature (optional)", "Number"),
+        field("colValues", "Columns: values", "sg=singular, pl=plural"),
+        h("p", {
+          className: "note",
+          textContent: "Values are separated by commas; write value=meaning to show the meaning in the grid. The template is kept with the project, so everyone working on it can use it.",
+        }),
+        f.error === null ? null : h("p", { className: "note error-text", role: "alert", textContent: f.error }),
+        h(
+          "div",
+          { className: "inline" },
+          h("button", { type: "button", textContent: f.editing === null ? "Add template" : "Save template", onclick: () => void saveTemplate() }),
+          h("button", {
+            type: "button",
+            textContent: "Cancel",
+            onclick: () => {
+              templateForm = null;
+              keepFocus(drawEditor);
+            },
+          }),
+        ),
+      );
+    }
+
+    function drawThenFocus(key: string) {
+      quietly(drawEditor);
+      const target = el.querySelector<HTMLElement>(`[data-key="${key}"]`);
+      target?.focus();
     }
 
     /** A cell's fields: one per form it holds, or one empty field that adds
@@ -950,6 +1103,9 @@ export const lexiconPanel: PanelDef = {
           selected = null;
           entry = null;
           paradigm = null;
+          ownTemplates = [];
+          templateForm = null;
+          if (isOwn(template)) template = TEMPLATES[0]!;
           domains = null;
           picker = null;
           uses = null;
@@ -962,6 +1118,7 @@ export const lexiconPanel: PanelDef = {
           if (picker !== null) void ensureDomains();
           if (uses !== null) void loadUses(uses.senseId);
         }
+        void loadOwnTemplates();
         void loadList().then(() => loadEntry(selected, true));
       },
     };
