@@ -12,7 +12,9 @@ use crate::lexicon::id_from_key;
 use crate::{CommitResult, Project, SCOPE_CONFIG};
 
 const MAX_KEY: usize = 128;
-const MAX_VALUE: usize = 1024;
+/// A setting holds a choice or a small table (an orthography profile of a
+/// few thousand rows), never a document: every change writes it whole.
+pub const MAX_VALUE: usize = 64 * 1024;
 
 /// The entity id a setting key lives on.
 pub fn setting_id(key: &str) -> String {
@@ -38,7 +40,7 @@ impl Project {
             return Err(format!("{key:?} is not a setting key"));
         }
         if value.len() > MAX_VALUE {
-            return Err("a setting's value is at most 1 kB".into());
+            return Err(format!("a setting's value is at most {} KB", MAX_VALUE / 1024));
         }
         let id = setting_id(key);
         let exists = match self.proj.entity_kind(&id)?.as_deref() {
@@ -166,7 +168,8 @@ mod tests {
         let (ra, mut a) = open("prs_Ana");
         assert!(a.set_setting("", "x").is_err());
         assert!(a.set_setting("a b", "x").is_err());
-        assert!(a.set_setting("k", &"x".repeat(2000)).is_err());
+        assert!(a.set_setting("k", &"x".repeat(MAX_VALUE + 1)).is_err());
+        assert!(a.set_setting("k", &"x".repeat(2000)).is_ok(), "a small table fits");
         std::fs::remove_dir_all(ra).ok();
     }
 }
