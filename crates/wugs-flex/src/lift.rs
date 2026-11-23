@@ -31,6 +31,11 @@ const F_ATTRS: &str = "x.lift.attrs";
 /// A pronunciation's `<media>` elements, each its attributes (`href`…), kept
 /// for export: wugs hears a pronunciation in a project recording instead.
 const F_MEDIA: &str = "x.lift.media";
+/// A sense's `<illustration>`s whose picture is not in the project, each
+/// `{attrs, label}`, written back as they came.
+const F_ILLUSTRATIONS: &str = "x.lift.illustrations";
+/// The `<label>` of the illustration that became the sense's picture.
+const F_PICTURE_LABEL: &str = "x.lift.picture-label";
 
 #[derive(Debug, Default)]
 pub struct ImportReport {
@@ -41,6 +46,9 @@ pub struct ImportReport {
     pub examples_created: usize,
     pub pronunciations_created: usize,
     pub relations_created: usize,
+    /// Each `<illustration>`: the sense it belongs to and its `href`, for the
+    /// caller to look for beside the file (`attach_illustration`).
+    pub illustrations: Vec<(String, String)>,
     /// `<span>` runs flattened into plain text (their text is kept in order;
     /// the markup is not).
     pub spans_flattened: usize,
@@ -75,6 +83,8 @@ struct Sense {
     examples: Vec<Example>,
     attrs: Value,
     relations: Vec<Value>,
+    /// Each `<illustration>`: `{attrs, label}`.
+    illustrations: Vec<Value>,
 }
 
 struct Example {
@@ -105,6 +115,27 @@ fn translations_from(v: Option<Value>) -> Vec<(Option<String>, MultiText)> {
             .collect(),
         _ => Vec::new(),
     }
+}
+
+/// An imported `<illustration>` whose file was found and stored as `blob`:
+/// it becomes the sense's picture under `name`, its label is kept for
+/// export, and it leaves the illustrations still waiting for a file.
+pub fn attach_illustration(project: &mut Project, sense: &str, href: &str, blob: &str, name: &str) -> Result<(), String> {
+    let items = match field_value(project, sense, F_ILLUSTRATIONS)? {
+        Some(Value::Arr(items)) => items,
+        _ => Vec::new(),
+    };
+    let is_it = |v: &Value| v.get("attrs").and_then(|a| a.get_str("href")) == Some(href);
+    let label = items.iter().find(|v| is_it(v)).and_then(|v| v.get("label").cloned());
+    let rest: Vec<Value> = items.iter().filter(|v| !is_it(v)).cloned().collect();
+    project.set_sense_picture(sense, Some((blob, name)))?;
+    let mut t = project.intent("import-lift-picture");
+    t.set("sense", sense, SCOPE_LEXICON, F_ILLUSTRATIONS, if rest.is_empty() { Value::Null } else { Value::Arr(rest) })?;
+    if let Some(l) = label {
+        t.set("sense", sense, SCOPE_LEXICON, F_PICTURE_LABEL, l)?;
+    }
+    t.commit()?;
+    Ok(())
 }
 
 /// Import a whole LIFT lexicon. One txn per entry, all in the lexicon scope.
@@ -160,7 +191,15 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
             push_opt(&mut fields, F_GRAMMATICAL_INFO, &s.grammatical_info);
             push_opt(&mut fields, F_ID, &s.id);
             push_opt(&mut fields, F_GUID, &s.guid);
+            if !s.illustrations.is_empty() {
+                fields.push((F_ILLUSTRATIONS, Value::Arr(s.illustrations.clone())));
+            }
             let sen = t.create("sense", "sen", SCOPE_LEXICON, fields);
+            for ill in &s.illustrations {
+                if let Some(href) = ill.get("attrs").and_then(|a| a.get_str("href")) {
+                    report.illustrations.push((sen.clone(), href.to_string()));
+                }
+            }
             report.senses_created += 1;
             pending.extend(s.relations.iter().map(|r| (sen.clone(), r.clone())));
             for (j, x) in s.examples.iter().enumerate() {
@@ -379,6 +418,7 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
         examples: Vec::new(),
         attrs: attrs_value(node),
         relations: Vec::new(),
+        illustrations: Vec::new(),
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -401,6 +441,13 @@ fn parse_sense(node: &XmlNode, index: usize, entry: &str, report: &mut ImportRep
             }
             "example" => s.examples.push(parse_example(c, report)),
             "relation" => s.relations.push(parse_relation(c, report)),
+            "illustration" => {
+                let label = c.child("label").map(|l| read_multi(l, report)).unwrap_or_default();
+                for ic in c.children.iter().filter(|ic| ic.name != "label") {
+                    report.not_carried.add(&format!("illustration/{}", ic.name));
+                }
+                s.illustrations.push(Value::Obj(vec![("attrs".to_string(), attrs_value(c)), ("label".to_string(), multi_value(&label))].into_iter().collect()));
+            }
             other => report.not_carried.add(&format!("sense/{other}")),
         }
     }
@@ -583,6 +630,25 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
                 sense.children.push(x);
             }
             relation_nodes(project, &sen, &mut sense)?;
+            // The sense's picture first, by the name it was chosen under (FLEx
+            // looks for it in a `pictures` folder beside the file), then any
+            // illustration whose picture never reached the project.
+            if let (Some(_), Some(name)) = (p.field_str(&sen, "picture")?.filter(|b| !b.is_empty()), p.field_str(&sen, "x.picture-name")?) {
+                let mut ill = XmlNode::new("illustration").with_attr("href", &name);
+                if let Some(label) = field_multi(project, &sen, F_PICTURE_LABEL)?.filter(|l| !l.is_empty()) {
+                    ill.children.push(multi_node("label", &label));
+                }
+                sense.children.push(ill);
+            }
+            if let Some(Value::Arr(items)) = field_value(project, &sen, F_ILLUSTRATIONS)? {
+                for item in items {
+                    let mut ill = with_attrs(XmlNode::new("illustration"), item.get("attrs").cloned(), &[]);
+                    if let Some(label) = item.get("label").and_then(multi_from).filter(|l| !l.is_empty()) {
+                        ill.children.push(multi_node("label", &label));
+                    }
+                    sense.children.push(ill);
+                }
+            }
             entry.children.push(sense);
         }
         relation_nodes(project, lex, &mut entry)?;

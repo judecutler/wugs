@@ -10,4 +10,4 @@ pub mod lift;
 
 pub use common::{ImportError, MultiText, NotCarried};
 pub use flextext::{export_flextext, import_flextext};
-pub use lift::{export_lift, import_lift};
+pub use lift::{attach_illustration, export_lift, import_lift};

@@ -93,7 +93,7 @@ pub(crate) fn picture_ext(name: &str) -> String {
 
 fn picture_view(p: &Project, sense: &str) -> Result<Option<PictureView>, String> {
     Ok(p.sense_picture(sense)?.map(|(blob, name)| {
-        let path = wugs_blob::parse_ref(&blob).map(|hex| p.root.join("blobs").join(hex.to_string())).filter(|f| f.is_file()).map(|f| f.display().to_string());
+        let path = wugs_blob::parse_ref(&blob).map(|hex| p.root.join("blobs").join(hex)).filter(|f| f.is_file()).map(|f| f.display().to_string());
         PictureView { blob, name, path }
     }))
 }

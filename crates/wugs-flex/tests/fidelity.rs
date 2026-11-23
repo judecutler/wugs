@@ -595,3 +595,39 @@ fn flextext_notes_become_notes_and_go_back_out() {
     assert!(!export_flextext(&p, &txt).unwrap().contains("type=\"note\""), "deleted notes leave");
     std::fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn illustrations_wait_for_their_picture_and_go_back_out() {
+    let lift = r#"<?xml version="1.0" encoding="UTF-8"?>
+<lift version="0.13">
+  <entry id="kesi_1" guid="11111111-1111-1111-1111-111111111111">
+    <lexical-unit><form lang="kan"><text>kesi</text></form></lexical-unit>
+    <sense id="kesi_s1">
+      <gloss lang="en"><text>fox</text></gloss>
+      <illustration href="fox.jpg"><label><form lang="en"><text>a red fox</text></form></label></illustration>
+      <illustration href="den.png"/>
+    </sense>
+  </entry>
+</lift>"#;
+    let (root, mut p) = temp_project();
+    let r = import_lift(&mut p, lift).unwrap();
+    assert_eq!(r.not_carried.total(), 0, "{:?}", r.not_carried);
+    assert_eq!(r.illustrations.len(), 2);
+    let (sense, href) = r.illustrations[0].clone();
+    assert_eq!(href, "fox.jpg");
+    // Not found yet: both go back out as they came.
+    let out = export_lift(&p).unwrap();
+    assert!(out.contains(r#"<illustration href="fox.jpg">"#) && out.contains("a red fox") && out.contains(r#"<illustration href="den.png"/>"#), "{out}");
+    // Found beside the file: it becomes the picture, its label kept, written once.
+    let blob = format!("blake3:{}", "cd".repeat(32));
+    wugs_flex::attach_illustration(&mut p, &sense, "fox.jpg", &blob, "fox.jpg").unwrap();
+    assert_eq!(p.sense_picture(&sense).unwrap(), Some((blob, "fox.jpg".to_string())));
+    let out = export_lift(&p).unwrap();
+    assert_eq!(out.matches(r#"href="fox.jpg""#).count(), 1, "{out}");
+    assert!(out.contains("a red fox") && out.contains(r#"href="den.png""#), "{out}");
+    // Taken off the sense in wugs: it no longer goes out.
+    p.set_sense_picture(&sense, None).unwrap();
+    let out = export_lift(&p).unwrap();
+    assert!(!out.contains("fox.jpg") && out.contains("den.png"), "{out}");
+    fs::remove_dir_all(root).ok();
+}

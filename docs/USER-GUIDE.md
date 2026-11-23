@@ -429,6 +429,8 @@ Empty a pronunciation's field to delete it, or click × and then **Delete?**. Pr
 
 To show what a sense means with a picture, click **+ Picture** under its examples and choose a PNG, JPEG, GIF or WebP file (at most 20 MB): a photo of the plant, a drawing of the tool. wugs copies the file into the project, so it goes with the project when it syncs or is sealed. The picture shows under the sense, in **Dictionary to print…** (inside the one HTML file), on a published website's dictionary and on the back of **Flashcards…**. **Change…** picks another, and **Remove picture** takes it off the sense.
 
+Pictures travel with LIFT files too. FLEx exports each sense's picture into a `pictures` folder beside the `.lift` file; when you import that file, wugs looks there and gives each sense its picture, and the message says how many it found. A picture it cannot find keeps its name and goes back out in the next LIFT export. When you export the lexicon as LIFT, wugs copies the pictures into a `pictures` folder beside the file, where FLEx looks for them.
+
 ### Fill in a paradigm
 
 The **Paradigm** section at the bottom of an entry lays out its inflected forms as a grid. Choose a template: **Person × number**, **Tense × person** or **Singular and plural** are built in. Type a form in a cell and press **Enter** or leave the field. The line beside the template says how many cells are filled. Forms that fit no cell of the grid are listed under it.
