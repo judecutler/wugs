@@ -13,6 +13,7 @@ import {
   type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
+import { typeWithShortcuts } from "../typing";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
@@ -45,7 +46,7 @@ export const lexiconPanel: PanelDef = {
     let show: ListShow = "all";
     const showPicker = h("select", { className: "lx-show", ariaLabel: "Which entries to list" });
     const searchBar = h("div", { className: "lx-search" }, search, showPicker);
-    const newLemma = h("input", { placeholder: "Lemma", ariaLabel: "New entry lemma" });
+    const newLemma = typeWithShortcuts(h("input", { placeholder: "Lemma", ariaLabel: "New entry lemma" }));
     const newGloss = h("input", { placeholder: "Gloss", ariaLabel: "New entry gloss" });
     const addForm = h(
       "form",
@@ -305,6 +306,8 @@ export const lexiconPanel: PanelDef = {
     /** A one-line field that saves on Enter or when it loses focus, if changed. Escape restores. */
     function cell(key: string, value: string, label: string, save: (v: string) => Promise<void>, opts: { placeholder?: string; size?: number } = {}) {
       const input = h("input", { value, placeholder: opts.placeholder ?? "", ariaLabel: label });
+      // Headwords and other forms are typed in the language: they take its shortcuts.
+      if (/^(lemma|cit|allo|prn|prn-new|exs):/u.test(key)) typeWithShortcuts(input);
       input.dataset.key = key;
       input.dataset.saved = value;
       if (opts.size !== undefined) input.size = opts.size;

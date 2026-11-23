@@ -9,6 +9,7 @@ import {
   type Answer, type BundledList, type ConceptView, type DomainItem, type DomainQuestions, type EntryRow, type ListSummary, type ListView,
 } from "../api";
 import { emptyState, h } from "../dom";
+import { typeWithShortcuts } from "../typing";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { localDay } from "../dates";
 import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, ownListLine, soundLine, soundSegment, wordlistLines, coverageLine, nextEmptyDomain, type Filter } from "../elicit/logic";
@@ -265,7 +266,7 @@ export const elicitPanel: PanelDef = {
     function conceptRow(c: ConceptView) {
       const isCurrent = c.id === current;
       const draft = drafts.get(c.id) ?? { form: "", gloss: "" };
-      const form = h("input", { value: draft.form, placeholder: isCurrent ? "Word…" : "", ariaLabel: `Word for ${c.gloss}` });
+      const form = typeWithShortcuts(h("input", { value: draft.form, placeholder: isCurrent ? "Word…" : "", ariaLabel: `Word for ${c.gloss}` }));
       form.dataset.concept = c.id;
       form.dataset.key = `form:${c.id}`;
       const gloss = h("input", { value: draft.gloss, placeholder: c.gloss, ariaLabel: `Gloss for ${c.gloss}`, className: "el-gloss" });
@@ -637,7 +638,7 @@ export const elicitPanel: PanelDef = {
     }
 
     function domainDetail(d: DomainQuestions): HTMLElement {
-      const form = h("input", { placeholder: "Word…", ariaLabel: `Word for ${d.label}` });
+      const form = typeWithShortcuts(h("input", { placeholder: "Word…", ariaLabel: `Word for ${d.label}` }));
       const gloss = h("input", { placeholder: "Gloss", ariaLabel: "Gloss", className: "el-gloss" });
       const save = () => {
         const typed = form.value.trim();

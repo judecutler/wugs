@@ -1,7 +1,7 @@
 // The transcription loop (TONGUES-UI build order step 3): one tier's
 // segments in time order, the selected one editable in place. Enter saves
 // and plays the next, so hearing and typing never leave the keyboard.
-import { assistSuggest, characterInventory, editSegmentContent, errorText, setTypingShortcuts, soundWords, typingShortcuts, type SegmentRow, type TierRow } from "../api";
+import { assistSuggest, characterInventory, editSegmentContent, errorText, setTypingShortcuts, soundWords, type SegmentRow, type TierRow } from "../api";
 import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
@@ -11,7 +11,8 @@ import { IPA_GROUPS, projectGroup, type IpaGroup } from "../transcribe/ipa";
 import { countWords, didYouMean, spellIndex, type SpellIndex } from "../checks/spelling";
 import { forms, tokenize } from "../gloss/tokenizer";
 import { matchCase, replaceWord } from "../transcribe/spell";
-import { applyShortcuts, EXAMPLE_TABLE, parseShortcuts, shortcutsLine, type Shortcut } from "../transcribe/shortcuts";
+import { EXAMPLE_TABLE, parseShortcuts, shortcutsLine } from "../transcribe/shortcuts";
+import { loadShortcuts, rememberShortcuts, shortcutCount, shortcutTable, typeWithShortcuts } from "../typing";
 import { createFieldController, type FieldController } from "../transcribe/field";
 import { preview as xsampaPreview, xsampaToIpa, XSAMPA_KEY } from "../transcribe/xsampa";
 import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, neighbor, renderWindow, tierSegments } from "../transcribe/logic";
@@ -38,13 +39,11 @@ export const transcribePanel: PanelDef = {
     showXsampa();
     const shortcutsToggle = h("button", { type: "button", textContent: "Shortcuts…", title: "Typing shortcuts for this project's letters, such as ;n for ŋ, the same for everyone on the project" });
     const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, paletteToggle, xsampaToggle, shortcutsToggle, playback.rateSelect(), keys, hint);
-    /** The project's typing shortcuts, read once per project and after a save. */
-    let shortcuts: Shortcut[] = [];
-    let shortcutTable = "";
+    /** The project's typing shortcuts (`src/typing.ts`), shared with the other panels. */
     const shortcutsBox = h("div", { className: "tx-shortcuts" });
     shortcutsBox.hidden = true;
     const drawShortcuts = (): void => {
-      const area = h("textarea", { className: "tx-shortcuts-table", spellcheck: false, rows: 8, value: shortcutTable, placeholder: EXAMPLE_TABLE });
+      const area = h("textarea", { className: "tx-shortcuts-table", spellcheck: false, rows: 8, value: shortcutTable(), placeholder: EXAMPLE_TABLE });
       area.setAttribute("aria-label", "Typing shortcuts: what you type, a space, and what it becomes, a line each");
       const problems = h("p", { className: "note" });
       const show = () => {
@@ -60,20 +59,19 @@ export const transcribePanel: PanelDef = {
         onclick: () =>
           void setTypingShortcuts({ table: area.value }).then(
             (t) => {
-              shortcutTable = t;
-              shortcuts = parseShortcuts(t).shortcuts;
+              rememberShortcuts(t);
               drawShortcuts();
-              showToast({ tone: "info", lines: [shortcutsLine(shortcuts.length)] });
+              showToast({ tone: "info", lines: [shortcutsLine(shortcutCount())] });
             },
             (e) => showToast({ tone: "error", lines: [errorText(e)] }),
           ),
       });
       const example =
-        shortcutTable.trim() === ""
+        shortcutTable().trim() === ""
           ? h("button", { type: "button", textContent: "Start from an example", onclick: () => { area.value = EXAMPLE_TABLE; show(); area.focus(); } })
           : null;
       shortcutsBox.replaceChildren(
-        h("p", { className: "note", textContent: `${shortcutsLine(parseShortcuts(shortcutTable).shortcuts.length)} A line each: what you type, a space, and what it becomes. It changes as soon as the last character is typed, in the transcription field.` }),
+        h("p", { className: "note", textContent: `${shortcutsLine(shortcutCount())} A line each: what you type, a space, and what it becomes. It changes as soon as the last character is typed, wherever the language is typed: transcriptions, breakdowns, headwords and elicited words.` }),
         area,
         problems,
         h("div", { className: "tx-shortcuts-actions" }, save, example),
@@ -89,7 +87,7 @@ export const transcribePanel: PanelDef = {
     };
     const list = h("div", { className: "tx-list" });
     const palette = h("div", { className: "tx-palette" });
-    const field = h("input", { className: "tx-field", spellcheck: false, title: "Enter: save, next and play. Shift+Enter: previous. Tab or Ctrl/Cmd+Enter: replay. Esc: revert. Shift+Tab leaves the field." });
+    const field = typeWithShortcuts(h("input", { className: "tx-field", spellcheck: false, title: "Enter: save, next and play. Shift+Enter: previous. Tab or Ctrl/Cmd+Enter: replay. Esc: revert. Shift+Tab leaves the field." }));
 
     const selTime = h("span", { className: "tx-time" });
     const selBadge = h("span", { className: "tx-unsaved", title: "The last save failed. Press Enter to retry." });
@@ -277,14 +275,6 @@ export const transcribePanel: PanelDef = {
       else if (ctl?.segmentId != null) play(stored(ctl.segmentId));
     };
     field.oninput = () => {
-      if (!composition.active && shortcuts.length > 0) {
-        const end = field.selectionEnd ?? field.value.length;
-        const r = applyShortcuts(field.value, end, shortcuts);
-        if (r !== null) {
-          field.value = r.value;
-          field.setSelectionRange(r.caret, r.caret);
-        }
-      }
       ctl?.type(field.value);
       updateHints(true);
       // Typed text is the person's: the machine offer goes until the field is empty again.
@@ -308,17 +298,9 @@ export const transcribePanel: PanelDef = {
     let lettersFor = "";
     function loadOwnLetters(projectId: string): void {
       if (projectId !== spellFor) {
-        shortcuts = [];
-        shortcutTable = "";
-        typingShortcuts().then(
-          (t) => {
-            if (spellFor !== projectId) return;
-            shortcutTable = t;
-            shortcuts = parseShortcuts(t).shortcuts;
-            if (!shortcutsBox.hidden) drawShortcuts();
-          },
-          () => {},
-        );
+        void loadShortcuts(projectId).then(() => {
+          if (spellFor === projectId && !shortcutsBox.hidden) drawShortcuts();
+        });
         spellFor = projectId;
         spelling = null;
         soundWords({ tierId: null, textId: null }).then(
