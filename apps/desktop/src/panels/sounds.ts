@@ -10,6 +10,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, soundWords } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
+import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
@@ -23,7 +24,7 @@ const PAD = 26;
 /** Room on the left for unrounded vowels with several spellings (i ĩ iː). */
 const PADX = 72;
 
-type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number };
+type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[] };
 
 export const soundsPanel: PanelDef = {
   title: "Sounds",
@@ -38,6 +39,9 @@ export const soundsPanel: PanelDef = {
     let key = "";
     let project = "";
     let seq = 0;
+    /** The sound whose contrasts are listed (null: every sound), and the contrast opened. */
+    let pairSound: string | null = null;
+    let openContrast: string | null = null;
 
     const shownText = (): { id: string; title: string } | null => {
       const s = getState();
@@ -55,7 +59,7 @@ export const soundsPanel: PanelDef = {
         }
         if (mine !== seq) return;
         const sounds = inventory(r.words);
-        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted };
+        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words) };
         problem = null;
       } catch (e) {
         if (mine !== seq) return;
@@ -127,6 +131,59 @@ export const soundsPanel: PanelDef = {
 
     const listed = (title: string, sounds: Sound[], note?: string): HTMLElement[] =>
       sounds.length === 0 ? [] : [h("h4", { className: "sd-h", textContent: title }), ...(note === undefined ? [] : [h("p", { className: "note", textContent: note })]), h("div", { className: "sd-list" }, ...sounds.map(soundButton))];
+
+    const wordButton = (word: string, count: number): HTMLElement => {
+      const b = h("button", { type: "button", className: "sd-word", textContent: word, title: `«${word}», ${count.toLocaleString()} ${count === 1 ? "time" : "times"}. Click for its lines.` });
+      b.onclick = () => askConcordance(word, "word", onlyThisText ? shownText() : null, true);
+      return b;
+    };
+
+    const pairsSection = (l: Loaded): HTMLElement[] => {
+      const keyOf = (c: Contrast) => `${c.a}\u001F${c.b}`;
+      const shown = contrastsOf(l.pairs, pairSound);
+      const which = h("select");
+      which.setAttribute("aria-label", "Contrasts of");
+      which.append(new Option("Every sound", "", false, pairSound === null));
+      const inPairs = new Set(l.pairs.flatMap((c) => [c.a, c.b]));
+      for (const s of l.sounds) if (inPairs.has(s.sound)) which.append(new Option(`«${s.sound}»`, s.sound, false, s.sound === pairSound));
+      which.onchange = () => {
+        pairSound = which.value === "" ? null : which.value;
+        openContrast = null;
+        paint();
+      };
+      const chips = shown.slice(0, 60).map((c) => {
+        const open = openContrast === keyOf(c);
+        const chip = h("button", { type: "button", className: `sd-contrast${open ? " is-open" : ""}`, textContent: contrastLabel(c) });
+        chip.setAttribute("aria-pressed", String(open));
+        chip.onclick = () => {
+          openContrast = open ? null : keyOf(c);
+          paint();
+        };
+        return chip;
+      });
+      const picked = shown.find((c) => keyOf(c) === openContrast) ?? null;
+      const detail: HTMLElement[] = [];
+      if (picked !== null) {
+        const copy = h("button", { type: "button", textContent: "Copy pairs" });
+        copy.onclick = () =>
+          writeText(pairsTable(picked)).then(
+            () => showToast({ tone: "info", lines: [`${picked.pairs.length} pairs for ${picked.a} ~ ${picked.b} copied.`] }),
+            (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+          );
+        const more = picked.total > picked.pairs.length ? [h("p", { className: "note", textContent: `The ${picked.pairs.length} with the commonest words of ${picked.total}.` })] : [];
+        detail.push(
+          h("div", { className: "sd-bar" }, h("strong", { className: "sd-glyph", textContent: `${picked.a} ~ ${picked.b}` }), copy),
+          ...more,
+          h("ul", { className: "sd-pairs" }, ...picked.pairs.map((p) => h("li", {}, wordButton(p.wordA, p.countA), h("span", { className: "sd-tilde", textContent: "~" }), wordButton(p.wordB, p.countB)))),
+        );
+      }
+      return [
+        h("h4", { className: "sd-h", textContent: "Minimal pairs" }),
+        h("div", { className: "sd-bar" }, h("p", { className: "note", textContent: pairsNote(l.pairs, Math.min(l.types, WORDS_READ), l.types) }), l.pairs.length > 0 ? which : null),
+        h("div", { className: "sd-list" }, ...chips),
+        ...detail,
+      ];
+    };
 
     const copyTable = () => {
       if (loaded === null) return;
@@ -200,6 +257,7 @@ export const soundsPanel: PanelDef = {
         ...(vowels === null ? [] : [h("h4", { className: "sd-h", textContent: "Vowels" }), vowels]),
         ...listed("Affricates and double articulations", c.affricates),
         ...[...c.others].flatMap(([group, sounds]) => listed(group, sounds)),
+        ...pairsSection(loaded),
         ...listed("Not on the IPA chart", c.unplaced.map((u) => u.sound), [...new Set(c.unplaced.map((u) => u.why))].join("; ").replace(/^./u, (x) => x.toUpperCase()) + ". Often a spelling slip, or a spelling rather than IPA."),
       );
     };

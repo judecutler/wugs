@@ -1251,6 +1251,12 @@ body::before {
 .sd-vgroup { position: absolute; display: flex; gap: 1px; transform: translateY(-50%); background: var(--surface-raised); border-radius: var(--radius-sm); }
 .sd-unrounded { flex-direction: row-reverse; }
 .sd-list { display: flex; flex-wrap: wrap; gap: 4px; }
+.sd-contrast { font-family: var(--font-ipa); border: 1px solid var(--line); background: var(--surface-raised); border-radius: var(--radius-sm); padding: 1px 8px; cursor: pointer; }
+.sd-contrast.is-open { border-color: var(--accent); background: var(--accent-soft); }
+.sd-pairs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 2px 12px; }
+.sd-pairs li { display: flex; gap: 6px; align-items: baseline; }
+.sd-word { font-family: var(--font-ipa); font-size: 16px; border: none; background: none; color: var(--accent); padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--line); }
+.sd-tilde { color: var(--muted); }
 
 .panel-vowels { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .vw-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }

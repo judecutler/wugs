@@ -512,6 +512,11 @@ def main():
                 failures.append("Sounds did not place the vowels")
             if run.page.locator(".panel-sounds .sd-list").count() < 3:
                 failures.append("Sounds did not list affricates, clicks or unplaced letters")
+            run.page.locator(".panel-sounds .sd-contrast").first.click()
+            run.page.locator(".panel-sounds .sd-pairs li").first.scroll_into_view_if_needed()
+            run.shot("state-sounds-pairs", run.page.locator(".panel-sounds"))
+            if run.page.locator(".panel-sounds .sd-pairs li").count() < 2:
+                failures.append("Minimal pairs did not list the pairs of the first contrast")
             # Elicit: answers heard in the Timeline's selected segment.
             run.front("elicit", "Elicit")
             run.page.locator(".panel-elicit .el-sound input").check()
