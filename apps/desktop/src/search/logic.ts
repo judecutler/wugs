@@ -47,5 +47,5 @@ export function clockTime(ms: number): string {
 /** "0:05 · Utterance" for a segment hit; empty for anything else. */
 export function whereLabel(r: SearchRow): string {
   if (r.kind !== "segment") return "";
-  return [r.startMs === null ? null : clockTime(r.startMs), r.tierName].filter((x) => x !== null && x !== "").join(" · ");
+  return [r.startMs === null ? null : clockTime(r.startMs), r.tierName, r.field === "note" ? "note" : null].filter((x) => x !== null && x !== "").join(" · ");
 }

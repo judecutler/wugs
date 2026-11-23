@@ -482,6 +482,9 @@ mod tests {
         let id = v.segment_notes[0].id.clone();
         let v = gloss_set_note(&mut s, &text, &seg, &id, "Said twice, softly.").unwrap().view;
         assert_eq!(v.segment_notes[0].body, "Said twice, softly.");
+        // Search finds the note as its sentence.
+        let hits = session::search(&mut s, "softly", session::SearchScope::Texts).unwrap();
+        assert!(hits.iter().any(|h| h.target == seg && h.kind == "segment" && h.field == "note"), "{hits:?}");
         let other = session::add_segment(&mut s, &text, None, Some(22_000.0), Some(23_000.0), "teka").unwrap().id;
         assert!(gloss_set_note(&mut s, &text, &other, &id, "x").is_err(), "a note is edited from its own sentence");
         assert!(gloss_set_note(&mut s, &text, &seg, &id, " ").unwrap().view.segment_notes.is_empty());
