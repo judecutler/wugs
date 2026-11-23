@@ -7790,6 +7790,7 @@ dependencies = [
  "wugs-peaks",
  "wugs-seal",
  "wugs-sync",
+ "wugs-tei",
  "wugs-text",
  "wugs-unicode",
  "zeroize",
@@ -7901,6 +7902,17 @@ dependencies = [
  "wugs-model",
  "wugs-oplog",
  "wugs-projection",
+]
+
+[[package]]
+name = "wugs-tei"
+version = "0.0.1"
+dependencies = [
+ "wugs-conllu",
+ "wugs-core",
+ "wugs-model",
+ "wugs-projection",
+ "wugs-xml",
 ]
 
 [[package]]

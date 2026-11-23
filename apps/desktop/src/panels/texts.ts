@@ -20,6 +20,7 @@ const TEXT_FORMATS: [TextFormat, string][] = [
   ["flextext", "FLEx (.flextext)"],
   ["textgrid", "Praat (.TextGrid)"],
   ["conllu", "CoNLL-U, Universal Dependencies (.conllu)"],
+  ["tei", "TEI P5 (.xml)"],
   ["plaintext", "Plain text, a line per segment (.txt)"],
 ];
 const LEXICON_FORMATS: [LexiconFormat, string][] = [
@@ -59,9 +60,9 @@ async function work(label: string, action: () => Promise<void>) {
 
 async function importOne() {
   const path = await pickFile({
-    title: "Import a file from ELAN, FLEx, Praat, Toolbox or CoNLL-U, or plain text",
+    title: "Import a file from ELAN, FLEx, Praat, Toolbox, CoNLL-U or TEI, or plain text",
     filters: [
-      { name: "ELAN, FLEx, Praat, Toolbox, CoNLL-U, tables of sentences, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "conllu", "conll", "csv", "tsv", "txt"] },
+      { name: "ELAN, FLEx, Praat, Toolbox, CoNLL-U, TEI, tables of sentences, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "csv", "tsv", "txt"] },
       { name: "All files", extensions: ["*"] },
     ],
   });
@@ -171,7 +172,7 @@ export const textsPanel: PanelDef = {
           h("button", {
             type: "button",
             textContent: busy === "import" ? "Importing…" : "Import a file…",
-            title: "ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu (tags and trees kept), a .csv/.tsv table of sentences, or plain text .txt (a segment per sentence)",
+            title: "ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu (tags and trees kept), TEI .xml, a .csv/.tsv table of sentences, or plain text .txt (a segment per sentence)",
             disabled: busy !== null,
             onclick: () => void importOne(),
           }),
