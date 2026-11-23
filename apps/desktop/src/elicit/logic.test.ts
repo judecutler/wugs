@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, ownListLine, wordlistLines } from "./logic.ts";
+import { exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, ownListLine, wordlistLines, coverageLine, nextEmptyDomain } from "./logic.ts";
 
 const c = (id: string, answered: boolean, skipped = false) => ({ id, skipped, answers: answered ? [{}] : [] });
 const list = [c("a", true), c("b", false), c("c", false, true), c("d", false)];
@@ -62,4 +62,19 @@ test("the word list export is reported in words", () => {
 test("loading a word list of one's own is reported in words", () => {
   assert.equal(ownListLine({ summary: { name: "Body parts", total: 2 }, created: 2, already: 0, withConcepticon: 2 }), "«Body parts»: 2 concepts loaded. 2 concepts are linked to Concepticon.");
   assert.match(ownListLine({ summary: { name: "B", total: 3 }, created: 1, already: 2, withConcepticon: 0 }), /^«B»: 1 new concept added, 2 already there\. None names/);
+});
+
+test("domain coverage and the next domain still empty", () => {
+  const all = [
+    { id: "1", depth: 0, words: 2 },
+    { id: "1.1", depth: 1, words: 0 },
+    { id: "1.2", depth: 1, words: 1 },
+    { id: "2", depth: 0 },
+  ];
+  assert.equal(coverageLine(all), "3 words in 2 of 4 domains (50%).");
+  assert.equal(coverageLine(all.map((d) => ({ ...d, words: 0 }))), "No words collected yet in any of the 4 domains.");
+  assert.equal(nextEmptyDomain(all, null)?.id, "1.1");
+  assert.equal(nextEmptyDomain(all, "1.1")?.id, "2");
+  assert.equal(nextEmptyDomain(all, "2")?.id, "1.1", "wraps round");
+  assert.equal(nextEmptyDomain(all.map((d) => ({ ...d, words: 1 })), "1"), null);
 });

@@ -457,7 +457,7 @@ export type PronunciationView = {
   audio: { sourceId: string; label: string; startMs: number; endMs: number } | null;
 };
 export type EntryEdit = { entry: EntryView | null; notes: string[] };
-export type DomainItem = { id: string; code: string; label: string; description: string; depth: number };
+export type DomainItem = { id: string; code: string; label: string; description: string; depth: number; words?: number };
 export type DomainsLoaded = { created: number; already: number; notes: string[] };
 export type LexemeField = "lemma" | "citation" | "pos-of-speech";
 

@@ -11,7 +11,7 @@ import {
 import { emptyState, h } from "../dom";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { localDay } from "../dates";
-import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, ownListLine, soundLine, soundSegment, wordlistLines, type Filter } from "../elicit/logic";
+import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, ownListLine, soundLine, soundSegment, wordlistLines, coverageLine, nextEmptyDomain, type Filter } from "../elicit/logic";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { elicitationSheet } from "../elicit/sheet";
 import { clockTime } from "../search/logic";
@@ -90,6 +90,7 @@ export const elicitPanel: PanelDef = {
     // domains
     let domains: DomainItem[] | null = null;
     let domainQuery = "";
+    let emptyOnly = false;
     let domain: DomainQuestions | null = null;
 
     let queue: Promise<unknown> = Promise.resolve();
@@ -582,27 +583,47 @@ export const elicitPanel: PanelDef = {
       }
       const search = h("input", { type: "search", value: domainQuery, placeholder: "Find a domain: a word or a number (e.g. 1.1.1)", ariaLabel: "Find a semantic domain" });
       const results = h("ul", { className: "lx-options el-domains" });
+      const shown = () => filterDomains(emptyOnly ? all.filter((d) => (d.words ?? 0) === 0) : all, domainQuery, 60);
+      const open = (id: string) =>
+        void enqueue(async () => {
+          domain = await domainQuestions({ domainId: id });
+          draw();
+          el.querySelector<HTMLInputElement>(".el-collect input")?.focus();
+        });
+      const emptyBox = h("input", { type: "checkbox", checked: emptyOnly });
+      emptyBox.onchange = () => {
+        emptyOnly = emptyBox.checked;
+        paint();
+      };
+      const next = nextEmptyDomain(all, domain?.id ?? null);
+      const coverage = h(
+        "div",
+        { className: "el-coverage" },
+        h("p", { className: "note", textContent: coverageLine(all) }),
+        h("label", { className: "el-empty-only" }, emptyBox, " Only domains with no words yet"),
+        next === null
+          ? null
+          : h("button", { type: "button", textContent: "Next empty domain", title: `Go on to ${next.code} ${next.label}, the next domain in the outline with no words yet, as a Rapid Word Collection session does`, onclick: () => open(next.id) }),
+      );
       const paint = () => {
         results.replaceChildren(
-          ...filterDomains(all, domainQuery, 60).map((d) =>
+          ...shown().map((d) =>
             h(
               "li",
               {
                 className: domain?.id === d.id ? "on" : "",
                 title: d.description,
-                onclick: () => void enqueue(async () => {
-                  domain = await domainQuestions({ domainId: d.id });
-                  draw();
-                  el.querySelector<HTMLInputElement>(".el-collect input")?.focus();
-                }),
+                onclick: () => open(d.id),
               },
               h("span", { className: "lx-code", textContent: d.code }),
               ` ${d.label}`,
+              (d.words ?? 0) > 0 ? h("span", { className: "el-count", textContent: String(d.words), title: `${d.words} ${d.words === 1 ? "word" : "words"} collected here` }) : null,
             ),
           ),
         );
+        const list = shown();
         for (const [i, li] of [...results.children].entries()) {
-          const d = filterDomains(all, domainQuery, 60)[i];
+          const d = list[i];
           if (d !== undefined && li instanceof HTMLElement) li.style.paddingLeft = `${6 + Math.min(d.depth, 6) * 10}px`;
         }
       };
@@ -611,7 +632,7 @@ export const elicitPanel: PanelDef = {
         paint();
       };
       paint();
-      const left = h("div", { className: "el-domain-list" }, search, results);
+      const left = h("div", { className: "el-domain-list" }, coverage, search, results);
       return [h("div", { className: "lx-body" }, left, h("div", { className: "lx-entry" }, domain === null ? h("p", { className: "note", textContent: "Pick a domain to see its questions." }) : domainDetail(domain)))];
     }
 
@@ -627,6 +648,7 @@ export const elicitPanel: PanelDef = {
         void enqueue(async () => {
           const r = await domainCollect({ domainId: d.id, form: typed, gloss: g });
           domain = r.domain;
+          domains = await domainsList();
           notes(r.notes);
           touchLexicon();
           draw();

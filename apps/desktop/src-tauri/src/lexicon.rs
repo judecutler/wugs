@@ -255,6 +255,8 @@ pub struct DomainItem {
     pub description: String,
     /// 0 for a top-level domain.
     pub depth: usize,
+    /// Live senses of live entries assigned to it (not its subdomains').
+    pub words: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -748,6 +750,23 @@ pub fn domains_list(session: &mut Session) -> Result<Vec<DomainItem>, String> {
     for list in children.values_mut() {
         list.sort();
     }
+    // How many live senses of live entries each domain holds, each pair once.
+    let mut words: BTreeMap<String, std::collections::BTreeSet<String>> = BTreeMap::new();
+    for link in p.proj.entities_of_kind("sense-domain")? {
+        if p.proj.is_tombstoned(&link)? {
+            continue;
+        }
+        let (Some(sense), Some(dom)) = (p.proj.field_str(&link, "sense")?, p.proj.field_str(&link, "domain")?) else { continue };
+        if p.proj.is_tombstoned(&sense)? {
+            continue;
+        }
+        match p.proj.field_str(&sense, "lexeme")? {
+            Some(lex) if !p.proj.is_tombstoned(&lex)? => {
+                words.entry(dom).or_default().insert(sense);
+            }
+            _ => {}
+        }
+    }
     let mut out = Vec::with_capacity(ids.len());
     // Iterative walk; a parent cycle (validator #6 holds those) cannot loop
     // here because each id is emitted at most once.
@@ -762,6 +781,7 @@ pub fn domains_list(session: &mut Session) -> Result<Vec<DomainItem>, String> {
             label: str_field(p, &id, "label")?,
             description: str_field(p, &id, "description")?,
             depth,
+            words: words.get(&id).map_or(0, |s| s.len()),
             id: id.clone(),
         });
         for (_, child) in children.get(&id).into_iter().flatten().rev() {

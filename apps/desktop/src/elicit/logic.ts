@@ -90,3 +90,26 @@ export function ownListLine(r: { summary: { name: string; total: number }; creat
   const linked = r.withConcepticon === 0 ? " None names a Concepticon concept set, so the export for comparison has no Concepticon IDs; a Concepticon_ID column adds them." : ` ${n(r.withConcepticon, "concept is", "concepts are")} linked to Concepticon.`;
   return `${added}.${linked}`;
 }
+
+/** A semantic domain as the coverage view reads it. */
+export type CoveredDomain = { id: string; depth: number; words?: number };
+
+/** "Words in 41 of 1,792 domains (2%)", or what to do when none has any yet. */
+export function coverageLine(all: readonly CoveredDomain[]): string {
+  const with_ = all.filter((d) => (d.words ?? 0) > 0).length;
+  if (all.length === 0) return "";
+  if (with_ === 0) return `No words collected yet in any of the ${all.length.toLocaleString("en")} domains.`;
+  const words = all.reduce((n, d) => n + (d.words ?? 0), 0);
+  const share = Math.round((100 * with_) / all.length);
+  return `${words.toLocaleString("en")} ${words === 1 ? "word" : "words"} in ${with_.toLocaleString("en")} of ${all.length.toLocaleString("en")} domains (${share === 0 ? "under 1" : share}%).`;
+}
+
+/** The first domain after `current`, in outline order, with no words yet (wrapping round), as a Rapid Word Collection session works through them. */
+export function nextEmptyDomain<T extends CoveredDomain>(all: readonly T[], current: string | null): T | null {
+  const at = current === null ? -1 : all.findIndex((d) => d.id === current);
+  for (let k = 1; k <= all.length; k++) {
+    const d = all[(at + k + all.length) % all.length]!;
+    if ((d.words ?? 0) === 0) return d;
+  }
+  return null;
+}
