@@ -321,7 +321,7 @@ The segment needs start and end times for this. If it has none, give it times on
 
 Under **Notes**, at the bottom of the Gloss panel, type anything you want to remember about the sentence: "the speaker hesitated here", "check this form with M.", "compare text 3". Press Enter or leave the field to keep it. A sentence can have as many notes as you like. Retype a note to change it, or empty it to delete it.
 
-Notes belong to the sentence's text, so they have its sharing level, and they sync with the project. Two people can add notes to the same sentence at once, and both notes stay. The **Interlinear** tab shows each note under its sentence, and **Search** finds words in notes too: the hit opens the sentence and says "note".
+Notes belong to the sentence's text, so they have its sharing level, and they sync with the project. Two people can add notes to the same sentence at once, and both notes stay. The **Interlinear** tab shows each note under its sentence, and **Search** finds words in notes too: the hit opens the sentence and says "note". Notes go in and out of FlexText as FLEx's Note line.
 
 ### Copy an example into a paper
 

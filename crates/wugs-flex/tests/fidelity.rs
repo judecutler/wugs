@@ -514,3 +514,29 @@ fn an_allomorph_added_in_wugs_goes_out_as_a_variant() {
     fs::remove_dir_all(root).ok();
     fs::remove_dir_all(root2).ok();
 }
+
+#[test]
+fn flextext_notes_become_notes_and_go_back_out() {
+    let (root, mut p) = temp_project();
+    let r = import_flextext(&mut p, FLEXTEXT, "T").unwrap();
+    let txt = r.texts[0].clone();
+    let seg = p.proj.ordered_children("text", &txt, "segment").unwrap().into_iter().find(|s| !p.segment_notes(s).unwrap().is_empty()).expect("the note became a note");
+    let notes = p.segment_notes(&seg).unwrap();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].1, "Said quickly; check the vowel of \"came\".");
+    // Unchanged, it goes out as it came (the round trip test checks the rest).
+    let out = export_flextext(&p, &txt).unwrap();
+    assert_eq!(out.matches("type=\"note\"").count(), 1, "{out}");
+    assert!(out.contains("check the vowel of"));
+    // Edited and added in wugs, the export follows.
+    p.set_note(&txt, &notes[0].0, "Said quickly.").unwrap();
+    p.add_segment_note(&txt, &seg, "Second take is clearer.").unwrap();
+    let out = export_flextext(&p, &txt).unwrap();
+    assert!(out.contains("<item type=\"note\" lang=\"en\">Said quickly.</item>") && out.contains("<item type=\"note\" lang=\"en\">Second take is clearer.</item>"), "{out}");
+    assert!(!out.contains("check the vowel"));
+    for (id, _) in p.segment_notes(&seg).unwrap() {
+        p.delete_note(&txt, &id).unwrap();
+    }
+    assert!(!export_flextext(&p, &txt).unwrap().contains("type=\"note\""), "deleted notes leave");
+    std::fs::remove_dir_all(root).ok();
+}

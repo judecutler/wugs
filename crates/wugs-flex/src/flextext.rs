@@ -225,6 +225,12 @@ pub fn import_flextext(project: &mut Project, input: &str, title_fallback: &str)
                     fields.push((F_PARAGRAPH_GUID, Value::str(g)));
                 }
                 let seg = t.create("segment", "seg", &text, fields);
+                // FLEx's Note line: each note item is also a note on the
+                // sentence (an Annotation), so wugs shows and edits it; the
+                // export writes the item back only from these notes.
+                for note in ph.items.iter().filter(|i| i.kind == "note" && !i.text.trim().is_empty()) {
+                    t.create("annotation", "ann", &text, vec![("target", Value::str(&seg)), ("kind", Value::str("note")), ("body", Value::str(&note.text))]);
+                }
                 if let Some(gls) = first(&ph.items, "gls") {
                     t.create(
                         "segment",
@@ -614,6 +620,20 @@ fn render_items(mut items: Vec<Item>, primaries: &[Primary]) -> Vec<Item> {
     items
 }
 
+/// A phrase's note items as its notes in wugs say: unchanged notes keep the
+/// items as they came (order and language), else the old note items go and
+/// the notes are written after the other items, in the first note's language.
+fn with_notes(mut items: Vec<Item>, notes: &[String]) -> Vec<Item> {
+    let stored: Vec<&str> = items.iter().filter(|i| i.kind == "note").map(|i| i.text.as_str()).collect();
+    if stored.iter().map(|t| t.trim()).eq(notes.iter().map(|n| n.as_str())) {
+        return items;
+    }
+    let lang = items.iter().find(|i| i.kind == "note").map(|i| i.lang.clone()).unwrap_or_else(|| "en".into());
+    items.retain(|i| i.kind != "note");
+    items.extend(notes.iter().map(|n| Item { kind: "note".into(), lang: lang.clone(), text: n.clone() }));
+    items
+}
+
 fn item_node(i: &Item) -> XmlNode {
     XmlNode::new("item")
         .with_attr("type", &i.kind)
@@ -712,6 +732,7 @@ pub fn export_flextext(project: &Project, text: &str) -> Result<String, String> 
                 Primary { kind: "gls", value: free, owned: true, default_lang: "en" },
             ],
         );
+        let items = with_notes(items, &project.segment_notes(seg)?.into_iter().map(|(_, body)| body).collect::<Vec<_>>());
         let (before, after): (Vec<&Item>, Vec<&Item>) = items.iter().partition(|i| i.kind == "segnum");
         for i in before {
             ph.children.push(item_node(i));
