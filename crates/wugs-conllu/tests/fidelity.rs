@@ -84,7 +84,10 @@ fn segments_read_as_the_sentence_and_punctuation_is_not_a_word() {
 fn the_same_file_again_adds_nothing() {
     let (root, mut p) = temp_project();
     let tier = tier(&mut p);
-    import_conllu(&mut p, SAMPLE, "sample", &tier).unwrap();
+    let first = import_conllu(&mut p, SAMPLE, "sample", &tier).unwrap();
+    let meta = p.text_metadata(&first.texts[0]).unwrap();
+    assert_eq!(meta, vec![("author".to_string(), "Invented Author".to_string()), ("genre".to_string(), "conversation".to_string())], "GUM's # meta:: lines");
+    assert!(p.text_metadata(&first.texts[1]).unwrap().is_empty(), "metadata stays with its document");
     let again = import_conllu(&mut p, SAMPLE, "sample", &tier).unwrap();
     assert!(again.texts.is_empty());
     assert_eq!(again.matched.len(), 2);
@@ -97,7 +100,7 @@ fn a_broken_file_is_refused_whole() {
     let tier = tier(&mut p);
     let broken = format!("{SAMPLE}1\tok\t_\t_\t_\t_\t0\troot\t_\t_\n3\tgap\t_\t_\t_\t_\t1\tdep\t_\t_\n");
     let err = import_conllu(&mut p, &broken, "sample", &tier).unwrap_err();
-    assert!(err.contains("line 31"), "{err}");
+    assert!(err.contains("line 33"), "{err}");
     assert!(p.proj.entities_of_kind("text").unwrap().is_empty(), "nothing half-imported");
     std::fs::remove_dir_all(root).ok();
 }
@@ -136,8 +139,9 @@ fn a_glossed_wugs_text_exports_with_its_analysis_in_misc() {
     let m = |surface: &str, kind: &str, gloss: &str, sense: Option<&str>| MorphSpec { surface: surface.into(), morph_type: kind.into(), gloss: Some(gloss.into()), glosses_by_lang: Default::default(), sense: sense.map(str::to_string) };
     p.apply_analysis(&text, &toks[0], &[m("ni-", "prefix", "1SG", None), m("kani", "root", "count", Some(&sense))]).unwrap();
     p.apply_analysis(&text, &toks[1], &[m("teka", "root", "ten", None)]).unwrap();
+    p.set_text_metadata(&text, "Speaker", "A").unwrap();
     let out = export(&p, "Counting", &[ExportSentence { segment: seg, translations: vec![(Some("en".into()), "I count to ten.".into()), (None, "Cuento hasta diez.".into())] }]).unwrap();
-    let expected = "# newdoc id = Counting\n# sent_id = 1\n# text = nikani tekama.\n# text_en = I count to ten.\n# translation = Cuento hasta diez.\n\
+    let expected = "# newdoc id = Counting\n# meta::speaker = A\n# sent_id = 1\n# text = nikani tekama.\n# text_en = I count to ten.\n# translation = Cuento hasta diez.\n\
 1\tnikani\tkani\tVERB\tVerb\t_\t_\t_\t_\tMSeg=ni-kani|MGloss=1SG-count\n\
 2\ttekama\t_\t_\t_\t_\t_\t_\t_\tGloss=ten\n\n";
     assert_eq!(out.conllu, expected);
@@ -166,7 +170,7 @@ fn vertical_and_tagged_text_carry_the_tags() {
     let mut s = sentences(&p, &texts[0], &tier);
     s[0].translations.push((Some("en".into()), "Let's go to \"the\" sea.".into()));
     let v = wugs_conllu::vertical(&p, "playa & co", &texts[0], &s).unwrap().conllu;
-    assert!(v.starts_with(&format!("<text id=\"{}\" title=\"playa &amp; co\">\n<s id=\"1\" translation=\"Let&apos;s go to &quot;the&quot; sea.\">\nVamos\tir\tVERB\tV\tMood=Imp|Number=Plur|Person=1\n", texts[0])), "{v}");
+    assert!(v.starts_with(&format!("<text id=\"{}\" title=\"playa &amp; co\" author=\"Invented Author\" genre=\"conversation\">\n<s id=\"1\" translation=\"Let&apos;s go to &quot;the&quot; sea.\">\nVamos\tir\tVERB\tV\tMood=Imp|Number=Plur|Person=1\n", texts[0])), "{v}");
     assert!(v.contains("mar\tmar\tNOUN\tNC\tNumber=Sing\n<g/>\n.\t.\tPUNCT\tFP\t_\n</s>"), "glue where no space follows: {v}");
     assert!(v.trim_end().ends_with("</text>"));
     let t = wugs_conllu::tagged_text(&p, "playa", &s).unwrap().conllu;

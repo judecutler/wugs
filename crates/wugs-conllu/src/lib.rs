@@ -50,6 +50,25 @@ struct Doc {
     sentences: Vec<Sentence>,
 }
 
+impl Doc {
+    /// Document metadata in the GUM convention, `# meta::<key> = <value>`
+    /// (usually under `# newdoc`); the first value of a key wins. The
+    /// comments stay on their sentences too, so the file still exports as
+    /// it came.
+    fn meta(&self) -> Vec<(String, String)> {
+        let mut out: Vec<(String, String)> = Vec::new();
+        for c in self.sentences.iter().flat_map(|s| &s.comments) {
+            let Some(rest) = c.trim_start().strip_prefix("meta::") else { continue };
+            let Some((k, v)) = rest.split_once('=') else { continue };
+            let (k, v) = (k.trim(), v.trim());
+            if !k.is_empty() && !v.is_empty() && !out.iter().any(|(o, _)| o == k) {
+                out.push((k.to_string(), v.to_string()));
+            }
+        }
+        out
+    }
+}
+
 /// Split at `# newdoc` (the title is its `id`, else the file's name with a
 /// number), or the whole file as one document named `fallback`.
 fn documents(sentences: Vec<Sentence>, fallback: &str) -> Vec<Doc> {
@@ -90,10 +109,14 @@ pub fn import_conllu(p: &mut Project, input: &str, fallback_title: &str, tier: &
     for doc in documents(sentences, fallback_title) {
         let title = p.proj.nfc(&doc.title);
         let contents: Vec<String> = doc.sentences.iter().map(|s| p.proj.nfc(content_of(s).trim())).collect();
+        let meta = doc.meta();
         if let Some(t) = same_text(p, &title, tier, &contents)? {
+            let rows: Vec<(String, String, String)> = meta.iter().map(|(k, v)| (t.clone(), k.clone(), v.clone())).collect();
+            p.import_text_metadata(&rows)?;
             report.matched.push(t);
             continue;
         }
+        let meta: Vec<(String, Value)> = meta.iter().filter_map(|(k, v)| Some((format!("{}{}", wugs_core::metadata::PREFIX, wugs_core::metadata::key_of(k)?), Value::Str(p.proj.nfc(v))))).collect();
         // Everything is worked out first; the txn only writes.
         let mut prepared = Vec::new();
         for (si, (s, content)) in doc.sentences.iter().zip(&contents).enumerate() {
@@ -128,7 +151,9 @@ pub fn import_conllu(p: &mut Project, input: &str, fallback_title: &str, tier: &
             prepared.push((seg, fields, words));
         }
         let mut t = p.intent("import-conllu");
-        let text = t.create_scope_root("text", "txt", vec![("title", Value::str(&title))]);
+        let mut text_fields = vec![("title", Value::str(&title))];
+        text_fields.extend(meta.iter().map(|(k, v)| (k.as_str(), v.clone())));
+        let text = t.create_scope_root("text", "txt", text_fields);
         for (seg, mut fields, words) in prepared {
             fields.insert(0, ("text", Value::str(&text)));
             t.create_with_id("segment", &seg, &text, fields);
@@ -309,6 +334,12 @@ fn sentence(p: &Project, title: &str, si: usize, es: &ExportSentence, notes: &mu
         _ => {
             if si == 0 {
                 s.comments.push(format!(" newdoc id = {}", one_line(title)));
+                // The text's metadata in GUM's form, which import reads back.
+                if let Some(text) = p.proj.field_str(seg, "text")? {
+                    for (k, v) in p.text_metadata(&text)? {
+                        s.comments.push(format!(" meta::{k} = {}", one_line(&v)));
+                    }
+                }
             }
             s.comments.push(format!(" sent_id = {}", si + 1));
             s.comments.push(format!(" text = {}", one_line(&content)));
@@ -493,7 +524,15 @@ fn xml_text(s: &str) -> String {
 /// sentence's `translation` attribute.
 pub fn vertical(p: &Project, title: &str, text_id: &str, sentences: &[ExportSentence]) -> Result<Exported, String> {
     let (out, notes) = export_sentences(p, title, sentences)?;
-    let mut v = format!("<text id=\"{}\" title=\"{}\">\n", xml_text(text_id), xml_text(title));
+    // The text's metadata as attributes, the way CWB corpora carry
+    // `text_genre` and the like (each key once; id and title are ours).
+    let mut attrs = format!("id=\"{}\" title=\"{}\"", xml_text(text_id), xml_text(title));
+    for (k, val) in p.text_metadata(text_id)? {
+        if k != "id" && k != "title" {
+            attrs.push_str(&format!(" {k}=\"{}\"", xml_text(&val)));
+        }
+    }
+    let mut v = format!("<text {attrs}>\n");
     for (n, (si, s)) in out.iter().enumerate() {
         let es = &sentences[*si];
         let mut attrs = format!(" id=\"{}\"", n + 1);

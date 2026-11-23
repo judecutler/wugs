@@ -524,6 +524,12 @@ export const exportText = (args: { textId: string; format: TextFormat; folder: s
 export const exportLexicon = (args: { format: LexiconFormat; folder: string }) => invoke<Exported>("export_lexicon", args);
 /** `date`: today on this computer's calendar (YYYY-MM-DD), which names the package folder. */
 export const sealProject = (args: { folder: string; date: string }) => invoke<Sealed>("seal_project", args);
+/** A text's document metadata and every key the project uses (src-tauri/src/metadata.rs). */
+export const textMetadata = (args: { textId: string }) => invoke<import("./metadata/logic").MetaView>("text_metadata", args);
+/** Set one key of a text's metadata; an empty value clears it. */
+export const setTextMetadata = (args: { textId: string; key: string; value: string }) => invoke<import("./metadata/logic").MetaView>("set_text_metadata", args);
+/** Bring in a CSV or TSV of document metadata, one row per text. */
+export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
 export const projectLanguage = () => invoke<import("./cldf/logic").Language>("project_language");
 export const setProjectLanguage = (args: { language: import("./cldf/logic").Language }) => invoke<import("./cldf/logic").Language>("set_project_language", args);
 export const exportCldf = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Published>("export_cldf", args);

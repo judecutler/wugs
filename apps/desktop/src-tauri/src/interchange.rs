@@ -136,7 +136,7 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
 /// Excel's ordinary CSV is Windows-1252, which differs from Latin-1 only in
 /// 0x80–0x9F (curly quotes, dashes, …, €): when the bytes were not UTF-8 or
 /// UTF-16, those characters are mapped to what Excel meant.
-fn windows_1252(text: String, bytes: &[u8]) -> String {
+pub(crate) fn windows_1252(text: String, bytes: &[u8]) -> String {
     if std::str::from_utf8(bytes).is_ok() || bytes.starts_with(&[0xFF, 0xFE]) || bytes.starts_with(&[0xFE, 0xFF]) {
         return text;
     }

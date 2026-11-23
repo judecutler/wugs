@@ -480,6 +480,16 @@ wugs names the file after the text's title and never replaces a file that exists
 
 At the top of **Import and export**, type the language's name and, if you know them, its Glottocode (from [glottolog.org](https://glottolog.org), like `stan1293`) and ISO 639-3 code (three letters, like `tur`). Each field saves when you press Enter or leave it. Archive packages and CLDF datasets carry them, so the data can be found and joined with other datasets. Everyone on the project sees the same language.
 
+### Describe each text
+
+Select a text in the **Texts** panel. Under the list, **Details** shows what is recorded about it: who wrote or spoke it, when, where, what kind of text it is. To add a detail, type a name (such as `genre`, `year` or `speaker`) and a value, then press Enter. Names you used on other texts are offered as you type. Change a value and press Enter or leave the field to save it. Press × to clear it.
+
+To describe many texts at once, make a table with a row for each text: one column that names the text (its title, or the name of the file it came from), and a column for each detail. Save it as `.csv` or `.tsv`, then press **Import details…** under Import and export. wugs reports the rows that named no text. Importing the same table again changes only what is different.
+
+Details also come in with files: a TEI file's header (author, date, genre, licence, speakers, place and more), and the `# meta::` lines of a CoNLL-U file. They go back out the same way in TEI and CoNLL-U, and as attributes of `<text>` in a CWB vertical file.
+
+Use details to search part of a corpus. See [Search with CQP queries](#search-with-cqp-queries).
+
 ### Publish the dictionary and examples as CLDF
 
 Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cldf-<date>` holding a CLDF Dictionary dataset: the CSV tables and metadata that pycldf, Zenodo, Dictionaria and other CLLD sites read.
@@ -535,6 +545,15 @@ Choose **CQP query** to search the way CQPweb, Sketch Engine and NoSketch Engine
 | `[gloss=".*PL.*"]` | words whose morpheme glosses include PL |
 
 The attributes are `word`, `lemma`, `upos` (also `pos`), `xpos`, `feats` and `gloss`. A value is a regular expression that must match the whole value. Case matters unless you add `%c`, and `%d` ignores diacritics. Join conditions with `&` (and), `|` (or) and `!` (not), and repeat a token with `?`, `*`, `+` or `{1,3}`. `[]` is any token.
+
+To search only some texts, end the query with `::` and a condition on their details, written as CQPweb writes it. Join several conditions with `&`:
+
+| Query | Finds |
+| --- | --- |
+| `[upos="NOUN"] :: match.text_genre="news"` | nouns in texts whose genre is news |
+| `"dog" :: match.text_year="19.*" & match.text_speaker!="B"` | dog in texts from the 1900s not spoken by B |
+
+A text that lacks the detail reads as empty, so `!=` keeps it.
 
 Lemmas and tags come from CoNLL-U files. For words you glossed in wugs, the lemma is the root's lexicon entry, and its part of speech is the tag. Punctuation counts as a token in a query, so `[upos!="PUNCT"]` skips it. A match never runs from one sentence into the next. If a query has a mistake, the panel says what is wrong and where.
 

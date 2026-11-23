@@ -140,6 +140,7 @@ impl Parser {
                     let (case, diacritics) = self.flags()?;
                     Cond::Test { attr: Attr::Word, negate: false, re: compile(&text, case, diacritics, at)?, diacritics }
                 }
+                Some(':') if self.chars.get(self.i + 1) == Some(&':') => break,
                 Some(c) => return self.err(format!("«{c}» cannot start a token; write [word=\"…\"], \"…\" or []")),
                 None => break,
             };
@@ -319,12 +320,85 @@ fn strip_marks(s: &str) -> String {
 /// A parsed query.
 pub struct Query {
     items: Vec<Item>,
+    /// Conditions on the text's metadata after `::`, all of which must hold.
+    meta: Vec<MetaTest>,
+}
+
+/// `match.text_<key>="re"` (or `!=`) after `::`: a condition on the
+/// metadata of the text a match is in, as CQPweb writes it.
+#[derive(Debug)]
+struct MetaTest {
+    /// The metadata keys it may name, tried in order: `genre`, then
+    /// `text_genre` for `match.text_genre`.
+    keys: Vec<String>,
+    negate: bool,
+    re: Regex,
+    diacritics: bool,
+}
+
+impl MetaTest {
+    fn holds(&self, meta: &[(String, String)]) -> bool {
+        let value = self.keys.iter().find_map(|k| meta.iter().find(|(m, _)| m == k).map(|(_, v)| v.as_str())).unwrap_or("");
+        let value = if self.diacritics { strip_marks(value) } else { value.to_string() };
+        self.re.is_match(&value) != self.negate
+    }
+}
+
+impl Parser {
+    /// After `::`: `match.text_<key>` conditions joined by `&`.
+    fn meta(&mut self) -> Result<Vec<MetaTest>, QueryError> {
+        let mut tests = Vec::new();
+        loop {
+            self.skip();
+            let start = self.i;
+            while self.chars.get(self.i).is_some_and(|c| c.is_alphanumeric() || matches!(c, '_' | '.')) {
+                self.i += 1;
+            }
+            let name: String = self.chars[start..self.i].iter().collect::<String>().to_lowercase();
+            let rest = name.strip_prefix("match.").unwrap_or(&name);
+            if rest.is_empty() {
+                return Err(QueryError { at: start, message: "after :: comes a condition on the text, like match.text_genre=\"news\"".into() });
+            }
+            let mut keys = Vec::new();
+            if let Some(k) = rest.strip_prefix("text_").filter(|k| !k.is_empty()) {
+                keys.push(k.to_string());
+            }
+            keys.push(rest.to_string());
+            let negate = if self.eat('!') {
+                if !self.eat('=') {
+                    return self.err("write != for \"does not match\"");
+                }
+                true
+            } else if self.eat('=') {
+                false
+            } else {
+                return self.err(format!("{name} is followed by = or != and a value in quotes"));
+            };
+            let (text, at) = self.string()?;
+            let (case, diacritics) = self.flags()?;
+            tests.push(MetaTest { keys, negate, re: compile(&text, case, diacritics, at)?, diacritics });
+            if !self.eat('&') {
+                break;
+            }
+        }
+        if self.peek().is_some() {
+            return self.err("a query ends after its text conditions; join more with &");
+        }
+        Ok(tests)
+    }
 }
 
 /// Read a query, or say what is wrong with it and where.
 pub fn parse(query: &str) -> Result<Query, QueryError> {
     let mut p = Parser { chars: query.chars().collect(), i: 0 };
-    Ok(Query { items: p.items()? })
+    let items = p.items()?;
+    let meta = if p.eat(':') {
+        p.i += 1;
+        p.meta()?
+    } else {
+        Vec::new()
+    };
+    Ok(Query { items, meta })
 }
 
 /// One token as a query sees it.
@@ -482,6 +556,12 @@ pub fn run(session: &mut Session, query: &str, only_text: Option<&str>) -> Resul
         if only_text.is_some_and(|t| t != text) || p.proj.is_tombstoned(&text)? {
             continue;
         }
+        if !q.meta.is_empty() {
+            let meta = p.text_metadata(&text)?;
+            if !q.meta.iter().all(|m| m.holds(&meta)) {
+                continue;
+            }
+        }
         let title = p.proj.field_str(&text, "title")?.unwrap_or_default();
         for seg in p.proj.ordered_children("text", &text, "segment")? {
             let tier = p.proj.field_str(&seg, "tier")?.unwrap_or_default();
@@ -571,7 +651,8 @@ mod tests {
         let p = project(&mut s).unwrap();
         let tier = crate::session::utterance_tier(p).unwrap();
         let ud = "# text = Vámonos al mar.\n1-2\tVámonos\t_\t_\t_\t_\t_\t_\t_\t_\n1\tVamos\tir\tVERB\t_\tMood=Imp\t0\troot\t_\t_\n2\tnos\tnosotros\tPRON\t_\t_\t1\tobj\t_\t_\n3-4\tal\t_\t_\t_\t_\t_\t_\t_\t_\n3\ta\ta\tADP\t_\t_\t5\tcase\t_\t_\n4\tel\tel\tDET\t_\t_\t5\tdet\t_\t_\n5\tmar\tmar\tNOUN\t_\t_\t1\tobl\t_\tSpaceAfter=No\n6\t.\t.\tPUNCT\t_\t_\t1\tpunct\t_\t_\n\n";
-        wugs_conllu::import_conllu(p, ud, "playa", &tier).unwrap();
+        let playa = wugs_conllu::import_conllu(p, ud, "playa", &tier).unwrap().texts[0].clone();
+        p.set_text_metadata(&playa, "Genre", "beach talk").unwrap();
         let r = run(&mut s, "[upos=\"ADP\"] [upos=\"DET\"] [upos=\"NOUN\"]", None).unwrap();
         assert_eq!(r.total, 1);
         let h = &r.hits[0];
@@ -582,6 +663,12 @@ mod tests {
         assert!(run(&mut s, "[gloss=\".*1SG.*\"]", None).unwrap().total >= 1);
         assert!(run(&mut s, "[lemma=\"kani\"]", None).unwrap().total >= 1);
         assert!(run(&mut s, "[lema=\"x\"]", None).unwrap_err().contains("not an attribute"));
+        // Conditions on the text's metadata, as CQPweb writes them.
+        assert_eq!(run(&mut s, "[upos=\"NOUN\"] :: match.text_genre=\"beach.*\"", None).unwrap().total, 1);
+        assert_eq!(run(&mut s, "[upos=\"NOUN\"] :: match.text_genre!=\"beach.*\"", None).unwrap().total, 0);
+        assert_eq!(run(&mut s, "[upos=\"NOUN\"] :: match.text_genre=\"BEACH TALK\" %c & match.text_year=\"\"", None).unwrap().total, 1, "a missing key reads as empty");
+        assert!(run(&mut s, "[upos=\"NOUN\"] :: genre", None).unwrap_err().contains("followed by = or !="));
+        assert!(run(&mut s, "[upos=\"NOUN\"] :: match.text_genre=\"x\" [word=\"y\"]", None).unwrap_err().contains("ends after"));
         drop(s);
         std::fs::remove_dir_all(dir).ok();
     }

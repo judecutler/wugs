@@ -20,6 +20,7 @@ pub mod kits;
 pub mod layout;
 pub mod lexicon;
 pub mod media_bin;
+pub mod metadata;
 pub mod people;
 pub mod plaintext;
 pub mod table_text;
@@ -145,6 +146,24 @@ fn concordance(s: State<SessionThread>, query: String, kind: concordance::Kind, 
 #[tauri::command(async)]
 fn concordance_query(s: State<SessionThread>, query: String, text_id: Option<String>) -> Result<concordance::Concordance, String> {
     s.run(move |s| cqp::run(s, &query, text_id.as_deref()))
+}
+
+/// A text's document metadata and the keys the project uses.
+#[tauri::command(async)]
+fn text_metadata(s: State<SessionThread>, text_id: String) -> Result<metadata::MetaView, String> {
+    s.run(move |s| metadata::text_metadata(s, &text_id))
+}
+
+/// Set one metadata key of a text; an empty value clears it.
+#[tauri::command(async)]
+fn set_text_metadata(s: State<SessionThread>, text_id: String, key: String, value: String) -> Result<metadata::MetaView, String> {
+    s.run(move |s| metadata::set_text_metadata(s, &text_id, &key, &value))
+}
+
+/// Bring in a table of document metadata (one row per text).
+#[tauri::command(async)]
+fn import_metadata(s: State<SessionThread>, path: String) -> Result<metadata::MetaImport, String> {
+    s.run(move |s| metadata::import_metadata(s, std::path::Path::new(&path)))
 }
 
 /// One sentence's words, tags and tree, for the Sentence panel.
@@ -1463,6 +1482,9 @@ pub fn run() {
             open_sample,
             concordance,
             concordance_query,
+            text_metadata,
+            set_text_metadata,
+            import_metadata,
             sentence_get,
             sentence_set,
             list_texts,

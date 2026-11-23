@@ -4,6 +4,7 @@ import { glottocodeProblem, isoProblem, publishedLines, type Language } from "..
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
+import { detailsSection, importMetadataTable } from "../metadata/section";
 import { megabytes } from "../assist/logic";
 import { localDay } from "../dates";
 import { emptyState, h } from "../dom";
@@ -90,6 +91,18 @@ async function importOne() {
       if (r.text !== null) await selectText(r.text);
     });
   });
+}
+
+async function importDetails() {
+  const path = await pickFile({
+    title: "Import document details: a table with a row per text (a title or file column, then author, date, genre…)",
+    filters: [
+      { name: "Tables", extensions: ["csv", "tsv", "txt"] },
+      { name: "All files", extensions: ["*"] },
+    ],
+  });
+  if (typeof path !== "string") return;
+  await work("details", () => importMetadataTable(path));
 }
 
 async function exportOne(textId: string) {
@@ -296,6 +309,13 @@ export const textsPanel: PanelDef = {
             disabled: busy !== null,
             onclick: () => void importOne(),
           }),
+          h("button", {
+            type: "button",
+            textContent: busy === "details" ? "Importing…" : "Import details…",
+            title: "A .csv or .tsv with a row per text: a title (or file name) column, then any details, such as author, date, genre or speaker. Corpus searches can then pick texts by them.",
+            disabled: busy !== null,
+            onclick: () => void importDetails(),
+          }),
         ),
         h(
           "div",
@@ -368,7 +388,11 @@ export const textsPanel: PanelDef = {
         ),
       );
       void loadLanguage(s.info.projectId);
-      el.replaceChildren(form, list, share);
+      // A redraw keeps focus on the details field in use.
+      const active = document.activeElement as HTMLElement | null;
+      const focusKey = active !== null && el.contains(active) && active.closest(".meta") !== null ? active.dataset.key : undefined;
+      el.replaceChildren(form, list, text === null ? h("span") : detailsSection(text, draw), share);
+      if (focusKey !== undefined) el.querySelector<HTMLElement>(`.meta [data-key="${CSS.escape(focusKey)}"]`)?.focus();
     };
     const view = sliced(el, slice, draw);
     live.add(draw);

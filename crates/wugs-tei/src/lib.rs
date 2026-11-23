@@ -72,6 +72,8 @@ struct Tok {
 
 struct Doc {
     title: Option<String>,
+    /// What the header says about the document, as metadata keys.
+    meta: Vec<(String, String)>,
     units: Vec<Unit>,
 }
 
@@ -252,6 +254,132 @@ fn title_of(tei: &XmlNode) -> Option<String> {
     Some(words_text(title, &mut ignore)).filter(|t| !t.is_empty())
 }
 
+/// Children of `n` with this local name.
+fn kids<'a>(n: &'a XmlNode, name: &'a str) -> impl Iterator<Item = &'a XmlNode> + 'a {
+    n.children.iter().filter(move |c| local(&c.name) == name)
+}
+
+/// The first node down a path of local names.
+fn at<'a>(mut n: &'a XmlNode, path: &[&str]) -> Option<&'a XmlNode> {
+    for name in path {
+        n = n.children.iter().find(|c| local(&c.name) == *name)?;
+    }
+    Some(n)
+}
+
+fn text_of(n: &XmlNode) -> String {
+    words_text(n, &mut BTreeMap::new())
+}
+
+/// A date element: its `when` (or `from`–`to`), else its text.
+fn date_of(n: &XmlNode) -> Option<String> {
+    let v = match (attr(n, "when"), attr(n, "from"), attr(n, "to")) {
+        (Some(w), _, _) => w.to_string(),
+        (None, Some(f), Some(t)) => format!("{f}/{t}"),
+        _ => text_of(n),
+    };
+    Some(v).filter(|v| !v.is_empty())
+}
+
+/// Document metadata from a `teiHeader`, under the keys corpus tools use:
+/// author, editor, date (the text's creation date, else its source's, else
+/// publication), publisher, licence, idno, source (the source's title),
+/// language (`langUsage` idents), genre (a `catRef` or `term` whose scheme
+/// or type names a genre), keywords and category (other terms and
+/// categories), speakers (`particDesc` names) and place (`settingDesc`).
+/// Several values of one key are joined with "; ".
+fn header_meta(tei: &XmlNode) -> Vec<(String, String)> {
+    let Some(h) = kids(tei, "teiHeader").next() else { return Vec::new() };
+    let mut m: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    fn put(m: &mut BTreeMap<&'static str, Vec<String>>, k: &'static str, v: Option<String>) {
+        if let Some(v) = v.map(|v| v.split_whitespace().collect::<Vec<_>>().join(" ")).filter(|v| !v.is_empty()) {
+            let e = m.entry(k).or_default();
+            if !e.contains(&v) {
+                e.push(v);
+            }
+        }
+    }
+    let file = at(h, &["fileDesc"]);
+    if let Some(stmt) = file.and_then(|f| at(f, &["titleStmt"])) {
+        kids(stmt, "author").for_each(|a| put(&mut m, "author", Some(text_of(a))));
+        kids(stmt, "editor").for_each(|a| put(&mut m, "editor", Some(text_of(a))));
+    }
+    let mut extra: Vec<(String, String)> = Vec::new();
+    if let Some(ns) = file.and_then(|f| at(f, &["notesStmt"])) {
+        for n in kids(ns, "note").filter(|n| attr(n, "type") == Some("meta")) {
+            if let Some(k) = attr(n, "n") {
+                extra.push((k.to_string(), text_of(n)));
+            }
+        }
+    }
+    let publication = file.and_then(|f| at(f, &["publicationStmt"]));
+    if let Some(ps) = publication {
+        kids(ps, "publisher").for_each(|n| put(&mut m, "publisher", Some(text_of(n))));
+        kids(ps, "idno").for_each(|n| put(&mut m, "idno", Some(text_of(n))));
+        if let Some(av) = at(ps, &["availability"]) {
+            for l in kids(av, "licence") {
+                put(&mut m, "licence", attr(l, "target").map(str::to_string).or_else(|| Some(text_of(l))));
+            }
+            if attr(av, "status").is_some() && kids(av, "licence").next().is_none() {
+                put(&mut m, "licence", attr(av, "status").map(str::to_string));
+            }
+        }
+    }
+    let bibl = file.and_then(|f| at(f, &["sourceDesc"])).and_then(|s| kids(s, "bibl").chain(kids(s, "biblStruct")).chain(kids(s, "biblFull")).next());
+    if let Some(b) = bibl {
+        if !m.contains_key("author") {
+            kids(b, "author").for_each(|a| put(&mut m, "author", Some(text_of(a))));
+        }
+        kids(b, "title").take(1).for_each(|t| put(&mut m, "source", Some(text_of(t))));
+    }
+    let profile = at(h, &["profileDesc"]);
+    let dates = [
+        profile.and_then(|p| at(p, &["creation", "date"])),
+        bibl.and_then(|b| kids(b, "date").next()),
+        publication.and_then(|p| kids(p, "date").next()),
+    ];
+    if let Some(d) = dates.into_iter().flatten().find_map(date_of) {
+        put(&mut m, "date", Some(d));
+    }
+    if let Some(p) = profile {
+        if let Some(lu) = at(p, &["langUsage"]) {
+            kids(lu, "language").for_each(|l| put(&mut m, "language", attr(l, "ident").map(str::to_string).or_else(|| Some(text_of(l)))));
+        }
+        if let Some(tc) = at(p, &["textClass"]) {
+            let genre = |n: &XmlNode| [attr(n, "scheme"), attr(n, "type")].into_iter().flatten().any(|s| s.to_lowercase().contains("genre"));
+            for c in kids(tc, "catRef") {
+                let targets: Vec<String> = attr(c, "target").unwrap_or_default().split_whitespace().map(|t| t.trim_start_matches('#').to_string()).collect();
+                for v in targets {
+                    put(&mut m, if genre(c) { "genre" } else { "category" }, Some(v));
+                }
+            }
+            for k in kids(tc, "keywords") {
+                for term in kids(k, "term") {
+                    put(&mut m, if genre(k) || genre(term) { "genre" } else { "keywords" }, Some(text_of(term)));
+                }
+            }
+            kids(tc, "classCode").for_each(|c| put(&mut m, "category", Some(text_of(c))));
+        }
+        if let Some(pd) = at(p, &["particDesc"]) {
+            for person in kids(pd, "person").chain(kids(pd, "listPerson").flat_map(|l| kids(l, "person"))) {
+                put(&mut m, "speakers", kids(person, "persName").next().map(text_of).or_else(|| attr(person, "id").map(str::to_string)));
+            }
+        }
+        if let Some(sd) = at(p, &["settingDesc"]) {
+            for s in kids(sd, "setting") {
+                kids(s, "placeName").chain(kids(s, "place")).chain(kids(s, "name")).for_each(|n| put(&mut m, "place", Some(text_of(n))));
+            }
+        }
+    }
+    let mut out: Vec<(String, String)> = m.into_iter().map(|(k, v)| (k.to_string(), v.join("; "))).collect();
+    for (k, v) in extra {
+        if !v.is_empty() && !out.iter().any(|(o, _)| *o == k) {
+            out.push((k, v));
+        }
+    }
+    out
+}
+
 fn docs(root: &XmlNode, report: &mut ImportReport) -> Result<Vec<Doc>, String> {
     let mut out = Vec::new();
     let mut collect = |tei: &XmlNode, report: &mut ImportReport| {
@@ -259,7 +387,7 @@ fn docs(root: &XmlNode, report: &mut ImportReport) -> Result<Vec<Doc>, String> {
         for text in tei.children.iter().filter(|c| local(&c.name) == "text") {
             walk(text, None, &mut units, &mut report.blocks_as_segments, &mut report.not_carried);
         }
-        out.push(Doc { title: title_of(tei), units });
+        out.push(Doc { title: title_of(tei), meta: header_meta(tei), units });
     };
     match local(&root.name) {
         "TEI" | "TEI.2" => collect(root, report),
@@ -289,7 +417,11 @@ pub fn import_tei(p: &mut Project, input: &str, fallback_title: &str, tier: &str
         }
         let title = p.proj.nfc(&doc.title.unwrap_or_else(|| if several { format!("{fallback_title} ({})", di + 1) } else { fallback_title.to_string() }));
         let contents: Vec<String> = doc.units.iter().map(|u| p.proj.nfc(&u.content)).collect();
+        let meta: Vec<(String, Value)> = doc.meta.iter().filter_map(|(k, v)| Some((format!("{}{}", wugs_core::metadata::PREFIX, wugs_core::metadata::key_of(k)?), Value::Str(p.proj.nfc(v))))).collect();
         if let Some(t) = wugs_conllu::same_text(p, &title, tier, &contents)? {
+            // The same document again: its header may have grown, and only what changed is written.
+            let rows: Vec<(String, String, String)> = doc.meta.iter().map(|(k, v)| (t.clone(), k.clone(), v.clone())).collect();
+            p.import_text_metadata(&rows)?;
             report.matched.push(t);
             continue;
         }
@@ -334,7 +466,9 @@ pub fn import_tei(p: &mut Project, input: &str, fallback_title: &str, tier: &str
             prepared.push((seg, fields, words));
         }
         let mut t = p.intent("import-tei");
-        let text = t.create_scope_root("text", "txt", vec![("title", Value::str(&title))]);
+        let mut text_fields = vec![("title", Value::str(&title))];
+        text_fields.extend(meta.iter().map(|(k, v)| (k.as_str(), v.clone())));
+        let text = t.create_scope_root("text", "txt", text_fields);
         for (seg, mut fields, words) in prepared {
             fields.insert(0, ("text", Value::str(&text)));
             t.create_with_id("segment", &seg, &text, fields);
@@ -409,18 +543,95 @@ pub fn export_tei(p: &Project, title: &str, language: Option<(&str, &str)>, sent
     if ranges > 0 {
         notes.push(format!("{ranges} multi-word {} written as {} syntactic words; TEI keeps no range.", if ranges == 1 { "token is" } else { "tokens are" }, if ranges == 1 { "its" } else { "their" }));
     }
-    let mut header = XmlNode::new("teiHeader").with_child(
-        XmlNode::new("fileDesc")
-            .with_child(XmlNode::new("titleStmt").with_child(XmlNode::new("title").with_text(title)))
-            .with_child(XmlNode::new("publicationStmt").with_child(XmlNode::new("p").with_text(&format!("Exported from wugs ({generator})."))))
-            .with_child(XmlNode::new("sourceDesc").with_child(XmlNode::new("p").with_text("Born-digital; see the wugs project for recordings and history."))),
-    );
+    // The text's own metadata, where TEI keeps each kind (and what TEI has
+    // no place for as `notesStmt` notes named by key), so it comes back in.
+    let text_id = match sentences.first() {
+        Some(s) => p.proj.field_str(&s.segment, "text")?,
+        None => None,
+    };
+    let meta = match &text_id {
+        Some(t) => p.text_metadata(t)?,
+        None => Vec::new(),
+    };
+    let get = |k: &str| meta.iter().find(|(m, _)| m == k).map(|(_, v)| v.as_str());
+    let many = |k: &str| get(k).map(|v| v.split("; ").map(str::to_string).collect::<Vec<_>>()).unwrap_or_default();
+    let mut title_stmt = XmlNode::new("titleStmt").with_child(XmlNode::new("title").with_text(title));
+    for a in many("author") {
+        title_stmt = title_stmt.with_child(XmlNode::new("author").with_text(&a));
+    }
+    for a in many("editor") {
+        title_stmt = title_stmt.with_child(XmlNode::new("editor").with_text(&a));
+    }
+    let mut publication = XmlNode::new("publicationStmt").with_child(XmlNode::new("p").with_text(&format!("Exported from wugs ({generator}).")));
+    if let Some(l) = get("licence") {
+        let licence = if l.starts_with("http://") || l.starts_with("https://") { XmlNode::new("licence").with_attr("target", l) } else { XmlNode::new("licence").with_text(l) };
+        publication = publication.with_child(XmlNode::new("availability").with_child(licence));
+    }
+    const PLACED: [&str; 10] = ["author", "editor", "licence", "date", "genre", "keywords", "language", "speakers", "place", "source"];
+    let mut file = XmlNode::new("fileDesc").with_child(title_stmt).with_child(publication);
+    let others: Vec<&(String, String)> = meta.iter().filter(|(k, _)| !PLACED.contains(&k.as_str())).collect();
+    if !others.is_empty() {
+        let mut notes_stmt = XmlNode::new("notesStmt");
+        for (k, v) in others {
+            notes_stmt = notes_stmt.with_child(XmlNode::new("note").with_attr("type", "meta").with_attr("n", k).with_text(v));
+        }
+        file = file.with_child(notes_stmt);
+    }
+    let mut source = XmlNode::new("sourceDesc").with_child(XmlNode::new("p").with_text("Born-digital; see the wugs project for recordings and history."));
+    if let Some(s) = get("source") {
+        source = XmlNode::new("sourceDesc").with_child(XmlNode::new("bibl").with_child(XmlNode::new("title").with_text(s)));
+    }
+    let mut header = XmlNode::new("teiHeader").with_child(file.with_child(source));
     let mut text = XmlNode::new("text");
+    let mut profile = XmlNode::new("profileDesc");
+    let mut has_profile = false;
+    if let Some(d) = get("date") {
+        let iso = d.len() >= 4 && d.chars().all(|c| c.is_ascii_digit() || c == '-') && d.chars().take(4).all(|c| c.is_ascii_digit());
+        let date = if iso { XmlNode::new("date").with_attr("when", d) } else { XmlNode::new("date").with_text(d) };
+        profile = profile.with_child(XmlNode::new("creation").with_child(date));
+        has_profile = true;
+    }
     if let Some((name, code)) = language {
         if !code.is_empty() {
             text = text.with_attr("xml:lang", code);
         }
-        header = header.with_child(XmlNode::new("profileDesc").with_child(XmlNode::new("langUsage").with_child(XmlNode::new("language").with_attr("ident", code).with_text(name))));
+        profile = profile.with_child(XmlNode::new("langUsage").with_child(XmlNode::new("language").with_attr("ident", code).with_text(name)));
+        has_profile = true;
+    }
+    let (genre, keywords) = (many("genre"), many("keywords"));
+    if !genre.is_empty() || !keywords.is_empty() {
+        let mut class = XmlNode::new("textClass");
+        for (scheme, terms) in [("genre", genre), ("", keywords)] {
+            if terms.is_empty() {
+                continue;
+            }
+            let mut k = XmlNode::new("keywords");
+            if !scheme.is_empty() {
+                k = k.with_attr("scheme", "#genre");
+            }
+            for term in terms {
+                k = k.with_child(XmlNode::new("term").with_text(&term));
+            }
+            class = class.with_child(k);
+        }
+        profile = profile.with_child(class);
+        has_profile = true;
+    }
+    let speakers = many("speakers");
+    if !speakers.is_empty() {
+        let mut list = XmlNode::new("listPerson");
+        for sp in speakers {
+            list = list.with_child(XmlNode::new("person").with_child(XmlNode::new("persName").with_text(&sp)));
+        }
+        profile = profile.with_child(XmlNode::new("particDesc").with_child(list));
+        has_profile = true;
+    }
+    if let Some(pl) = get("place") {
+        profile = profile.with_child(XmlNode::new("settingDesc").with_child(XmlNode::new("setting").with_child(XmlNode::new("placeName").with_text(pl))));
+        has_profile = true;
+    }
+    if has_profile {
+        header = header.with_child(profile);
     }
     let tei = XmlNode::new("TEI").with_attr("xmlns", "http://www.tei-c.org/ns/1.0").with_child(header).with_child(text.with_child(XmlNode::new("body").with_child(XmlNode::new("div").with_child(body))));
     Ok(TeiExport { tei: tei.to_xml(), notes })

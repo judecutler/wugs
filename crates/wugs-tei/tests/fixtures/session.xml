@@ -2,11 +2,16 @@
 <TEI xmlns="http://www.tei-c.org/ns/1.0" xml:lang="es">
   <teiHeader>
     <fileDesc>
-      <titleStmt><title>Sesión de prueba</title></titleStmt>
-      <publicationStmt><p>Synthetic test data for wugs.</p></publicationStmt>
+      <titleStmt><title>Sesión de prueba</title><author>Comisión Inventada</author></titleStmt>
+      <publicationStmt><p>Synthetic test data for wugs.</p><availability><licence target="https://creativecommons.org/licenses/by/4.0/"/></availability></publicationStmt>
       <sourceDesc><p>Written by hand.</p></sourceDesc>
     </fileDesc>
-    <profileDesc><langUsage><language ident="es">Spanish</language></langUsage></profileDesc>
+    <profileDesc>
+      <creation><date when="2021-03-04"/></creation>
+      <langUsage><language ident="es">Spanish</language></langUsage>
+      <textClass><catRef scheme="#genre" target="#parla.debate"/><keywords><term>pruebas</term></keywords></textClass>
+      <particDesc><listPerson><person xml:id="Ana"><persName>Ana Ejemplo</persName></person><person xml:id="Luis"/></listPerson></particDesc>
+    </profileDesc>
   </teiHeader>
   <text>
     <body>
