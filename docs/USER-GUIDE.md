@@ -912,7 +912,7 @@ All of these are in the **Texts** panel, under **Import and export**.
 ### Import files from ELAN, FLEx, Praat and other tools
 
 1. Click **Import a file…**.
-2. Choose the file.
+2. Choose the file, or several at once (hold Ctrl, or Cmd on a Mac, while you click): a folder of ELAN files comes in one after another, and one message says how many of each format came in and which, if any, did not.
 
 Or drop the file anywhere on the wugs window.
 

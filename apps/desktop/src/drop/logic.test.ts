@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { chunks, classify, dragAction, outcomeLines, overlayWords, progressLine } from "./logic.ts";
+import { chunks, classify, dragAction, outcomeLines, overlayWords, progressLine, batchLines } from "./logic.ts";
 
 test("each file takes the import its type needs", () => {
   assert.equal(classify("Interview 3.WAV"), "recording");
@@ -50,4 +50,17 @@ test("only files are imported; dock tabs and text fields keep their drags; anyth
   assert.equal(dragAction({ files: false, dock: false, editable: true }), "pass");
   assert.equal(dragAction({ files: false, dock: false, editable: false }), "refuse", "a link from a browser never reaches the webview");
   assert.equal(dragAction({ files: false, dock: false, editable: false, card: true }), "pass", "a media bin card goes to the Timeline");
+});
+
+test("several files imported at once are reported in one toast", () => {
+  const lines = batchLines([
+    { name: "a.eaf", format: "ELAN", error: null },
+    { name: "b.eaf", format: "ELAN", error: null },
+    { name: "c.txt", format: "plain text", error: null },
+    { name: "d.doc", format: null, error: "not a format wugs reads" },
+  ]);
+  assert.deepEqual(lines, ["Imported 3 of 4 files: 2 ELAN, 1 plain text.", "«d.doc» was not imported: not a format wugs reads"]);
+  const many = batchLines(Array.from({ length: 8 }, (_, i) => ({ name: `${i}.x`, format: null, error: "no" })));
+  assert.equal(many[0], "Imported 0 of 8 files.");
+  assert.equal(many.at(-1), "3 more files were not imported.");
 });
