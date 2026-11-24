@@ -33,3 +33,23 @@ test("axes and the path", () => {
   const g: Growth = { points: [{ tokens: 0, types: 0 }, { tokens: 10, types: 4 }], tokens: 10, types: 4, texts: [] };
   assert.equal(growthPath(g, { width: 110, height: 60, left: 10, right: 0, top: 0, bottom: 20 }), "M10.0,40.0 L110.0,0.0");
 });
+
+test("Heaps' law, Good-Turing and Chao1 forecast what more recording brings", async () => {
+  const { heaps, newChance, chao1, forecastNote } = await import("./growth.ts");
+  // An exact power law: types = 3 × tokens^0.5.
+  const points = [0, 100, 400, 900, 1600, 2500, 3600].map((t) => ({ tokens: t, types: Math.round(3 * Math.sqrt(t)) }));
+  const g: Growth = { points, tokens: 3600, types: 180, texts: [], once: 60, twice: 20 };
+  const fit = heaps(g)!;
+  assert.ok(Math.abs(fit.beta - 0.5) < 1e-9 && Math.abs(fit.k - 3) < 1e-6 && fit.r2 > 0.999);
+  assert.equal(newChance(g), 60 / 3600);
+  // 180 + 60 × 59 / (2 × 21).
+  assert.ok(Math.abs(chao1(g)! - (180 + 3540 / 42)) < 1e-9);
+  const note = forecastNote(g);
+  assert.match(note, /types = 3\.0 × words\^0\.50 \(r² 1\.00\): as many running words again would bring about 75 new words/);
+  assert.match(note, /About 1 word in 60 you transcribe next will be one not met yet \(60 words met only once\)/);
+  assert.match(note, /Chao1 puts the words of this kind of speech at 264 or more, 84 not met yet/);
+  // Too few words, or counts from an older backend: nothing to forecast.
+  assert.equal(forecastNote({ ...g, tokens: 150 }), "");
+  assert.equal(newChance({ points, tokens: 3600, types: 180, texts: [] }), null);
+  assert.equal(heaps({ points: points.slice(0, 2), tokens: 100, types: 30, texts: [] }), null);
+});

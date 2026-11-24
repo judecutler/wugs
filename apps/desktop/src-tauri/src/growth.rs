@@ -5,7 +5,7 @@
 //! mostly in. Words are counted as the Frequencies panel counts them (NFC,
 //! case folded, diacritics kept), on transcription tracks.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use serde::Serialize;
 
@@ -42,11 +42,15 @@ pub struct Growth {
     pub types: usize,
     /// Each text with words, where it starts.
     pub texts: Vec<TextStart>,
+    /// Word types met once and twice: Good-Turing's chance that the next word
+    /// is new is `once / tokens`, and Chao1's estimate of the vocabulary uses both.
+    pub once: usize,
+    pub twice: usize,
 }
 
 pub fn vocabulary_growth(session: &mut Session) -> Result<Growth, String> {
     let p = project(session)?;
-    let mut seen: HashSet<String> = HashSet::new();
+    let mut seen: HashMap<String, usize> = HashMap::new();
     let mut tokens = 0usize;
     let mut marks: Vec<GrowthPoint> = vec![GrowthPoint { tokens: 0, types: 0 }];
     let mut texts: Vec<TextStart> = Vec::new();
@@ -63,7 +67,7 @@ pub fn vocabulary_growth(session: &mut Session) -> Result<Growth, String> {
                 texts.push(TextStart { title: seg.title.clone(), at: tokens });
             }
             tokens += 1;
-            seen.insert(key);
+            *seen.entry(key).or_insert(0) += 1;
             if tokens % step == 0 {
                 marks.push(GrowthPoint { tokens, types: seen.len() });
                 if marks.len() > MAX_MARKS {
@@ -77,7 +81,9 @@ pub fn vocabulary_growth(session: &mut Session) -> Result<Growth, String> {
     if marks.last().map(|m| m.tokens) != Some(tokens) {
         marks.push(GrowthPoint { tokens, types: seen.len() });
     }
-    Ok(Growth { points: thin(&marks, MAX_POINTS), tokens, types: seen.len(), texts })
+    let once = seen.values().filter(|&&n| n == 1).count();
+    let twice = seen.values().filter(|&&n| n == 2).count();
+    Ok(Growth { points: thin(&marks, MAX_POINTS), tokens, types: seen.len(), texts, once, twice })
 }
 
 /// At most `max` + 1 points, evenly spread by tokens, always the first and last.
@@ -118,6 +124,8 @@ mod tests {
         p.add_segment(&b, &tier, 0, None, None, "mi to").unwrap();
         let g = vocabulary_growth(&mut s).unwrap();
         assert_eq!((g.tokens, g.types), (5, 3));
+        // ka and mi (Mi folded) twice, to once.
+        assert_eq!((g.once, g.twice), (1, 2));
         assert_eq!(g.points.first(), Some(&GrowthPoint { tokens: 0, types: 0 }));
         let types: Vec<_> = g.points.iter().map(|p| p.types).collect();
         assert_eq!(types, [0, 1, 1, 2, 2, 3]);

@@ -1110,6 +1110,8 @@ def main():
             growth.wait_for()
             growth.scroll_into_view_if_needed()
             run.shot("state-growth", run.page.locator(".panel-progress"))
+            if "Heaps' law" not in run.page.locator(".panel-progress .pg-forecast").inner_text() or "Chao1" not in run.page.locator(".panel-progress .pg-forecast").inner_text():
+                failures.append("Vocabulary growth did not forecast what more recording brings")
             if "flattening" not in run.page.locator(".panel-progress .pg-growth").inner_text():
                 failures.append("Progress did not describe the vocabulary growth")
             spk = run.page.locator(".panel-progress .pg-speaker-table")

@@ -16,7 +16,7 @@ import { hasPeople, isChild, speakerCells, speakerColumns, speakersNote, speaker
 import { brownNote, brownRows, brownTsv, type BrownTrack } from "../progress/brown";
 import { ageLabel, agePoints, ageNote, ageTicks, ageTsv, inMorphemes, plotted } from "../progress/mluage";
 import { standalone } from "./vowels";
-import { growthNote, growthPath, ticks, type Box, type Growth } from "../progress/growth";
+import { forecastNote, growthNote, growthPath, ticks, type Box, type Growth } from "../progress/growth";
 import { composition, compositionNote, compositionTsv, detailKeys, keyLabel, wordShare } from "../progress/composition";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
@@ -184,6 +184,8 @@ export const progressPanel: PanelDef = {
         parts.push(chart);
       }
       parts.push(h("p", { className: "note", textContent: `${growthNote(g)}${g.texts.length > 1 ? " Dashed lines mark where each text starts, in the order the texts were made." : ""}` }));
+      const forecast = forecastNote(g);
+      if (forecast !== "") parts.push(h("p", { className: "note pg-forecast", textContent: forecast }));
       growthBox.replaceChildren(...parts);
     };
 
