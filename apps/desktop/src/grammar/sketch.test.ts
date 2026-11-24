@@ -112,3 +112,34 @@ test("word orders counted in the trees open the syntax chapter", () => {
   assert.doesNotMatch(html, /genitive and noun/, "a construction never found is left out");
   assert.match(html, /class="todo">\[Check these against the examples/);
 });
+
+test("a locator map and the neighbours open the introduction", async () => {
+  const { locatorMap, placeLines, placeWords } = await import("./sketch.ts");
+  const place = {
+    lat: 53,
+    lon: -1,
+    family: "Indo-European",
+    macroarea: "Eurasia;Africa",
+    neighbours: [
+      { glottocode: "scot1243", name: "Scots", family: "Indo-European", lat: 56, lon: -3.5, km: 371.4 },
+      { glottocode: "wels1247", name: "Welsh", family: "Indo-European", lat: 52, lon: -3.8, km: 214 },
+    ],
+    land: "M0 0L1 1Z",
+  };
+  assert.equal(placeWords(place), "53.00° N, 1.00° W");
+  assert.deepEqual(placeLines(place, "English"), [
+    "Glottolog classifies English in the Indo-European family, in Eurasia, Africa.",
+    "The languages Glottolog places nearest are Scots (Indo-European, 371 km) and Welsh (Indo-European, 214 km).",
+  ]);
+  assert.match(placeLines({ ...place, family: "isolate", neighbours: [] }, "Basque")[0]!, /as an isolate/u);
+  const svg = locatorMap(place, "English");
+  assert.match(svg, /viewBox="154 22 50 30"/u);
+  assert.equal((svg.match(/<path /gu) ?? []).length, 3, "the land and a copy either side");
+  assert.match(svg, /<title>Scots<\/title>/u);
+  // Across 180°: a neighbour on the far side is drawn beside, not across the world.
+  const fiji = locatorMap({ ...place, lat: -17, lon: 179, neighbours: [{ ...place.neighbours[0]!, lat: -14, lon: -178 }] }, "Fijian");
+  assert.match(fiji, /cx="362" cy="104"/u);
+  const html = grammarSketch({ ...base, place });
+  assert.match(html, /Figure 1\. Where Glottolog places/u);
+  assert.match(grammarSketch(base), /Where .* is spoken, by whom, its family and neighbours/u);
+});

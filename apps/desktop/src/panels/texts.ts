@@ -1,5 +1,5 @@
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { lexiconList, wordOrder, orthographyGet, projectAffixes, projectProgress, soundWords, typologyAnswers, typologyProfile } from "../api";
+import { glottologPlace, lexiconList, wordOrder, orthographyGet, projectAffixes, projectProgress, soundWords, typologyAnswers, typologyProfile } from "../api";
 import { featuresOf, grammarSketch, graphemesOf, morphemesOf, type Feature } from "../grammar/sketch";
 import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
@@ -381,7 +381,9 @@ async function exportSketch() {
     const slots = affixes === null ? [] : slotChart(affixes.affixes).map((c) => ({ label: slotLabel(c.slot), affixes: c.affixes.map((a) => `${marked(a)} ${a.gloss}`.trim()) }));
     const graphemes = graphemesOf(toGrid(ortho.profile));
     const order = await wordOrder().catch(() => undefined);
+    const place = language.glottocode === "" ? null : await glottologPlace({ glottocode: language.glottocode }).catch(() => null);
     const html = grammarSketch({
+      place,
       order,
       language,
       words: track === null ? [] : words.words,

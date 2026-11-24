@@ -133,6 +133,53 @@ pub fn all() -> Vec<Languoid> {
     rows().iter().map(|r| r.item.clone()).collect()
 }
 
+/// Great-circle distance in kilometres.
+pub fn km(a: (f32, f32), b: (f32, f32)) -> f64 {
+    let (la1, lo1, la2, lo2) = (f64::from(a.0).to_radians(), f64::from(a.1).to_radians(), f64::from(b.0).to_radians(), f64::from(b.1).to_radians());
+    let h = ((la2 - la1) / 2.0).sin().powi(2) + la1.cos() * la2.cos() * ((lo2 - lo1) / 2.0).sin().powi(2);
+    2.0 * 6371.0 * h.sqrt().asin()
+}
+
+/// A language near another, as a grammar's introduction names its neighbours.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct Neighbour {
+    pub glottocode: &'static str,
+    pub name: &'static str,
+    pub family: &'static str,
+    pub lat: f32,
+    pub lon: f32,
+    pub km: f64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct Place {
+    pub lat: f32,
+    pub lon: f32,
+    pub family: &'static str,
+    pub macroarea: &'static str,
+    /// The nearest other languages Glottolog places, nearest first.
+    pub neighbours: Vec<Neighbour>,
+    /// The land to draw a locator map on (`typology::LAND`).
+    pub land: &'static str,
+}
+
+/// Where Glottolog places a languoid (a dialect without a place of its own
+/// by its language), and its `n` nearest languages; None when it has no place.
+pub fn place(code: &str, n: usize) -> Option<Place> {
+    let me = by_glottocode(code)?;
+    let at = [Some(me.clone()), if me.dialect { by_name(me.language, me.family) } else { None }].into_iter().flatten().find(|l| l.lat.is_some() && l.lon.is_some())?;
+    let here = (at.lat?, at.lon?);
+    let mut near: Vec<Neighbour> = rows()
+        .iter()
+        .map(|r| &r.item)
+        .filter(|l| !l.dialect && l.glottocode != me.glottocode && l.glottocode != at.glottocode)
+        .filter_map(|l| Some(Neighbour { glottocode: l.glottocode, name: l.name, family: l.family, lat: l.lat?, lon: l.lon?, km: km(here, (l.lat?, l.lon?)) }))
+        .collect();
+    near.sort_by(|a, b| a.km.total_cmp(&b.km).then(a.glottocode.cmp(b.glottocode)));
+    near.truncate(n);
+    Some(Place { lat: here.0, lon: here.1, family: me.family, macroarea: me.macroarea, neighbours: near, land: crate::typology::LAND })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,5 +224,16 @@ mod tests {
         assert_eq!(key("Kʼicheʼ"), "kiche");
         assert_eq!(key("  Nāhuatl  "), "nahuatl");
         assert_eq!(key("İstanbul Türkçesi"), "istanbul turkcesi");
+    }
+
+    #[test]
+    fn a_place_and_its_neighbours() {
+        let p = place("stan1293", 5).unwrap();
+        assert_eq!((p.lat, p.lon), (53.0, -1.0));
+        assert_eq!(p.neighbours.len(), 5);
+        assert!(p.neighbours.windows(2).all(|w| w[0].km <= w[1].km));
+        assert!(p.neighbours.iter().all(|n| n.glottocode != "stan1293" && n.km < 800.0), "{:?}", p.neighbours);
+        assert!((km((0.0, 0.0), (0.0, 1.0)) - 111.19).abs() < 0.1);
+        assert!(place("nope1234", 5).is_none());
     }
 }

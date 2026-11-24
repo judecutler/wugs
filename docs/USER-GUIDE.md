@@ -980,7 +980,7 @@ In Anki, copy the files in `sounds/` into Anki's media folder first (in Anki, **
 
 Press **Grammar sketch…** beside **Dictionary to print…**. wugs writes one HTML file with a grammar's usual chapters, filled with what the project already knows, for you to open in Word or LibreOffice and go on writing:
 
-- **Introduction**: the language's name and codes, and how many texts, words and entries the sketch draws on.
+- **Introduction**: the language's name and codes, a map of where Glottolog places it with its nearest languages (when the project has a Glottocode), its family and region, those neighbours by name with their families and distances, and how many texts, words and entries the sketch draws on.
 - **Phonology**: the consonants in a chart by place and manner and the vowels, read from your IPA track (or your fullest track) as the Sounds panel reads them, with a table of how often each sound occurs and an example word, then the commonest word shapes (CV, CVCV…) and the consonants never found at the start or end of a word. These are the sounds as written, not yet phonemes: say which contrast.
 - **Orthography**: your orthography profile's letters beside their IPA, when the Orthography panel keeps one.
 - **Morphology**: the lexicon's prefixes, suffixes, infixes and clitics (entries written like `ni-`, `-ok`, `<um>` or `=ma`) with their glosses.

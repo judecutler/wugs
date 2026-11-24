@@ -18,8 +18,21 @@ export type Feature = { id: string; question: string; answer: string; note: stri
 export type Grapheme = { grapheme: string; ipa: string };
 export type SketchText = { title: string; sentences: number; words: number; glossed: number; /** Morphs of the glossed words. */ morphs?: number };
 
+/** Where Glottolog places the language (src-tauri/src/glottolog.rs `place`). */
+export type Place = {
+  lat: number;
+  lon: number;
+  family: string;
+  macroarea: string;
+  neighbours: { glottocode: string; name: string; family: string; lat: number; lon: number; km: number }[];
+  /** Natural Earth's land as an SVG path, x = lon + 180, y = 90 − lat. */
+  land: string;
+};
+
 export type SketchInput = {
   language: { name: string; glottocode: string; iso: string };
+  /** Where Glottolog places the language, for a locator map and its neighbours. */
+  place?: Place | null;
   /** The word types of one transcription track with their counts, as
    * `sound_words` gives them; sounds and word shapes are read from them. */
   words: { word: string; count: number }[];
@@ -93,6 +106,42 @@ const KIND_NAMES: Record<Morpheme["kind"], string> = { prefix: "Prefixes", procl
 
 const todo = (what: string) => `<p class="todo">[${esc(what)}]</p>`;
 
+const r1 = (n: number) => Math.round(n * 10) / 10;
+
+/** A locator map: the land around the language's place, its neighbours as
+ * grey dots and the language as a ringed one, 50° of longitude across. */
+export function locatorMap(p: Place, name: string): string {
+  const cx = p.lon + 180;
+  const cy = 90 - p.lat;
+  const w = 50;
+  const h = 30;
+  const x = r1(cx - w / 2);
+  const y = r1(Math.min(Math.max(cy - h / 2, 0), 180 - h));
+  // Copies of the land either side, so a place near 180° still has land around it.
+  const land = [-360, 0, 360].map((dx) => `<path d="${p.land}" transform="translate(${dx} 0)" fill="#f2ede0" stroke="#b9ad8f" stroke-width="0.08"/>`).join("");
+  const near = p.neighbours.map((n) => {
+    let nx = n.lon + 180;
+    if (nx - cx > 180) nx -= 360;
+    if (cx - nx > 180) nx += 360;
+    return `<circle cx="${r1(nx)}" cy="${r1(90 - n.lat)}" r="0.35" fill="#777"><title>${esc(n.name)}</title></circle>`;
+  });
+  return `<figure class="map"><svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" role="img" aria-label="${esc(`Where ${name} is spoken`)}"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#dbeef4"/>${land}${near.join("")}<circle cx="${r1(cx)}" cy="${r1(cy)}" r="0.7" fill="#00718a" stroke="#000" stroke-width="0.25"/></svg><figcaption>Figure 1. Where Glottolog places ${esc(name)} (${placeWords(p)}), with the languages nearest to it in grey. Land from Natural Earth.</figcaption></figure>`;
+}
+
+/** "53.00° N, 1.00° W" */
+export const placeWords = (p: { lat: number; lon: number }): string => `${Math.abs(p.lat).toFixed(2)}° ${p.lat >= 0 ? "N" : "S"}, ${Math.abs(p.lon).toFixed(2)}° ${p.lon >= 0 ? "E" : "W"}`;
+
+/** The introduction's sentences on family, region and neighbours. */
+export function placeLines(p: Place, name: string): string[] {
+  const family = p.family === "" ? `Glottolog does not place ${name} in a family` : p.family === "isolate" ? `Glottolog classifies ${name} as an isolate` : `Glottolog classifies ${name} in the ${p.family} family`;
+  const lines = [`${family}${p.macroarea ? `, in ${p.macroarea.replace(/;/g, ", ")}` : ""}.`];
+  if (p.neighbours.length > 0) {
+    const listed = p.neighbours.map((n) => `${n.name} (${n.family === "" ? "unclassified" : n.family}, ${Math.round(n.km).toLocaleString("en")} km)`);
+    lines.push(`The languages Glottolog places nearest are ${listed.slice(0, -1).join(", ")}${listed.length > 1 ? " and " : ""}${listed[listed.length - 1]}.`);
+  }
+  return lines;
+}
+
 function consonantTable(sounds: readonly Sound[]): string {
   const c = chart(sounds);
   const { manners, places } = gridOf(c, false);
@@ -124,7 +173,12 @@ export function grammarSketch(d: SketchInput): string {
   parts.push(`<h1>A grammar sketch of ${esc(name)}</h1>`);
   parts.push(`<p class="meta">Draft of ${esc(d.date)}, started from the project's data by ${esc(d.generator)}.${ids ? ` ${esc(ids)}.` : ""} Bracketed passages are places to write.</p>`);
 
-  parts.push(`<h2>1. Introduction</h2>`, todo(`Where ${name} is spoken, by whom, its family and neighbours, and the sources of this sketch`));
+  parts.push(`<h2>1. Introduction</h2>`);
+  if (d.place) {
+    parts.push(locatorMap(d.place, name), ...placeLines(d.place, name).map((l) => `<p>${esc(l)}</p>`), todo(`Where ${name} is spoken and by whom, which of these neighbours it is in contact with, and the sources of this sketch`));
+  } else {
+    parts.push(todo(`Where ${name} is spoken, by whom, its family and neighbours, and the sources of this sketch`));
+  }
   const glossed = d.texts.reduce((n, t) => n + t.glossed, 0);
   const words = d.texts.reduce((n, t) => n + t.words, 0);
   parts.push(
@@ -227,6 +281,7 @@ export function grammarSketch(d: SketchInput): string {
   const style = `body{font-family:"Charis SIL","Doulos SIL","Gentium Plus",serif;max-width:46em;margin:2em auto;line-height:1.45}
 table{border-collapse:collapse;margin:.6em 0}th,td{border:1px solid #999;padding:3px 8px;text-align:left;vertical-align:top}
 .chart td{min-width:3em;text-align:center}.ipa{font-family:"Charis SIL","Doulos SIL",serif}.big{font-size:1.3em;letter-spacing:.2em}
-.todo{color:#8a5a00;font-style:italic}.meta{color:#555}.gl{font-variant:small-caps}`;
+.todo{color:#8a5a00;font-style:italic}.meta{color:#555}.gl{font-variant:small-caps}
+.map{margin:1em 0}.map svg{width:100%;max-width:34em;border:1px solid #b9ad8f;display:block}.map figcaption{font-size:.9em;color:#444}`;
   return `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>A grammar sketch of ${esc(name)}</title>\n<style>${style}</style>\n</head>\n<body>\n${parts.join("\n")}\n</body>\n</html>\n`;
 }
