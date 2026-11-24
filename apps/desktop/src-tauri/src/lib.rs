@@ -1308,6 +1308,18 @@ fn elicit_unlink(s: State<SessionThread>, concept_id: String, sense_id: String) 
     s.run(move |s| elicit::elicit_unlink(s, &concept_id, &sense_id))
 }
 
+/// Entries glossed like a concept no one has answered yet, offered for linking.
+#[tauri::command(async)]
+fn elicit_gloss_matches(s: State<SessionThread>, list_id: String) -> Result<Vec<elicit::GlossMatch>, String> {
+    s.run(move |s| elicit::gloss_matches(s, &list_id))
+}
+
+/// Link the chosen (sense, concept) pairs in one txn.
+#[tauri::command(async)]
+fn elicit_link_matches(s: State<SessionThread>, list_id: String, pairs: Vec<(String, String)>) -> Result<elicit::ListView, String> {
+    s.run(move |s| elicit::link_matches(s, &list_id, &pairs))
+}
+
 #[tauri::command(async)]
 fn elicit_skip(s: State<SessionThread>, concept_id: String, skipped: bool, note: String) -> Result<elicit::ConceptEdit, String> {
     s.run(move |s| elicit::elicit_skip(s, &concept_id, skipped, &note))
@@ -2475,6 +2487,8 @@ pub fn run() {
             elicit_link,
             elicit_unlink,
             elicit_skip,
+            elicit_gloss_matches,
+            elicit_link_matches,
             domain_questions,
             domain_collect,
             conflict_count,

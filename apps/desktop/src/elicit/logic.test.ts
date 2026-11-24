@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, ownListLine, wordlistLines, coverageLine, nextEmptyDomain } from "./logic.ts";
+import { matchesLine, matchKey, exactMatches, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, soundLine, soundSegment, ownListLine, wordlistLines, coverageLine, nextEmptyDomain } from "./logic.ts";
 
 const c = (id: string, answered: boolean, skipped = false) => ({ id, skipped, answers: answered ? [{}] : [] });
 const list = [c("a", true), c("b", false), c("c", false, true), c("d", false)];
@@ -77,4 +77,12 @@ test("domain coverage and the next domain still empty", () => {
   assert.equal(nextEmptyDomain(all, "1.1")?.id, "2");
   assert.equal(nextEmptyDomain(all, "2")?.id, "1.1", "wraps round");
   assert.equal(nextEmptyDomain(all.map((d) => ({ ...d, words: 1 })), "1"), null);
+});
+
+test("entries the lexicon offers for a list", () => {
+  const m = (concept: string, sense: string) => ({ conceptId: concept, answer: { senseId: sense } });
+  assert.equal(matchKey(m("c1", "s1")), "s1|c1");
+  assert.equal(matchesLine([]), "No entry in the lexicon is glossed like a concept still to do.");
+  assert.match(matchesLine([m("c1", "s1"), m("c1", "s2"), m("c2", "s3")]), /^2 concepts still to do have an entry/);
+  assert.match(matchesLine([m("c1", "s1")]), /^1 concept still to do has an entry/);
 });

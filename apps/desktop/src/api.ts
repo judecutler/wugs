@@ -577,6 +577,9 @@ export const compareRead = (args: { path: string }) => invoke<import("./compare/
 export const elicitAnswer = (args: { conceptId: string; form: string; gloss: string; segmentId: string | null }) => invoke<ConceptEdit>("elicit_answer", args);
 export const elicitLink = (args: { conceptId: string; senseId: string; segmentId: string | null }) => invoke<ConceptEdit>("elicit_link", args);
 export const elicitUnlink = (args: { conceptId: string; senseId: string }) => invoke<ConceptEdit>("elicit_unlink", args);
+export type GlossMatch = { conceptId: string; number: number; conceptGloss: string; answer: Answer };
+export const elicitGlossMatches = (args: { listId: string }) => invoke<GlossMatch[]>("elicit_gloss_matches", args);
+export const elicitLinkMatches = (args: { listId: string; pairs: [string, string][] }) => invoke<ListView>("elicit_link_matches", args);
 export const elicitSkip = (args: { conceptId: string; skipped: boolean; note: string }) => invoke<ConceptEdit>("elicit_skip", args);
 export const domainQuestions = (args: { domainId: string }) => invoke<DomainQuestions>("domain_questions", args);
 export const domainCollect = (args: { domainId: string; form: string; gloss: string }) => invoke<DomainEdit>("domain_collect", args);

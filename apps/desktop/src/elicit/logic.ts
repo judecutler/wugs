@@ -113,3 +113,14 @@ export function nextEmptyDomain<T extends CoveredDomain>(all: readonly T[], curr
   }
   return null;
 }
+
+/** One offered link of a lexicon entry to a concept, as the panel ticks it. */
+export const matchKey = (m: { conceptId: string; answer: { senseId: string } }): string => `${m.answer.senseId}|${m.conceptId}`;
+
+/** The line above the entries the lexicon offers for this list. */
+export function matchesLine(matches: readonly { conceptId: string }[]): string {
+  if (matches.length === 0) return "No entry in the lexicon is glossed like a concept still to do.";
+  const concepts = new Set(matches.map((m) => m.conceptId)).size;
+  const cs = concepts === 1 ? "1 concept still to do" : `${concepts.toLocaleString()} concepts still to do`;
+  return `${cs} ${concepts === 1 ? "has" : "have"} an entry in the lexicon glossed the same way. Untick any that do not mean the concept (a gloss like «bark» can mean two things), then link the rest.`;
+}
