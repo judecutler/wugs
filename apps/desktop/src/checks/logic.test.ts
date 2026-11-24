@@ -83,3 +83,13 @@ test("consent records, in words", () => {
   assert.equal(consentNote(two[0]!, label), "No consent record covers this text, its recording or the whole project.");
   assert.equal(consentNote(two[1]!, label), "A record: no to «Publish online», shared within the community only.");
 });
+
+test("segment timing in words", async () => {
+  const { timingLine, timingNote } = await import("./logic.ts");
+  const i = { kind: "overlap" as const, textId: "t", textTitle: "T", tierId: "u", segmentId: "s", sentence: "two", startMs: 800, endMs: 2000, other: "s0", overlapMs: 200 };
+  assert.equal(timingNote(i), "Starts 0.20 s before the segment before it ends (0.80 s–2.00 s)");
+  assert.equal(timingNote({ ...i, kind: "long", startMs: 3000, endMs: 40_000 }), "37.0 s long (3.00 s–40.0 s): split it for speech tools");
+  assert.match(timingLine({ timed: 5, overlaps: 1, short: 1, long: 0, issues: [] }), /^Of 5 timed segments, 1 overlaps the one before it on its track, 1 is under 0\.15 s\./);
+  assert.match(timingLine({ timed: 3, overlaps: 0, short: 0, long: 0, issues: [] }), /^All 3 timed segments are fine/);
+  assert.equal(timingLine({ timed: 0, overlaps: 0, short: 0, long: 0, issues: [] }), "No segment has times yet.");
+});

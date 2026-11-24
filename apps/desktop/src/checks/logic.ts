@@ -153,3 +153,25 @@ export function consentNote(t: TextConsent, termLabel: (term: string) => string)
   const limits = [...t.no.map((x) => `no to «${termLabel(x)}»`), ...(t.communityOnly ? ["shared within the community only"] : [])];
   return `${t.records === 1 ? "A record" : "Its records"}: ${limits.join(", ")}.`;
 }
+
+/** Segment timing (src-tauri/src/timing.rs). */
+export type TimingIssue = { kind: "overlap" | "short" | "long"; textId: string; textTitle: string; tierId: string; segmentId: string; sentence: string; startMs: number; endMs: number; other: string | null; overlapMs: number | null };
+export type Timing = { timed: number; overlaps: number; short: number; long: number; issues: TimingIssue[] };
+
+const secs = (ms: number): string => `${(ms / 1000).toFixed(ms < 10_000 ? 2 : 1)} s`;
+
+/** The line over the list. */
+export function timingLine(t: Timing): string {
+  if (t.timed === 0) return "No segment has times yet.";
+  const parts = [t.overlaps > 0 ? `${t.overlaps} ${t.overlaps === 1 ? "overlaps" : "overlap"} the one before it on its track` : "", t.short > 0 ? `${t.short} ${t.short === 1 ? "is" : "are"} under 0.15 s` : "", t.long > 0 ? `${t.long} ${t.long === 1 ? "is" : "are"} over 30 s` : ""].filter((x) => x !== "");
+  if (parts.length === 0) return `All ${t.timed} timed segments are fine: none overlap on a track, and none is under 0.15 s or over 30 s.`;
+  return `Of ${t.timed} timed segments, ${parts.join(", ")}. Overlaps on one track confuse ELAN and Praat; very short ones are often stray clicks; speech tools take at most 30 s.`;
+}
+
+/** One issue in words. */
+export function timingNote(i: TimingIssue): string {
+  const span = `${secs(i.startMs)}–${secs(i.endMs)}`;
+  if (i.kind === "overlap") return `Starts ${secs(i.overlapMs ?? 0)} before the segment before it ends (${span})`;
+  if (i.kind === "short") return `Only ${secs(i.endMs - i.startMs)} long (${span})`;
+  return `${secs(i.endMs - i.startMs)} long (${span}): split it for speech tools`;
+}

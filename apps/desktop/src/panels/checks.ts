@@ -4,9 +4,10 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
+import { timingLine, timingNote, type Timing, type TimingIssue } from "../checks/logic";
 import { addedLine, addLabel, consentLine, consentNote, type ConsentGaps, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
 import { headwordOf } from "../notes/logic";
@@ -34,6 +35,7 @@ export const checksPanel: PanelDef = {
     let chars: Inventory | null = null;
     let near: { pairs: NearPair[]; read: number } | null = null;
     let doubles: { pairs: LikelyPair[]; entries: number } | null = null;
+    let timing: Timing | null = null;
     let gaps: { without: number; fillable: number } | null = null;
     let trees: { sentences: TreeProblem[]; total: number; annotated: number } | null = null;
     let showAllChars = false;
@@ -47,9 +49,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" })]).then(
-        ([r, m, c, w, g, t, d, k, l]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null)]).then(
+        ([r, m, c, w, g, t, d, k, l, tm]) => {
           if (mine !== seq) return;
+          timing = tm;
           doubles = { pairs: likelyDuplicates(l), entries: l.length };
           consent = k;
           drift = d;
@@ -396,6 +399,22 @@ export const checksPanel: PanelDef = {
       return h("li", { className: "ck-card" }, h("div", { className: "ck-variant" }, open(p.keep), h("span", { className: "note", textContent: "and" }), open(p.other)), h("p", { className: "note", textContent: duplicateNote(p) }), go);
     };
 
+    const timingCard = (i: TimingIssue): HTMLElement => {
+      const open = h("button", { type: "button", className: "link-button", textContent: i.sentence || "(no text)", title: `Open this segment of «${i.textTitle}» on the Timeline` });
+      open.onclick = async () => {
+        await selectText(i.textId);
+        selectSegment({ textId: i.textId, tierId: i.tierId, segmentId: i.segmentId });
+        window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "timeline" }));
+      };
+      const label = { overlap: "Overlaps", short: "Very short", long: "Very long" }[i.kind];
+      return h("li", { className: "ck-card" }, h("div", { className: "ck-variant" }, h("strong", { textContent: label }), h("span", { className: "note", textContent: `«${i.textTitle}»` }), open), h("p", { className: "note", textContent: timingNote(i) }));
+    };
+
+    const timingSection = (): HTMLElement[] =>
+      timing === null
+        ? []
+        : [h("h3", { className: "ck-title", textContent: "Segment timing" }), h("p", { className: "note", textContent: timingLine(timing) }), h("ul", { className: "ck-list" }, ...timing.issues.map(timingCard))];
+
     const doublesSection = (): HTMLElement[] =>
       doubles === null
         ? []
@@ -441,6 +460,7 @@ export const checksPanel: PanelDef = {
         h("p", { className: "note", textContent: driftSummary(drift) }),
         h("ul", { className: "ck-list" }, ...drift.map(driftCard)),
         ...doublesSection(),
+        ...timingSection(),
         ...examplesSection(),
         ...treesSection(),
         ...consentSection(),
