@@ -1565,3 +1565,12 @@ body::before {
 .sd-allophones li { padding: 2px 0; }
 .sd-pair { font-weight: 600; }
 .sd-allo-rule { color: var(--ink); }
+
+/* Keywords: texts most like the one picked, a bar either side of zero. */
+.kw-alike { display: grid; gap: 4px; margin-top: 6px; }
+.kw-alike-row { display: grid; grid-template-columns: minmax(6em, 1fr) minmax(6em, 2fr) 3.5em; gap: 8px; align-items: center; }
+.kw-alike-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kw-alike-track { position: relative; height: 10px; border-radius: var(--radius-sm); background: var(--emphasis); }
+.kw-alike-track::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; border-left: 1px solid var(--muted); }
+.kw-bar { position: absolute; left: 50%; top: 0; bottom: 0; background: var(--accent-bright); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.kw-bar-neg { left: auto; right: 50%; background: var(--muted); border-radius: var(--radius-sm) 0 0 var(--radius-sm); }

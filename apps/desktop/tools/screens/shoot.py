@@ -522,6 +522,11 @@ def main():
             run.shot("state-keywords", run.page.locator(".panel-keywords"))
             if run.page.locator(".panel-keywords .kw-table tbody tr").count() == 0:
                 failures.append("keywords showed no rows")
+            alike = run.page.locator(".panel-keywords .kw-alike-row")
+            alike.first.scroll_into_view_if_needed()
+            run.shot("state-keywords-alike", run.page.locator(".panel-keywords"))
+            if alike.count() != 2 or "Greetings at the market" not in alike.first.inner_text():
+                failures.append("Keywords did not rank the texts most like the one picked")
             if "Scrolls" not in run.page.locator(".kit-switcher").inner_text():
                 failures.append("switching to Scrolls did not change the kit")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")

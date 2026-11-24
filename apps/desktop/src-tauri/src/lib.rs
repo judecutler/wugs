@@ -43,6 +43,7 @@ pub mod field_sessions;
 pub mod plaintext;
 pub mod replace;
 pub mod website;
+pub mod stylometry;
 pub mod subtitles;
 pub mod table_text;
 pub mod listen;
@@ -293,6 +294,12 @@ fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option
 #[tauri::command(async)]
 fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, within: Option<concordance::Where>, min_count: usize, size: Option<usize>) -> Result<keywords::Keywords, String> {
     s.run(move |s| keywords::keywords_of(s, kind, &concordance::Scope::of(text_id, within), min_count, size.unwrap_or(1)))
+}
+
+/// How alike the texts are in their most frequent words (Cosine Delta).
+#[tauri::command(async)]
+fn texts_alike(s: State<SessionThread>, kind: concordance::Kind) -> Result<stylometry::Alike, String> {
+    s.run(move |s| stylometry::alike(s, kind))
 }
 
 /// Which words keep company with a word (Scrolls' collocates).
@@ -2284,6 +2291,7 @@ pub fn run() {
             gloss_apply_all,
             gloss_word_types,
             likely_meanings,
+            texts_alike,
             gloss_break_all,
             gloss_apply_type,
             gloss_set,

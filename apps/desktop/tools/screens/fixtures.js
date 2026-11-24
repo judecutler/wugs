@@ -901,6 +901,21 @@ const LEXICON = [
         { textId: "t-empty", title: "Untranscribed session", words: 0, hits: 0, positions: [], meta: [] },
       ],
     }),
+    // Cosine Delta between the three texts.
+    texts_alike: () => ({
+      texts: [
+        { id: "t-count", title: "Counting to ten", words: 64 },
+        { id: "t-fox", title: "The fox and the well", words: 1840 },
+        { id: "t-market", title: "Greetings at the market", words: 920 },
+      ],
+      mfw: 200,
+      similarity: [
+        [1, -0.42, 0.31],
+        [-0.42, 1, -0.58],
+        [0.31, -0.58, 1],
+      ],
+      omitted: 0,
+    }),
     keywords: ({ minCount }) => {
       // Computed by the same formulas as src-tauri/src/keywords.rs.
       const c = 23, d = 42, n = c + d;
