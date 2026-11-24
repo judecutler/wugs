@@ -1175,6 +1175,7 @@ const LEXICON = [
     }),
     update_check: () => ({ currentVersion: "0.0.1", available: null }),
     gloss_get: ({ segmentId }) => glossView(segmentId),
+    gloss_still_to_gloss: () => ["u03", "u10"],
     // Sentences like the one on screen, with a translation for the first.
     like_sentences: ({ segmentId }) =>
       segmentId === "u01"

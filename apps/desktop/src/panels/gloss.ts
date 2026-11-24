@@ -5,8 +5,9 @@
 import {
   abbreviationMeanings, addSegment, glossAddTopic, glossRemoveTopic, topicsOverview, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize, likelyMeanings, likeSentences,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
-  textMetadata,
+  textMetadata, glossStillToGloss,
 } from "../api";
+import { nextStill, nothingLeft } from "../gloss/next";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
 import { alternativeNote, hiddenNote } from "../gloss/hidden";
 import { breakdownKey, breakdownCell, glossCell, glossKey, langCell, nextCell, nextWordCell } from "../gloss/keys";
@@ -102,6 +103,25 @@ export const glossPanel: PanelDef = {
       if (s.kind !== "open" || s.text === null || sel === null || sel.textId !== s.text.id) return null;
       const segment = s.text.segments.find((x) => x.id === sel.segmentId);
       return segment === undefined ? null : { text: s.text, segment };
+    }
+
+    /** Select the next sentence on this track with a word still to gloss. */
+    async function goNextToGloss(): Promise<void> {
+      const sel = selected();
+      if (sel === null) return;
+      try {
+        const still = new Set(await glossStillToGloss(sel.text.id));
+        const now = selected();
+        if (now === null || now.segment.id !== sel.segment.id) return;
+        const next = nextStill(now.text.segments, now.segment, still);
+        if (next === null) {
+          showToast({ tone: "info", lines: [nothingLeft(still.has(now.segment.id))] });
+          return;
+        }
+        selectSegment({ textId: now.text.id, tierId: next.tier, segmentId: next.id });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
     }
 
     function empty(title: string, body: string, caption?: string): void {
@@ -938,6 +958,7 @@ export const glossPanel: PanelDef = {
         playButton("Play this segment", () => void hear({ textId: sel.text.id, tierId: sel.segment.tier, segmentId: sel.segment.id, startMs: sel.segment.startMs, endMs: sel.segment.endMs }, false)),
         h("span", { className: "gl-time", textContent: formatRange(sel.segment.startMs, sel.segment.endMs) }),
         h("span", { className: "gl-spacer" }),
+        h("button", { type: "button", className: "gl-next", textContent: "Next to gloss", title: "Go to the next sentence on this track with a word still to gloss (Ctrl+Shift+N)", onclick: () => void goNextToGloss() }),
         v.words.length > 0 ? copyControl(sel, v) : null,
         langControl(),
       );
@@ -974,8 +995,23 @@ export const glossPanel: PanelDef = {
       }
     }
 
+    el.addEventListener("keydown", (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && !e.altKey && e.key.toLowerCase() === "n" && !e.isComposing) {
+        e.preventDefault();
+        void goNextToGloss();
+      }
+    });
     const unsubscribe = subscribeSelection(() => draw());
     const unprovide = provide("gloss", () => [
+      {
+        id: "gloss:next",
+        title: "Gloss the next sentence with a word still to gloss",
+        group: "Gloss",
+        keys: "Ctrl+Shift+N",
+        words: ["unglossed", "next", "interlinear", "skip"],
+        disabled: () => (selected() === null ? "Select a segment first" : null),
+        run: () => void goNextToGloss(),
+      },
       {
         id: "gloss:copy-example",
         title: "Copy the example for a paper",

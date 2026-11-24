@@ -1164,6 +1164,12 @@ fn edit_segment_content(
     })
 }
 
+/// A text's sentences still to gloss: not broken into words, or with a word without morphs.
+#[tauri::command(async)]
+fn gloss_still_to_gloss(s: State<SessionThread>, text_id: String) -> Result<Vec<String>, String> {
+    s.run(move |s| gloss::still_to_gloss(s, &text_id))
+}
+
 #[tauri::command(async)]
 fn gloss_get(s: State<SessionThread>, text_id: String, segment_id: String) -> Result<GlossView, String> {
     s.run(move |s| gloss::gloss_get(s, &text_id, &segment_id))
@@ -2856,6 +2862,7 @@ pub fn run() {
             import_alignments,
             add_tier,
             gloss_get,
+            gloss_still_to_gloss,
             gloss_tokenize,
             gloss_retokenize,
             gloss_apply,
