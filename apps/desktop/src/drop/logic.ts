@@ -19,7 +19,7 @@ export function dragAction(drag: { files: boolean; dock: boolean; editable: bool
 }
 
 const RECORDINGS = new Set(["wav", "wave", "m4a", "mp4", "aac", "mp3", "flac", "ogg", "oga", "aif", "aiff", "aifc"]);
-const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "txt", "csv", "tsv", "tab", "xlsx", "xls", "xlsm", "ods", "srt", "vtt", "cha"]);
+const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "txt", "csv", "tsv", "tab", "xlsx", "xls", "xlsm", "ods", "srt", "vtt", "cha", "exb"]);
 
 /** Pieces of this size keep memory flat for a two-hour WAV and the progress moving. */
 export const CHUNK_BYTES = 8 * 1024 * 1024;

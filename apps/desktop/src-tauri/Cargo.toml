@@ -48,6 +48,7 @@ wugs-flex = { path = "../../../crates/wugs-flex" }
 wugs-seal = { path = "../../../crates/wugs-seal" }
 wugs-conllu = { path = "../../../crates/wugs-conllu" }
 wugs-tei = { path = "../../../crates/wugs-tei" }
+wugs-xml = { path = "../../../crates/wugs-xml" }
 wugs-cldf = { path = "../../../crates/wugs-cldf" }
 # CQP-style queries in the Concordance: regular expressions over token attributes, %d by stripping marks.
 regex = "1"
