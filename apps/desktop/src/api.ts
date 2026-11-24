@@ -246,6 +246,7 @@ export const glossSet = (args: SegmentArgs & { morphId: string; gloss: string; l
 export const glossAddTopic = (args: SegmentArgs & { name: string }) => invoke<GlossEdit>("gloss_add_topic", args);
 export const glossRemoveTopic = (args: SegmentArgs & { name: string }) => invoke<GlossEdit>("gloss_remove_topic", args);
 export const topicsOverview = () => invoke<import("./topics/logic").Topics>("topics_overview");
+export const fileUnderTopic = (lines: { textId: string; segmentId: string }[], name: string) => invoke<{ filed: number; already: number }>("file_under_topic", { lines, name });
 export const renameTopic = (from: string, to: string) => invoke<import("./topics/logic").Topics>("rename_topic", { from, to });
 export const glossAddNote = (args: SegmentArgs & { body: string }) => invoke<GlossEdit>("gloss_add_note", args);
 export const glossSetNote = (args: SegmentArgs & { noteId: string; body: string }) => invoke<GlossEdit>("gloss_set_note", args);

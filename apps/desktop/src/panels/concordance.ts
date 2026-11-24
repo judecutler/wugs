@@ -2,7 +2,7 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { concordance, concordanceQuery, corpusTracks, dispersion, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
+import { fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
 import { categoriesLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
@@ -135,6 +135,16 @@ export const concordancePanel: PanelDef = {
     sorter.setAttribute("aria-label", "Sort");
     const copy = h("button", { type: "button", textContent: "Copy rows", title: "Copy every row as a table to paste into a spreadsheet, or into a document as lined-up concordance lines" });
     const copyExamples = h("button", { type: "button", textContent: "Copy as examples", title: "Copy the sentences these lines come from as numbered glossed examples for a paper (at most 50)" });
+    // File the lines' sentences under a grammar topic (the Topics panel gathers them).
+    const fileTopic = h("button", { type: "button", textContent: "File under a topic…", title: "File the sentences these lines come from under a grammar topic, to copy them later from the Topics panel as examples for a chapter" });
+    const topicName = h("input", { className: "cc-topic-name", placeholder: "Topic, such as negation", spellcheck: false });
+    topicName.setAttribute("aria-label", "Topic");
+    const topicNames = h("datalist", { id: "cc-topic-names" });
+    topicName.setAttribute("list", topicNames.id);
+    const topicGo = h("button", { type: "button", className: "primary", textContent: "File them" });
+    const topicCancel = h("button", { type: "button", textContent: "Cancel" });
+    const topicBar = h("div", { className: "cc-bar cc-topic-bar" }, topicName, topicNames, topicGo, topicCancel);
+    topicBar.hidden = true;
     const saveClipsButton = h("button", { type: "button", textContent: "Save clips…", title: "Save the sentences these lines come from as sound files, each cut from its text's recording, with a clips.csv index naming the text and what was searched for: every token of a word, ready for Praat" });
     const plotToggle = h("button", { type: "button", textContent: "Plot", title: "Show where in each text it occurs, and how evenly it is spread (AntConc's Plot)" });
     plotToggle.setAttribute("aria-pressed", "false");
@@ -491,6 +501,7 @@ export const concordancePanel: PanelDef = {
       nearBar.hidden = on || plotOn;
       sortToggle.hidden = on || plotOn;
       copyExamples.hidden = on || plotOn;
+      fileTopic.hidden = on || plotOn;
       saveClipsButton.hidden = on || plotOn;
     };
 
@@ -504,6 +515,7 @@ export const concordancePanel: PanelDef = {
       nearBar.hidden = on;
       sortToggle.hidden = on;
       copyExamples.hidden = on;
+      fileTopic.hidden = on;
       saveClipsButton.hidden = on;
       plotSorter.hidden = !on;
       plotByPicker.hidden = !on;
@@ -679,6 +691,38 @@ export const concordancePanel: PanelDef = {
           copyExamples.disabled = false;
         });
     };
+    fileTopic.onclick = () => {
+      if (hits.length === 0) return;
+      topicBar.hidden = !topicBar.hidden;
+      if (topicBar.hidden) return;
+      topicGo.textContent = `File ${sampled().length === 1 ? "its sentence" : "their sentences"}`;
+      topicName.focus();
+      void topicsOverview()
+        .then((t) => topicNames.replaceChildren(...t.topics.map((x) => h("option", { value: x.name }))))
+        .catch(() => undefined);
+    };
+    topicCancel.onclick = () => {
+      topicBar.hidden = true;
+    };
+    const fileThem = async () => {
+      const name = topicName.value.trim();
+      if (name === "" || hits.length === 0) return;
+      topicGo.disabled = true;
+      try {
+        const r = await fileUnderTopic(sampled().map((x) => ({ textId: x.textId, segmentId: x.segmentId })), name);
+        topicBar.hidden = true;
+        showToast({ tone: "info", lines: [`Filed ${r.filed} ${r.filed === 1 ? "sentence" : "sentences"} under «${name}»${r.already > 0 ? `; ${r.already} ${r.already === 1 ? "was" : "were"} there already` : ""}. The Topics panel lists them.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [`Could not file them: ${errorText(e)}`] });
+      } finally {
+        topicGo.disabled = false;
+      }
+    };
+    topicGo.onclick = () => void fileThem();
+    topicName.onkeydown = (e) => {
+      if (e.key === "Enter") void fileThem();
+      else if (e.key === "Escape") topicBar.hidden = true;
+    };
     saveClipsButton.onclick = async () => {
       if (hits.length === 0) return;
       const folder = await pickFile({ directory: true, title: "Where should the clips go?" });
@@ -833,7 +877,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, saveClipsButton), nearBar, catBar, catNote, chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, fileTopic, saveClipsButton), topicBar, nearBar, catBar, catNote, chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */
