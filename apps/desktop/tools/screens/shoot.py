@@ -1488,6 +1488,12 @@ def main():
             run.shot("state-sounds-together", run.page.locator(".panel-sounds"))
             if together.locator("tbody tr").count() < 3 or "pairs of a vowel and the next vowel" not in run.page.locator(".panel-sounds .sd-together-note").inner_text():
                 failures.append("Sounds together drew no table of vowel pairs")
+            harmony = run.page.locator(".panel-sounds .sd-harmony")
+            if harmony.count() != 1 or "neighbouring vowels" not in harmony.inner_text() and "Too few words" not in harmony.inner_text():
+                failures.append("Sounds together did not test for vowel harmony")
+            else:
+                harmony.scroll_into_view_if_needed()
+                run.shot("state-sounds-harmony", run.page.locator(".panel-sounds"))
             run.page.locator(".panel-sounds .sd-together-kind").select_option("CV")
             run.page.wait_for_timeout(300)
             cv = run.page.locator(".panel-sounds .sd-together")

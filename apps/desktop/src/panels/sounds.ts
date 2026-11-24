@@ -15,6 +15,7 @@ import type { FeatureMap } from "../typology/map";
 import { drawFeatureMap } from "./featuremap";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
+import { harmony, harmonyLines } from "../sounds/harmony";
 import { PROFILE_MARK, profileOf, sonorityBreaks, sonorityNote } from "../sounds/sonority";
 import { clustersNote, consonantClusters, gapsNote, positions, shapes, share, type Cluster, type Shape, type Where } from "../sounds/shapes";
 import { againstRelatives, checkInventory, phoibleLine, phonemeKey, shareOf, type PhoibleCompared } from "../sounds/phoible";
@@ -369,6 +370,11 @@ export const soundsPanel: PanelDef = {
     // Which vowels (or consonants) come together in a word: vowel harmony and co-occurrence restrictions.
     let togetherKind: Together = "V";
     let togetherMemo: { for: Loaded; kind: Together; value: Cooccurrence } | null = null;
+    let harmonyMemo: { for: Loaded; lines: string[] } | null = null;
+    const harmonyOf = (l: Loaded): string[] => {
+      if (harmonyMemo?.for !== l) harmonyMemo = { for: l, lines: harmonyLines(harmony(l.words)) };
+      return harmonyMemo.lines;
+    };
     const togetherSection = (l: Loaded): HTMLElement[] => {
       if (togetherMemo?.for !== l || togetherMemo.kind !== togetherKind) togetherMemo = { for: l, kind: togetherKind, value: cooccurrence(l.words, togetherKind) };
       const c = togetherMemo.value;
@@ -400,6 +406,8 @@ export const soundsPanel: PanelDef = {
         h("div", { className: "cc-bar" }, kindPick, copy),
         h("p", { className: "note sd-together-note", textContent: cooccurrenceNote(c, togetherKind) }),
         ...(table === null ? [] : [h("div", { className: "sd-scroll" }, table)]),
+        // Vowel harmony: neighbouring vowels' agreement in backness, rounding and height against chance.
+        ...(togetherKind === "V" && harmonyOf(l).length > 0 ? [h("div", { className: "ag-summary sd-harmony" }, h("strong", { textContent: "Vowel harmony" }), ...harmonyOf(l).map((line) => h("p", { textContent: line })))] : []),
       ];
     };
 

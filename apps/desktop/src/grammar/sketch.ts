@@ -11,6 +11,7 @@ import { gapsNote, positions, shapes, share } from "../sounds/shapes.ts";
 import { syllableNote, syllableTypes } from "../sounds/syllables.ts";
 import { toneMelodies, tonesNote } from "../sounds/tones.ts";
 import { cooccurrence, cooccurrenceNote, standouts } from "../sounds/cooccur.ts";
+import { harmony, harmonyLines, MIN_PAIRS, strength } from "../sounds/harmony.ts";
 import { affixLabel, signatures } from "../affixes/signatures.ts";
 import { possibleAllophones } from "../sounds/allophones.ts";
 import { countsLine, total, verdict, type WordOrder } from "../wordorder/logic.ts";
@@ -245,6 +246,9 @@ export function grammarSketch(d: SketchInput): string {
     // Vowels together in a word: harmony shows as pairs avoided and preferred.
     const together = cooccurrence(d.words, "V");
     if (standouts(together).length > 0) parts.push(`<p>${esc(cooccurrenceNote(together, "V"))} Pairs well below 1 may point to vowel harmony.</p>`);
+    // Agreement of neighbouring vowels against chance, when some feature shows a tendency.
+    const agreement = harmony(d.words).filter((x) => x.pairs >= MIN_PAIRS);
+    if (agreement.some((x) => strength(x.kappa) !== "none")) parts.push(...harmonyLines(agreement).map((l) => `<p>${esc(l)}</p>`), todo("Which vowels are neutral, which affixes harmonise, and what the exceptions are"));
     parts.push(todo("Vowel contrasts, length, nasality, harmony"));
     parts.push(`<h3>2.3 Frequency</h3>`, soundTable(sounds));
   }
