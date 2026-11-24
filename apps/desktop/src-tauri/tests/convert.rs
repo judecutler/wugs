@@ -41,7 +41,7 @@ fn every_compressed_format_decodes_to_a_wav_of_the_same_length() {
     ] {
         assert_eq!(convert::is_wav(&fixture(name)), name.ends_with(".wav"), "{name}");
         let out = dir.0.join(format!("{name}.wav"));
-        let Converted { sample_rate, channels: ch, frames } = convert::to_wav(&fixture(name), &out).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let Converted { sample_rate, channels: ch, frames, .. } = convert::to_wav(&fixture(name), &out).unwrap_or_else(|e| panic!("{name}: {e}"));
         assert_eq!((sample_rate, ch), (rate, channels), "{name}");
         let want = rate as i64 / 2;
         assert!((frames as i64 - want).abs() <= 2048, "{name}: {frames} frames for 0.5 s at {rate} Hz");
@@ -53,6 +53,18 @@ fn every_compressed_format_decodes_to_a_wav_of_the_same_length() {
         // ffmpeg's sine source plays at an eighth of full scale (about 4096).
         assert!((2_500..12_000).contains(&peak), "{name}: the tone is there at its level (peak {peak})");
     }
+}
+
+#[test]
+fn a_files_own_tags_come_back_as_details() {
+    let dir = TempDir::new();
+    let c = convert::to_wav(&fixture("tone-tagged.mp3"), &dir.0.join("t.wav")).unwrap();
+    assert_eq!(
+        c.details,
+        vec![("date".to_string(), "2024-05-01".to_string()), ("recorded_by".into(), "Jo Doe".into())],
+        "ID3's date and artist (Symphonia 0.5 does not hand over ID3 comments)"
+    );
+    assert!(convert::to_wav(&fixture("tone.mp3"), &dir.0.join("u.wav")).unwrap().details.is_empty());
 }
 
 #[test]

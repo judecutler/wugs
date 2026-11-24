@@ -21,7 +21,7 @@ fn field(bytes: &[u8]) -> String {
 }
 
 /// A recorder's date as `YYYY-MM-DD` (bext allows `-`, `_`, `:`, ` ` or `.` between the parts).
-fn date(s: &str) -> Option<String> {
+pub(crate) fn date(s: &str) -> Option<String> {
     let d: Vec<&str> = s.split(['-', '_', ':', ' ', '.', '/']).filter(|p| !p.is_empty()).collect();
     match d.as_slice() {
         [y, m, d, ..] if y.len() == 4 && y.chars().all(|c| c.is_ascii_digit()) && m.len() <= 2 && d.len() <= 2 => {
