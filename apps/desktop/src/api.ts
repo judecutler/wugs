@@ -179,6 +179,10 @@ export const speechSpans = (args: { source: string; granularity: "utterance" | "
 export type AutoSegmented = { ids: string[]; skipped: number; tier: string; findings: string[]; states: SegmentState[] };
 /** One machine segment per stretch of speech not already covered on the tier (the utterance tier when null). */
 export const autoSegment = (args: { textId: string; source: string; tierId: string | null; granularity: "utterance" | "word" }) => invoke<AutoSegmented>("auto_segment", args);
+/** The track's sentences (no times yet) laid over the recording's speech by length (`src-tauri/src/rough_align.rs`). */
+export type RoughTimed = { tier: string; tierName: string; sentences: number; spans: number; states: SegmentState[] };
+export const roughTime = (args: { textId: string; source: string; tierId: string | null }) => invoke<RoughTimed>("rough_time", args);
+export const roughUntime = (args: { textId: string; expect: { id: string; startMs?: number; endMs?: number }[] }) => invoke<null>("rough_untime", args);
 
 export type TierTemplate = "transcription" | "translation" | "notes" | "custom";
 

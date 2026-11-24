@@ -9,6 +9,8 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import {
   addSegment,
   autoSegment,
+  roughTime,
+  roughUntime,
   deleteSegment,
   deleteSegments,
   editSegmentContent,
@@ -29,7 +31,7 @@ import { getSelection, getState, refreshConflicts, refreshText, reloadTexts, sel
 import { tint } from "../assist/logic";
 import { crossedDragThreshold, dragEdge, grabOffset, hitTest, DRAG_PX, type Edge, type Hit } from "./gestures";
 import { laneBounds, snapDragged, snapRange, type Span } from "./snap";
-import { editRules, type EditRules, type Granularity } from "./edit-rules";
+import { editRules, roughLines, type EditRules, type Granularity } from "./edit-rules";
 import { checkOf, edgeEntry, UndoHistory, type SegmentCheck, type UndoEntry, type UndoStack } from "./undo";
 import { StripCache } from "./strips";
 import { editBlocker, NO_TRACKS, parseTracks, shuttle, toggleHidden, toggleLocked, toggleMuted, tracksKey, pxPerSecToSlider, sliderToPxPerSec, type Tracks } from "./tracks";
@@ -1460,6 +1462,57 @@ export class TimelineView {
     } catch (e) {
       showToast({ tone: "error", lines: [errorText(e)] });
       await refreshText();
+    }
+  }
+
+  /**
+   * Time a typed transcription roughly: the selected segment's track (else
+   * the utterance track), which has no times yet, laid over the recording's
+   * stretches of speech by sentence length. Undo takes the times away.
+   */
+  async roughTime(source: string): Promise<void> {
+    await this.track(this.roughTimeNow(source));
+  }
+
+  private async roughTimeNow(source: string): Promise<void> {
+    const text = this.text;
+    if (text === null) return;
+    const sel = this.selected === null ? null : this.findSegment(this.selected);
+    const tierId = sel?.tier ?? null;
+    const target = this.lanes.find((l) => (tierId !== null ? l.tierId === tierId : text.tiers.some((t) => t.id === l.tierId && t.utterance === true)));
+    const why = this.laneBlock(target);
+    if (why !== null) {
+      showToast({ tone: "info", lines: [why] });
+      return;
+    }
+    const stack = this.history();
+    try {
+      let out = await roughTime({ textId: text.id, source, tierId });
+      const timesOf = () => out.states.map((st) => checkOf(st, ["startMs", "endMs"]));
+      const entry: UndoEntry = {
+        label: "rough timing",
+        undo: async () => {
+          await roughUntime({ textId: text.id, expect: timesOf() });
+        },
+        redo: async () => {
+          out = await roughTime({ textId: text.id, source, tierId: out.tier });
+        },
+      };
+      stack?.push(entry);
+      await this.afterEdit();
+      showToast({
+        tone: "info",
+        lines: roughLines(out),
+        action: {
+          label: "Undo",
+          run: () => {
+            if (stack !== null && stack === this.history() && stack.isNewest(entry)) void this.undo();
+            else showToast({ tone: "info", lines: ["Later edits came after it; use Undo on the timeline to step back to it."] });
+          },
+        },
+      });
+    } catch (e) {
+      showToast({ tone: "error", lines: [errorText(e)] });
     }
   }
 

@@ -140,6 +140,31 @@ impl Project {
         Ok((gone, kept, res))
     }
 
+    /// Give each segment the span given, or take its times away (`None`),
+    /// in one resolving `time-segments` txn: rough alignment of a typed
+    /// transcription to its recording, and that alignment's undo. A span
+    /// must run forward from 0. Nothing is written for an empty list.
+    pub fn time_segments(&mut self, text: &str, rows: &[(String, Option<(f64, f64)>)]) -> Result<Option<CommitResult>, String> {
+        for (seg, span) in rows {
+            self.require_in_text(seg, "segment", text)?;
+            if let Some((s, e)) = span {
+                if !(s.is_finite() && e.is_finite() && *s >= 0.0 && e > s) {
+                    return Err(format!("{s}–{e} ms is not a time span"));
+                }
+            }
+        }
+        if rows.is_empty() {
+            return Ok(None);
+        }
+        let mut t = self.intent("time-segments").resolving();
+        for (seg, span) in rows {
+            let (s, e) = span.map_or((Value::Null, Value::Null), |(s, e)| (Value::Num(s), Value::Num(e)));
+            t.set("segment", seg, text, "start", s)?;
+            t.set("segment", seg, text, "end", e)?;
+        }
+        t.commit().map(Some)
+    }
+
     /// Live timed segments of `text` on `tier`, as (id, start, end) in time
     /// order (ties by id, so every device sees one order).
     fn tier_spans(&self, text: &str, tier: &str) -> Result<Vec<(String, f64, f64)>, String> {
@@ -383,6 +408,23 @@ mod tests {
     fn row(p: &Project, seg: &str) -> (f64, f64, String, bool) {
         let (s, e) = span(p, seg).unwrap().unwrap();
         (s, e, p.proj.field_str(seg, "content").unwrap().unwrap_or_default(), p.proj.is_tombstoned(seg).unwrap())
+    }
+
+    #[test]
+    fn segments_are_timed_and_untimed_in_one_txn() {
+        let (root, mut p, txt, tier) = project();
+        let (a, _) = p.add_segment(&txt, &tier, 0, None, None, "one").unwrap();
+        let (b, _) = p.add_segment(&txt, &tier, 1, None, None, "two").unwrap();
+        assert!(p.time_segments(&txt, &[(a.clone(), Some((5.0, 1.0)))]).is_err(), "a backward span is refused");
+        p.time_segments(&txt, &[(a.clone(), Some((100.0, 900.0))), (b.clone(), Some((1200.0, 2000.0)))]).unwrap();
+        assert_eq!((row(&p, &a).0, row(&p, &b).1), (100.0, 2000.0));
+        p.time_segments(&txt, &[(a.clone(), None), (b.clone(), None)]).unwrap();
+        assert_eq!((span(&p, &a).unwrap(), span(&p, &b).unwrap()), (None, None), "times taken away");
+        assert!(p.time_segments(&txt, &[]).unwrap().is_none());
+        drop(p);
+        let p = Project::open(&root, "prs_Alice").unwrap();
+        assert_eq!(span(&p, &a).unwrap(), None, "and after replay");
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]
