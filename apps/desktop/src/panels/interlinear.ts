@@ -2,7 +2,9 @@
 // sentence with its words, morphs, glosses and free translation, the way a
 // FLEx or Toolbox user reads a text. Read-only: a sentence opens in the Gloss
 // panel when clicked, ▶ plays it.
-import { abbreviationMeanings, errorText, glossGet, setAbbreviationMeaning, type TextDetail } from "../api";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { abbreviationMeanings, errorText, facsimileView, glossGet, setAbbreviationMeaning, type TextDetail } from "../api";
+import { cropStyle, type FacsimileView } from "../facsimile/logic";
 import { abbreviationList, abbreviationsOf, unexplainedNote } from "../gloss/abbreviations";
 import { emptyState, h } from "../dom";
 import { glossRuns, wordLines, type ExampleWord } from "../gloss/example";
@@ -19,6 +21,13 @@ let show: Show = "all";
 
 /** Show the list of abbreviations the text's glosses use (kept while the app runs). */
 let showAbbreviations = false;
+
+/** Show each sentence's area of its page image under it (kept on this computer). */
+const CROPS_KEY = "wugs.interlinear.pageLines";
+let showCrops = localStorage.getItem(CROPS_KEY) !== "off";
+
+/** The natural size of page images already loaded, by URL. */
+const sizes = new Map<string, { width: number; height: number }>();
 
 /** How many sentences are read from the engine at once. */
 const BATCH = 8;
@@ -56,6 +65,8 @@ export const interlinearPanel: PanelDef = {
     let key = "";
     let seq = 0;
     let lines: Line[] = [];
+    /** The text's page images and marked areas, when it has any. */
+    let facs: FacsimileView | null = null;
     /** The project's own meanings of the abbreviations in `lines`. */
     let own = new Map<string, string>();
     /** What is typed in a meaning field and not saved yet, by abbreviation. */
@@ -148,13 +159,38 @@ export const interlinearPanel: PanelDef = {
               }),
             )
           : h("p", { className: "il-plain", textContent: l.content.trim() === "" ? "(not transcribed)" : l.content });
+        const area = showCrops ? facs?.marked.find((m) => m.segment === l.id) : undefined;
+        const page = area === undefined ? undefined : facs?.pages.find((p) => p.source === area.area.source);
+        let crop: HTMLElement | null = null;
+        if (area !== undefined && page?.path) {
+          const url = convertFileSrc(page.path);
+          const natural = sizes.get(url);
+          if (natural === undefined) {
+            const img = new Image();
+            img.onload = () => {
+              sizes.set(url, { width: img.naturalWidth || 1000, height: img.naturalHeight || 1000 });
+              const now = getState();
+              if (now.kind === "open" && now.text?.id === text.id) paint(now.text);
+            };
+            img.src = url;
+          } else {
+            const st = cropStyle(area.area, natural);
+            crop = h("div", { className: "il-crop", title: `${page.label}: where this line stands on the page` });
+            crop.style.backgroundImage = `url("${url}")`;
+            crop.style.backgroundSize = st.backgroundSize;
+            crop.style.backgroundPosition = st.backgroundPosition;
+            crop.style.aspectRatio = st.aspectRatio;
+            crop.setAttribute("role", "img");
+            crop.setAttribute("aria-label", `The line on ${page.label}`);
+          }
+        }
         const row = h(
           "li",
           { className: `il-row${l.speaker === undefined ? "" : " il-row-speaker"}${sel?.segmentId === l.id ? " il-selected" : ""}${analysed(l) ? "" : " il-unglossed"}`, tabIndex: 0, title: "Open this sentence in the Gloss panel" },
           h("span", { className: "il-num", textContent: `(${l.number})` }),
           play,
           l.speaker === undefined ? null : h("span", { className: "il-speaker", textContent: l.speaker }),
-          h("div", { className: "il-body" }, body, l.translation === null ? null : h("p", { className: "il-tr", textContent: `‘${l.translation}’` }), ...(l.notes ?? []).map((n) => h("p", { className: "il-note", textContent: `Note: ${n}` }))),
+          h("div", { className: "il-body" }, crop, body, l.translation === null ? null : h("p", { className: "il-tr", textContent: `‘${l.translation}’` }), ...(l.notes ?? []).map((n) => h("p", { className: "il-note", textContent: `Note: ${n}` }))),
         );
         row.dataset.id = l.id;
         const pick = () => seg !== undefined && selectSegment({ textId: text.id, tierId: seg.tier, segmentId: seg.id });
@@ -189,6 +225,16 @@ export const interlinearPanel: PanelDef = {
         paint(text);
       };
       const bar = h("div", { className: "il-bar" }, only, next, abbrButton);
+      if ((facs?.marked.length ?? 0) > 0) {
+        const crops = h("button", { type: "button", textContent: "Page lines", title: "Show each sentence's line from its page image above it" });
+        crops.setAttribute("aria-pressed", String(showCrops));
+        crops.onclick = () => {
+          showCrops = !showCrops;
+          localStorage.setItem(CROPS_KEY, showCrops ? "on" : "off");
+          paint(text);
+        };
+        bar.append(crops);
+      }
       const abbrSection = showAbbreviations ? abbreviationsSection(text) : null;
       const empty = show !== "all" && shown.length === 0 && lines.length > 0 ? h("p", { className: "note", textContent: showOf(show).done }) : null;
       el.replaceChildren(h("h3", { className: "il-title", textContent: text.title || "(untitled)" }), h("p", { className: "note", textContent: progress(lines) }), bar, ...(abbrSection === null ? [] : [abbrSection]), ...(empty === null ? [] : [empty]), h("ol", { className: "il-list" }, ...rows));
@@ -217,9 +263,10 @@ export const interlinearPanel: PanelDef = {
       key = wanted;
       const mine = ++seq;
       if (lines.length === 0) el.replaceChildren(emptyState("Interlinear", "Reading the text…"));
-      void linesOf(text).then(
-        async (ls) => {
+      void Promise.all([linesOf(text), facsimileView({ text: text.id }).catch(() => null)]).then(
+        async ([ls, f]) => {
           if (mine !== seq) return;
+          facs = f;
           const used = abbreviationsOf(ls);
           const meanings = used.length === 0 ? [] : await abbreviationMeanings(used).catch(() => used.map(() => null));
           if (mine !== seq) return;

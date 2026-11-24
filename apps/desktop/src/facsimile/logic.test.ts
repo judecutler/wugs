@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { areasOn, facsimileLine, nextToMark, pageOf, pointIn, rectFrom, zoomBy, type FacsimileView } from "./logic.ts";
+import { areasOn, cropStyle, facsimileLine, nextToMark, pageOf, pointIn, rectFrom, zoomBy, type FacsimileView } from "./logic.ts";
 
 test("a drag becomes a rectangle on the page, and a click does not", () => {
   assert.deepEqual(rectFrom({ x: 0.6, y: 0.4 }, { x: 0.2, y: 0.1 }, "p1"), { source: "p1", x: 0.2, y: 0.1, w: 0.4, h: 0.3 });
@@ -43,4 +43,10 @@ test("the line above the page and the zoom steps", () => {
   assert.equal(zoomBy(1, 1), 1.5);
   assert.equal(zoomBy(1, -1), 0.75);
   assert.equal(zoomBy(4, 1), 4);
+});
+
+test("an area of a page is shown by scaling and shifting the page", () => {
+  const c = cropStyle({ source: "p", x: 0.1, y: 0.5, w: 0.5, h: 0.1 }, { width: 2000, height: 3000 });
+  assert.deepEqual(c, { backgroundSize: "200% auto", backgroundPosition: "20% 55.556%", aspectRatio: "1000 / 300" });
+  assert.equal(cropStyle({ source: "p", x: 0, y: 0, w: 1, h: 1 }, { width: 10, height: 20 }).backgroundPosition, "0% 0%");
 });
