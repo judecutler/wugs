@@ -130,8 +130,73 @@ pub fn import(session: &mut Session, path: &Path) -> Result<TableImport, String>
     })
 }
 
+/// A CLDF ExampleTable (`examples.csv` with Primary_Text, Analyzed_Word and
+/// Gloss, as wugs, IMTVault and most CLDF datasets write it) turned into
+/// glossed-example text the `igt_text` reader takes: one group per
+/// Text_Title, else per Language_ID when there are several, else one.
+/// Each is (title, the examples as text, examples with no analysis left out).
+/// None when the table is not an ExampleTable.
+pub fn examples_as_igt(input: &str, tabs: bool, stem: &str) -> Option<Vec<(String, String, usize)>> {
+    let (header, rows, _) = crate::table_text::records(input, tabs).ok()?;
+    let col = |names: &[&str]| names.iter().find_map(|n| header.iter().position(|h| h.trim().eq_ignore_ascii_case(n)));
+    let (text, words, gloss) = (col(&["Primary_Text"])?, col(&["Analyzed_Word"])?, col(&["Gloss"])?);
+    let (translation, language, title) = (col(&["Translated_Text"]), col(&["Language_ID"]), col(&["Text_Title"]));
+    let languages: std::collections::BTreeSet<String> = rows.iter().map(|r| cell(r, language)).collect();
+    let mut groups: Vec<(String, String, usize)> = Vec::new();
+    for r in &rows {
+        let name = match (cell(r, title), languages.len() > 1) {
+            (t, _) if !t.is_empty() => t,
+            (_, true) => format!("{stem} ({})", cell(r, language)),
+            _ => stem.to_string(),
+        };
+        let at = match groups.iter().position(|g| g.0 == name) {
+            Some(i) => i,
+            None => {
+                groups.push((name, String::new(), 0));
+                groups.len() - 1
+            }
+        };
+        // CLDF separates the words of Analyzed_Word and Gloss with tabs; a file with none uses spaces.
+        let split = |v: &str| -> Vec<String> {
+            let parts: Vec<&str> = if v.contains('\t') { v.split('\t').collect() } else { v.split_whitespace().collect() };
+            parts.iter().map(|w| w.trim().replace(char::is_whitespace, "_")).collect()
+        };
+        let (ws, gs) = (split(&cell(r, Some(words))), split(&cell(r, Some(gloss))));
+        let primary = cell(r, Some(text)).replace(['\n', '\r'], " ");
+        if ws.iter().all(String::is_empty) || gs.iter().all(String::is_empty) || ws.len() != gs.len() {
+            groups[at].2 += 1;
+            continue;
+        }
+        let g = &mut groups[at].1;
+        g.push_str(&primary);
+        g.push('\n');
+        g.push_str(&ws.join(" "));
+        g.push('\n');
+        g.push_str(&gs.join(" "));
+        g.push('\n');
+        let tr = cell(r, translation).replace(['\n', '\r'], " ");
+        if !tr.is_empty() {
+            g.push_str(&format!("‘{tr}’\n"));
+        }
+        g.push('\n');
+    }
+    Some(groups)
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn an_example_table_becomes_glossed_examples() {
+        let csv = "ID,Language_ID,Primary_Text,Analyzed_Word,Gloss,Translated_Text\nex1,kanu,Nikani ŋai.,ni-kani\tŋai,1SG-count\tone,I count one.\nex2,kanu,Ŋai,,,One.\nex3,tura,Kesi mo,kesi\tmo=ta,two\tthree=Q,\"Two, three?\"\n";
+        let groups = examples_as_igt(csv, false, "examples").unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].0, "examples (kanu)");
+        assert_eq!(groups[0].1, "Nikani ŋai.\nni-kani ŋai\n1SG-count one\n‘I count one.’\n\n");
+        assert_eq!(groups[0].2, 1, "an example with no analysis is left out");
+        assert!(wugs_legacy::igt_text::is_glossed_examples(&groups[1].1), "{}", groups[1].1);
+        assert!(examples_as_igt("ID,Form\n1,a\n", false, "x").is_none());
+    }
+
     use super::*;
 
     fn fresh(name: &str) -> std::path::PathBuf {
@@ -179,6 +244,23 @@ mod tests {
         let r = crate::lexicon_table::import(&mut session, &meta).unwrap();
         assert_eq!((r.entries, r.senses), (published.entries, published.senses), "{r:?}");
         assert_eq!(crate::lexicon::lexicon_list(&mut session, "").unwrap().len(), before);
+        drop(session);
+        // Its examples (the tutorial is restricted, so included on purpose) come in as glossed text.
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir.join("sample"), "tester").unwrap();
+        let with = crate::interchange::export_cldf(&mut session, &dir, "2026-11-25", true, false, "wugs test").unwrap();
+        drop(session);
+        let mut session: Session = None;
+        crate::session::create_project(&mut session, dir.join("ex").to_str().unwrap(), "prs_Ana").unwrap();
+        let examples = Path::new(&with.path).join("examples.csv");
+        let r = crate::interchange::import_file(&mut session, examples.to_str().unwrap()).unwrap();
+        assert!(r.lines[0].starts_with("Read as a CLDF example table: 1 new text with 2 glossed examples"), "{:?}", r.lines);
+        let text = r.text.unwrap();
+        let detail = crate::session::get_text(&mut session, &text).unwrap();
+        assert_eq!(crate::session::list_texts(&mut session).unwrap()[0].title, "Counting to six (tutorial)");
+        assert!(detail.segments.iter().any(|s| s.content == "wʌn tuː θɹiː"), "{:?}", detail.segments.iter().map(|s| &s.content).collect::<Vec<_>>());
+        let again = crate::interchange::import_file(&mut session, examples.to_str().unwrap()).unwrap();
+        assert!(again.lines.iter().any(|l| l.contains("matched a text already here")), "{:?}", again.lines);
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }
