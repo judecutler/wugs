@@ -1,7 +1,7 @@
 import { token } from "../theme/tokens";
 import { THEME_EVENT } from "../theme/theme";
-import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, mediaOverview, type Recovered, type SourceRow } from "../api";
-import { CARD_TYPE, cardDrag, cards, duration, normalized, wavePath, type Card } from "../media/logic";
+import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, mediaOverview, sourceSetDetail, type Recovered, type SourceRow } from "../api";
+import { CARD_TYPE, cardDrag, cards, detailsLine, duration, normalized, recordingDetailKeys, recordingDetailLabel, wavePath, type Card } from "../media/logic";
 import { canRecord } from "../capture/recorder.ts";
 import { defaultLabel, formatElapsed, meterFill } from "../capture/pcm.ts";
 import {
@@ -241,6 +241,51 @@ export const mediaPanel: PanelDef = {
     // A card replaced mid-drag never gets its dragend, so redraws wait for the drag to end.
     let redrawAfterDrag = false;
     let redrawTimer = 0;
+    /** The recording whose details are open under the cards. */
+    let detailsFor: string | null = null;
+    let detailsPending = false;
+    list.addEventListener("focusout", () =>
+      window.setTimeout(() => {
+        if (detailsPending && !list.contains(document.activeElement)) {
+          detailsPending = false;
+          drawList();
+        }
+      }),
+    );
+    const detailsSection = (): HTMLElement | null => {
+      const src = sources.find((x) => x.id === detailsFor);
+      if (src === undefined) return null;
+      const close = h("button", { type: "button", textContent: "Close", onclick: () => ((detailsFor = null), drawList()) });
+      return h(
+        "section",
+        { className: "bin-details", ariaLabel: `Details of ${src.label}` },
+        h("div", { className: "bin-details-head" }, h("h3", { textContent: `Details of «${src.label || "(unnamed recording)"}»` }), close),
+        h("p", { className: "note", textContent: "What an archive asks about a recording. The catalogue sheet uses its date and place for a text that has none of its own." }),
+        ...recordingDetailKeys(src.details).map((key) => {
+          const had = src.details.find(([k]) => k === key)?.[1] ?? "";
+          const field = h("input", { value: had, className: "bin-detail", ariaLabel: recordingDetailLabel(key), placeholder: key === "date" ? "YYYY-MM-DD" : "" });
+          field.dataset.key = key;
+          let sent = had;
+          const save = () => {
+            const next = field.value.trim();
+            if (next === sent) return;
+            sent = next;
+            void attempt(async () => {
+              sources = await sourceSetDetail({ source: src.id, key, value: next });
+              // Saving on leaving a field must not redraw under the next one.
+              if (list.contains(document.activeElement)) detailsPending = true;
+              else drawList();
+            });
+          };
+          field.onkeydown = (e) => {
+            if (e.key === "Enter") save();
+          };
+          field.onblur = save;
+          return h("label", { className: "bin-detail-row" }, h("span", { textContent: recordingDetailLabel(key) }), field);
+        }),
+      );
+    };
+
     const drawList = () => {
       if (cardDrag.active()) {
         redrawAfterDrag = true;
@@ -268,6 +313,7 @@ export const mediaPanel: PanelDef = {
       const others = sources.filter((x) => !(x.kind === "audio" && x.hasMedia));
       list.replaceChildren(
         bin.length === 0 ? emptyState("No recordings yet", "Record above, import one on the Timeline, or drop a recording here.", "Nothing for the wug to listen to yet.") : h("div", { className: "bin-grid", role: "list" }, ...bin.map((c) => card(c, shown))),
+        detailsSection() ?? "",
         others.length === 0
           ? ""
           : h("p", { className: "note bin-others", textContent: `Also in the project, without audio here: ${others.map((x) => `${x.label || x.id} (${x.access ?? "open"})`).join(", ")}.` }),
@@ -352,6 +398,18 @@ export const mediaPanel: PanelDef = {
         h("div", { className: "bin-name", textContent: c.label }),
         h("div", { className: "bin-meta" }, h("span", { className: "bin-time", textContent: typeof w === "object" ? duration(w.durationMs) : "" }), h("span", { className: `access access-${c.access}`, textContent: c.access })),
         h("div", { className: "note bin-where", textContent: where }),
+        h("button", {
+          type: "button",
+          className: "link-button bin-details-open",
+          textContent: detailsLine(sources.find((x) => x.id === c.id)?.details ?? []),
+          title: "Date, place, who recorded it and more, for the archive",
+          ondblclick: (e: MouseEvent) => e.stopPropagation(),
+          onclick: () => {
+            detailsFor = detailsFor === c.id ? null : c.id;
+            drawList();
+            list.querySelector<HTMLInputElement>(".bin-detail")?.focus();
+          },
+        }),
         button,
       );
       el.ondragstart = (e) => {

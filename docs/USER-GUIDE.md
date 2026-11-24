@@ -99,6 +99,8 @@ Recording is meant to work on Windows and macOS. On Linux, the system's web view
 
 Below the Record button, the **Media** panel shows each recording as a card: its waveform, name, length, sharing level and the texts that use it. The card of the text on screen has a blue outline and says **In this text**. To use a recording for the text on screen, drag its card onto the Timeline, double-click it, or click **Use for this text**. The text remembers it, so every panel can play its segments.
 
+Under each card's text line, a link names the recording's details (**No details yet** at first). Click it to open them under the cards: date, place, who recorded it, participants, genre, equipment and a description, what an archive asks about a recording. Each saves when you press Enter or leave the field. The **Catalogue sheet…** uses a recording's date, place, genre and description for a text linked to it that has none of its own.
+
 ## Segment the recording
 
 A segment marks where one utterance, or one word, starts and ends. The Transcribe and Gloss panels work segment by segment.

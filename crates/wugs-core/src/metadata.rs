@@ -44,6 +44,9 @@ pub fn key_of(raw: &str) -> Option<String> {
     Some(out.chars().take(MAX_KEY).collect::<String>().trim_end_matches('_').to_string())
 }
 
+/// The Source fields DATA-MODEL §3 names that a recording's details edit directly.
+const SOURCE_FIELDS: [&str; 2] = ["date", "place"];
+
 /// One text's metadata, by key.
 pub type Metadata = Vec<(String, String)>;
 
@@ -132,6 +135,34 @@ impl Project {
         Ok((key, t.commit()?))
     }
 
+    /// A recording's details (date, place, recorded by, equipment…): its
+    /// own `date` and `place` fields (DATA-MODEL §3 Source) and its
+    /// `meta:<key>` fields, sorted by key.
+    pub fn source_details(&self, source: &str) -> Result<Metadata, String> {
+        let mut out = self.text_metadata(source)?;
+        for key in SOURCE_FIELDS {
+            if let Some((Value::Str(v), _)) = self.proj.field(source, key)?.filter(|(v, _)| matches!(v, Value::Str(s) if !s.is_empty())) {
+                out.retain(|(k, _)| k != key);
+                out.push((key.to_string(), v));
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
+    /// Set (or clear) one of a recording's details, in the recording's own
+    /// scope: `date` and `place` are the Source's own fields, any other key
+    /// a `meta:<key>` field. Resolving, a person's edit.
+    pub fn set_source_detail(&mut self, source: &str, key: &str, value: &str) -> Result<(String, CommitResult), String> {
+        self.require(source, "source")?;
+        let key = key_of(key).ok_or_else(|| format!("«{key}» cannot be a detail's name: it needs a letter first"))?;
+        let value = self.metadata_value(value)?;
+        let field = if SOURCE_FIELDS.contains(&key.as_str()) { key.clone() } else { format!("{PREFIX}{key}") };
+        let mut t = self.intent("set-source-detail").resolving();
+        t.set("source", source, source, &field, value)?;
+        Ok((key, t.commit()?))
+    }
+
     /// A value as stored: trimmed, line breaks as spaces, NFC; empty is Null.
     fn metadata_value(&self, value: &str) -> Result<Value, String> {
         let v: String = value.split(['\r', '\n', '\t']).map(str::trim).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" ");
@@ -156,5 +187,25 @@ mod tests {
         assert_eq!(key_of("1st"), None);
         assert_eq!(key_of("--"), None);
         assert_eq!(key_of(&"a".repeat(60)).map(|k| k.len()), Some(MAX_KEY));
+    }
+
+    #[test]
+    fn a_recording_s_details_use_its_own_date_and_place() {
+        let root = std::env::temp_dir().join(format!("wugs-source-details-{}", wugs_model::ulid()));
+        let mut p = Project::open(&root, "prs_Test").unwrap();
+        let src = p.add_source("Session 1", None, "audio", None).unwrap();
+        p.set_source_detail(&src, "Date", "2026-11-03").unwrap();
+        p.set_source_detail(&src, "Recorded by", "J. C.").unwrap();
+        p.set_source_detail(&src, "Place", "Kelani").unwrap();
+        assert_eq!(p.proj.field_str(&src, "date").unwrap().as_deref(), Some("2026-11-03"), "the Source's own field");
+        assert_eq!(
+            p.source_details(&src).unwrap(),
+            vec![("date".to_string(), "2026-11-03".to_string()), ("place".to_string(), "Kelani".to_string()), ("recorded_by".to_string(), "J. C.".to_string())]
+        );
+        p.set_source_detail(&src, "place", "").unwrap();
+        assert_eq!(p.source_details(&src).unwrap().len(), 2, "cleared: {:?}", p.source_details(&src).unwrap());
+        assert!(p.set_source_detail("src_nothing", "date", "x").is_err());
+        drop(p);
+        std::fs::remove_dir_all(root).ok();
     }
 }

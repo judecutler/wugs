@@ -1585,6 +1585,12 @@ fn list_sources(s: State<SessionThread>) -> Result<Vec<SourceRow>, String> {
     s.run(session::list_sources)
 }
 
+/// Set (or clear) one of a recording's details (date, place, recorded by…).
+#[tauri::command(async)]
+fn source_set_detail(s: State<SessionThread>, source: String, key: String, value: String) -> Result<Vec<SourceRow>, String> {
+    s.run(move |session| session::set_source_detail(session, &source, &key, &value))
+}
+
 #[tauri::command(async)]
 fn search(s: State<SessionThread>, query: String, scope: SearchScope) -> Result<Vec<SearchRow>, String> {
     s.run(move |s| session::search(s, &query, scope))
@@ -2301,6 +2307,7 @@ pub fn run() {
             spectrogram,
             conflict_resolve,
             list_sources,
+            source_set_detail,
             import_media,
             capture_begin,
             capture_chunk,
