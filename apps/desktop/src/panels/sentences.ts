@@ -5,7 +5,8 @@
 // prompt are kept. Commands in src-tauri/src/sentences.rs; rules in
 // ../sentences/logic.ts.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { errorText, sentenceAnswer, sentenceListImport, sentenceLists, sentenceListView } from "../api";
+import { elicitationSheet } from "../elicit/sheet";
+import { errorText, projectLanguage, saveDocument, sentenceAnswer, sentenceListImport, sentenceLists, sentenceListView } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { NO_LISTS, nextToDo, progressLine, shownPrompts, type PromptList, type PromptRow, type PromptView } from "../sentences/logic";
@@ -34,6 +35,7 @@ export const sentencesPanel: PanelDef = {
     const load = h("button", { type: "button", textContent: "Load prompts…", title: "Read a list of prompts: a .txt with one sentence a line, or a CSV or tab-separated table with a prompt column" });
     const toDoBox = h("input", { type: "checkbox" });
     const toDo = h("label", { title: "List only the prompts that have no answer yet" }, toDoBox, " Only prompts to do");
+    const print = h("button", { type: "button", textContent: "Print a sheet…", title: "These prompts as a form to print and fill in by hand: a header for the speaker, date and place, then a row per prompt with room for the sentence and notes. With Only prompts to do ticked, only those" });
     const line = h("p", { className: "note se-line" });
     const list = h("ol", { className: "se-prompts" });
 
@@ -136,6 +138,28 @@ export const sentencesPanel: PanelDef = {
       }
     };
 
+    print.onclick = async () => {
+      const v = view;
+      if (v === null) return;
+      const folder = await pickFile({ directory: true, title: "Where should the sheet go?" });
+      if (typeof folder !== "string") return;
+      try {
+        const language = await projectLanguage().catch(() => ({ name: "", glottocode: "", iso: "" }));
+        const contents = elicitationSheet({
+          list: { name: v.list.name, citation: "" },
+          language: language.name,
+          concepts: v.prompts.map((r) => ({ number: r.number, gloss: r.prompt, concepticonGloss: "", skipped: false, answers: r.answers.map((a) => ({ lemma: a.content, gloss: "" })) })),
+          which: toDoOnly ? "todo" : "all",
+          withAnswers: !toDoOnly,
+          generator: "wugs",
+          kind: "sentences",
+        });
+        const r = await saveDocument({ folder, title: `${v.list.name} sheet`, extension: "html", contents });
+        showToast({ tone: "info", lines: [`Saved a sheet to print in ${r.path}. Open it in a browser or Word and print it.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    };
     picker.onchange = () => {
       listId = picker.value;
       drafts.clear();
@@ -186,7 +210,7 @@ export const sentencesPanel: PanelDef = {
         listId = "";
         view = null;
         drafts.clear();
-        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, toDo), line, list);
+        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, toDo, print), line, list);
         void fetchLists();
         return;
       }
