@@ -296,6 +296,23 @@ mod tests {
     }
 
     #[test]
+    fn a_person_s_details_are_kept_in_the_people_scope() {
+        let (root, mut p) = project();
+        let ana = p.add_named_person("Ana Reyes", &[]).unwrap();
+        assert_eq!(p.set_person_detail(&ana, "Born", " 1958 ").unwrap().0, "born");
+        p.set_person_detail(&ana, "Languages", "Kanu (first),\nTok Pisin").unwrap();
+        assert_eq!(p.person_details(&ana).unwrap(), vec![("born".to_string(), "1958".to_string()), ("languages".to_string(), "Kanu (first), Tok Pisin".to_string())]);
+        p.set_person_detail(&ana, "born", "").unwrap();
+        assert_eq!(p.person_details(&ana).unwrap().len(), 1, "an empty value clears it");
+        let people_log: String = std::fs::read_dir(root.join("log").join(crate::SCOPE_PEOPLE)).unwrap().map(|f| std::fs::read_to_string(f.unwrap().path()).unwrap()).collect();
+        assert!(people_log.contains("meta:languages"), "written in the people scope's log");
+        assert!(p.set_person_detail(&ana, "1st", "x").is_err());
+        assert!(p.set_person_detail("prs_nobody", "born", "1950").is_err());
+        drop(p);
+        std::fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
     fn a_person_and_their_consent_round_trip() {
         let (root, mut p) = project();
         let ana = p.add_named_person(" Ana Reyes ", &["speaker".into(), "speaker".into(), " ".into()]).unwrap();

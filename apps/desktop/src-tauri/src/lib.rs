@@ -965,6 +965,10 @@ fn person_set_roles(s: State<SessionThread>, person: String, roles: Vec<String>)
     s.run(move |s| people::set_roles(s, &person, &roles))
 }
 #[tauri::command(async)]
+fn person_set_detail(s: State<SessionThread>, person: String, key: String, value: String) -> Result<people::PeopleView, String> {
+    s.run(move |s| people::set_detail(s, &person, &key, &value))
+}
+#[tauri::command(async)]
 fn person_delete(s: State<SessionThread>, person: String) -> Result<people::PeopleView, String> {
     s.run(move |s| people::delete_person(s, &person))
 }
@@ -2214,6 +2218,7 @@ pub fn run() {
             person_add,
             person_set_name,
             person_set_roles,
+            person_set_detail,
             person_delete,
             consent_add,
             consent_set_term,

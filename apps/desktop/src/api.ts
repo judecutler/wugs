@@ -727,11 +727,11 @@ export const saveDocument = (args: { folder: string; title: string; extension: s
 /** A term's answer: true agreed, false refused, null not asked. */
 export type PeopleConsent = { id: string; covers: string; terms: [string, boolean | null][]; date: string; evidenceName: string | null; hasEvidence: boolean };
 /** `deleted`: the person was deleted on another device while a record was added for them here; the records still count. */
-export type PeoplePerson = { id: string; name: string; roles: string[]; consents: PeopleConsent[]; deleted: boolean };
+export type PeoplePerson = { id: string; name: string; roles: string[]; details: [string, string][]; consents: PeopleConsent[]; deleted: boolean };
 export type Coverable = { id: string; kind: "project" | "recording" | "text"; label: string };
 export type PeopleView = { people: PeoplePerson[]; coverable: Coverable[] };
 export type PeopleCommand =
-  | "people_view" | "person_add" | "person_set_name" | "person_set_roles" | "person_delete"
+  | "people_view" | "person_add" | "person_set_name" | "person_set_roles" | "person_set_detail" | "person_delete"
   | "consent_add" | "consent_set_term" | "consent_set_covers" | "consent_set_date" | "consent_attach" | "consent_detach" | "consent_delete";
 export const peopleCommand = (command: PeopleCommand, args: Record<string, unknown> = {}) => invoke<PeopleView>(command, args);
 // Corrections export: src-tauri/src/corrections.rs (roadmap 57).

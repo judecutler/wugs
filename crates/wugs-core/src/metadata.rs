@@ -113,6 +113,25 @@ impl Project {
         Ok((writes.len(), Some(t.commit()?)))
     }
 
+    /// A person's details (born, languages, from…; what an archive's actor
+    /// record asks for), `meta:<key>` fields like a text's metadata, sorted by key.
+    pub fn person_details(&self, person: &str) -> Result<Metadata, String> {
+        self.text_metadata(person)
+    }
+
+    /// Set (or, with an empty value, clear) one of a person's details: a
+    /// person's edit, so resolving, in the people scope. Returns the key it
+    /// was written under.
+    pub fn set_person_detail(&mut self, person: &str, key: &str, value: &str) -> Result<(String, CommitResult), String> {
+        self.require(person, "person")?;
+        let key = key_of(key).ok_or_else(|| format!("«{key}» cannot be a detail's name: it needs a letter first"))?;
+        let value = self.metadata_value(value)?;
+        let field = format!("{PREFIX}{key}");
+        let mut t = self.intent("set-person-detail").resolving();
+        t.set("person", person, crate::SCOPE_PEOPLE, &field, value)?;
+        Ok((key, t.commit()?))
+    }
+
     /// A value as stored: trimmed, line breaks as spaces, NFC; empty is Null.
     fn metadata_value(&self, value: &str) -> Result<Value, String> {
         let v: String = value.split(['\r', '\n', '\t']).map(str::trim).filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" ");
