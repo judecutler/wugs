@@ -1259,8 +1259,10 @@ Choose **CQP query** to search the way CQPweb, Sketch Engine and NoSketch Engine
 | `[upos="ADJ" & !lemma="big"]` | adjectives other than big |
 | `[feats=".*Number=Plur.*"]` | plural words |
 | `[gloss=".*PL.*"]` | words whose morpheme glosses include PL |
+| `[deprel="nsubj" & headlemma="eat"]` | the subjects of eat, in a parsed corpus |
+| `[deprel="amod"] [headword="house"]` | an adjective modifying the word house right after it |
 
-The attributes are `word`, `lemma`, `upos` (also `pos`), `xpos`, `feats` and `gloss`. A value is a regular expression that must match the whole value. Case matters unless you add `%c`, and `%d` ignores diacritics. Join conditions with `&` (and), `|` (or) and `!` (not), and repeat a token with `?`, `*`, `+` or `{1,3}`. `[]` is any token.
+The attributes are `word`, `lemma`, `upos` (also `pos`), `xpos`, `feats`, `gloss`, and for parsed sentences `deprel` (the dependency relation), `headword` and `headlemma` (the word it depends on; empty for the root). A value is a regular expression that must match the whole value. Case matters unless you add `%c`, and `%d` ignores diacritics. Join conditions with `&` (and), `|` (or) and `!` (not), and repeat a token with `?`, `*`, `+` or `{1,3}`. `[]` is any token.
 
 To search only some texts, end the query with `::` and a condition on their details, written as CQPweb writes it. Join several conditions with `&`:
 
