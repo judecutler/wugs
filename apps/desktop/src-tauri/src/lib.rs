@@ -54,6 +54,7 @@ pub mod notes_overview;
 pub mod growth;
 pub mod wordsketch;
 pub mod soundchanges;
+pub mod audacity;
 pub mod cognates;
 pub mod compare;
 pub mod phoible;

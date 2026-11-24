@@ -43,6 +43,8 @@ pub enum Format {
     AntConc,
     /// Subtitles: SubRip `.srt`, or WebVTT `.vtt` when `vtt` (`subtitles`).
     Subtitles { vtt: bool },
+    /// An Audacity label track (`.txt`, `start<TAB>end<TAB>label`; `audacity`).
+    Audacity,
 }
 
 impl Format {
@@ -62,6 +64,7 @@ impl Format {
             "antconc" => Format::AntConc,
             "srt" => Format::Subtitles { vtt: false },
             "vtt" => Format::Subtitles { vtt: true },
+            "audacity" => Format::Audacity,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -78,7 +81,7 @@ impl Format {
             Format::Conllu => "conllu",
             Format::Tei => "xml",
             Format::Vertical => "vert",
-            Format::AntConc => "txt",
+            Format::AntConc | Format::Audacity => "txt",
             Format::Subtitles { vtt: false } => "srt",
             Format::Subtitles { vtt: true } => "vtt",
         }
@@ -99,6 +102,7 @@ impl Format {
             Format::Tei => "TEI",
             Format::Vertical => "CWB vertical",
             Format::AntConc => "AntConc tagged text",
+            Format::Audacity => "Audacity labels",
             Format::Subtitles { vtt: false } => "SubRip subtitles",
             Format::Subtitles { vtt: true } => "WebVTT subtitles",
         }
@@ -144,6 +148,9 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         Some(Format::TextGrid)
     } else if ext == "xml" && (head.contains("<TEI") || head.contains("<teiCorpus")) {
         Some(Format::Tei)
+    } else if ext == "txt" && crate::audacity::is_labels(&sniff(&bytes[..bytes.len().min(1 << 20)])) {
+        // Audacity's File > Export > Labels: start, end and label a line.
+        Some(Format::Audacity)
     } else if ext == "txt" && tab_table(head) {
         // Excel's "Unicode text": tab-separated columns saved as .txt.
         Some(Format::Table { tabs: true })
@@ -334,7 +341,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } | Format::Audacity => decode_xml(&bytes, file_name)?,
         Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
@@ -475,6 +482,33 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                     crate::plaintext::Cut::ByLine => format!("A new text with {}, one per line of the file.", plural(units.len(), "segment", "segments")),
                     crate::plaintext::Cut::BySentence => format!("A new text with {}, the file's paragraphs cut into sentences.", plural(units.len(), "segment", "segments")),
                 });
+                (Some(text), false)
+            }
+        }
+        Format::Audacity => {
+            let labels = crate::audacity::read(input);
+            if labels.is_empty() {
+                return Err(format!("{file_name} has no labels with text in it; nothing was imported"));
+            }
+            let stem = p.proj.nfc(&stem);
+            let units: Vec<String> = labels.iter().map(|l| p.proj.nfc(&l.text)).collect();
+            if let Some(t) = same_text(p, &stem, &units)? {
+                lines.push("It matched a text already here; nothing was added.".into());
+                (Some(t), false)
+            } else {
+                let tier = session::utterance_tier(p)?;
+                let rows: Vec<wugs_core::WrittenRow> = labels
+                    .iter()
+                    .enumerate()
+                    .map(|(i, l)| wugs_core::WrittenRow { text: &units[i], translation: "", extras: Vec::new(), span: (l.end > l.start).then_some((l.start, l.end)) })
+                    .collect();
+                let (text, _) = p.import_written_rows(&stem, &tier, None, &rows)?;
+                lines.push(format!("A new text with {}, one per Audacity label.", plural(units.len(), "segment", "segments")));
+                let points = labels.iter().filter(|l| l.end <= l.start).count();
+                if points > 0 {
+                    lines.push(format!("{} marked a point rather than a stretch, so {} untimed.", plural(points, "label", "labels"), if points == 1 { "it came in" } else { "they came in" }));
+                }
+                lines.push("Pick the recording in the Timeline (or the Media panel) to hear it.".into());
                 (Some(text), false)
             }
         }
@@ -836,6 +870,17 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             crate::table_text::export(p, &segments)?
         }
         Format::GlossedExamples => return Err("use Glossed examples for, which writes them for Word, LaTeX or plain text".into()),
+        Format::Audacity => {
+            let segments = one_track(p, text_id, &mut notes, "Audacity labels")?;
+            let (out, left_out) = crate::audacity::export(p, &segments)?;
+            if left_out == segments.len() {
+                return Err("This text has no timed sentences, so there is nothing to write as labels.".into());
+            }
+            if left_out > 0 {
+                notes.push(format!("{} with no time or no text {} left out.", plural(left_out, "sentence", "sentences"), if left_out == 1 { "was" } else { "were" }));
+            }
+            out
+        }
         Format::Subtitles { vtt } => {
             let segments = one_track(p, text_id, &mut notes, "Subtitles")?;
             let (out, left_out) = crate::subtitles::export(p, &segments, vtt)?;
@@ -1432,6 +1477,33 @@ mod tests {
         assert!(picture_beside(&lift, "C:\\Users\\me\\pictures\\fox.jpg").is_some(), "another computer's path is looked for by its name");
         assert!(picture_beside(&lift, "fox.exe").is_none());
         fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn audacity_labels_go_out_and_come_back_timed() {
+        let dir = std::env::temp_dir().join(format!("wugs-audacity-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let text = session::list_texts(&mut s).unwrap().into_iter().next().unwrap().id;
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let labels = export_text(&mut s, &text, Format::Audacity, &out).unwrap();
+        assert!(labels.path.ends_with(".txt"), "{}", labels.path);
+        let written = fs::read_to_string(&labels.path).unwrap();
+        assert!(written.lines().any(|l| l.ends_with("\twʌn tuː θɹiː")), "{written}");
+        drop(s);
+        let mut t: Session = None;
+        session::create_project(&mut t, dir.join("q").to_str().unwrap(), "prs_Ben").unwrap();
+        let r = import_file(&mut t, &labels.path).unwrap();
+        assert_eq!(r.format, "Audacity labels", "{:?}", r.lines);
+        let shown = session::get_text(&mut t, &r.text.unwrap()).unwrap();
+        let first = shown.segments.iter().find(|x| x.content == "wʌn tuː θɹiː").unwrap();
+        assert!(first.start_ms.is_some() && first.end_ms > first.start_ms, "{first:?}");
+        // The same file again adds nothing.
+        let again = import_file(&mut t, &labels.path).unwrap();
+        assert!(again.lines.iter().any(|l| l.contains("matched a text already here")), "{:?}", again.lines);
+        drop(t);
+        fs::remove_dir_all(dir).ok();
     }
 
     #[test]
