@@ -101,6 +101,8 @@ Below the Record button, the **Media** panel shows each recording as a card: its
 
 Under each card's text line, a link names the recording's details (**No details yet** at first). Click it to open them under the cards: date, place, who recorded it, participants, genre, equipment and a description, what an archive asks about a recording. Each saves when you press Enter or leave the field. The **Catalogue sheet…** uses a recording's date, place, genre and description for a text linked to it that has none of its own.
 
+If your files follow a naming convention, **Details from file names** under the cards fills those details for every recording at once. Write the pattern with each detail in braces: `{date}_{participants}_{genre}` reads `20260312_Ana_story.wav` as the date 2026-03-12, participants Ana and genre story. Any other name in braces makes a detail of that name, and `{skip}` leaves a part out. A table shows what each name gives, and which names do not fit. **Fill details** writes only details that are still empty, unless **Replace filled details** is ticked. Underscores inside a part read as spaces, and dates written `20260312` or `2026.03.12` come in as `2026-03-12`. The pattern is remembered on this computer.
+
 ## Segment the recording
 
 A segment marks where one utterance, or one word, starts and ends. The Transcribe and Gloss panels work segment by segment.

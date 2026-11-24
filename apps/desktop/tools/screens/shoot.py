@@ -1199,6 +1199,20 @@ def main():
             if "Date, place and 2 more" not in run.page.locator(".panel-media .bin-card", has_text="Counting session").inner_text():
                 failures.append("Media did not keep a recording's detail")
             run.page.locator(".panel-media .bin-details-head button", has_text="Close").click()
+            # Details read from the file names by a pattern.
+            run.page.locator(".panel-media .bin-from-names summary").click()
+            run.page.locator(".panel-media .bin-pattern").fill("{genre} ({recorded_by})")
+            run.page.wait_for_timeout(200)
+            run.page.locator(".panel-media .bin-from-names").scroll_into_view_if_needed()
+            run.shot("state-media-names", run.page.locator(".panel-media"))
+            names_note = run.page.locator(".panel-media .bin-from-names .note").nth(1).inner_text()
+            run.page.locator(".panel-media .bin-from-names button", has_text="Fill details").click()
+            run.page.wait_for_timeout(400)
+            if "1 of 2 file names fit" not in names_note or not any("Filled 2 details" in t for t in run.toasts()):
+                failures.append(f"Media did not fill details from the file names: {names_note} {run.toasts()}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.page.locator(".panel-media .bin-pattern").fill("{date}_{participants}_{genre}")
+            run.page.locator(".panel-media .bin-from-names summary").click()
             fox.drag_to(run.page.locator(".panel-timeline .tl-body"))
             run.page.wait_for_timeout(600)
             if run.page.locator(".tl-sources").input_value() != "src-fox":

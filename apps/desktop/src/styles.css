@@ -1580,3 +1580,10 @@ body::before {
 .se-frames label { display: flex; gap: 6px; align-items: center; }
 .se-frame-text { font-family: inherit; width: 100%; box-sizing: border-box; }
 .se-hint { margin-left: 8px; font-family: var(--font-ipa); color: var(--accent); }
+
+/* Media bin: details read from file names. */
+.bin-from-names { margin-top: 12px; }
+.bin-from-names summary { cursor: pointer; font-weight: 600; }
+.bin-pattern { flex: 1 1 16em; font-family: var(--font-mono, monospace); }
+.bin-names td.bin-new { color: var(--accent); font-weight: 600; }
+.bin-names tr.bin-nofit th { color: var(--muted); }
