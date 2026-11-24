@@ -968,7 +968,7 @@ The **Word order** panel counts, in every sentence with a dependency parse (from
 
 Each feature shows how often each order occurs, as a bar. Click an order to open an example sentence in the Sentence panel. Under the bars is the order WALS would call dominant: one at least twice as common as any other, else "No dominant order" (or "Mixed"). Nothing is suggested from fewer than 5. As in WALS, subjects and objects count only when they are nouns, since pronouns often take other places.
 
-**Use … as the answer** writes the suggestion as the project's WALS answer, with the counts as its note, and the Typology panel shows it there. A tagger's parse can be wrong, so open the examples first. **Copy table** copies every feature with its counts.
+**Use … as the answer** writes the suggestion as the project's WALS answer, with the counts as its note, and the Typology panel shows it there. **Answer Grambank …** writes the same finding as Grambank asks it: the order of numeral, demonstrative, possessor or adjective and noun (GB024, GB025, GB065, GB193) and of subject and verb (GB130), with "both" where no order dominates; whether transitive clauses are verb-initial, verb-medial or verb-final (GB131–GB133); and whether there are prepositions and postpositions at all (GB074, GB075: present once counted twice, absent when never counted among five or more adpositions). A card says when the project's Grambank answers already agree. A tagger's parse can be wrong, so open the examples first. **Copy table** copies every feature with its counts.
 
 ### See what typology says about the language
 

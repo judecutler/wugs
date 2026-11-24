@@ -9,7 +9,7 @@ import { errorText, setTypologyAnswer, typologyAnswers, wordOrder } from "../api
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import type { Ours } from "../typology/logic";
-import { answerNote, orderLine, orderTsv, total, verdict, type Example, type WordOrder } from "../wordorder/logic";
+import { answerNote, grambankAnswers, orderLine, orderTsv, total, verdict, type Example, type WordOrder } from "../wordorder/logic";
 import { dataGeneration, getState, selectSegment, selectText, showToast } from "../store";
 import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
@@ -21,6 +21,7 @@ export const wordOrderPanel: PanelDef = {
     let seq = 0;
     let data: WordOrder | null = null;
     let ours = new Map<string, Ours>();
+    let grambank = new Map<string, Ours>();
 
     const openExample = async (e: Example) => {
       await selectText(e.textId);
@@ -31,10 +32,11 @@ export const wordOrderPanel: PanelDef = {
     const load = async () => {
       const mine = ++seq;
       try {
-        const [w, a] = await Promise.all([wordOrder(), typologyAnswers({ source: "wals" }).catch(() => [] as Ours[])]);
+        const [w, a, g] = await Promise.all([wordOrder(), typologyAnswers({ source: "wals" }).catch(() => [] as Ours[]), typologyAnswers({ source: "grambank" }).catch(() => [] as Ours[])]);
         if (mine !== seq) return;
         data = w;
         ours = new Map(a.map((x) => [x.id, x]));
+        grambank = new Map(g.map((x) => [x.id, x]));
         paint();
       } catch (e) {
         if (mine === seq) el.replaceChildren(emptyState("Word order", errorText(e)));
@@ -46,6 +48,17 @@ export const wordOrderPanel: PanelDef = {
         const r = await setTypologyAnswer({ source: "wals", id, value: code, note });
         ours.set(id, r);
         showToast({ tone: "info", lines: [`Kept as this project's answer to WALS ${id}. The Typology panel shows it under WALS.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      paint();
+    };
+
+    /** Write the Grambank answers an order suggests, each with the counts as its note. */
+    const takeGrambank = async (answers: [string, string][], note: string) => {
+      try {
+        for (const [id, value] of answers) grambank.set(id, await setTypologyAnswer({ source: "grambank", id, value, note }));
+        showToast({ tone: "info", lines: [`Kept as this project's answer to Grambank ${answers.map(([id]) => id).join(", ")}. The Typology panel shows ${answers.length === 1 ? "it" : "them"} under Grambank.`] });
       } catch (e) {
         showToast({ tone: "error", lines: [errorText(e)] });
       }
@@ -98,6 +111,14 @@ export const wordOrderPanel: PanelDef = {
                 : h("button", { type: "button", textContent: answered ? `Change the answer to ${v.label}` : `Use ${v.label} as the answer`, title: `Write ${v.label} as this project's answer to WALS ${p.id}, with the counts as its note` });
             if (use !== null) use.onclick = () => void take(p.id, v.code!, answerNote(p, w.parsed));
             const answer = !answered ? "No WALS answer yet." : same ? "This project's WALS answer agrees." : `This project's WALS answer is code ${mine.value}.`;
+            const gb = grambankAnswers(p);
+            const gbOpen = gb.filter(([id, value]) => grambank.get(id)?.value !== value);
+            const gbUse =
+              gbOpen.length === 0
+                ? null
+                : h("button", { type: "button", className: "wo-grambank", textContent: `Answer Grambank ${gbOpen.map(([id]) => id).join(", ")}`, title: `Write ${gbOpen.map(([id, value]) => `${id} = ${value}`).join(", ")} as this project's Grambank ${gbOpen.length === 1 ? "answer" : "answers"}, with the counts as the note` });
+            if (gbUse !== null) gbUse.onclick = () => void takeGrambank(gbOpen, answerNote(p, w.parsed));
+            const gbLine = gb.length > 0 && gbOpen.length === 0 ? h("p", { className: "note", textContent: `This project's Grambank ${gb.map(([id]) => id).join(", ")} ${gb.length === 1 ? "agrees" : "agree"}.` }) : null;
             return h(
               "li",
               { className: "wo-card" },
@@ -105,6 +126,8 @@ export const wordOrderPanel: PanelDef = {
               ...bars,
               h("p", { className: "note", title: v.why }, h("strong", { textContent: v.label }), ` · ${answer}`),
               use,
+              gbUse,
+              gbLine,
             );
           });
       el.replaceChildren(h("div", { className: "cc-bar" }, again, copy), h("p", { className: "note wo-line", textContent: orderLine(w) }), h("ul", { className: "wo-list" }, ...cards));
