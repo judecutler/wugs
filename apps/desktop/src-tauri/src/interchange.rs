@@ -49,6 +49,8 @@ pub enum Format {
     Chat,
     /// An EXMARaLDA basic transcription (`.exb`; `exmaralda`).
     Exmaralda,
+    /// Pangloss Collection XML (export only; `pangloss`).
+    Pangloss,
 }
 
 impl Format {
@@ -71,6 +73,7 @@ impl Format {
             "audacity" => Format::Audacity,
             "chat" => Format::Chat,
             "exmaralda" => Format::Exmaralda,
+            "pangloss" => Format::Pangloss,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -85,7 +88,7 @@ impl Format {
             Format::Table { tabs: true } => "tsv",
             Format::Table { tabs: false } => "csv",
             Format::Conllu => "conllu",
-            Format::Tei => "xml",
+            Format::Tei | Format::Pangloss => "xml",
             Format::Vertical => "vert",
             Format::AntConc | Format::Audacity => "txt",
             Format::Subtitles { vtt: false } => "srt",
@@ -115,6 +118,7 @@ impl Format {
             Format::Subtitles { vtt: true } => "WebVTT subtitles",
             Format::Chat => "CHAT transcript",
             Format::Exmaralda => "EXMARaLDA transcription",
+            Format::Pangloss => "Pangloss XML",
         }
     }
 }
@@ -369,7 +373,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
         Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } | Format::Audacity | Format::Chat | Format::Exmaralda => decode_xml(&bytes, file_name)?,
-        Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
+        Format::Vertical | Format::AntConc | Format::Pangloss => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
         Format::TextGrid | Format::Toolbox | Format::ToolboxText => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
@@ -749,7 +753,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             lines.extend(not_carried(&r.not_carried));
             (r.texts.first().or(r.matched.first()).cloned(), false)
         }
-        Format::Vertical | Format::AntConc => unreachable!("refused above"),
+        Format::Vertical | Format::AntConc | Format::Pangloss => unreachable!("refused above"),
         Format::Toolbox | Format::ToolboxText if wugs_legacy::toolbox_text::is_interlinear(input) => {
             let tier = session::utterance_tier(p)?;
             // A translation track only when the file has free translations.
@@ -993,6 +997,23 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             let segments = one_track(p, text_id, &mut notes, format.name())?;
             let sentences = segments.into_iter().map(|s| Ok((translations_of(p, &s)?.into_iter().map(|t| t.1).next(), s))).map(|r: Result<_, String>| r.map(|(t, s)| (s, t))).collect::<Result<Vec<_>, String>>()?;
             wugs_legacy::toolbox_text::export_toolbox_text(p, &title, &sentences)?
+        }
+        Format::Pangloss => {
+            let segments = one_track(p, text_id, &mut notes, format.name())?;
+            let lang = p.project_language()?;
+            let language = if !lang.iso.is_empty() { Some(lang.iso.clone()) } else if !lang.glottocode.is_empty() { Some(lang.glottocode.clone()) } else { None };
+            let sound = p.text_recording(text_id)?.map(|_| format!("{}.wav", file_stem(&title, "text")));
+            let (out, glossed) = crate::pangloss::export(p, text_id, &title, language.as_deref(), sound.as_deref(), &segments)?;
+            if let Some(sound) = &sound {
+                notes.push(format!("The file names its recording «{sound}»: put the recording beside it under that name when you deposit them."));
+            }
+            if language.is_none() {
+                notes.push("The project has no ISO 639-3 code or Glottocode, so the language is written und. Add one under Import and export.".into());
+            }
+            if glossed < segments.len() && !segments.is_empty() {
+                notes.push(format!("{} of {} sentences have glossed words.", glossed, segments.len()));
+            }
+            out
         }
         Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
     };
