@@ -18,6 +18,7 @@ import type { PanelDef } from "./panel";
 import { peoplePanel } from "./people";
 import { searchPanel } from "./search";
 import { soundsPanel } from "./sounds";
+import { signsPanel } from "./signs";
 import { sentencePanel } from "./sentence";
 import { textsPanel } from "./texts";
 import { timelinePanel } from "./timeline";
@@ -66,6 +67,7 @@ export const PANELS = {
   turns: turnsPanel,
   sessions: sessionsPanel,
   sounds: soundsPanel,
+  signs: signsPanel,
   typology: typologyPanel,
   progress: progressPanel,
   affixes: affixesPanel,
