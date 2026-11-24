@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chunksFor, frameMs, rangesFor, yFor, type Chunk } from "./analysis.ts";
+import { chunksFor, frameMs, rangesFor, readAt, readingText, yFor, type Chunk } from "./analysis.ts";
 
 test("a view asks for the 10 s chunks it overlaps, inside the recording", () => {
   assert.deepEqual(chunksFor(0, 8_000, 60_000), [0]);
@@ -37,4 +37,14 @@ test("a voice's ranges are what the overlay draws", () => {
   assert.equal(yFor("pitch", 400, 0, 100, low), null);
   assert.equal(yFor("formants", 5000, 0, 100, low), 0);
   assert.equal(rangesFor(null).pitch.hi, 600);
+});
+
+test("the reading at a moment is the nearest frame's", () => {
+  const c: Chunk = { index: 0, startMs: 0, stepMs: 10, pitch: [null, 200, 210], intensity: [60, 65, 70], f1: [500, 510, null], f2: [1500, 1510, 1520], f3: [2500, 2510, 2520] };
+  const r = readAt([c], 16)!;
+  assert.equal(r.ms, 15, "frame 1 sits at 15 ms");
+  assert.deepEqual([r.pitch, r.intensity, r.f1, r.f2], [200, 65, 510, 1510]);
+  assert.equal(readAt([c], 40), null, "past the chunk");
+  assert.equal(readingText(r, new Set(["pitch", "formants"])), "0.015 s · 200 Hz · F1 510 F2 1510 F3 2510");
+  assert.equal(readingText(readAt([c], 2)!, new Set(["pitch", "intensity"])), "0.005 s · unvoiced · 60.0 dB");
 });

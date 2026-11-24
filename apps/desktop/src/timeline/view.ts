@@ -485,6 +485,8 @@ export class TimelineView {
 
   /** Set while `picture` draws: no playhead, selection, machine tints or drafts. */
   private forPicture = false;
+  /** Where the pointer is over the waveform band, for the analysis readout. */
+  private hoverMs: number | null = null;
 
   /** What the view shows as a PNG (data URL) for a paper or a handout: the
    * ruler, waveform, spectrogram and curves that are on, and every track,
@@ -565,7 +567,7 @@ export class TimelineView {
       this.spectrogram.draw(this.ctx, v, RULER_H, WAVE_H);
       this.drawWave(v, channels);
       if (!this.forPicture) this.drawSpeech(v);
-      this.analysis.draw(this.ctx, v, RULER_H, WAVE_H);
+      this.analysis.draw(this.ctx, v, RULER_H, WAVE_H, this.forPicture ? null : this.hoverMs);
     } else {
       ctx.fillStyle = this.colors.muted;
       ctx.font = "12px system-ui";
@@ -835,6 +837,8 @@ export class TimelineView {
       const drag = this.drag;
       if (drag === null) {
         this.updateHoverCursor(x, y);
+        const inBand = x >= 0 && x <= this.vp().widthPx && y >= RULER_H && y < RULER_H + WAVE_H;
+        this.hoverMs = inBand ? Math.max(0, xToTime(this.vp(), x)) : null;
         return;
       }
       this.interacted = true;

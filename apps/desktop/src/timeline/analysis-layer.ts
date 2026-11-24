@@ -5,7 +5,7 @@
 import { token } from "../theme/tokens";
 import { THEME_EVENT } from "../theme/theme";
 import { errorText, acousticAnalysis } from "../api";
-import { chunksFor, frameMs, rangesFor, yFor, type Chunk, type Kind, type Voice } from "../praat/analysis";
+import { chunksFor, frameMs, rangesFor, readAt, readingText, yFor, type Chunk, type Kind, type Voice } from "../praat/analysis";
 import type { Viewport } from "./viewport";
 
 /** About ten minutes of analysis kept in memory. */
@@ -124,7 +124,7 @@ export class AnalysisLayer {
   }
 
   /** Draw into the band from `top` to `top + height`. */
-  draw(ctx: CanvasRenderingContext2D, v: Viewport, top: number, height: number): void {
+  draw(ctx: CanvasRenderingContext2D, v: Viewport, top: number, height: number, hoverMs: number | null = null): void {
     if (this.problem !== null) {
       this.note(ctx, v, top, `Analysis failed: ${this.problem}`);
       return;
@@ -152,6 +152,29 @@ export class AnalysisLayer {
     }
     this.legend(ctx, v, top, height);
     if (waiting) this.note(ctx, v, top, "Analysing…");
+    if (hoverMs !== null) this.readout(ctx, v, top, height, hoverMs);
+  }
+
+  /** Praat's cursor readout: a hairline at the pointer and the values there. */
+  private readout(ctx: CanvasRenderingContext2D, v: Viewport, top: number, height: number, ms: number): void {
+    const r = readAt(this.chunks.values(), ms);
+    if (r === null) return;
+    const x = ((ms - v.t0Ms) * v.pxPerSec) / 1000;
+    ctx.strokeStyle = colors().muted;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(x) + 0.5, top);
+    ctx.lineTo(Math.round(x) + 0.5, top + height);
+    ctx.stroke();
+    const text = readingText(r, this.on);
+    ctx.font = "11px system-ui";
+    const w = ctx.measureText(text).width + 8;
+    // Beside the pointer, on whichever side has room.
+    const left = x + 8 + w > v.widthPx ? x - 8 - w : x + 8;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.88)";
+    ctx.fillRect(left, top + height - 20, w, 16);
+    ctx.fillStyle = colors().muted;
+    ctx.fillText(text, left + 4, top + height - 8);
   }
 
   private dots(ctx: CanvasRenderingContext2D, c: Chunk, values: (number | null)[], kind: Kind, xOf: (ms: number) => number, top: number, height: number, r: number): void {

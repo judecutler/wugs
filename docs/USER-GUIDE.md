@@ -705,6 +705,8 @@ Without Praat, all three still work: wugs analyses the recording itself with Pra
 
 The analysis covers at most one minute of view at a time. If more is on screen, zoom in. wugs keeps the results, so a part you already viewed shows at once next time.
 
+Hold the pointer over the waveform to read the values there, as Praat's cursor does: a line marks the moment, and a label beside it gives the time and, for the overlays that are on, the pitch (or *unvoiced*), the intensity and the first three formants, such as `1.234 s · 212 Hz · F1 540 F2 1720 F3 2610`.
+
 The analysis uses Praat's standard speech settings unless you choose otherwise. Once an overlay is on, a **voice** menu appears beside the toggles. Choose the one that fits the speaker in this recording:
 
 - **Typical**: pitch 75–600 Hz, formants up to 5500 Hz (Praat's defaults).

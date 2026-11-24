@@ -407,6 +407,12 @@ def main():
                 run.shot("state-pitch-voice", run.page.locator(".panel-timeline"))
                 if run.page.locator(".panel-timeline .praat-voice").count() != 1:
                     failures.append("turning Pitch on showed no voice picker")
+                # The cursor readout: the values under the pointer in the waveform band.
+                canvas = run.page.locator(".panel-timeline canvas").first
+                box = canvas.bounding_box()
+                run.page.mouse.move(box["x"] + box["width"] * 0.3, box["y"] + 60)
+                run.page.wait_for_timeout(300)
+                run.shot("state-pitch-readout", run.page.locator(".panel-timeline"))
                 run.page.locator(".panel-timeline .praat-bar button", has_text="Pitch").click()
 
             # The Language row offers Glottolog's matches as a name is typed.
