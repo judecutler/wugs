@@ -9,6 +9,7 @@ import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { byDetail, detailTsv, marks, NOT_GIVEN, per1000, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
+import { nearHits, nearLine, NEAR_SIDES, NEAR_WINDOWS, type NearSide } from "../concordance/near";
 import { asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { linesUnder } from "../concordance/under";
 import { emptyState, h } from "../dom";
@@ -204,7 +205,21 @@ export const concordancePanel: PanelDef = {
     let thinTo = 0;
     const thinner = h("select", { className: "cc-sort cc-thin", title: "Show a random sample of the lines, the same each time for the same query (CQPweb's thin)" }, h("option", { value: "0", textContent: "Every line" }), ...THIN_SIZES.map((n) => h("option", { value: String(n), textContent: `${n} at random` })));
     thinner.setAttribute("aria-label", "Lines shown");
-    const sampled = (): Hit[] => (thinTo > 0 ? thin(hits, thinTo, `${kind}|${asked}`) : hits);
+    // Near: only the lines with another word close to the match (AntConc's context words).
+    const nearInput = h("input", { type: "search", className: "cc-near-word", placeholder: "near a word", title: "Keep only the lines with this word close to the match. * stands for any letters" });
+    nearInput.setAttribute("aria-label", "Near a word");
+    const nearWindow = h("select", { title: "How close" }, ...NEAR_WINDOWS.map((n) => h("option", { value: String(n), textContent: n === 1 ? "next to it" : `within ${n} words` })));
+    nearWindow.setAttribute("aria-label", "How close");
+    nearWindow.value = "3";
+    const nearSide = h("select", { title: "On which side of the match" }, ...NEAR_SIDES.map((s) => h("option", { value: s.id, textContent: s.label })));
+    nearSide.setAttribute("aria-label", "Which side");
+    const nearBar = h("div", { className: "cc-bar cc-near" }, nearInput, nearWindow, nearSide);
+    const nearOn = () => nearInput.value.trim() !== "";
+    const kept = (): Hit[] => (nearOn() ? nearHits(hits, nearInput.value, Number(nearWindow.value), nearSide.value as NearSide) : hits);
+    const sampled = (): Hit[] => {
+      const k = kept();
+      return thinTo > 0 ? thin(k, thinTo, `${kind}|${asked}|${nearInput.value}`) : k;
+    };
     /** The lines as shown: thinned when asked, with tags when they have them and Tags is on. */
     const shownHits = (): Hit[] => (tagsOn ? sampled().map(withTags) : sampled());
     const count = h("p", { className: "note cc-count" });
@@ -349,6 +364,7 @@ export const concordancePanel: PanelDef = {
       sidePicker.hidden = !on;
       sorter.hidden = on || plotOn;
       thinner.hidden = on || plotOn;
+      nearBar.hidden = on || plotOn;
       copyExamples.hidden = on || plotOn;
       saveClipsButton.hidden = on || plotOn;
     };
@@ -360,6 +376,7 @@ export const concordancePanel: PanelDef = {
       plotToggle.classList.toggle("active", on);
       sorter.hidden = on;
       thinner.hidden = on;
+      nearBar.hidden = on;
       copyExamples.hidden = on;
       saveClipsButton.hidden = on;
       plotSorter.hidden = !on;
@@ -383,8 +400,13 @@ export const concordancePanel: PanelDef = {
       const texts = new Set(hits.map((x) => x.textId)).size;
       const scoped = exactFor !== null && exactFor.query === asked && exactFor.kind === kind ? exactFor : null;
       const only = [scoped?.text ? `«${scoped.text.title}»` : null, scoped?.within ? whereWords(scoped.within) : null].filter((x) => x !== null);
-      const thinned = thinTo > 0 && hits.length > thinTo;
-      count.textContent = countLine(hits.length, total, texts) + (only.length > 0 ? ` Only in ${only.join(", among ")}.` : "") + (thinned ? thinLine(thinTo, hits.length, total) : "");
+      const near = nearOn() ? kept().length : hits.length;
+      const thinned = thinTo > 0 && near > thinTo;
+      count.textContent =
+        countLine(hits.length, total, texts) +
+        (only.length > 0 ? ` Only in ${only.join(", among ")}.` : "") +
+        (nearOn() && hits.length > 0 ? nearLine(near, hits.length, nearInput.value, Number(nearWindow.value), nearSide.value as NearSide) : "") +
+        (thinned ? thinLine(thinTo, near, nearOn() ? near : total) : "");
       tagsToggle.hidden = !hasTags(hits);
       // The word the lines are sorted by is marked, as concordancers colour it.
       const mark = sortedWord(sortBy);
@@ -513,6 +535,9 @@ export const concordancePanel: PanelDef = {
       sortBy = sorter.value as SortBy;
       drawRows();
     };
+    nearInput.oninput = () => drawRows();
+    nearWindow.onchange = () => drawRows();
+    nearSide.onchange = () => drawRows();
     thinner.onchange = () => {
       thinTo = Number(thinner.value);
       drawRows();
@@ -655,6 +680,7 @@ export const concordancePanel: PanelDef = {
       seq += 1;
       hits = [];
       total = 0;
+      nearInput.value = "";
       plot = null;
       asked = "";
       exactFor = null;
@@ -670,7 +696,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, copy, copyExamples, saveClipsButton), chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, copy, copyExamples, saveClipsButton), nearBar, chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */

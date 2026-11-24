@@ -1087,6 +1087,7 @@ body::before {
 /* Concordance (roadmap 71): keyword in the middle, context either side;
    the analysis and the text under it, so it reads in a narrow side panel too. */
 .cc-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 6px; }
+.cc-near-word { width: 10em; }
 .cc-query { flex: 1 1 100%; min-width: 0; }
 .panel-concordance .scopes { flex-wrap: wrap; }
 .cc-count { margin: 6px 0; }
