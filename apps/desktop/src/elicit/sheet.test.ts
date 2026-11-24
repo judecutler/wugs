@@ -35,3 +35,19 @@ test("the sheet prints a header to fill in, the concepts, and answers to check",
   assert.doesNotMatch(blank, /class="had"/);
   assert.match(blank, /2 concepts\./);
 });
+
+test("a questionnaire prints with a prompt column", async () => {
+  const { elicitationSheet } = await import("./sheet.ts");
+  const html = elicitationSheet({
+    list: { name: "Valency prompts", citation: "" },
+    language: "Kanu",
+    concepts: [{ number: 1, gloss: "The dog sleeps.", concepticonGloss: "", skipped: false, answers: [] }],
+    which: "all",
+    withAnswers: true,
+    generator: "wugs",
+    kind: "sentences",
+  });
+  assert.match(html, /<th>Prompt<\/th><th>Sentence as heard<\/th>/);
+  assert.match(html, /\.g\{width:70mm\}/);
+  assert.match(html, /1 prompt\. Printed by wugs; type the answers into the Elicit sentences panel/);
+});

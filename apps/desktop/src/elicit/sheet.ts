@@ -24,6 +24,8 @@ export type SheetOptions = {
   /** Print answers already in the project, in grey, for checking. */
   withAnswers: boolean;
   generator: string;
+  /** "sentences" prints a questionnaire's prompts: a wider prompt column and a line for the sentence as heard. */
+  kind?: "words" | "sentences";
 };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -37,6 +39,7 @@ export function sheetRows(o: Pick<SheetOptions, "concepts" | "which">): SheetCon
 /** The sheet as one HTML document, A4 or Letter, with a header to fill in by hand. */
 export function elicitationSheet(o: SheetOptions): string {
   const rows = sheetRows(o);
+  const sentences = o.kind === "sentences";
   const title = `${o.list.name}${o.language.trim() ? ` — ${o.language.trim()}` : ""}`;
   const field = (label: string) => `<div class="field"><span>${esc(label)}</span><span class="line"></span></div>`;
   const answerCell = (c: SheetConcept) => {
@@ -55,7 +58,7 @@ h1{font-size:15pt;margin:0 0 2pt}.cite{color:#555;font-size:9pt;margin:0 0 8pt}
 .head{display:grid;grid-template-columns:1fr 1fr;gap:4pt 16pt;margin-bottom:10pt}.field{display:flex;gap:6pt;align-items:flex-end}.field span:first-child{white-space:nowrap}.line{flex:1;border-bottom:1px solid #000;height:14pt}
 table{border-collapse:collapse;width:100%}th{text-align:left;font-size:9pt;border-bottom:1.5px solid #000;padding:2pt 4pt}
 td{border-bottom:1px solid #999;padding:4pt;vertical-align:top;height:20pt}tr{page-break-inside:avoid}thead{display:table-header-group}
-.n{width:8mm;color:#555;text-align:right}.g{width:42mm}.cg{color:#666;font-size:8.5pt;font-variant:small-caps}.w{width:auto}.x{width:40mm}.had{color:#888}
+.n{width:8mm;color:#555;text-align:right}.g{width:${o.kind === "sentences" ? "70mm" : "42mm"}}.cg{color:#666;font-size:8.5pt;font-variant:small-caps}.w{width:auto}.x{width:40mm}.had{color:#888}
 .foot{color:#777;font-size:8pt;margin-top:8pt}`;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -69,12 +72,12 @@ td{border-bottom:1px solid #999;padding:4pt;vertical-align:top;height:20pt}tr{pa
 ${o.list.citation ? `<p class="cite">${esc(o.list.citation)}</p>` : ""}
 <div class="head">${field("Speaker")}${field("Date")}${field("Place")}${field("Recording")}${field("Elicited by")}${field("Contact language")}</div>
 <table>
-<thead><tr><th>#</th><th>Concept</th><th>Word as heard</th><th>Notes</th></tr></thead>
+<thead><tr><th>#</th><th>${sentences ? "Prompt" : "Concept"}</th><th>${sentences ? "Sentence as heard" : "Word as heard"}</th><th>Notes</th></tr></thead>
 <tbody>
 ${body}
 </tbody>
 </table>
-<p class="foot">${rows.length} ${rows.length === 1 ? "concept" : "concepts"}. Printed by ${esc(o.generator)}; type the answers into the Elicit panel's list after the session.</p>
+<p class="foot">${rows.length} ${sentences ? (rows.length === 1 ? "prompt" : "prompts") : rows.length === 1 ? "concept" : "concepts"}. Printed by ${esc(o.generator)}; type the answers into the ${sentences ? "Elicit sentences panel" : "Elicit panel's list"} after the session.</p>
 </body>
 </html>
 `;

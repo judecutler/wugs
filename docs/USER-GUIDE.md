@@ -581,7 +581,7 @@ The **Elicit sentences** panel works through a questionnaire: sentences in a lan
 2. Type the answer under a prompt (typing shortcuts work here) and press **Enter**. The cursor moves to the next prompt without an answer.
 3. Each answer is saved as a sentence of the list's own text, named after the list, with the prompt as its translation. Open it in the Gloss panel by clicking it, to gloss it like any other sentence. A prompt can have several answers (another way to say it, another speaker); type the next one under the first.
 
-The line at the top counts the prompts answered. **Only prompts to do** hides the rest. Since the answers are ordinary sentences, they appear in the Concordance, the exports and the Interlinear tab; record the session and line the sentences up on the Timeline to hear them.
+The line at the top counts the prompts answered. **Only prompts to do** hides the rest. **Print a sheet…** saves the prompts as a form to print, with a header for the speaker, date and place and room for each sentence and notes, for a session without the laptop; with **Only prompts to do** ticked it holds only those, else every prompt with the answers already here in grey. Since the answers are ordinary sentences, they appear in the Concordance, the exports and the Interlinear tab; record the session and line the sentences up on the Timeline to hear them.
 
 ## Record people and consent
 
