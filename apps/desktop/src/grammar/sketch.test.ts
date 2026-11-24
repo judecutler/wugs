@@ -239,3 +239,11 @@ test("the morphology chapter gives Greenberg's indices when the affixes were cou
   // Without them, the texts' own count of morphs a word.
   assert.match(grammarSketch(base), /8 words\), Greenberg's index of synthesis/);
 });
+
+test("the vowel section reports vowel harmony when neighbouring vowels agree beyond chance", () => {
+  const C = "ptksmnlr";
+  const make = (vs: string[], n: number) => Array.from({ length: n }, (_, i) => ({ word: `${C[i % 8]}${C[Math.floor(i / 8) % 8]}${vs[i % vs.length]}t${vs[(i + 1) % vs.length]}m${vs[(i + 2) % vs.length]}`, count: 1 }));
+  const html = grammarSketch({ ...base, words: [...make(["i", "e", "y", "ø"], 20), ...make(["ɯ", "ɑ", "u", "o"], 20)] });
+  assert.match(html, /<p>Backness: 100% of 80 neighbouring vowels agree, against 50% by chance/);
+  assert.ok(!grammarSketch(base).includes("neighbouring vowels agree"));
+});
