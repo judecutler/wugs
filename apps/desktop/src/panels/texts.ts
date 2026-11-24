@@ -40,6 +40,7 @@ const TEXT_FORMATS: [TextFormat, string][] = [
   ["textgrid", "Praat (.TextGrid)"],
   ["conllu", "CoNLL-U, Universal Dependencies (.conllu)"],
   ["tei", "TEI P5 (.xml)"],
+  ["pangloss", "Pangloss archive XML (.xml)"],
   ["vertical", "CWB vertical: CQPweb, Sketch Engine (.vert)"],
   ["antconc", "AntConc, words tagged word_TAG (.txt)"],
   ["toolboxtext", "Toolbox interlinear text (.txt)"],

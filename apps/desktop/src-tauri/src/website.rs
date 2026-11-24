@@ -67,7 +67,7 @@ fn gloss_html(g: &str) -> String {
 }
 
 /// A word's morphs and glosses joined at Leipzig's markers.
-fn word_lines(p: &Project, tok: &str) -> Result<Option<(String, String)>, String> {
+pub(crate) fn word_lines(p: &Project, tok: &str) -> Result<Option<(String, String)>, String> {
     let morphs = p.proj.members(tok)?;
     if morphs.is_empty() {
         return Ok(None);
