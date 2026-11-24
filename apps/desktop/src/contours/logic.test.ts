@@ -42,3 +42,24 @@ test("the table and the note", () => {
   assert.equal(t[1], "ma 1\t0.000\t0.300\t100.0\t");
   assert.equal(contourNote([pt("a", rise), pt("b", [null])], 1, 2, "Praat", "st", 150), "1 of 2 segments drawn, analysed by Praat. 1 had no voiced stretch. 2 without times left out. 0 st is the speaker's median, 150 Hz.");
 });
+
+test("a speaker's pitch range and each label's level", async () => {
+  const { pitchRange, rangeLine, levels, quantile } = await import("./logic.ts");
+  assert.equal(quantile([1, 2, 3, 4], 0.5), 2.5);
+  assert.equal(quantile([10, 20], 0.1), 11);
+  const tok = (i: number, label: string, hz: number) => ({ segment: `s${i}`, label, startMs: 0, endMs: 100, contour: Array.from({ length: 10 }, (_, k) => (k === 9 ? null : hz)) });
+  // Three H tokens at 200 Hz, three L at 100 Hz: an octave apart.
+  const ps = [tok(1, "H", 200), tok(2, "H", 200), tok(3, "H", 200), tok(4, "L", 100), tok(5, "L", 100), tok(6, "L", 100)];
+  const r = pitchRange(ps)!;
+  assert.equal(r.points, 54);
+  assert.ok(Math.abs(r.median - 150) < 1e-9);
+  assert.equal(r.p10, 100);
+  assert.equal(r.p90, 200);
+  assert.ok(Math.abs(r.spanSt - 12) < 1e-9);
+  assert.match(rangeLine("A", r), /^A's pitch: median 150 Hz; 80% of the 54 voiced points lie between 100 Hz and 200 Hz, a span of 12\.0 semitones/);
+  assert.equal(pitchRange(ps.slice(0, 2)), null);
+  assert.match(rangeLine("A", null), /Too few voiced points/);
+  const lv = levels(ps);
+  assert.deepEqual(lv.map((l) => [l.label, l.tokens, l.median]), [["H", 3, 200], ["L", 3, 100]]);
+  assert.ok(Math.abs(lv[0]!.st - 12 * Math.log2(200 / 150)) < 1e-9);
+});

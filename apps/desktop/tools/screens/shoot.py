@@ -272,6 +272,9 @@ def prepare(run, panel_id):
     elif panel_id == "contours":
         page.locator(".panel-contours button", has_text="Draw").click()
         page.locator(".panel-contours .ct-plot").wait_for()
+        # The speaker's pitch range and each label's level under the plot.
+        if "semitones" not in page.locator(".panel-contours .ct-range").inner_text() or page.locator(".panel-contours .ct-levels tbody tr").count() < 2:
+            raise RuntimeError("Pitch contours did not give the pitch range and the labels' levels")
     elif panel_id == "kits":
         # The user kit, so the shot shows the editor and the wug picker.
         page.locator(".panel-kits .kit-name", has_text="Word-list sprint").click()

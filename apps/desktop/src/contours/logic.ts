@@ -106,3 +106,60 @@ export function contourNote(points: readonly ContourPoint[], shown: number, unti
   if (unit === "st" && ref !== null) parts.push(`0 st is the speaker's median, ${Math.round(ref)} Hz.`);
   return parts.join(" ");
 }
+
+/** The `q` quantile (0–1) of sorted values, linear between neighbours. */
+export function quantile(sorted: readonly number[], q: number): number {
+  if (sorted.length === 0) return NaN;
+  const at = (sorted.length - 1) * q;
+  const lo = Math.floor(at);
+  const hi = Math.ceil(at);
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (at - lo);
+}
+
+/** A speaker's pitch range over every voiced point: the median, the 10th to 90th percentile and that span in semitones, and the spread in semitones around the median. */
+export type PitchRange = { points: number; median: number; p10: number; p90: number; spanSt: number; sdSt: number };
+
+/** Fewer voiced points than this, and no range is given. */
+export const MIN_VOICED = 20;
+
+export function pitchRange(points: readonly ContourPoint[]): PitchRange | null {
+  const all = points.flatMap((p) => p.contour.filter((v): v is number => v !== null && v > 0)).sort((a, b) => a - b);
+  if (all.length < MIN_VOICED) return null;
+  const median = quantile(all, 0.5);
+  const st = all.map((v) => semitones(v, median));
+  const mean = st.reduce((a, b) => a + b, 0) / st.length;
+  const sd = Math.sqrt(st.reduce((a, v) => a + (v - mean) ** 2, 0) / (st.length - 1));
+  const p10 = quantile(all, 0.1);
+  const p90 = quantile(all, 0.9);
+  return { points: all.length, median, p10, p90, spanSt: semitones(p90, p10), sdSt: sd };
+}
+
+/** The range in words. */
+export function rangeLine(track: string, r: PitchRange | null): string {
+  if (r === null) return `Too few voiced points yet (${MIN_VOICED} are needed) for ${track}'s pitch range.`;
+  const hz = (v: number) => `${Math.round(v)} Hz`;
+  return `${track}'s pitch: median ${hz(r.median)}; 80% of the ${r.points.toLocaleString("en")} voiced points lie between ${hz(r.p10)} and ${hz(r.p90)}, a span of ${r.spanSt.toFixed(1)} semitones (SD ${r.sdSt.toFixed(1)} st around the median). Measured on the segments drawn, so a track of one kind of utterance shows that kind's range.`;
+}
+
+/** Each label's level: its tokens, median F0 over its voiced points, and how far that is from the speaker's median in semitones, highest first. */
+export type Level = { label: string; tokens: number; median: number; st: number };
+
+export function levels(points: readonly ContourPoint[]): Level[] {
+  const ref = reference(points);
+  if (ref === null) return [];
+  const by = new Map<string, { tokens: number; values: number[] }>();
+  for (const p of points) {
+    const voiced = p.contour.filter((v): v is number => v !== null && v > 0);
+    if (voiced.length === 0) continue;
+    const g = by.get(groupOf(p)) ?? { tokens: 0, values: [] };
+    g.tokens += 1;
+    g.values.push(...voiced);
+    by.set(groupOf(p), g);
+  }
+  return [...by.entries()]
+    .map(([label, g]) => {
+      const median = quantile([...g.values].sort((a, b) => a - b), 0.5);
+      return { label, tokens: g.tokens, median, st: semitones(median, ref) };
+    })
+    .sort((a, b) => b.median - a.median || a.label.localeCompare(b.label));
+}

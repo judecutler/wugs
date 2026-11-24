@@ -8,7 +8,7 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { errorText, measurePoints, saveDocument } from "../api";
-import { contourNote, contourTable, dashOf, lines, means, POSITIONS, reference, valueRange, type ContourPoint, type Unit } from "../contours/logic";
+import { levels, pitchRange, rangeLine, contourNote, contourTable, dashOf, lines, means, POSITIONS, reference, valueRange, type ContourPoint, type Unit } from "../contours/logic";
 import { emptyState, h } from "../dom";
 import { hear, recordingForShown } from "../hear/hear";
 import { trackToMeasure } from "../measure/logic";
@@ -207,6 +207,26 @@ export const contoursPanel: PanelDef = {
       if (current !== null) {
         const drawn = lines(current.points, unit).length;
         body.push(plot(), h("p", { className: "note", textContent: contourNote(current.points, drawn, current.untimed, current.analysedBy, unit, reference(current.points)) }));
+        // The speaker's range, and each label's level against the speaker's median (tone registers, a tune's height).
+        const lv = levels(current.points);
+        body.push(
+          h("h3", { textContent: "Pitch range" }),
+          h("p", { className: "note ct-range", textContent: rangeLine(current.track, pitchRange(current.points)) }),
+          ...(lv.length < 2
+            ? []
+            : [
+                h(
+                  "div",
+                  { className: "ag-scroll" },
+                  h(
+                    "table",
+                    { className: "pg-table ct-levels" },
+                    h("thead", {}, h("tr", {}, ...[["Label", ""], ["Tokens", ""], ["Median", "The median F0 of the label's voiced points"], ["Level", "Semitones above or below the speaker's median"]].map(([t, title]) => h("th", { scope: "col", textContent: t, title })))),
+                    h("tbody", {}, ...lv.map((l) => h("tr", {}, h("th", { scope: "row", textContent: l.label }), h("td", { className: "num", textContent: String(l.tokens) }), h("td", { className: "num", textContent: `${Math.round(l.median)} Hz` }), h("td", { className: "num", textContent: `${l.st >= 0 ? "+" : "−"}${Math.abs(l.st).toFixed(1)} st` })))),
+                  ),
+                ),
+              ]),
+        );
       } else if (problem === null) {
         body.push(
           h("p", {
