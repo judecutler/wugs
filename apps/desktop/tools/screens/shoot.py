@@ -651,6 +651,11 @@ def main():
             run.shot("state-spellings", run.page.locator(".panel-checks"))
             if "tʰakka" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Spellings to check did not list a rare word beside a common one")
+            unusual = run.page.locator(".panel-checks .ck-title", has_text="Unusual sound sequences")
+            unusual.scroll_into_view_if_needed()
+            run.shot("state-unusual-sequences", run.page.locator(".panel-checks"))
+            if "Only word with kk" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Unusual sound sequences did not list tʰakka's kk")
             run.page.locator(".panel-checks button", has_text="Every character").click()
             run.page.locator(".panel-checks .ck-chars").scroll_into_view_if_needed()
             run.shot("state-characters", run.page.locator(".panel-checks"))
