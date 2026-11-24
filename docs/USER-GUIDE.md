@@ -680,7 +680,7 @@ The numbers come from the same analysis as the overlays and **Measure…**: your
 
 ### Compare how long sounds last
 
-The **Durations** panel shows how long each label's segments last on one track of the text on screen: the numbers a study of vowel length, gemination or speaking rate starts from. Open it from **Settings → Closed panels** (it is not placed by default). It reads the segments' own start and end times, so nothing is measured and no recording is needed.
+The **Durations** panel shows how long each label's segments last on one track of the text on screen: the numbers a study of vowel length, gemination or speaking rate starts from. Open it from Settings (Closed panels) or with **Find an action**. It reads the segments' own start and end times, so nothing is measured and no recording is needed.
 
 Segment the recording one sound, syllable or word to a segment and type a label in each, such as `a` and `aː`, or `t` and `tː`. Choose the **Track**. The panel shows:
 
