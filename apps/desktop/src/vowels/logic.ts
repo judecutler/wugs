@@ -301,3 +301,71 @@ export function areaLine(first: { track: string; area: VowelArea | null }, secon
   const ratio = second.area.area / first.area.area;
   return `${one(first.track, first.area)}; ${one(second.track, second.area)}, ${ratio.toFixed(2)} times as large.${first.area.corners.join() !== second.area.corners.join() ? " Their corners differ, so compare with care." : ""}`;
 }
+
+/** Labels with fewer tokens than this are not checked for outliers. */
+export const OUTLIER_MIN_TOKENS = 6;
+/** How unlikely a listed token's distance is if it belonged with the others. */
+export const OUTLIER_P = 0.01;
+
+/**
+ * The squared Mahalanobis distance past which a new token is unlikely to
+ * come from the same vowel as `m` others (two formants): a new observation
+ * against a sample's mean and covariance follows
+ * d² ~ (m+1)(m−1)·2 / (m(m−2)) · F(2, m−2), and F with 2 numerator degrees of
+ * freedom has the closed-form quantile (k/2)·(p^(−2/k) − 1). Small samples
+ * get a wide cut, so a vowel heard a few times is not over-flagged.
+ */
+export function criticalD2(m: number, p = OUTLIER_P): number {
+  const k = m - 2;
+  if (k < 1) return Infinity;
+  const f = (k / 2) * (p ** (-2 / k) - 1);
+  return (((m + 1) * (m - 1) * 2) / (m * k)) * f;
+}
+
+export type Outlier = { point: Point; label: string; distance: number };
+
+/** A token's Mahalanobis distance from the other tokens of its label (leave one out, so a stray token cannot pull the mean and spread towards itself); null when the others have no spread. */
+export function leaveOneOut(others: { n: number; sx: number; sy: number; sxx: number; syy: number; sxy: number }, x: number, y: number): number | null {
+  const { n, sx, sy, sxx, syy, sxy } = others;
+  if (n < 3) return null;
+  const mx = sx / n;
+  const my = sy / n;
+  const cxx = (sxx - n * mx * mx) / (n - 1);
+  const cyy = (syy - n * my * my) / (n - 1);
+  const cxy = (sxy - n * mx * my) / (n - 1);
+  const det = cxx * cyy - cxy * cxy;
+  if (!(det > 1e-12 * Math.max(1, cxx * cyy))) return null;
+  const dx = x - mx;
+  const dy = y - my;
+  return Math.sqrt((cyy * dx * dx - 2 * cxy * dx * dy + cxx * dy * dy) / det);
+}
+
+/** Tokens far from the rest of their label, the farthest first: likely a mislabel or a formant tracked on the wrong peak. */
+export function outliers(points: readonly Plotted[]): Outlier[] {
+  const by = new Map<string, Plotted[]>();
+  for (const p of points) if (p.group !== "(no label)") by.set(p.group, [...(by.get(p.group) ?? []), p]);
+  const out: Outlier[] = [];
+  for (const [label, ps] of by) {
+    if (ps.length < OUTLIER_MIN_TOKENS) continue;
+    const all = { n: ps.length, sx: 0, sy: 0, sxx: 0, syy: 0, sxy: 0 };
+    for (const p of ps) {
+      all.sx += p.x;
+      all.sy += p.y;
+      all.sxx += p.x * p.x;
+      all.syy += p.y * p.y;
+      all.sxy += p.x * p.y;
+    }
+    for (const p of ps) {
+      const d = leaveOneOut({ n: all.n - 1, sx: all.sx - p.x, sy: all.sy - p.y, sxx: all.sxx - p.x * p.x, syy: all.syy - p.y * p.y, sxy: all.sxy - p.x * p.y }, p.x, p.y);
+      if (d !== null && d * d > criticalD2(all.n - 1)) out.push({ point: p.point, label, distance: d });
+    }
+  }
+  return out.sort((a, b) => b.distance - a.distance);
+}
+
+/** The line over the list, in words. */
+export function outliersLine(found: readonly Outlier[], checked: number): string {
+  if (checked === 0) return "";
+  if (found.length === 0) return `No token lies unusually far from the other tokens of its label (labels with ${OUTLIER_MIN_TOKENS} or more tokens checked).`;
+  return `${found.length} ${found.length === 1 ? "token lies" : "tokens lie"} further from the other tokens of ${found.length === 1 ? "its" : "their"} label than chance would put ${found.length === 1 ? "it" : "them"} (p < .01): listen to check for a wrong label or a formant tracked on the wrong peak.`;
+}

@@ -1564,6 +1564,7 @@ body::before {
 .vw-tick { font-size: 11px; fill: var(--muted); font-family: var(--font-ui); }
 .vw-axis { font-size: 12px; fill: var(--ink); font-family: var(--font-ui); }
 .sd-ssp-break { color: var(--warn); font-weight: 600; }
+.vw-outliers { list-style: none; padding-left: 0; } .vw-outliers li { margin: .2em 0; }
 .vw-hull { fill: var(--accent-bright); fill-opacity: 0.05; stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 3; }
 .vw-hull.vw-two { fill: var(--warn); stroke: var(--warn); }
 .vw-ellipse { fill: var(--accent-bright); fill-opacity: 0.08; stroke: var(--accent); stroke-width: 1.2; }
