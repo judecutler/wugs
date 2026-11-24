@@ -36,13 +36,18 @@ export function perThousand(count: number, tokens: number): string {
 }
 
 /** The summary line; `title` is a text's title, or with `named` already words (`Texts whose genre is «news»`). */
-export function summary(title: string, k: Keywords, named = false): string {
+/**
+ * The line above the table. `against` names the reference when it is not the
+ * rest of the project, written out ("«Hen»", "texts whose genre is «news»").
+ */
+export function summary(title: string, k: Keywords, named = false, against: string | null = null): string {
   const n = (x: number) => x.toLocaleString("en");
   const who = named ? title : `«${title}»`;
   if (k.focusTokens === 0) return `${who} ${named ? "have" : "has"} no words yet.`;
-  if (k.referenceTokens === 0) return "There is nothing to compare with yet: keywords compare a text with the project's other texts.";
+  if (k.referenceTokens === 0)
+    return against === null ? "There is nothing to compare with yet: keywords compare a text with the project's other texts." : `There is nothing to compare with: ${against} ${against.startsWith("«") ? "has" : "have"} no words outside ${named ? title.charAt(0).toLowerCase() + title.slice(1) : `«${title}»`}.`;
   const cut = k.omitted > 0 ? ` The ${n(k.omitted)} weakest are left out.` : "";
-  return `${who} (${n(k.focusTokens)} words) against the project's other texts (${n(k.referenceTokens)} words). Rows marked • are significant at p < 0.05 after Bonferroni correction (log-likelihood ${k.critical.toFixed(2)} or more).${cut}`;
+  return `${who} (${n(k.focusTokens)} words) against ${against ?? "the project's other texts"} (${n(k.referenceTokens)} words). Rows marked • are significant at p < 0.05 after Bonferroni correction (log-likelihood ${k.critical.toFixed(2)} or more).${cut}`;
 }
 
 export function asTsv(rows: readonly KeywordRow[]): string {

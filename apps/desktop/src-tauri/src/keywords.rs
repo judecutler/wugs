@@ -77,9 +77,15 @@ pub fn keywords(session: &mut Session, kind: Kind, target: &Scope, min_count: us
     keywords_of(session, kind, target, min_count, 1)
 }
 
-/// Keywords over sequences of `size` words in a row inside a segment (1 = single words):
-/// each side's size is then its number of sequences.
 pub fn keywords_of(session: &mut Session, kind: Kind, target: &Scope, min_count: usize, size: usize) -> Result<Keywords, String> {
+    keywords_against(session, kind, target, &Scope::all(), min_count, size)
+}
+
+/// Keywords over sequences of `size` words in a row inside a segment (1 = single words):
+/// each side's size is then its number of sequences. The reference is
+/// `against` less the target (the whole project: every other text), so two
+/// groups of texts or two speakers' tracks can be compared directly.
+pub fn keywords_against(session: &mut Session, kind: Kind, target: &Scope, against: &Scope, min_count: usize, size: usize) -> Result<Keywords, String> {
     let size = size.clamp(1, MAX_SIZE);
     if !matches!(kind, Kind::Word | Kind::Translation) {
         return Err("keywords are counted between words or translation words".into());
@@ -88,13 +94,15 @@ pub fn keywords_of(session: &mut Session, kind: Kind, target: &Scope, min_count:
         return Err("keywords compare a text, or the texts a detail picks, with the rest".into());
     }
     let p = project(session)?;
-    let picked = target.picked(p)?;
-    let only_tier = target.tier().map(str::to_string);
-    let here_of = |text: &str, tier: &str| target.text.as_deref().is_none_or(|t| t == text) && picked.as_ref().is_none_or(|set| set.contains(text)) && only_tier.as_deref().is_none_or(|t| t == tier);
+    let here = target.member(p)?;
+    let there = against.member(p)?;
     let mut tallies: HashMap<String, Tally> = HashMap::new();
     let (mut c, mut d) = (0usize, 0usize);
     each_segment(p, Read::of(kind), &Scope::all(), |seg| {
-        let here = here_of(&seg.text, &seg.tier);
+        let here = here.has(&seg.text, &seg.tier);
+        if !here && !there.has(&seg.text, &seg.tier) {
+            return Ok(());
+        }
         let words: Vec<(String, String)> = seg
             .words
             .iter()
@@ -256,6 +264,16 @@ mod tests {
         assert_eq!(pairs.focus_tokens, 5);
         assert_eq!((pairs.rows[0].item.as_str(), pairs.rows[0].focus, pairs.rows[0].reference), ("the fox", 2, 0));
         assert!(keywords(&mut session, Kind::Gloss, &Scope::text(&sample), 1).is_err());
+        // Against one other text only: the sample is left out of the reference.
+        let hen = crate::session::create_text(&mut session, "Hen").unwrap();
+        crate::session::add_segment(&mut session, &hen, None, Some(0.0), Some(900.0), "the hen ran").unwrap();
+        let ab = keywords_against(&mut session, Kind::Word, &Scope::text(&fox), &Scope::text(&hen), 1, 1).unwrap();
+        assert_eq!((ab.focus_tokens, ab.reference_tokens), (8, 3));
+        let ran = ab.rows.iter().find(|r| r.item == "ran").unwrap();
+        assert_eq!((ran.focus, ran.reference), (1, 1));
+        assert!(ab.rows.iter().all(|r| r.focus + r.reference > 0 && !["wʌn", "faɪv"].contains(&r.item.as_str())), "nothing from the sample");
+        // A reference that is the target itself leaves nothing to compare with.
+        assert_eq!(keywords_against(&mut session, Kind::Word, &Scope::text(&fox), &Scope::text(&fox), 1, 1).unwrap().reference_tokens, 0);
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -228,6 +228,24 @@ impl Scope {
         }
         Ok(Some(out))
     }
+
+    /// Whether a segment of `text` on `tier` is inside, worked out once.
+    pub(crate) fn member(&self, p: &Project) -> Result<Member, String> {
+        Ok(Member { text: self.text.clone(), picked: self.picked(p)?, tier: self.tier().map(str::to_string) })
+    }
+}
+
+/// A scope's test for one segment (`Scope::member`).
+pub(crate) struct Member {
+    text: Option<String>,
+    picked: Option<std::collections::HashSet<String>>,
+    tier: Option<String>,
+}
+
+impl Member {
+    pub(crate) fn has(&self, text: &str, tier: &str) -> bool {
+        self.text.as_deref().is_none_or(|t| t == text) && self.picked.as_ref().is_none_or(|set| set.contains(text)) && self.tier.as_deref().is_none_or(|t| t == tier)
+    }
 }
 
 /// What a corpus reader needs from each segment.

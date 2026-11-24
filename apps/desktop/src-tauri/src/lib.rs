@@ -297,10 +297,10 @@ fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option
     s.run(move |s| frequencies::frequencies_of(s, kind, &concordance::Scope::of(text_id, within), size.unwrap_or(1)))
 }
 
-/// Which words one text, or the texts a detail picks, use more or less than the rest (Scrolls' keywords).
+/// Which words one text, or the texts a detail picks, use more or less than the rest, or than another text, detail or track (Scrolls' keywords).
 #[tauri::command(async)]
-fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, within: Option<concordance::Where>, min_count: usize, size: Option<usize>) -> Result<keywords::Keywords, String> {
-    s.run(move |s| keywords::keywords_of(s, kind, &concordance::Scope::of(text_id, within), min_count, size.unwrap_or(1)))
+fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, within: Option<concordance::Where>, against_text: Option<String>, against: Option<concordance::Where>, min_count: usize, size: Option<usize>) -> Result<keywords::Keywords, String> {
+    s.run(move |s| keywords::keywords_against(s, kind, &concordance::Scope::of(text_id, within), &concordance::Scope::of(against_text, against), min_count, size.unwrap_or(1)))
 }
 
 /// How alike the texts are in their most frequent words (Cosine Delta).

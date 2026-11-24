@@ -1235,6 +1235,7 @@ body::before {
 .co-neg { color: var(--muted); }
 .panel-collocates select, .panel-keywords select { max-width: 100%; }
 .kw-table th:nth-child(n+2) { text-align: right; }
+.kw-against { color: var(--muted); align-self: center; }
 .cc-play { grid-area: play; }
 .play-seg:disabled { opacity: 0.4; cursor: default; }
 .cc-left { grid-area: left; text-align: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; unicode-bidi: plaintext; }
