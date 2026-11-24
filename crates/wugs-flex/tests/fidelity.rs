@@ -751,3 +751,34 @@ fn lift_etymologies_fields_and_subsenses_are_kept_and_written_back() {
     fs::remove_dir_all(root).ok();
     fs::remove_dir_all(root2).ok();
 }
+
+#[test]
+fn lift_borrowed_etymology_is_the_entrys_loan_source() {
+    let (root, mut p) = temp_project();
+    let lift = r#"<?xml version="1.0" encoding="UTF-8"?>
+<lift version="0.13">
+<entry id="buku_1" guid="11111111-1111-4111-8111-111111111111"><lexical-unit><form lang="xyz"><text>buku</text></form></lexical-unit><etymology type="borrowed" source="Malay"><form lang="ms"><text>buku</text></form><gloss lang="en"><text>book</text></gloss></etymology><sense id="s1"><gloss lang="en"><text>book</text></gloss></sense></entry>
+<entry id="ama_1" guid="22222222-2222-4222-8222-222222222222"><lexical-unit><form lang="xyz"><text>ama</text></form></lexical-unit><etymology type="proto" source="PMP"><form lang="pmp"><text>*ama</text></form></etymology><sense id="s2"><gloss lang="en"><text>father</text></gloss></sense></entry>
+</lift>"#;
+    let r = import_lift(&mut p, lift).unwrap();
+    assert_eq!(r.loans, 1);
+    let lex = |p: &Project, id: &str| p.proj.entities_of_kind("lexeme").unwrap().into_iter().find(|l| p.proj.field_str(l, "x.lift.id").unwrap().as_deref() == Some(id)).unwrap();
+    let buku = lex(&p, "buku_1");
+    let ama = lex(&p, "ama_1");
+    assert_eq!(p.proj.field_str(&buku, "borrowed-from").unwrap().as_deref(), Some("Malay"));
+    assert_eq!(p.proj.field_str(&ama, "borrowed-from").unwrap(), None, "a proto-form is not a loan");
+    let flat = |x: &str| x.lines().map(str::trim).collect::<String>();
+    // Unchanged, the etymology goes out as it came, form and gloss kept.
+    let out = flat(&export_lift(&p).unwrap());
+    assert!(out.contains("<etymology type=\"borrowed\" source=\"Malay\"><form lang=\"ms\"><text>buku</text></form><gloss lang=\"en\"><text>book</text></gloss></etymology>"), "{out}");
+    // Edited, its source follows; a loan marked in wugs gets an etymology; cleared, it is left out.
+    p.set_lexeme_field(&buku, "borrowed-from", "Dutch").unwrap();
+    p.set_lexeme_field(&ama, "borrowed-from", "Arabic").unwrap();
+    let out = flat(&export_lift(&p).unwrap());
+    assert!(out.contains("<etymology type=\"borrowed\" source=\"Dutch\"><form lang=\"ms\">"), "{out}");
+    assert!(out.contains("<etymology type=\"proto\" source=\"PMP\">") && out.contains("<etymology type=\"borrowed\" source=\"Arabic\"/>"), "{out}");
+    p.set_lexeme_field(&buku, "borrowed-from", "").unwrap();
+    let out = flat(&export_lift(&p).unwrap());
+    assert!(!out.contains("source=\"Dutch\"") && !out.contains("source=\"Malay\""), "{out}");
+    fs::remove_dir_all(root).ok();
+}
