@@ -46,7 +46,7 @@
     title: t.title,
     tiers: [tiers[0]],
     segments: Array.from({ length: t.segments }, (_, i) =>
-      seg(`${t.id}-s${i}`, "tier-utt", 1000 + i * 2400, 3000 + i * 2400, ["mopa tela wiripa", "kanu sele", "ŋai toɾu tela", "wiripa ni-kani"][i % 4], `c${i}`),
+      seg(`${t.id}-s${i}`, "tier-utt", 1000 + i * 2400, 3000 + i * 2400 - ((i * 337 + (i % 4) * 280) % 900), ["mopa tela wiripa", "kanu sele", "ŋai toɾu tela", "wiripa ni-kani"][i % 4], `c${i}`),
     ),
   });
 

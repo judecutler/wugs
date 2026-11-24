@@ -42,6 +42,7 @@ PANELS = [
     ("checks", "Checks"),
     ("vowels", "Vowel space"),
     ("contours", "Pitch contours"),
+    ("durations", "Durations"),
     ("sounds", "Sounds"),
     ("typology", "Typology"),
     ("progress", "Progress"),
@@ -688,6 +689,17 @@ def main():
             if run.page.evaluate("document.activeElement && document.activeElement.dataset.prompt") != "3":
                 failures.append("Elicit sentences did not move to the next prompt")
             # Word order: WALS orders counted in the parsed sentences.
+            # Durations: a text whose labels repeat, so the strip plot and the comparison show.
+            run.page.evaluate("async () => { const st = await import('/src/store.ts'); window.__keptSelection = st.getSelection(); await st.selectText('t-fox'); }")
+            run.front("durations", "Durations")
+            run.page.locator(".panel-durations .du-plot").wait_for()
+            run.page.wait_for_timeout(300)
+            run.shot("state-durations", run.page.locator(".panel-durations"))
+            result = run.page.locator(".panel-durations .du-result")
+            if result.count() != 1 or "Welch" not in (result.text_content() or ""):
+                failures.append("Durations: two labels with several segments each were not compared")
+            run.page.evaluate("async () => { const st = await import('/src/store.ts'); await st.selectText('t-count'); st.selectSegment(window.__keptSelection); }")
+            run.page.wait_for_timeout(300)
             # Affixes: the order of two affixes met in one word.
             run.front("affixes", "Affixes")
             order = run.page.locator(".panel-affixes .af-order")

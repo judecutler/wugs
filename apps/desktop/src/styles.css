@@ -1430,6 +1430,14 @@ body::before {
 .ct-token { fill: none; stroke: var(--accent-bright); stroke-opacity: 0.35; stroke-width: 1.2; cursor: pointer; }
 .ct-token:hover, .ct-token:focus { stroke: var(--ink); stroke-opacity: 1; outline: none; }
 .ct-token.is-selected { stroke: var(--error); stroke-opacity: 1; }
+.du-dot { fill: var(--accent-bright); fill-opacity: 0.55; stroke: var(--accent); stroke-width: 0.8; cursor: pointer; }
+.du-dot:hover, .du-dot:focus { fill: var(--ink); fill-opacity: 1; outline: none; }
+.du-dot.is-selected { fill: var(--error); fill-opacity: 1; }
+.du-mean { stroke: var(--ink); stroke-width: 2.4; stroke-linecap: round; pointer-events: none; }
+.du-sd { stroke: var(--ink); stroke-width: 1.4; pointer-events: none; }
+.du-label { font-family: var(--font-ipa); font-size: 15px; fill: var(--ink); }
+.du-label-cell { font-family: var(--font-ipa); font-weight: normal; text-align: left; }
+.du-result { font-size: var(--text-sm); }
 .ct-mean { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; pointer-events: none; }
 .ct-label { font-family: var(--font-ipa); font-size: 13px; font-weight: 600; fill: var(--ink); }
 
