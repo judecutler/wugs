@@ -3,10 +3,11 @@
 // export's consent column and sealed packages; nothing is blocked by them
 // (DECISIONS 2026-11-11, "Consent records inform, never enforce").
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { errorText, peopleCommand, type Coverable, type PeopleCommand, type PeopleConsent as ConsentView, type PeoplePerson as PersonView, type PeopleView } from "../api";
+import { errorText, peopleCommand, projectLanguage, saveDocument, type Coverable, type PeopleCommand, type PeopleConsent as ConsentView, type PeoplePerson as PersonView, type PeopleView } from "../api";
 import { localDay } from "../dates";
 import { emptyState, h } from "../dom";
 import { detailKeys, detailLabel, peopleTsv, termLabel, ROLES, type Answer } from "../people/logic";
+import { consentForm } from "../people/form";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { dataGeneration, getState, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
@@ -62,6 +63,19 @@ export const peoplePanel: PanelDef = {
         }
       }),
     );
+
+    /** Save a consent form to print, for one person or blank. */
+    async function printForm(name: string, roles: readonly string[]) {
+      const folder = await pickFile({ directory: true, title: "Where should the form go?" });
+      if (typeof folder !== "string") return;
+      try {
+        const language = await projectLanguage().then((l) => l.name, () => "");
+        const r = await saveDocument({ folder, title: name === "" ? "Consent form" : `Consent form ${name}`, extension: "html", contents: consentForm({ language, name, roles }) });
+        showToast({ tone: "info", lines: [`Saved the form as ${r.path}. Open it in a browser and print it.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    }
 
     function twoClick(id: string, label: string, run: () => void): HTMLButtonElement {
       const on = armed.has(id);
@@ -203,6 +217,13 @@ export const peoplePanel: PanelDef = {
         ...p.consents.map((c) => consentCard(p, c, coverable)),
         h("button", {
           type: "button",
+          className: "pp-print",
+          textContent: "Print a form…",
+          title: `A consent form with ${p.name}'s name filled in, each use in plain words with Yes and No boxes`,
+          onclick: () => void printForm(p.name, p.roles),
+        }),
+        h("button", {
+          type: "button",
           textContent: p.consents.length === 0 ? "Record what they agreed to" : "Add another record",
           onclick: () => void act("consent_add", { person: p.id, covers: coverable[0]?.id ?? "", date: localDay(new Date()) }),
         }),
@@ -241,6 +262,13 @@ export const peoplePanel: PanelDef = {
           "Optional. Write down who speaks in your recordings and what each person agreed to. The corrections export and sealed archive packages report what these records say; nothing in wugs is blocked by them. Your ethics board's rules are the ones that count.",
         ),
         add,
+        h("button", {
+          type: "button",
+          className: "pp-print",
+          textContent: "Print a consent form…",
+          title: "A blank form to start from: each use (archive, website, community only, speech tools) in plain words with Yes and No boxes, room for oral consent, and signature lines",
+          onclick: () => void printForm("", []),
+        }),
         ...(v.people.length === 0
           ? []
           : [h("button", {
