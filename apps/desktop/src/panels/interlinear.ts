@@ -51,7 +51,7 @@ async function linesOf(text: TextDetail): Promise<Line[]> {
       const full = text.segments.find((s) => s.id === seg.id)!;
       const translation = translationLines(full, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
       const words: ExampleWord[] = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
-      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, endMs: full.endMs ?? null, notes: (v.segmentNotes ?? []).map((n) => n.body), topics: v.topics ?? [], categories: v.words.map((w) => wordCategory(w.morphs)), ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
+      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, endMs: full.endMs ?? null, notes: (v.segmentNotes ?? []).map((n) => n.body), topics: v.topics ?? [], categories: v.words.map((w) => wordCategory(w.morphs) ?? w.tag ?? null), ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
     });
   }
   return lines;
@@ -207,7 +207,9 @@ export const interlinearPanel: PanelDef = {
           if (seg !== undefined) void hear({ textId: text.id, tierId: seg.tier, segmentId: seg.id, startMs: seg.startMs, endMs: seg.endMs });
         });
         play.disabled = seg?.startMs === null || seg?.startMs === undefined;
-        const body = analysed(l)
+        // A sentence tagged but not glossed still shows its words with their tags when Categories is on.
+        const tagged = showCats && (l.categories ?? []).some((c) => c !== null && c !== "");
+        const body = analysed(l) || (tagged && l.words.length > 0)
           ? h(
               "div",
               { className: "il-words" },
@@ -292,7 +294,7 @@ export const interlinearPanel: PanelDef = {
       };
       const read = h("button", { type: "button", className: "il-read", textContent: reading ? "Stop" : "Read along", title: "Play the whole text from its recording, marking each sentence as it is heard" });
       read.onclick = () => void readAlong(text);
-      const cats = h("button", { type: "button", textContent: "Categories", title: "Show each word's part of speech under its glosses, from its root's lexicon entry (FLEx's Word Cat. line)" });
+      const cats = h("button", { type: "button", textContent: "Categories", title: "Show each word's part of speech under its glosses, from its root's lexicon entry (FLEx's Word Cat. line), else the sentence's tags (a tagger's, a treebank's or CHAT's %mor)" });
       cats.setAttribute("aria-pressed", String(showCats));
       cats.onclick = () => {
         showCats = !showCats;
