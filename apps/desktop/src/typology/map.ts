@@ -19,13 +19,13 @@ export function colourOf(value: string | null, codes: readonly Code[]): string {
   return i < 0 ? UNKNOWN : COLOURS[i % COLOURS.length]!;
 }
 
-export type View = {
+export type View<P = MapPoint> = {
   /** The SVG viewBox in the land path's units (x = lon + 180, y = 90 − lat). */
   box: { x: number; y: number; w: number; h: number };
   /** Whether western longitudes are drawn east of 180° (a group across the Pacific). */
   pacific: boolean;
   /** Each point placed: `x`, `y` in the same units. */
-  placed: (MapPoint & { x: number; y: number })[];
+  placed: (P & { x: number; y: number })[];
 };
 
 const span = (xs: readonly number[]) => (xs.length === 0 ? 0 : Math.max(...xs) - Math.min(...xs));
@@ -33,7 +33,7 @@ const span = (xs: readonly number[]) => (xs.length === 0 ? 0 : Math.max(...xs) -
 /** Where the map looks: the points' bounding box with a margin, at least
  * 24° across, and centred on the Pacific when that keeps a group together
  * (Austronesian from Madagascar to Rapa Nui). */
-export function mapView(points: readonly MapPoint[]): View {
+export function mapView<P extends Pick<MapPoint, "lat" | "lon">>(points: readonly P[], least: { x: number; y: number } = { x: 24, y: 14 }): View<P> {
   const plain = points.map((p) => p.lon + 180);
   const shifted = points.map((p) => (p.lon < 0 ? p.lon + 540 : p.lon + 180));
   const pacific = points.length > 1 && span(shifted) + 1e-9 < span(plain);
@@ -45,13 +45,15 @@ export function mapView(points: readonly MapPoint[]): View {
   let x1 = Math.max(...xs);
   let y0 = Math.min(...ys);
   let y1 = Math.max(...ys);
+  // A margin of an eighth of the least width each side (3° on a world map).
+  const margin = least.x / 8;
   const grow = (a: number, b: number, least: number): [number, number] => {
     const mid = (a + b) / 2;
-    const half = Math.max(least, (b - a) * 1.15) / 2 + 3;
+    const half = Math.max(least, (b - a) * 1.15) / 2 + margin;
     return [mid - half, mid + half];
   };
-  [x0, x1] = grow(x0, x1, 24);
-  [y0, y1] = grow(y0, y1, 14);
+  [x0, x1] = grow(x0, x1, least.x);
+  [y0, y1] = grow(y0, y1, least.y);
   // Wide enough for the panel's shape: at least half as tall as it is wide, and the other way round.
   const w = x1 - x0;
   const h = y1 - y0;

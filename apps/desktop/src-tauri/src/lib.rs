@@ -688,6 +688,12 @@ fn orthography_convert(s: State<SessionThread>, profile: String, tier_id: String
     s.run(move |s| orthography::convert(s, &profile, &tier_id, text_id, &column, ignore_case, &target))
 }
 
+/// Natural Earth's land as one SVG path (x = lon + 180, y = 90 − lat), for maps of one's own places.
+#[tauri::command]
+fn world_land() -> &'static str {
+    typology::LAND
+}
+
 /// Where Glottolog places a language and its nearest languages, for a grammar sketch's locator map.
 #[tauri::command(async)]
 fn glottolog_place(glottocode: String) -> Option<glottolog::Place> {
@@ -2495,6 +2501,7 @@ pub fn run() {
             morphosyntax_choose_stanza,
             glottolog_find,
             glottolog_place,
+            world_land,
             typology_profile,
             typology_map,
             phoible_compare,
