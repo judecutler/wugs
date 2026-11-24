@@ -1459,6 +1459,8 @@ body::before {
 .sd-shape { font-family: var(--font-ipa); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 1px 8px; background: var(--surface-raised); }
 .sd-where td.num { text-align: right; min-width: 5em; }
 .sd-where td.sd-gap { color: var(--muted); }
+.sd-together td.sd-avoid { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.sd-together td.sd-prefer { background: color-mix(in srgb, var(--accent-bright) 18%, transparent); font-weight: 600; }
 
 .panel-vowels { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .vw-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
