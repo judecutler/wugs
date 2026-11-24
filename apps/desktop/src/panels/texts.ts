@@ -6,7 +6,7 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, readTierGlossing, tierGlossing, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { abbreviationMeanings, createText, readTierGlossing, tierGlossing, topicsOverview, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { CARD_ORDERS, corpusLines, dictionaryLines, flashcardLines, parallelLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { sentencesOf } from "../interlinear/logic";
@@ -446,7 +446,9 @@ async function exportSketch() {
     const graphemes = graphemesOf(toGrid(ortho.profile));
     const order = await wordOrder().catch(() => undefined);
     const place = language.glottocode === "" ? null : await glottologPlace({ glottocode: language.glottocode }).catch(() => null);
+    const topics = await topicExamples().catch(() => []);
     const html = grammarSketch({
+      topics,
       place,
       order,
       language,
@@ -471,6 +473,24 @@ async function exportSketch() {
       lines: [`Saved a grammar sketch in ${r.path}. Open it in Word or LibreOffice and write in the bracketed places.`, ...(missing.length > 0 ? [`Still to fill: ${missing.join(", ")}.`] : [])],
     });
   });
+}
+
+/** The sentences filed under each grammar topic as glossed examples, at most
+ * `TOPIC_EXAMPLES` a topic, for the grammar sketch. */
+const TOPIC_EXAMPLES = 30;
+async function topicExamples(): Promise<{ name: string; examples: Example[] }[]> {
+  const t = await topicsOverview();
+  const out: { name: string; examples: Example[] }[] = [];
+  for (const topic of t.topics) {
+    const examples: Example[] = [];
+    for (const s of topic.sentences.slice(0, TOPIC_EXAMPLES)) {
+      const v = await glossGet({ textId: s.textId, segmentId: s.segmentId });
+      const words = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
+      examples.push({ number: 0, translation: s.translation, words: words.length > 0 ? words : [{ form: s.content, morphs: [] }] });
+    }
+    out.push({ name: topic.name, examples });
+  }
+  return out;
 }
 
 /** The text's sentences as the Interlinear tab reads them: the utterance
