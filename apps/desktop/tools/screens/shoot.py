@@ -621,6 +621,13 @@ def main():
             run.shot("state-collocates-compare", run.page.locator(".panel-collocates"))
             if run.page.locator(".panel-collocates .ws-lean-b").count() != 1 or "against «kesi»" not in run.page.locator(".panel-collocates .fq-count").inner_text():
                 failures.append("Collocates did not compare two words")
+            # The network: the two words with what they share between them.
+            run.page.locator(".panel-collocates button", has_text="Network").click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-collocates-network", run.page.locator(".panel-collocates"))
+            if run.page.locator(".panel-collocates .co-net-shared").count() != 1:
+                failures.append("the collocation network did not set the shared collocate between the words")
+            run.page.locator(".panel-collocates button", has_text="Network").click()
             run.page.locator(".panel-collocates .co-versus").fill("")
             # Similar words (Scrolls): the words used in the same company.
             run.front("similar", "Similar words")

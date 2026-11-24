@@ -1271,6 +1271,15 @@ body::before {
 .co-table th:nth-child(n+2) { text-align: right; }
 .co-node { flex: 1; font-family: var(--font-ipa); }
 .co-versus { flex: 1; min-width: 10em; font-family: var(--font-ipa); }
+.co-net-svg { width: 100%; max-height: 360px; display: block; background: var(--surface-raised); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.co-net-edge { stroke: var(--line); }
+.co-net-node { cursor: pointer; }
+.co-net-node circle { fill: var(--accent-bright); stroke: var(--ink); stroke-width: 0.006; }
+.co-net-centre circle { fill: var(--accent); }
+.co-net-shared circle { fill: var(--warn, #c9a400); }
+.co-net-node text { font-size: 0.1px; font-family: var(--font-ipa); fill: var(--ink); paint-order: stroke; stroke: var(--surface-raised); stroke-width: 0.02px; }
+.co-net-centre text { font-size: 0.13px; font-weight: 600; }
+.co-net-node:focus-visible circle { stroke: var(--accent); stroke-width: 0.02; }
 .co-neg { color: var(--muted); }
 .panel-collocates select, .panel-keywords select { max-width: 100%; }
 .kw-table th:nth-child(n+2) { text-align: right; }
