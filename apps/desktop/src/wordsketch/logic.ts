@@ -48,7 +48,7 @@ const DEPENDENTS: Record<string, string> = {
 };
 
 /** A group's title: "objects of «eat»", or "words «dog» is the nsubj of". */
-export function groupTitle(g: SketchGroup, lemma: string): string {
+export function groupTitle(g: Pick<SketchGroup, "relation" | "direction">, lemma: string): string {
   const base = g.relation.split(":")[0]!;
   const sub = g.relation.includes(":") ? ` (${g.relation})` : "";
   if (g.direction === "dependent") {
@@ -79,5 +79,58 @@ export function pairQuery(node: string, item: SketchItem): string {
 export function sketchTsv(w: WordSketch): string {
   const head = ["relation", "direction", "lemma", "count", "logDice"].join("\t");
   const rows = w.groups.flatMap((g) => g.items.map((i) => [g.relation, g.direction, i.lemma, i.count, i.logDice.toFixed(2)].join("\t")));
+  return [head, ...rows].join("\n");
+}
+
+// ------------------------------------------------------------ sketch difference
+
+export type DiffItem = { lemma: string; a: SketchItem | null; b: SketchItem | null; diff: number };
+export type DiffGroup = { relation: string; direction: "dependent" | "head"; total: number; items: DiffItem[] };
+
+/** Two lemmas' sketches side by side, as Sketch Engine's sketch difference:
+ * per relation, every collocate of either with each one's logDice; the
+ * collocates most typical of the first lemma first, of the second last.
+ * Relations with most uses together first. */
+export function sketchDiff(a: WordSketch, b: WordSketch): DiffGroup[] {
+  const key = (g: SketchGroup) => `${g.direction}\u0001${g.relation}`;
+  const groups = new Map<string, { relation: string; direction: "dependent" | "head"; total: number; a: SketchItem[]; b: SketchItem[] }>();
+  for (const [side, w] of [["a", a], ["b", b]] as const) {
+    for (const g of w.groups) {
+      const k = key(g);
+      const at = groups.get(k) ?? { relation: g.relation, direction: g.direction, total: 0, a: [], b: [] };
+      at.total += g.total;
+      at[side].push(...g.items);
+      groups.set(k, at);
+    }
+  }
+  return [...groups.values()]
+    .map((g) => {
+      const lemmas = new Set([...g.a.map((i) => i.lemma), ...g.b.map((i) => i.lemma)]);
+      const items = [...lemmas].map((lemma): DiffItem => {
+        const x = g.a.find((i) => i.lemma === lemma) ?? null;
+        const y = g.b.find((i) => i.lemma === lemma) ?? null;
+        return { lemma, a: x, b: y, diff: (x?.logDice ?? 0) - (y?.logDice ?? 0) };
+      });
+      items.sort((p, q) => q.diff - p.diff || p.lemma.localeCompare(q.lemma));
+      return { relation: g.relation, direction: g.direction, total: g.total, items };
+    })
+    .sort((p, q) => q.total - p.total || p.relation.localeCompare(q.relation));
+}
+
+/** Which lemma a collocate leans to: "a", "b", or "both" when the scores are within 1 logDice. */
+export const leaning = (i: DiffItem): "a" | "b" | "both" => (i.a !== null && i.b !== null && Math.abs(i.diff) < 1 ? "both" : i.diff > 0 ? "a" : "b");
+
+/** The line above a sketch difference. */
+export function diffLine(a: WordSketch, b: WordSketch, groups: readonly DiffGroup[]): string {
+  if (a.lemma === "" || b.lemma === "") return `${[a, b].filter((w) => w.lemma === "").length === 2 ? "Neither lemma is" : "One lemma is not"} in the parsed sentences.`;
+  const items = groups.flatMap((g) => g.items);
+  const shared = items.filter((i) => leaning(i) === "both").length;
+  return `«${a.lemma}» (${a.count}) against «${b.lemma}» (${b.count}): ${items.length} collocates in ${groups.length} relations, ${shared} used alike. Those typical of «${a.lemma}» first, of «${b.lemma}» last.`;
+}
+
+/** Tab-separated, a row per relation and collocate. */
+export function diffTsv(a: WordSketch, b: WordSketch, groups: readonly DiffGroup[]): string {
+  const head = ["relation", "direction", "lemma", `${a.lemma} count`, `${a.lemma} logDice`, `${b.lemma} count`, `${b.lemma} logDice`, "difference"].join("\t");
+  const rows = groups.flatMap((g) => g.items.map((i) => [g.relation, g.direction, i.lemma, i.a?.count ?? 0, i.a?.logDice.toFixed(2) ?? "", i.b?.count ?? 0, i.b?.logDice.toFixed(2) ?? "", i.diff.toFixed(2)].join("\t")));
   return [head, ...rows].join("\n");
 }

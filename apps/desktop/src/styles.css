@@ -1554,3 +1554,7 @@ body::before {
 .sd-feat { font-size: var(--text-xs); padding: 1px 4px; min-width: 0; }
 .sd-feat.is-on { background: var(--accent-soft); border-color: var(--accent); }
 .sd-feat-out td, .sd-feat-out th { opacity: 0.3; }
+
+/* Word sketch difference: collocates leaning to the first lemma, both, or the second */
+.ws-diff tr.ws-lean-a td { background: color-mix(in srgb, var(--accent-bright) 14%, transparent); }
+.ws-diff tr.ws-lean-b td { background: var(--warn-soft); }
