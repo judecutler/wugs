@@ -35,7 +35,7 @@
 //! before hello. Then what each side sends depends on who the peer is
 //! (`PeerPolicy`): members get every scope, guests get open scopes only and
 //! are never pulled from. A client that does not speak TLS gets no wugs
-//! frame at all, and one that negotiates no `wugs/3` ALPN is refused right
+//! frame at all, and one that negotiates no `wugs/4` ALPN is refused right
 //! after the handshake.
 //!
 //! Only members contribute to the roster exchange: a guest receives the
@@ -221,7 +221,7 @@ pub enum Refusal {
     /// TLS failed: the peer's key is not on the roster, it offered another
     /// session version, or the bytes were not TLS at all.
     Handshake(String),
-    /// The handshake finished without agreeing on the `wugs/3` ALPN (the
+    /// The handshake finished without agreeing on the `wugs/4` ALPN (the
     /// peer offered none, or another); holds what was negotiated, if anything.
     SessionVersion(Option<String>),
     /// This device is not on its own project roster (never paired).
@@ -245,7 +245,7 @@ impl fmt::Display for Refusal {
             Refusal::SelfRevoked => write!(f, "this device has been marked lost and can no longer sync"),
             Refusal::PeerRevoked(k) => write!(f, "device {k} has been marked lost"),
             Refusal::SessionVersion(got) => {
-                write!(f, "the peer did not agree on session version wugs/3 (negotiated {})", got.as_deref().unwrap_or("nothing"))
+                write!(f, "the peer did not agree on session version wugs/4 (negotiated {})", got.as_deref().unwrap_or("nothing"))
             }
             Refusal::Roster(e) => write!(f, "{e}"),
             Refusal::GuestPush => write!(f, "guest devices are read-only; nothing is pulled from them"),

@@ -18,7 +18,9 @@ use wugs_auth::{DeviceKey, PublicKey};
 /// ALPN carries the session version. A peer offering only another version
 /// fails the handshake; one offering none completes it, and wugs-net then
 /// refuses the session before any frame, so frames are never misread.
-pub const ALPN: &[u8] = b"wugs/3";
+/// `wugs/4` since the window summaries hash op ids through a finalizer
+/// (wugs-sync): a `wugs/3` peer's summaries would never match.
+pub const ALPN: &[u8] = b"wugs/4";
 
 /// rustls wants a server name even when nothing checks it.
 pub fn server_name() -> ServerName<'static> {

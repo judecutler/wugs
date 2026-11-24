@@ -26,6 +26,7 @@
 - **Undo is an inverse write** (2026-11-11). The log is never rewritten, so undo writes the opposite edit, and it is refused when what it would overwrite changed since, anywhere. The first version overwrote later edits and could lose a session of typing.
 - **A text remembers its recording** (2026-11-12). Only a person's pick links them, because the wrong audio is worse than none. Linking can change a text's inherited sharing level, so the app says when it does.
 - **Track toggles are view state** (2026-11-12). Lock, hide and mute stay on one computer and never become ops; another person's lock must not stop someone who never chose it. No solo: a text has one recording.
+- **Sync summaries mix each op hash** (2026-11-24). A window's hash XORs one hash per op id, and plain FNV-1a of consecutive ULIDs (a txn's ops) can cancel between two devices, which left their writes unsynced for good. Each FNV-1a now goes through MurmurHash3's 64-bit finalizer, so only chance collides (2⁻⁶⁴). Every summary changed, so the session version is `wugs/4`; a device on `wugs/3` must update before it syncs with one on `wugs/4`.
 
 ## Models and analysis
 - **Features, not models** (2026-11-10). Code asks for a capability; packages provide it. Automatic picks by published score; a project can pin a model through a synced setting so a team uses one; a pick that cannot run is an error, never a silent swap. Large downloads ask first.
