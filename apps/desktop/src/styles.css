@@ -1582,8 +1582,9 @@ body::before {
 .se-hint { margin-left: 8px; font-family: var(--font-ipa); color: var(--accent); }
 
 /* Media bin: details read from file names. */
-.bin-from-names { margin-top: 12px; }
-.bin-from-names summary { cursor: pointer; font-weight: 600; }
+.bin-from-names, .bin-levels-box { margin-top: 12px; }
+.bin-from-names summary, .bin-levels-box summary { cursor: pointer; font-weight: 600; }
 .bin-pattern { flex: 1 1 16em; font-family: var(--font-mono, monospace); }
 .bin-names td.bin-new { color: var(--accent); font-weight: 600; }
 .bin-names tr.bin-nofit th { color: var(--muted); }
+.bin-levels tr.bin-flag th { color: var(--attention, var(--accent)); }

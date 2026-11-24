@@ -103,6 +103,8 @@ Under each card's text line, a link names the recording's details (**No details 
 
 If your files follow a naming convention, **Details from file names** under the cards fills those details for every recording at once. Write the pattern with each detail in braces: `{date}_{participants}_{genre}` reads `20260312_Ana_story.wav` as the date 2026-03-12, participants Ana and genre story. Any other name in braces makes a detail of that name, and `{skip}` leaves a part out. A table shows what each name gives, and which names do not fit. **Fill details** writes only details that are still empty, unless **Replace filled details** is ticked. Underscores inside a part read as spaces, and dates written `20260312` or `2026.03.12` come in as `2026-03-12`. The pattern is remembered on this computer.
 
+**Recording levels**, under it, says how well each recording was made. Press **Check levels** and wugs reads every recording on this computer once: its length, its loudest moment (**Peak**), the level of the speech (**Speech**, the loud end of the recording) and of the room under it (**Room**, the quiet end), in decibels below full scale, and how many times it clips (three samples or more in a row at full scale, where the gain was set too high and the waveform is cut off). A recording that clips, peaks below −20 dB, has speech less than 20 dB above the room's noise, or was made below 16 kHz gets a note saying so in words. Worth a look before you measure pitch or formants, and before depositing. **Copy table** copies the figures.
+
 ## Segment the recording
 
 A segment marks where one utterance, or one word, starts and ends. The Transcribe and Gloss panels work segment by segment.

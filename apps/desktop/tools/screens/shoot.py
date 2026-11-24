@@ -1235,6 +1235,16 @@ def main():
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.locator(".panel-media .bin-pattern").fill("{date}_{participants}_{genre}")
             run.page.locator(".panel-media .bin-from-names summary").click()
+            # Recording levels: peak, speech, room and clips per recording.
+            run.page.locator(".panel-media .bin-levels-box summary").click()
+            run.page.locator(".panel-media .bin-levels-box button", has_text="Check levels").click()
+            run.page.locator(".panel-media .bin-levels tbody tr").nth(1).wait_for()
+            run.page.locator(".panel-media .bin-levels-box").scroll_into_view_if_needed()
+            run.shot("state-media-levels", run.page.locator(".panel-media"))
+            levels_text = run.page.locator(".panel-media .bin-levels-box").inner_text()
+            if "1 of 2 recordings have something to look at" not in levels_text or "Clips 4 times, first at 0:07" not in levels_text:
+                failures.append(f"Media did not read the recording levels: {levels_text[:300]}")
+            run.page.locator(".panel-media .bin-levels-box summary").click()
             fox.drag_to(run.page.locator(".panel-timeline .tl-body"))
             run.page.wait_for_timeout(600)
             if run.page.locator(".tl-sources").input_value() != "src-fox":

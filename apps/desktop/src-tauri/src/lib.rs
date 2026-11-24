@@ -34,6 +34,7 @@ pub mod layout;
 pub mod lexicon;
 pub mod lexicon_table;
 pub mod duplicates;
+pub mod levels;
 pub mod meanings;
 pub mod measure;
 pub mod media_bin;
@@ -844,6 +845,16 @@ async fn media_overview(s: State<'_, SessionThread>, source_id: String) -> Resul
         return Ok(media_bin::Overview::Missing);
     };
     tauri::async_runtime::spawn_blocking(move || media_bin::overview(&at)).await.map_err(|e| e.to_string())?
+}
+
+/// A recording's peak, loudness, noise floor and clips, read off the
+/// session thread; None when its audio is not on this computer.
+#[tauri::command]
+async fn recording_levels(s: State<'_, SessionThread>, source_id: String) -> Result<Option<levels::Levels>, String> {
+    let Some(at) = s.run(move |s| media_bin::locate(s, &source_id))? else {
+        return Ok(None);
+    };
+    tauri::async_runtime::spawn_blocking(move || levels::levels(&at.media)).await.map_err(|e| e.to_string())?.map(Some)
 }
 
 #[tauri::command(async)]
@@ -2325,6 +2336,7 @@ pub fn run() {
             gloss_apply_all,
             gloss_word_types,
             likely_meanings,
+            recording_levels,
             export_spelling,
             save_hit_clips,
             texts_alike,
