@@ -390,7 +390,7 @@ When sentences have translations, a line under a word offers **Maybe** ‘…’
 
 Only sentences already broken into words are listed. When some are not (a text imported from plain text, say), **Break N sentences into words** does it for all of them at once, as **Break into words** does for one in the Gloss panel.
 
-When many forms already have an earlier analysis (they were glossed in another text), **Use the earlier analysis for N word forms** gives each of them that analysis for all its uses at once (click it twice). Guesses from known morphs are never taken this way; apply those one by one. Read the result through in the Interlinear tab, since a form can mean different things in different sentences.
+When many forms already have an earlier analysis (they were glossed in another text), **Use the earlier analysis for N word forms** gives each of them that analysis for all its uses at once (click it twice). Guesses from known morphs are never taken this way; apply those one by one. Read the result through in the Interlinear tab, since a form can mean different things in different sentences. **Gloss N word forms that are lexicon headwords** (click it twice) does the same for words spelled exactly as one lexicon entry with a single sense, such as particles and nouns that take no affixes: each use becomes that entry's root with its gloss, linked to the entry. A spelling two entries share, or an entry with several senses, is left for you to choose.
 
 ### Check that each morph is glossed one way
 

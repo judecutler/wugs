@@ -41,3 +41,16 @@ test("apply all takes only earlier analyses, never guesses", async () => {
   assert.equal(appliedAllLine(2, 17, 0), "Analysed 17 uses of 2 word forms, each as it was analysed before. Check them in the Interlinear tab.");
   assert.match(appliedAllLine(3, 5, 1), /1 form could not be analysed/);
 });
+
+test("words spelled as one lexicon entry can be glossed from it at once", async () => {
+  const { headwordRows, headwordLabel } = await import("./logic.ts");
+  const rows = [
+    { form: "mosa", headword: true, suggestion: { guessed: true } },
+    { form: "tela", headword: false, suggestion: { guessed: true } },
+    { form: "x", headword: true, suggestion: null },
+  ];
+  assert.deepEqual(headwordRows(rows).map((r) => r.form), ["mosa"]);
+  assert.equal(headwordLabel(1, 4, false), "Gloss 1 word form that is a lexicon headword");
+  assert.equal(headwordLabel(2, 4, false), "Gloss 2 word forms that are lexicon headwords");
+  assert.equal(headwordLabel(3, 9, true), "Gloss 9 uses of 3 word forms from the lexicon? Click again");
+});
