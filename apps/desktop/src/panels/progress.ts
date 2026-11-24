@@ -11,6 +11,7 @@ import { shows } from "../lexicon/logic";
 import { SHOW_PANEL } from "./panel";
 import { mapView } from "../typology/map";
 import { dayLabel, workColumns, worklogLine, worklogTsv, type Day } from "../progress/worklog";
+import { pace, paceLines } from "../progress/pace";
 import { localDay } from "../dates";
 import { hasPeople, isChild, speakerCells, speakerColumns, speakersNote, speakersTsv, type SpeakerRow } from "../progress/speakers";
 import { brownNote, brownRows, brownTsv, type BrownTrack } from "../progress/brown";
@@ -402,7 +403,14 @@ export const progressPanel: PanelDef = {
         h("thead", {}, h("tr", {}, h("th", { textContent: "Day" }), ...cols.map((c) => h("th", { textContent: c.label, title: c.title })), h("th", { textContent: "Devices", title: "How many devices wrote that day" }))),
         h("tbody", {}, ...work.map((d) => h("tr", {}, h("td", { textContent: dayLabel(d.date) }), ...cols.map((c) => h("td", { className: "num", textContent: d[c.key] === 0 ? "" : d[c.key].toLocaleString("en") })), h("td", { className: "num", textContent: String(d.devices) })))),
       );
-      workBox.replaceChildren(h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Day by day" }), copyWork), h("p", { className: "note", textContent: worklogLine(work, localDay(new Date())) }), ...(work.length === 0 ? [] : [h("div", { className: "pg-rows" }, t)]));
+      // What the work left would take at this pace, once the totals are in too.
+      const forecast = data === null ? [] : paceLines(pace(work, data, localDay(new Date())));
+      workBox.replaceChildren(
+        h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Day by day" }), copyWork),
+        h("p", { className: "note", textContent: worklogLine(work, localDay(new Date())) }),
+        ...(forecast.length === 0 ? [] : [h("div", { className: "ag-summary pg-pace", title: "Working days are days with hand work: segmenting, transcribing, translating, glossing, lexicon or notes. Imports and machine suggestions do not count." }, ...forecast.map((line) => h("p", { textContent: line })))]),
+        ...(work.length === 0 ? [] : [h("div", { className: "pg-rows" }, t)]),
+      );
     };
 
     async function load() {
@@ -467,6 +475,8 @@ export const progressPanel: PanelDef = {
         const r = await projectProgress();
         if (mine !== seq) return;
         data = r;
+        // The forecast under Day by day needs the totals: draw it again if the log came first.
+        if (work.length > 0) drawWork();
       } catch (e) {
         if (mine !== seq) return;
         data = null;
