@@ -671,6 +671,7 @@ export const metadataValues = () => invoke<import("./metadata/logic").MetaValues
 export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
 /** Segments that overlap, or are very short or long (src-tauri/src/timing.rs). */
 export const segmentTiming = () => invoke<import("./checks/logic").Timing>("segment_timing");
+export const duplicateSentences = () => invoke<import("./checks/logic").Duplicates>("duplicate_sentences");
 /** Prompt lists for sentence elicitation (src-tauri/src/sentences.rs). */
 export const sentenceLists = () => invoke<import("./sentences/logic").PromptList[]>("sentence_lists");
 export const sentenceListImport = (args: { path: string }) => invoke<import("./sentences/logic").PromptList>("sentence_list_import", args);

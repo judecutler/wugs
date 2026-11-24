@@ -102,3 +102,13 @@ test("archive readiness in words", async () => {
   assert.match(readinessLine({ total: 3, ready: 1, texts: [t], language: ["glottocode", "iso639_3"] }), /^1 of 3 texts have what .* no Glottocode or ISO 639-3 code yet/u);
   assert.match(readinessLine({ total: 2, ready: 2, texts: [], language: [] }), /^Every text has/u);
 });
+
+test("sentences written twice are counted in words", async () => {
+  const { twiceLine, twiceNote } = await import("./logic.ts");
+  const copy = (textId: string, textTitle: string) => ({ textId, textTitle, tierId: "u", segmentId: `${textId}-1` });
+  const t = { sentence: "kuri mopa tela senu", copies: [copy("a", "Fish"), copy("a", "Fish"), copy("b", "Fish again")] };
+  assert.equal(twiceNote(t), "3 times in 2 texts");
+  assert.equal(twiceNote({ ...t, copies: t.copies.slice(0, 2) }), "2 times in «Fish»");
+  assert.match(twiceLine({ listed: [t], groups: 1, extra: 2, read: 40 }), /^1 sentence is written more than once .*2 copies beyond the first/);
+  assert.equal(twiceLine({ listed: [], groups: 0, extra: 0, read: 40 }), "None of the 40 sentences of four words or more is written twice.");
+});

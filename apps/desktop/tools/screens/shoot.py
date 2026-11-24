@@ -691,6 +691,11 @@ def main():
             run.shot("state-checks-timing", run.page.locator(".panel-checks"))
             if "1 overlaps the one before it" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not list segment timing")
+            twice = run.page.locator(".panel-checks .ck-title", has_text="Sentences written twice")
+            twice.scroll_into_view_if_needed()
+            run.shot("state-checks-twice", run.page.locator(".panel-checks"))
+            if "1 sentence is written more than once" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not list the sentence written twice")
             doubles = run.page.locator(".panel-checks .ck-title", has_text="Entries that may be one word")
             doubles.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
             run.shot("state-checks-doubles", run.page.locator(".panel-checks"))

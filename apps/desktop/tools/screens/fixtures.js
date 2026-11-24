@@ -1175,6 +1175,12 @@ const LEXICON = [
       { source: "Tadmor-2009-100", name: "Leipzig-Jakarta (100)", citation: "Tadmor 2009, via Concepticon", count: 100, listId: null },
     ],
     concept_lists: () => [listSummary],
+    duplicate_sentences: () => ({
+      listed: [{ sentence: "wuno tekal nikani ra", copies: [{ textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03" }, { textId: "t-market", textTitle: "Greetings at the market", tierId: "tier-utt", segmentId: "g02" }] }],
+      groups: 1,
+      extra: 1,
+      read: 31,
+    }),
     segment_timing: () => ({
       timed: 42,
       overlaps: 1,

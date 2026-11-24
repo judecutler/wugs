@@ -208,3 +208,20 @@ export function readinessNote(t: TextReadiness): string {
   const out = parts.join("; ");
   return out === "" ? "" : `${out.charAt(0).toUpperCase()}${out.slice(1)}.`;
 }
+
+export type SentenceCopy = { textId: string; textTitle: string; tierId: string; segmentId: string };
+export type Twice = { sentence: string; copies: SentenceCopy[] };
+export type Duplicates = { listed: Twice[]; groups: number; extra: number; read: number };
+
+/** The line over the sentences written twice. */
+export function twiceLine(d: Duplicates): string {
+  if (d.read === 0) return "No sentences of four words or more to compare yet.";
+  if (d.groups === 0) return `None of the ${d.read} sentences of four words or more is written twice.`;
+  return `${d.groups} ${d.groups === 1 ? "sentence is" : "sentences are"} written more than once (the same words in the same order), ${d.extra} ${d.extra === 1 ? "copy" : "copies"} beyond the first, which word counts take as uses of their own: a text imported twice, or a sentence pasted again. Sentences under four words are left out, since short replies repeat.`;
+}
+
+/** Where one sentence's copies are, in words. */
+export function twiceNote(t: Twice): string {
+  const texts = new Set(t.copies.map((c) => c.textId)).size;
+  return texts === 1 ? `${t.copies.length} times in «${t.copies[0]!.textTitle}»` : `${t.copies.length} times in ${texts} texts`;
+}
