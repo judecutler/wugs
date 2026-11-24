@@ -2,7 +2,7 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
+import { deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
 import { categoriesLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
@@ -11,7 +11,7 @@ import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { byDetail, byPeriod, detailTsv, marks, NOT_GIVEN, per1000, periodTsv, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, timeKeys, type Dispersion, type PlotSort } from "../concordance/plot";
 import { nearHits, nearLine, NEAR_SIDES, NEAR_WINDOWS, type NearSide } from "../concordance/near";
-import { asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
+import { savedLine, type SavedSearch, asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { linesUnder } from "../concordance/under";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
@@ -145,6 +145,81 @@ export const concordancePanel: PanelDef = {
     const topicCancel = h("button", { type: "button", textContent: "Cancel" });
     const topicBar = h("div", { className: "cc-bar cc-topic-bar" }, topicName, topicNames, topicGo, topicCancel);
     topicBar.hidden = true;
+    // Searches kept with the project under a name (CQPweb's saved queries).
+    let saved: SavedSearch[] = [];
+    const savedPick = h("select", { className: "cc-saved", title: "Searches kept with this project: pick one to run it again" });
+    savedPick.setAttribute("aria-label", "Saved searches");
+    const keepSearch = h("button", { type: "button", textContent: "Keep search…", title: "Keep this search with the project under a name, to run it again later or on another device" });
+    const keepName = h("input", { className: "cc-keep-name", placeholder: "Name, such as negated verbs", spellcheck: false });
+    keepName.setAttribute("aria-label", "The search's name");
+    const keepGo = h("button", { type: "button", className: "primary", textContent: "Keep it" });
+    const keepCancel = h("button", { type: "button", textContent: "Cancel" });
+    const keepBar = h("div", { className: "cc-bar cc-keep-bar" }, keepName, keepGo, keepCancel);
+    keepBar.hidden = true;
+    const drawSaved = () => {
+      savedPick.hidden = saved.length === 0;
+      savedPick.replaceChildren(
+        h("option", { value: "", textContent: `Saved searches (${saved.length})` }),
+        h("optgroup", { label: "Run" }, ...saved.map((x) => h("option", { value: `r:${x.name}`, textContent: x.name, title: savedLine(x) }))),
+        h("optgroup", { label: "Forget" }, ...saved.map((x) => h("option", { value: `x:${x.name}`, textContent: `Forget «${x.name}»` }))),
+      );
+      savedPick.value = "";
+    };
+    const loadSaved = () =>
+      void savedSearches().then(
+        (r) => {
+          saved = r;
+          drawSaved();
+        },
+        () => undefined,
+      );
+    savedPick.onchange = () => {
+      const v = savedPick.value;
+      savedPick.value = "";
+      const x = saved.find((s) => s.name === v.slice(2));
+      if (x === undefined) return;
+      if (v.startsWith("r:")) {
+        askConcordance(x.query, x.kind as PanelKind, x.textId ? { id: x.textId, title: x.textTitle ?? "" } : null, x.exact, x.within);
+        return;
+      }
+      void deleteSavedSearch(x.name).then(
+        (r) => {
+          saved = r;
+          drawSaved();
+          showToast({ tone: "info", lines: [`Forgot the search «${x.name}».`] });
+        },
+        (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+      );
+    };
+    keepSearch.onclick = () => {
+      keepBar.hidden = !keepBar.hidden;
+      if (keepBar.hidden) return;
+      keepName.value = keepName.value || input.value.trim().slice(0, 80);
+      keepName.focus();
+      keepName.select();
+    };
+    keepCancel.onclick = () => {
+      keepBar.hidden = true;
+    };
+    const keepIt = async () => {
+      const query = input.value.trim();
+      if (query === "" || keepName.value.trim() === "") return;
+      const scoped = exactFor !== null && exactFor.query === query && exactFor.kind === kind ? exactFor : null;
+      try {
+        saved = await saveSearch({ name: keepName.value, kind, query, textId: scoped?.text?.id ?? null, textTitle: scoped?.text?.title ?? null, exact: scoped?.exact ?? false, within: scoped?.within ?? null });
+        drawSaved();
+        keepBar.hidden = true;
+        showToast({ tone: "info", lines: [`Kept the search as «${keepName.value.trim()}». Pick it under Saved searches to run it again.`] });
+        keepName.value = "";
+      } catch (e) {
+        showToast({ tone: "error", lines: [`Could not keep it: ${errorText(e)}`] });
+      }
+    };
+    keepGo.onclick = () => void keepIt();
+    keepName.onkeydown = (e) => {
+      if (e.key === "Enter") void keepIt();
+      else if (e.key === "Escape") keepBar.hidden = true;
+    };
     const saveClipsButton = h("button", { type: "button", textContent: "Save clips…", title: "Save the sentences these lines come from as sound files, each cut from its text's recording, with a clips.csv index naming the text and what was searched for: every token of a word, ready for Praat" });
     const plotToggle = h("button", { type: "button", textContent: "Plot", title: "Show where in each text it occurs, and how evenly it is spread (AntConc's Plot)" });
     plotToggle.setAttribute("aria-pressed", "false");
@@ -869,6 +944,9 @@ export const concordancePanel: PanelDef = {
       underEpoch += 1;
       underGeneration = -1;
       input.value = "";
+      saved = [];
+      keepBar.hidden = true;
+      if (now !== "closed") loadSaved();
       if (now === "closed") {
         el.replaceChildren(emptyState("Concordance", "Open a project to see every place a word, morph or gloss is used.", "The wug is counting words."));
         return;
@@ -877,7 +955,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, fileTopic, saveClipsButton), topicBar, nearBar, catBar, catNote, chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, savedPick, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, fileTopic, keepSearch, saveClipsButton), topicBar, keepBar, nearBar, catBar, catNote, chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */
