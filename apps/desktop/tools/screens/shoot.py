@@ -344,6 +344,18 @@ def main():
             )
             run.shot("state-toast")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            # The Timeline as a picture for a paper.
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/figures'")
+            run.page.locator(".panel-timeline .tl-toolbar button", has_text="Save picture").click()
+            run.page.wait_for_timeout(500)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            saved = run.page.evaluate("window.__WUGS_SAVED__") or {}
+            if saved.get("extension") != "png" or not saved.get("contents", "").startswith("data:image/png;base64,") or len(saved.get("contents", "")) < 5000:
+                failures.append(f"Save picture did not save the Timeline as a PNG: {str(saved)[:120]}")
+            else:
+                import base64 as _b64
+                (run.out / "state-timeline-picture.png").write_bytes(_b64.b64decode(saved["contents"].split(",", 1)[1]))
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
 
             # Reach for the Timeline group's tabs: they rise and push its content down.
             box = run.page.locator(".panel-timeline").bounding_box()

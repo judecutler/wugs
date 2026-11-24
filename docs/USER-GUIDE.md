@@ -692,6 +692,10 @@ Click **Save clips…** in the Timeline toolbar to save every timed segment of a
 
 Use the clips in a Praat script that runs over a folder, as stimuli for a listening task, in flash cards, or to send a speaker the words to check. Saving again makes a second folder beside the first.
 
+### Save the Timeline as a picture
+
+For a figure in a paper or a slide, zoom the Timeline to the stretch you want, turn on the spectrogram or the pitch, intensity and formant curves if you want them, and click **Save picture…** in the toolbar. wugs saves what the Timeline shows as a PNG on white, at three times the screen's size so it prints sharp: the time ruler, the waveform, what is turned on over it, and every track with its segments. The playhead, the selection and the machine tints are left out. Track names are not drawn, so label the tracks in your figure's caption. The palette finds it too ("figure", "picture").
+
 ### Plot the vowel space
 
 The **Vowel space** panel puts every timed segment of a track at its F1 and F2, the chart phoneticians draw for a vowel system: F2 runs from right to left and F1 from top to bottom, so front vowels sit on the left and high vowels at the top. Open it from Settings (Closed panels) or with **Find an action**.

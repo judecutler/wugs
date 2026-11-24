@@ -4,7 +4,7 @@
 // tier gutter, the editing buttons (Auto-segment, Split, Merge, Undo, Redo)
 // and the perf toggle.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { addTier, importMedia, linkRecording, listSources, measureTrack, peaksInfo, saveClips, type SourceRow, type TierTemplate } from "../api";
+import { addTier, errorText, importMedia, linkRecording, listSources, measureTrack, peaksInfo, saveClips, saveDocument, type SourceRow, type TierTemplate } from "../api";
 import { clipsLines, measuredLines, trackToMeasure } from "../measure/logic";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
@@ -93,7 +93,8 @@ export const timelinePanel: PanelDef = {
     const measureButton = h("button", { textContent: "Measure…", title: MEASURE_TITLE });
     const CLIPS_TITLE = "Save every timed segment of that track as its own sound file, named after its transcription, with a clips.csv list of them (for Praat scripts, stimulus lists, flash cards or sharing)";
     const clipsButton = h("button", { textContent: "Save clips…", title: CLIPS_TITLE });
-    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, measureButton, clipsButton, perfButton, praat.element);
+    const pictureButton = h("button", { textContent: "Save picture…", title: "Save what the Timeline shows (waveform, spectrogram and curves that are on, and the tracks) as a PNG picture for a paper or a handout" });
+    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, measureButton, clipsButton, pictureButton, perfButton, praat.element);
 
     const updateEditButtons = () => {
       const stack = view?.history() ?? null;
@@ -159,6 +160,23 @@ export const timelinePanel: PanelDef = {
           updateEditButtons();
         }
       });
+    };
+    pictureButton.onclick = () => {
+      const s = getState();
+      if (s.kind !== "open" || s.text === null || view === null) return;
+      const png = view.picture();
+      if (png === null) return;
+      const title = `${s.text.title} at ${clock(playback.currentMs()).replace(/:/gu, ".")}`;
+      void (async () => {
+        const folder = await pickFile({ directory: true, title: "Where should the picture go?" });
+        if (typeof folder !== "string") return;
+        try {
+          const r = await saveDocument({ folder, title, extension: "png", contents: png });
+          showToast({ tone: "info", lines: [`Saved the picture as ${r.path}.`] });
+        } catch (e) {
+          showToast({ tone: "error", lines: [errorText(e)] });
+        }
+      })();
     };
     clipsButton.onclick = () => {
       const s = getState();
@@ -256,6 +274,7 @@ export const timelinePanel: PanelDef = {
       { id: "timeline:undo", title: "Undo a timeline edit", group: "Timeline", keys: "Ctrl+Z", disabled: () => needsView() ?? (undoButton.disabled ? "Nothing to undo" : null), run: () => void view?.undo() },
       { id: "timeline:redo", title: "Redo a timeline edit", group: "Timeline", keys: "Ctrl+Shift+Z", disabled: () => needsView() ?? (redoButton.disabled ? "Nothing to redo" : null), run: () => void view?.redo() },
       { id: "timeline:measure", title: "Measure a track: pitch, intensity, formants…", group: "Timeline", words: ["phonetics", "vowel", "formant", "pitch", "f0", "csv", "duration", "acoustic"], disabled: () => needsRecording() ?? asButton(measureButton)(), run: () => measureButton.click() },
+      { id: "timeline:picture", title: "Save the Timeline as a picture…", group: "Timeline", words: ["figure", "png", "image", "waveform", "spectrogram", "paper", "screenshot", "praat picture"], disabled: () => needsView(), run: () => pictureButton.click() },
       { id: "timeline:clips", title: "Save a track's segments as sound files…", group: "Timeline", words: ["clips", "wav", "extract", "intervals", "stimuli", "audio", "export", "cut"], disabled: () => needsRecording() ?? asButton(clipsButton)(), run: () => clipsButton.click() },
       { id: "timeline:import", title: "Import audio…", group: "Timeline", words: ["recording", "wav", "mp3", "m4a"], disabled: () => needsView() ?? (importButton.disabled ? "An import is running" : null), run: () => importButton.click() },
     ];
