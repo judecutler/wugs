@@ -79,3 +79,13 @@ export function citation(title: string, details: ReadonlyMap<string, string>, la
   const bibtex = `@misc{${key || "text"},\n${body}\n}\n`;
   return { text, bibtex };
 }
+
+/** A short source for an example: `Heole 2010: 12` when the text names its
+ * author or speakers and a year, else `<title>: 12`. */
+export function sourceTag(title: string, details: ReadonlyMap<string, string>, number: number): string {
+  const who = people(pick(details, ["author", "authors", "speakers", "speaker"]));
+  const year = yearOf(pick(details, ["date", "year", "recorded", "created"]));
+  const surname = (name: string) => (name.includes(",") ? name.split(",")[0]!.trim() : name.split(" ").slice(-1)[0] ?? name);
+  const names = who.length === 0 ? "" : who.length === 1 ? surname(who[0]!) : who.length === 2 ? `${surname(who[0]!)} & ${surname(who[1]!)}` : `${surname(who[0]!)} et al.`;
+  return names !== "" && year !== "" ? `${names} ${year}: ${number}` : `${title.trim() || "Untitled"}: ${number}`;
+}

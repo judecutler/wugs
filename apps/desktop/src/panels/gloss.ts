@@ -5,6 +5,7 @@
 import {
   abbreviationMeanings, addSegment, glossAddTopic, glossRemoveTopic, topicsOverview, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize, likelyMeanings, likeSentences,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
+  textMetadata,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
 import { alternativeNote, hiddenNote } from "../gloss/hidden";
@@ -18,7 +19,8 @@ import { tokenState } from "../gloss/state";
 import { applyNeedsConfirm, applyOthersLabel, describe, matchCase } from "../gloss/suggest";
 import { forms } from "../gloss/tokenizer";
 import { isPaired, NEW_TRACK, translationLines } from "../gloss/translation";
-import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
+import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, SOURCE_KEY, type Example } from "../gloss/example";
+import { sourceTag } from "../metadata/cite";
 import { provide } from "../palette/registry";
 import { LIKE_KEY, likeNote, likeTitle, type Like } from "../gloss/like";
 import { meaningTitle, type Meaning } from "../wordtypes/logic";
@@ -868,8 +870,11 @@ export const glossPanel: PanelDef = {
         format = parseFormat(picker.value);
         writeStored(FORMAT_KEY, format);
       };
+      const sourceBox = h("input", { type: "checkbox", checked: readStored(SOURCE_KEY) === "on" });
+      sourceBox.onchange = () => writeStored(SOURCE_KEY, sourceBox.checked ? "on" : "off");
+      const sourceLabel = h("label", { className: "gl-copy-source", title: "Write where the example comes from after its translation: the speakers and year from the text's details (Heole 2010: 12), else the text's title and the sentence's number" }, sourceBox, " with source");
       const button = h("button", { type: "button", className: "gl-copy", textContent: "Copy example", title: "Copy this segment as a numbered, glossed example for a paper" });
-      button.onclick = () => {
+      button.onclick = async () => {
         const segs = sel.text.segments
           .filter((x) => x.tier === sel.segment.tier)
           .slice()
@@ -878,6 +883,10 @@ export const glossPanel: PanelDef = {
         const number = Math.max(1, segs.findIndex((x) => x.id === sel.segment.id) + 1);
         const translation = translationLines(sel.segment, sel.text.segments, sel.text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
         const ex: Example = { number, translation, words: v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) })) };
+        if (sourceBox.checked) {
+          const details = await textMetadata({ textId: sel.text.id }).catch(() => ({ fields: [] as { key: string; value: string }[] }));
+          ex.source = sourceTag(sel.text.title, new Map(details.fields.map((f) => [f.key, f.value])), number);
+        }
         const out = clipboardFor(ex, format);
         const label = EXAMPLE_FORMATS.find((f) => f.id === format)?.label ?? "";
         void copyToClipboard(out.text, out.html).then(
@@ -886,7 +895,7 @@ export const glossPanel: PanelDef = {
           (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
         );
       };
-      return h("span", { className: "gl-copy-group" }, button, picker);
+      return h("span", { className: "gl-copy-group" }, button, picker, sourceLabel);
     }
 
     // ---------------------------------------------------------------- draw

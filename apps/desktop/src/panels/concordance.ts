@@ -6,7 +6,8 @@ import { deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOve
 import { categoriesLine, crossTab, crossTabTsv, independence, independenceLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
-import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
+import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, SOURCE_KEY, type Example } from "../gloss/example";
+import { sourceTag } from "../metadata/cite";
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { byDetail, byPeriod, detailTsv, marks, NOT_GIVEN, per1000, periodTsv, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, timeKeys, type Dispersion, type PlotSort } from "../concordance/plot";
@@ -55,6 +56,13 @@ export async function copyAsExamples(lines: readonly Pick<Hit, "textId" | "segme
   const texts = new Map<string, TextDetail>();
   const examples: Example[] = [];
   let unglossed = 0;
+  let withSource = false;
+  try {
+    withSource = localStorage.getItem(SOURCE_KEY) === "on";
+  } catch {
+    withSource = false;
+  }
+  const details = new Map<string, Map<string, string>>();
   for (const hit of lines) {
     let t = texts.get(hit.textId);
     if (t === undefined) {
@@ -74,7 +82,18 @@ export async function copyAsExamples(lines: readonly Pick<Hit, "textId" | "segme
     const translation = translationLines(sentence, t.segments, t.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
     const words = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
     if (!words.some((w) => w.morphs.length > 0)) unglossed += 1;
-    examples.push({ number: examples.length + 1, translation, words: words.length > 0 ? words : [{ form: sentence.content, morphs: [] }] });
+    const ex: Example = { number: examples.length + 1, translation, words: words.length > 0 ? words : [{ form: sentence.content, morphs: [] }] };
+    if (withSource) {
+      let d = details.get(hit.textId);
+      if (d === undefined) {
+        d = new Map((await textMetadata({ textId: hit.textId }).catch(() => ({ fields: [] as { key: string; value: string }[] }))).fields.map((f) => [f.key, f.value]));
+        details.set(hit.textId, d);
+      }
+      // The sentence's place on its own track, as Copy example numbers it.
+      const track = t.segments.filter((x) => x.tier === sentence.tier).sort((a, b) => (a.startMs ?? Number.MAX_SAFE_INTEGER) - (b.startMs ?? Number.MAX_SAFE_INTEGER));
+      ex.source = sourceTag(t.title, d, Math.max(1, track.findIndex((x) => x.id === sentence.id) + 1));
+    }
+    examples.push(ex);
   }
   if (examples.length === 0) return;
   let stored: string | null = null;

@@ -485,6 +485,8 @@ Choose where it will go in the list beside the button:
 
 wugs remembers the choice on this computer. The number is the segment's place in its text. A morph with no gloss yet shows **?**, so you can see the gap before you send the paper. Grammatical glosses paste as slightly smaller capitals, which read as small capitals in every word processor.
 
+Tick **with source** to write where the example comes from after its translation, as papers cite examples: the speakers' surnames and the year from the text's details (`(Heole 2010: 12)`), or the text's title and the sentence's number when those are missing. The Concordance's and the Topics panel's **Copy as examples** follow the same choice. **Copy citation** under the text's details gives the full reference for the paper's list of sources.
+
 ### Read a whole text glossed
 
 The **Interlinear** tab, beside Gloss, shows the selected text the way you would print it: each sentence with its number, its words, the morph breakdown, the glosses with grammatical glosses in small capitals, and the free translation in quotes. Sentences not glossed yet show their transcription in grey. A transcript with a track per speaker, such as a CHAT file, is read as a conversation: every speaker's utterances in time order, numbered together, each with the speaker's code beside it.
