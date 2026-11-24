@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { asTsv, keywordQuery, keywordRows, significant, summary, type KeywordRow } from "./logic.ts";
+import { asTsv, keywordQuery, keywordRows, significant, summary, type KeywordRow, lockNote } from "./logic.ts";
 
 const row = (item: string, ll: number, lr: number): KeywordRow => ({ item, focus: 3, reference: 1, logLikelihood: ll, logRatio: lr, percentDiff: 50, simpleMaths: 2 ** lr });
 const rows = [row("fox", 12, 4), row("the", 2, 0.5), row("kesi", -9, -3), row("ŋai", -1, -5)];
@@ -46,4 +46,14 @@ test("morph and gloss keywords count morphs and glosses", async () => {
   assert.equal(unitOf("morph"), "morphs");
   assert.equal(unitOf("gloss"), "glosses");
   assert.equal(unitOf("tag"), "tagged words");
+});
+
+test("lockwords: the common ground, in the backend's order or by alphabet", () => {
+  const r = (item: string, focus: number, reference: number) => ({ item, focus, reference, logLikelihood: 0.1, logRatio: 0.1, percentDiff: 7, simpleMaths: 1 });
+  const lock = [r("the", 40, 400), r("and", 30, 290)];
+  assert.deepEqual(keywordRows(lock, "alike", "ll").map((x) => x.item), ["the", "and"]);
+  assert.deepEqual(keywordRows(lock, "alike", "alpha").map((x) => x.item), ["and", "the"]);
+  const k = { rows: [], focusTokens: 1000, referenceTokens: 10000, types: 50, omitted: 0, critical: 10, lockwords: lock };
+  assert.match(lockNote(k), /^ 2 words are used about as often on both sides .*lockwords \(Baker 2011\)/u);
+  assert.match(lockNote({ ...k, lockwords: [] }), /^ No word is used about as often/u);
 });

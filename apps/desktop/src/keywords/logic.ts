@@ -2,7 +2,7 @@
 import { cqpLiteral } from "../frequencies/logic.ts";
 
 export type KeywordRow = { item: string; focus: number; reference: number; logLikelihood: number; logRatio: number; percentDiff: number; simpleMaths: number };
-export type Keywords = { rows: KeywordRow[]; focusTokens: number; referenceTokens: number; types: number; omitted: number; critical: number };
+export type Keywords = { rows: KeywordRow[]; focusTokens: number; referenceTokens: number; types: number; omitted: number; critical: number; lockwords?: KeywordRow[] };
 
 export type KeywordSort = "ll" | "ratio" | "sm" | "alpha";
 export const KEYWORD_SORTS: { id: KeywordSort; label: string }[] = [
@@ -12,13 +12,14 @@ export const KEYWORD_SORTS: { id: KeywordSort; label: string }[] = [
   { id: "alpha", label: "Alphabetical" },
 ];
 
-/** Which rows to show: words the text uses more, less, or both. */
-export type KeywordSide = "more" | "less";
+/** Which rows to show: words the text uses more, less, or about as often as the other side (lockwords). */
+export type KeywordSide = "more" | "less" | "alike";
 
 const collator = new Intl.Collator(undefined, { sensitivity: "accent", numeric: true });
 
 /** The rows on one side, sorted; "less" puts the most negative first. */
 export function keywordRows(rows: readonly KeywordRow[], side: KeywordSide, by: KeywordSort): KeywordRow[] {
+  if (side === "alike") return by === "alpha" ? [...rows].sort((a, b) => collator.compare(a.item, b.item)) : [...rows];
   const sign = side === "more" ? 1 : -1;
   const out = rows.filter((r) => sign * r.logLikelihood > 0);
   if (by === "alpha") return out.sort((a, b) => collator.compare(a.item, b.item));
@@ -73,4 +74,11 @@ export function keywordQuery(kind: "lemma" | "tag", item: string, size: number, 
   const parts = size > 1 ? item.split(" ") : [item];
   const q = parts.map((v) => `[${attr}="${cqpLiteral(v)}"]`).join(" ");
   return within === null || within.key === "" ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
+}
+
+/** The line for lockwords: words both sides use about as often. */
+export function lockNote(k: Keywords): string {
+  const n = (k.lockwords ?? []).length;
+  if (n === 0) return " No word is used about as often on both sides (within 1.4 times, and met on both).";
+  return ` ${n === 1 ? "One word is" : `${n.toLocaleString("en")} words are`} used about as often on both sides (within 1.4 times, the difference not significant): lockwords (Baker 2011), the common ground of the two, most used first.`;
 }
