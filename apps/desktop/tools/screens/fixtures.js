@@ -796,7 +796,9 @@ const LEXICON = [
       ],
       words: (tierId === "tier-utt" ? ["kesi mopa", "tela senu"] : ["tʰaka", "ŋaːla", "t͡ʃimbo", "ᵐbeli", "kʼosu", "ɓaɾu", "ǃxoa", "ɛʔɛ", "jɔɣu", "Wiri", "łuwe", "ɲĩda", "fɪsu", "pata", "bata", "tata", "kata", "pati", "bati", "suka", "ʃuka", "smaka", "kunta", "palks", "spina"]).flatMap((w, i) => w.split(" ").map((word) => ({ word, count: (9 - (i % 7)) * (tierId === null ? 10 : 1) })))
         // Every track (the Checks panel): a slip and a variant beside common words.
-        .concat(tierId === null ? [{ word: "tʰakka", count: 1 }, { word: "fisu", count: 1 }] : []),
+        .concat(tierId === null ? [{ word: "tʰakka", count: 1 }, { word: "fisu", count: 1 }] : [])
+        // Stems that share endings, for the Affixes panel's guesses.
+        .concat(tierId === null ? ["kanu", "kanula", "kanuli", "tepa", "tepala", "tepali", "siro", "sirola", "siroli", "moru", "morula", "moruli"].map((word) => ({ word, count: 5 })) : []),
       running: tierId === "tier-utt" ? 64 : 52,
       omitted: 0,
     }),

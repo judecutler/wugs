@@ -841,6 +841,12 @@ def main():
             run.shot("state-affixes-forms", run.page.locator(".panel-affixes"))
             if forms.count() != 1 or "vowel harmony" not in (forms.first.text_content() or ""):
                 failures.append("Affixes: -si and -su PL were not found conditioned by the stem's vowel")
+            guess = run.page.locator(".panel-affixes .af-guess")
+            guess.locator("tbody tr").first.wait_for()
+            guess.scroll_into_view_if_needed()
+            run.shot("state-affixes-guessed", run.page.locator(".panel-affixes"))
+            if not (guess.locator("tbody th").first.text_content() or "").startswith("∅ -la -li"):
+                failures.append("Affixes: the endings ∅ -la -li were not guessed from the words")
             run.front("wordorder", "Word order")
             run.page.locator(".panel-wordorder .wo-card").first.wait_for()
             run.shot("state-wordorder", run.page.locator(".panel-wordorder"))
