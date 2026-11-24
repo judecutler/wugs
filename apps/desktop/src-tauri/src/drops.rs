@@ -34,6 +34,11 @@ pub const MAX_BYTES: u64 = 8 << 30;
 /// whose first bytes say RIFF/WAVE is a recording whatever its name.
 const RECORDING_EXTENSIONS: &[&str] = &["wav", "wave", "m4a", "mp4", "aac", "mp3", "flac", "ogg", "oga", "aif", "aiff", "aifc"];
 
+/// Whether a file with this extension is a recording wugs imports.
+pub(crate) fn is_recording_extension(ext: &str) -> bool {
+    RECORDING_EXTENSIONS.contains(&ext.to_ascii_lowercase().as_str())
+}
+
 struct Staging {
     file: File,
     root: PathBuf,

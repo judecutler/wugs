@@ -297,6 +297,10 @@ pub struct Imported {
     pub lexicon: bool,
     /// What happened, one sentence each.
     pub lines: Vec<String>,
+    /// A recording the file names that is on this computer, for a text that
+    /// has none linked yet: the caller imports it and links the text.
+    #[serde(skip)]
+    pub recording: Option<PathBuf>,
 }
 
 pub(crate) fn plural(n: usize, one: &str, many: &str) -> String {
@@ -830,7 +834,12 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     };
     // A Toolbox file holding texts reads as one, whatever its extension said.
     let format = if format == Format::Toolbox && !lexicon { Format::ToolboxText } else { format };
-    Ok(Imported { format: format.name().into(), text, lexicon, lines })
+    // An ELAN file names its recording; when it is here and the text has none yet, the caller takes it.
+    let recording = match (format, &text) {
+        (Format::Elan, Some(t)) if p.text_recording(t)?.is_none() => elan_media(Path::new(path), input),
+        _ => None,
+    };
+    Ok(Imported { format: format.name().into(), text, lexicon, lines, recording })
 }
 
 #[derive(Serialize, Debug)]
@@ -932,6 +941,68 @@ pub(crate) fn file_url(path: &Path) -> String {
         }
     }
     out
+}
+
+/// The first audio file an ELAN file's `MEDIA_DESCRIPTOR`s name that is on
+/// this computer: at its `MEDIA_URL`, at its `RELATIVE_MEDIA_URL` from the
+/// file's folder, or by its name beside the file (ELAN's own fallbacks).
+pub(crate) fn elan_media(eaf: &Path, input: &str) -> Option<PathBuf> {
+    let root = wugs_xml::parse(input).ok()?;
+    let header = root.children.iter().find(|c| c.name == "HEADER")?;
+    let dir = eaf.parent().unwrap_or(Path::new("."));
+    for m in header.children.iter().filter(|c| c.name == "MEDIA_DESCRIPTOR") {
+        let attr = |k: &str| m.attrs.iter().find(|(n, _)| n == k).map(|(_, v)| v.as_str());
+        let url = attr("MEDIA_URL").unwrap_or_default();
+        let is_audio = |p: &Path| p.extension().and_then(|x| x.to_str()).is_some_and(|x| crate::drops::is_recording_extension(x));
+        let mut tries: Vec<PathBuf> = Vec::new();
+        if let Some(p) = url_path(url) {
+            tries.push(p);
+        }
+        if let Some(rel) = attr("RELATIVE_MEDIA_URL").and_then(|r| percent_decode(r.trim_start_matches("file:"))) {
+            let rel = rel.trim_start_matches("./").to_string();
+            if !rel.starts_with('/') && !rel.split(['/', '\\']).any(|part| part == "..") {
+                tries.push(dir.join(rel));
+            }
+        }
+        if let Some(name) = url.rsplit(['/', '\\']).next().and_then(percent_decode).filter(|n| !n.is_empty() && n != "." && n != "..") {
+            tries.push(dir.join(name));
+        }
+        if let Some(found) = tries.into_iter().find(|p| p.is_file() && is_audio(p)) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// `%XX` escapes decoded, or None when they do not make UTF-8.
+fn percent_decode(s: &str) -> Option<String> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' && i + 2 < b.len() {
+            let hex = std::str::from_utf8(&b[i + 1..i + 3]).ok()?;
+            out.push(u8::from_str_radix(hex, 16).ok()?);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
+/// A `file:` URL's path on this computer (`file:///C:/x` as `C:/x` on Windows).
+fn url_path(url: &str) -> Option<PathBuf> {
+    let rest = url.strip_prefix("file://")?;
+    let rest = rest.strip_prefix("localhost").unwrap_or(rest);
+    let decoded = percent_decode(rest)?;
+    let bytes = decoded.as_bytes();
+    // `/C:/…`: a Windows drive.
+    if bytes.len() > 3 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() && bytes[2] == b':' {
+        return Some(PathBuf::from(&decoded[1..]));
+    }
+    Some(PathBuf::from(decoded))
 }
 
 /// Exports and seals go outside the project folder: inside it, `cache/` is
@@ -1443,6 +1514,47 @@ mod tests {
     fn file_urls_are_escaped_as_elan_writes_them() {
         assert_eq!(file_url(Path::new("/home/ana/My Texts/kanu ŋ.wav")), "file:///home/ana/My%20Texts/kanu%20%C5%8B.wav");
         assert_eq!(file_url(Path::new("C:\\Users\\ana\\a.wav")), "file:///C:/Users/ana/a.wav");
+    }
+
+    #[test]
+    fn an_elan_file_finds_its_recording_beside_it() {
+        let dir = std::env::temp_dir().join(format!("wugs-elan-find-{}", wugs_model::ulid()));
+        fs::create_dir_all(dir.join("audio")).unwrap();
+        fs::write(dir.join("audio").join("story one.wav"), b"RIFF").unwrap();
+        fs::write(dir.join("other.wav"), b"RIFF").unwrap();
+        let eaf = dir.join("story.eaf");
+        let doc = |media: &str| format!("<ANNOTATION_DOCUMENT><HEADER MEDIA_FILE=\"\" TIME_UNITS=\"milliseconds\">{media}</HEADER></ANNOTATION_DOCUMENT>");
+        // The absolute URL is from another computer; the relative one finds it.
+        let rel = doc(r#"<MEDIA_DESCRIPTOR MEDIA_URL="file:///C:/Users/x/story%20one.wav" MIME_TYPE="audio/x-wav" RELATIVE_MEDIA_URL="./audio/story%20one.wav"/>"#);
+        assert_eq!(elan_media(&eaf, &rel), Some(dir.join("audio").join("story one.wav")));
+        // Only the name matches, beside the file.
+        let named = doc(r#"<MEDIA_DESCRIPTOR MEDIA_URL="file:///gone/other.wav" MIME_TYPE="audio/x-wav"/>"#);
+        assert_eq!(elan_media(&eaf, &named), Some(dir.join("other.wav")));
+        // A video, a path out of the folder and no media at all find nothing.
+        assert_eq!(elan_media(&eaf, &doc(r#"<MEDIA_DESCRIPTOR MEDIA_URL="file:///gone/film.mpg" MIME_TYPE="video/mpeg"/>"#)), None);
+        assert_eq!(elan_media(&eaf, &doc(r#"<MEDIA_DESCRIPTOR MEDIA_URL="file:///gone/x.wav" RELATIVE_MEDIA_URL="../x.wav"/>"#)), None);
+        assert_eq!(elan_media(&eaf, &doc("")), None);
+        assert_eq!(url_path("file:///C:/a%20b/c.wav"), Some(PathBuf::from("C:/a b/c.wav")));
+        assert_eq!(url_path("file:///home/a/c.wav"), Some(PathBuf::from("/home/a/c.wav")));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn an_exported_elan_file_brings_its_recording_back() {
+        let dir = std::env::temp_dir().join(format!("wugs-elan-back-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let text = crate::session::list_texts(&mut s).unwrap()[0].id.clone();
+        let e = export_text(&mut s, &text, Format::Elan, &out).unwrap();
+        drop(s);
+        let mut s: Session = None;
+        crate::session::create_project(&mut s, dir.join("fresh").to_str().unwrap(), "prs_Ana").unwrap();
+        let r = import_file(&mut s, &e.path).unwrap();
+        assert_eq!(r.recording, Some(out.join("Counting to six (tutorial).wav")));
+        drop(s);
+        fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

@@ -953,7 +953,7 @@ wugs reads these formats:
 
 A message reports what wugs imported, and the new text is selected. The import report also counts anything the format holds that wugs does not keep. For FLEx, that includes notes, pronunciations, relations, and etymologies.
 
-An imported ELAN or Praat text is not linked to its recording. Import the audio with **Import audio…** on the Timeline and pick it there.
+An ELAN file names its recording. When that recording is on this computer (where the file says, or in the same folder as the `.eaf`, as ELAN itself looks), wugs imports it too and links it to the text, so the text opens with its sound; the message after the import says so. Otherwise, and for a Praat TextGrid, import the audio with **Import audio…** on the Timeline and pick it there.
 
 
 ### Glossing kept in ELAN tiers

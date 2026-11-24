@@ -431,7 +431,16 @@ fn create_text(s: State<SessionThread>, title: String) -> Result<String, String>
 /// Import an ELAN, FLEx, Praat or Toolbox file into the open project.
 #[tauri::command(async)]
 fn import_file(s: State<SessionThread>, path: String) -> Result<interchange::Imported, String> {
-    s.run(move |s| interchange::import_file(s, &path))
+    let mut r = s.run(move |s| interchange::import_file(s, &path))?;
+    // An ELAN file's own recording, found beside it: imported and linked, so the text opens with its sound.
+    if let (Some(text), Some(media)) = (r.text.clone(), r.recording.take()) {
+        let name = media.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        match import_recording(&s, &media, name.clone(), None).and_then(|row| s.run(move |s| session::link_recording(s, &text, Some(&row.id)))) {
+            Ok(()) => r.lines.push(format!("Its recording «{name}» was found beside it, imported and linked, so the text opens with its sound.")),
+            Err(e) => r.lines.push(format!("Its recording «{name}» was found but could not be imported: {e}")),
+        }
+    }
+    Ok(r)
 }
 
 /// Export one text (`elan`, `flextext`, `textgrid`) into `folder`.
