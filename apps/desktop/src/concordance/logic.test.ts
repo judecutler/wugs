@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { asTsv, clip, countLine, hasTags, isRtl, withTags, keyword, left, right, sortHits, type Hit } from "./logic.ts";
+import { asTsv, kwicHtml, clip, countLine, hasTags, isRtl, withTags, keyword, left, right, sortHits, type Hit } from "./logic.ts";
 
 const hit = (words: string[], at: number, title = "T"): Hit => ({ textId: title, textTitle: title, segmentId: words.join("_"), tierId: "u", startMs: 0, endMs: 1, words, at, breakdown: null, glosses: null });
 
@@ -122,4 +122,15 @@ test("lines copied as a KWIC table for a word processor", async () => {
   assert.match(html, /Fox &amp; well/u);
   const long = kwicHtml([hit([..."abcdefghijklmnopqrstuvwxyz".split("").map((c) => c.repeat(4)), "KEY"], 26)], 20);
   assert.match(long, />…/u, "the left context is clipped on its far side");
+});
+
+test("with translations shown, copied lines carry them", () => {
+  const one = hit(["kuri", "mopa"], 0, "Fish");
+  const under = (h: Hit) => (h === one ? "the dog sleeps" : null);
+  const tsv = asTsv([one], new Map(), under).split("\n");
+  assert.equal(tsv[0], "left\tkeyword\tright\ttext\tstart_s\tend_s\ttranslation");
+  assert.ok(tsv[1].endsWith("\tthe dog sleeps"));
+  assert.ok(!asTsv([one], new Map(), () => null).includes("translation"), "no column when none is shown");
+  assert.match(kwicHtml([one], 40, under), /<i>|font-style:italic[^>]*>‘the dog sleeps’/);
+  assert.doesNotMatch(kwicHtml([one]), /italic/);
 });

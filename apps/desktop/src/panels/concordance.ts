@@ -582,7 +582,11 @@ export const concordancePanel: PanelDef = {
       // whose details cannot be read just has none.
       const ids = [...new Set(lines.map((l) => l.textId))];
       void Promise.all(ids.map((id) => textMetadata({ textId: id }).then((m): [string, Map<string, string>] => [id, new Map(m.fields.map((f) => [f.key, f.value]))], (): [string, Map<string, string>] => [id, new Map()])))
-        .then((pairs) => writeHtml(kwicHtml(lines), asTsv(lines, new Map(pairs))))
+        .then((pairs) => {
+          // With translations on, each line's translation goes along as it shows.
+          const shown = underOn ? (h: Hit) => under.get(h.textId)?.get(h.segmentId) ?? null : undefined;
+          return writeHtml(kwicHtml(lines, 40, shown), asTsv(lines, new Map(pairs), shown));
+        })
         .then(
         () =>
           showToast({

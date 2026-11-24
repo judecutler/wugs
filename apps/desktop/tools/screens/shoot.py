@@ -550,6 +550,12 @@ def main():
             unders = run.page.locator(".panel-concordance .cc-under").all_inner_texts()
             if "I count: one, two, three." not in unders:
                 failures.append(f"Concordance did not show the translation under a line: {unders}")
+            run.page.locator(".panel-concordance button", has_text="Copy rows").click()
+            run.page.wait_for_timeout(300)
+            copied = run.page.evaluate("() => window.__WUGS_CLIPBOARD__") or {}
+            if "\ttranslation" not in (copied.get("text") or "") or "I count: one, two, three." not in (copied.get("html") or ""):
+                failures.append("Concordance: Copy rows did not carry the translations shown")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.locator(".panel-concordance .cc-under-toggle").click()
             # Sorted by the word before: that word is marked in each line.
             run.page.locator(".panel-concordance select.cc-sort").first.select_option("left")
