@@ -7,7 +7,8 @@ import { isGrammatical } from "./leipzig.ts";
 import { joinedBreakdown, type MorphType } from "./morphs.ts";
 
 export type ExampleWord = { form: string; morphs: { surface: string; type: string; gloss: string | null }[] };
-export type Example = { words: ExampleWord[]; translation: string | null; number: number };
+/** `source`: where the example comes from (`Heole 2010: 12`), written after the translation in parentheses. */
+export type Example = { words: ExampleWord[]; translation: string | null; number: number; source?: string };
 
 export type ExampleFormat = "word" | "gb4e" | "expex" | "text";
 
@@ -19,6 +20,8 @@ export const EXAMPLE_FORMATS: { id: ExampleFormat; label: string; note: string }
 ];
 
 export const FORMAT_KEY = "wugs.gloss.copyFormat";
+/** Whether copied examples name their source (localStorage, "on" or not). */
+export const SOURCE_KEY = "wugs.gloss.copySource";
 
 export function parseFormat(stored: string | null): ExampleFormat {
   return EXAMPLE_FORMATS.some((f) => f.id === stored) ? (stored as ExampleFormat) : "word";
@@ -73,6 +76,12 @@ function quoted(translation: string | null): string {
   return t === "" ? "" : `‘${t}’`;
 }
 
+/** The translation in quotes and the source after it: the example's last line. */
+function lastLine(ex: Example): string {
+  const src = (ex.source ?? "").trim();
+  return [quoted(ex.translation), src === "" ? "" : `(${src})`].filter((x) => x !== "").join(" ");
+}
+
 export function asText(ex: Example): string {
   const lines = ex.words.map(wordLines);
   const cols = lines.map((l) => Math.max(width(l.morphs), width(l.glosses)));
@@ -84,7 +93,7 @@ export function asText(ex: Example): string {
   const label = `(${ex.number})`;
   const indent = " ".repeat(label.length + 1);
   const out = [`${label} ${row((l) => l.morphs)}`, `${indent}${row((l) => l.glosses)}`];
-  const t = quoted(ex.translation);
+  const t = lastLine(ex);
   if (t !== "") out.push(`${indent}${t}`);
   return out.join("\n");
 }
@@ -125,6 +134,13 @@ function latexGloss(gloss: string, flavour: Flavour): string {
 
 const latexWord = (s: string, flavour: Flavour): string => (s === "" ? "{}" : grouped(latexEscape(s), /\s/u.test(s), flavour));
 
+/** The translation in TeX quotes and the source after it, escaped. */
+function latexTail(ex: Example): string {
+  const t = (ex.translation ?? "").trim();
+  const src = (ex.source ?? "").trim();
+  return [t === "" ? "" : `\`${latexEscape(t)}'`, src === "" ? "" : `(${latexEscape(src)})`].filter((x) => x !== "").join(" ");
+}
+
 export function asGb4e(ex: Example): string {
   const lines = ex.words.map(wordLines);
   const out = [
@@ -132,21 +148,21 @@ export function asGb4e(ex: Example): string {
     `\\ex \\gll ${lines.map((l) => latexWord(l.morphs, "gb4e")).join(" ")}\\\\`,
     `     ${lines.map((l) => latexGloss(l.glosses, "gb4e")).join(" ")}\\\\`,
   ];
-  const t = (ex.translation ?? "").trim();
-  if (t !== "") out.push(`\\glt \`${latexEscape(t)}'`);
+  const t = latexTail(ex);
+  if (t !== "") out.push(`\\glt ${t}`);
   out.push("\\end{exe}");
   return out.join("\n");
 }
 
 export function asExpex(ex: Example): string {
   const lines = ex.words.map(wordLines);
-  const t = (ex.translation ?? "").trim();
+  const t = latexTail(ex);
   return [
     "\\ex",
     "\\begingl",
     `\\gla ${lines.map((l) => latexWord(l.morphs, "expex")).join(" ")}//`,
     `\\glb ${lines.map((l) => latexGloss(l.glosses, "expex")).join(" ")}//`,
-    ...(t === "" ? [] : [`\\glft \`${latexEscape(t)}'//`]),
+    ...(t === "" ? [] : [`\\glft ${t}//`]),
     "\\endgl",
     "\\xe",
   ].join("\n");
@@ -169,7 +185,7 @@ export function asHtml(ex: Example): string {
   const cell = (inner: string, extra = "") => `<td style="padding: 0 0.8em 0 0; border: none; vertical-align: top${extra}">${inner}</td>`;
   const morphRow = lines.map((l) => cell(`<i>${htmlEscape(l.morphs)}</i>`)).join("");
   const glossRow = lines.map((l) => cell(htmlGloss(l.glosses))).join("");
-  const t = quoted(ex.translation);
+  const t = lastLine(ex);
   const span = lines.length;
   return [
     '<table style="border-collapse: collapse; border: none">',

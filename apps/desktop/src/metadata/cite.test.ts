@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { citation, people, yearOf } from "./cite.ts";
+import { citation, people, sourceTag, yearOf } from "./cite.ts";
 
 const lang = { name: "Kanu", glottocode: "kanu1234", iso: "" };
 
@@ -32,4 +32,10 @@ test("nothing known gives a year of n.d.", () => {
   assert.equal(citation("", new Map(), lang).text, "n.d. Untitled. Text in Kanu [kanu1234].");
   assert.deepEqual(people("A and B & C"), ["A", "B", "C"]);
   assert.equal(yearOf("c. 1890s"), "1890");
+});
+
+test("an example's source is short: speakers and year, else the title", () => {
+  assert.equal(sourceTag("Fish", new Map([["speakers", "Awi Heole; Ilawi Amosa"], ["date", "2010-06-06"]]), 12), "Heole & Amosa 2010: 12");
+  assert.equal(sourceTag("Fish", new Map([["speakers", "A B; C D; E F"], ["year", "1999"]]), 3), "B et al. 1999: 3");
+  assert.equal(sourceTag("Fish", new Map([["speakers", "Awi Heole"]]), 4), "Fish: 4");
 });

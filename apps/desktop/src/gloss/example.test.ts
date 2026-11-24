@@ -95,3 +95,13 @@ test("several examples go on the clipboard one after another", async () => {
   const word = clipboardForAll([ex(1, "three"), ex(2, "three")], "word");
   assert.equal((word.html ?? "").match(/<table/g)?.length, 2);
 });
+
+test("an example can name its source after the translation", async () => {
+  const { asText, asGb4e, asExpex, asHtml } = await import("./example.ts");
+  const ex = { number: 2, translation: "I count one.", source: "Heole 2010: 12", words: [{ form: "nikani", morphs: [{ surface: "ni", type: "prefix", gloss: "1SG" }, { surface: "kani", type: "root", gloss: "count" }] }] };
+  assert.match(asText(ex), /‘I count one\.’ \(Heole 2010: 12\)$/);
+  assert.match(asGb4e(ex), /\\glt `I count one\.' \(Heole 2010: 12\)/);
+  assert.match(asExpex(ex), /\\glft `I count one\.' \(Heole 2010: 12\)\/\//);
+  assert.match(asHtml(ex), /‘I count one\.’ \(Heole 2010: 12\)/);
+  assert.match(asText({ ...ex, translation: null }), /\(Heole 2010: 12\)$/, "a source with no translation still shows");
+});
