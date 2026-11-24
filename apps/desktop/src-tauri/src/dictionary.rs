@@ -37,6 +37,8 @@ pub struct Dictionary {
     pub pictures: usize,
     /// Semantic domains in the "Words by topic" index.
     pub topics: usize,
+    /// Entries marked ◆ as among the most used in the texts.
+    pub common: usize,
     /// With pictures as files: each file the page shows and the blob it copies.
     #[serde(skip)]
     pub picture_files: Vec<(String, String)>,
@@ -160,7 +162,7 @@ h1 { font-size: 22pt; margin: 0 0 .2em; } .front { margin-bottom: 2em; color: #4
 .entries, .reversal { column-count: 2; column-gap: 2em; }
 h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; margin: 1.2em 0 .5em; break-after: avoid; }
 .entry { margin: 0 0 .6em; break-inside: avoid; text-indent: -1.2em; padding-left: 1.2em; }
-.hw { font-weight: bold; } .hn { font-size: 70%; vertical-align: sub; font-weight: normal; }
+.hw { font-weight: bold; } .cm { color: #8a5a00; font-size: 80%; margin-left: .15em; } .hn { font-size: 70%; vertical-align: sub; font-weight: normal; }
 .ps { font-style: italic; } .bw, .et { color: #555; } .rel { font-variant: small-caps; } .pr { font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
 .gl2 { color: #333; } .ex { font-style: italic; } .tr { }
 .pic { display: block; max-width: 12em; max-height: 9em; margin: .3em 0 .2em 1.2em; border-radius: 3px; }
@@ -170,10 +172,13 @@ h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; ma
 @media print { body { margin: 0; max-width: none; } a { color: inherit; text-decoration: none; } }
 ";
 
-fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Option<&str>, pictures: &BTreeMap<String, String>) -> String {
+fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Option<&str>, pictures: &BTreeMap<String, String>, common: bool) -> String {
     let mut out = format!("<p class=\"entry\" id=\"{}\"><span class=\"hw\">{}</span>", esc(&e.id), esc(&e.lemma));
     if let Some(n) = e.homograph {
         out.push_str(&format!("<span class=\"hn\">{n}</span>"));
+    }
+    if common {
+        out.push_str("<span class=\"cm\" title=\"Among the words used most in the texts\">◆</span>");
     }
     if let Some(file) = clip {
         out.push_str(&format!(" <button class=\"play\" data-src=\"{}\" aria-label=\"Hear {}\">▶</button>", esc(file), esc(&e.lemma)));
@@ -274,6 +279,22 @@ pub fn export_dictionary(s: &mut Session, folder: &Path, date: &str, include_res
     Ok(d)
 }
 
+/// An entry used at least this often in the texts can be marked as common.
+pub const COMMON_USES: usize = 3;
+
+/// The entries to mark ◆: the most used fifth (rounded up) of the entries
+/// used in the texts at least `COMMON_USES` times; ties at the cut all in.
+pub(crate) fn most_used<'a>(uses: impl Iterator<Item = (&'a str, usize)>) -> std::collections::HashSet<String> {
+    let mut used: Vec<(&str, usize)> = uses.filter(|(_, n)| *n >= COMMON_USES).collect();
+    if used.is_empty() {
+        return Default::default();
+    }
+    used.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+    let keep = used.len().div_ceil(5);
+    let cut = used[keep - 1].1;
+    used.into_iter().take_while(|(_, n)| *n >= cut).map(|(id, _)| id.to_string()).collect()
+}
+
 /// Where a headword is heard, for a ▶ on a site: its first pronunciation
 /// with a recording that is on this computer and may be shown.
 pub(crate) fn headword_clip(p: &Project, e: &EntryView, include_restricted: bool) -> Result<Option<(String, f64, f64)>, String> {
@@ -353,6 +374,9 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
             shown.insert(sense.id.clone(), src);
         }
     }
+    // The most used entries in the texts get a ◆, as learner's dictionaries mark frequent words.
+    let uses = crate::flashcards::uses_by_entry(p)?;
+    let common = most_used(entries.iter().map(|e| (e.id.as_str(), uses.get(&e.id).copied().unwrap_or(0))));
     body.push_str("<div class=\"entries\">\n");
     for e in &entries {
         let l = letter(&units, &p.proj.nfc(&e.lemma));
@@ -368,7 +392,7 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
             }
             None => None,
         };
-        body.push_str(&entry_html(e, &examples, clip.as_deref(), &shown));
+        body.push_str(&entry_html(e, &examples, clip.as_deref(), &shown, common.contains(&e.id)));
     }
     body.push_str("</div>\n");
     // Reversal index: each primary gloss, case-blind, with the headwords that carry it.
@@ -431,10 +455,11 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
     let html = format!(
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>{title}</title>\n<style>{STYLE}</style>\n</head>\n<body>\n\
          <h1{lang_attr}>{title}</h1>\n<p class=\"front\">{entries} entries, {senses} senses{codes}. Made with wugs from the project's lexicon on {date}. \
-         A sense's examples are the ones chosen for it in the lexicon, else its first use in the project's texts.{note}</p>\n{body}</body>\n</html>\n",
+         A sense's examples are the ones chosen for it in the lexicon, else its first use in the project's texts.{marked}{note}</p>\n{body}</body>\n</html>\n",
         title = esc(&title),
         entries = entries.len(),
         codes = if codes.is_empty() { String::new() } else { format!(" · {}", esc(&codes.join(", "))) },
+        marked = if common.is_empty() { String::new() } else { format!(" ◆ marks the {} {} used most in the texts.", common.len(), if common.len() == 1 { "entry" } else { "entries" }) },
         note = if include_restricted { " Examples from texts that are not open are included: check before sharing." } else { "" },
     );
     let headwords = entries
@@ -446,7 +471,7 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
             glosses: e.senses.iter().map(|s| s.gloss.trim()).filter(|g| !g.is_empty()).collect::<Vec<_>>().join("; "),
         })
         .collect();
-    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords, clips: cut, pictures: shown.len(), topics: topics.len(), picture_files };
+    let d = Dictionary { path: String::new(), entries: entries.len(), senses, examples: examples.values().map(Vec::len).sum(), restricted_left_out: left_out, headwords, clips: cut, pictures: shown.len(), topics: topics.len(), common: common.len(), picture_files };
     Ok((title, html, d))
 }
 
@@ -454,6 +479,17 @@ pub(crate) fn document(p: &Project, date: &str, include_restricted: bool, clips:
 mod tests {
     use super::*;
     use crate::lexicon::{domains_list, domains_load_sil, lexicon_assign_domain};
+
+    #[test]
+    fn the_most_used_fifth_is_marked() {
+        let uses = [("a", 40), ("b", 12), ("c", 12), ("d", 5), ("e", 4), ("f", 3), ("g", 3), ("h", 3), ("i", 3), ("j", 3), ("k", 3), ("x", 2), ("y", 0)];
+        // 11 entries used 3 times or more: a fifth is 3, and c ties with b at the cut.
+        let mut got: Vec<_> = most_used(uses.into_iter()).into_iter().collect();
+        got.sort();
+        assert_eq!(got, ["a", "b", "c"]);
+        assert_eq!(most_used([("a", 2), ("b", 1)].into_iter()).len(), 0);
+        assert_eq!(most_used([("a", 3)].into_iter()).len(), 1);
+    }
 
     #[test]
     fn letters_follow_the_alphabet() {
