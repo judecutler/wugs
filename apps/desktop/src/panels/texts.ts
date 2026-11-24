@@ -58,6 +58,7 @@ const LEXICON_FORMATS: [LexiconFormat | "table", string][] = [
   ["lift", "LIFT (FLEx, WeSay)"],
   ["toolbox", "Toolbox (.txt)"],
   ["table", "Spreadsheet, a row per sense (.csv)"],
+  ["teilex0", "TEI Lex-0 dictionary (.xml)"],
 ];
 
 // Kept across redraws, so a choice survives a text being added elsewhere.

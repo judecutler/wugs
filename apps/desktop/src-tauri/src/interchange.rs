@@ -51,6 +51,8 @@ pub enum Format {
     Exmaralda,
     /// Pangloss Collection XML (export only; `pangloss`).
     Pangloss,
+    /// A TEI Lex-0 dictionary of the lexicon (export only; `tei_lex`).
+    TeiLex0,
 }
 
 impl Format {
@@ -74,6 +76,7 @@ impl Format {
             "chat" => Format::Chat,
             "exmaralda" => Format::Exmaralda,
             "pangloss" => Format::Pangloss,
+            "teilex0" => Format::TeiLex0,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -88,7 +91,7 @@ impl Format {
             Format::Table { tabs: true } => "tsv",
             Format::Table { tabs: false } => "csv",
             Format::Conllu => "conllu",
-            Format::Tei | Format::Pangloss => "xml",
+            Format::Tei | Format::Pangloss | Format::TeiLex0 => "xml",
             Format::Vertical => "vert",
             Format::AntConc | Format::Audacity => "txt",
             Format::Subtitles { vtt: false } => "srt",
@@ -119,6 +122,7 @@ impl Format {
             Format::Chat => "CHAT transcript",
             Format::Exmaralda => "EXMARaLDA transcription",
             Format::Pangloss => "Pangloss XML",
+            Format::TeiLex0 => "TEI Lex-0 dictionary",
         }
     }
 }
@@ -377,7 +381,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
         Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } | Format::Audacity | Format::Chat | Format::Exmaralda => decode_xml(&bytes, file_name)?,
-        Format::Vertical | Format::AntConc | Format::Pangloss => return Err(format!("{} is written by wugs, not read", format.name())),
+        Format::Vertical | Format::AntConc | Format::Pangloss | Format::TeiLex0 => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
         Format::TextGrid | Format::Toolbox | Format::ToolboxText => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
@@ -757,7 +761,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             lines.extend(not_carried(&r.not_carried));
             (r.texts.first().or(r.matched.first()).cloned(), false)
         }
-        Format::Vertical | Format::AntConc | Format::Pangloss => unreachable!("refused above"),
+        Format::Vertical | Format::AntConc | Format::Pangloss | Format::TeiLex0 => unreachable!("refused above"),
         Format::Toolbox | Format::ToolboxText if wugs_legacy::toolbox_text::is_interlinear(input) => {
             let tier = session::utterance_tier(p)?;
             // A translation track only when the file has free translations.
@@ -1208,7 +1212,7 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             }
             out
         }
-        Format::Lift | Format::Toolbox => return Err(format!("{} is a lexicon format", format.name())),
+        Format::Lift | Format::Toolbox | Format::TeiLex0 => return Err(format!("{} is a lexicon format", format.name())),
     };
     let path = write_new(folder, &file_stem(&title, "text"), format.extension(), contents.as_bytes())?;
     Ok(Exported { path: path.display().to_string(), notes })
@@ -1348,6 +1352,10 @@ pub fn export_lexicon(s: &mut Session, format: Format, folder: &Path) -> Result<
         Format::Table { .. } => return Err("a table of sentences holds texts, not a lexicon".into()),
         Format::Lift => wugs_flex::export_lift(p)?,
         Format::Toolbox => wugs_legacy::export_toolbox(p)?,
+        Format::TeiLex0 => {
+            let date = crate::corrections::date_or_today("");
+            crate::tei_lex::export(p, concat!("wugs ", env!("CARGO_PKG_VERSION")), &date)?.0
+        }
         _ => return Err(format!("{} is a text format", format.name())),
     };
     let path = write_new(folder, "lexicon", format.extension(), contents.as_bytes())?;
