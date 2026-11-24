@@ -44,6 +44,9 @@ enum Attr {
     Xpos,
     Feats,
     Gloss,
+    Deprel,
+    HeadWord,
+    HeadLemma,
 }
 
 impl Attr {
@@ -55,6 +58,9 @@ impl Attr {
             "xpos" => Attr::Xpos,
             "feats" => Attr::Feats,
             "gloss" => Attr::Gloss,
+            "deprel" => Attr::Deprel,
+            "headword" => Attr::HeadWord,
+            "headlemma" => Attr::HeadLemma,
             _ => return None,
         })
     }
@@ -233,10 +239,10 @@ impl Parser {
         }
         let name: String = self.chars[start..self.i].iter().collect();
         if name.is_empty() {
-            return self.err("an attribute goes here: word, lemma, upos, xpos, feats or gloss");
+            return self.err("an attribute goes here: word, lemma, upos, xpos, feats, gloss, deprel, headword or headlemma");
         }
         let Some(attr) = Attr::named(&name.to_ascii_lowercase()) else {
-            return Err(QueryError { at: start, message: format!("«{name}» is not an attribute wugs knows; use word, lemma, upos, xpos, feats or gloss") });
+            return Err(QueryError { at: start, message: format!("«{name}» is not an attribute wugs knows; use word, lemma, upos, xpos, feats, gloss, deprel, headword or headlemma") });
         };
         let negate = if self.eat('!') {
             if !self.eat('=') {
@@ -417,6 +423,11 @@ pub struct Tok {
     pub xpos: String,
     pub feats: String,
     pub gloss: String,
+    /// Its dependency relation, and its head's word and lemma (empty for
+    /// the root and for words with no head).
+    pub deprel: String,
+    pub head_word: String,
+    pub head_lemma: String,
 }
 
 impl Tok {
@@ -428,6 +439,9 @@ impl Tok {
             Attr::Xpos => &self.xpos,
             Attr::Feats => &self.feats,
             Attr::Gloss => &self.gloss,
+            Attr::Deprel => &self.deprel,
+            Attr::HeadWord => &self.head_word,
+            Attr::HeadLemma => &self.head_lemma,
         }
     }
 }
@@ -512,6 +526,9 @@ pub(crate) fn tokens_of(p: &Project, seg: &str) -> Result<Vec<Tok>, String> {
             xpos: col(r, "xpos"),
             feats: col(r, "feats"),
             gloss: String::new(),
+            deprel: col(r, "deprel"),
+            head_word: String::new(),
+            head_lemma: String::new(),
         };
         if t.upos.is_empty() && p.proj.is_punct_token(id) {
             t.upos = "PUNCT".into();
@@ -538,6 +555,15 @@ pub(crate) fn tokens_of(p: &Project, seg: &str) -> Result<Vec<Tok>, String> {
         }
         t.gloss = crate::concordance::joined(&glosses);
         out.push(t);
+    }
+    // Each word's head by token id, once every word's lemma is known.
+    let at: HashMap<&str, usize> = ids.iter().enumerate().map(|(i, id)| (id.as_str(), i)).collect();
+    for (i, id) in ids.iter().enumerate() {
+        let head = col(rows.get(id), "head");
+        if let Some(&h) = at.get(head.as_str()) {
+            out[i].head_word = out[h].word.clone();
+            out[i].head_lemma = out[h].lemma.clone();
+        }
     }
     Ok(out)
 }
@@ -678,6 +704,13 @@ mod tests {
         assert_eq!(&h.words[h.at..h.at + h.len], ["a", "el", "mar"]);
         assert_eq!(h.words.last().map(String::as_str), Some("."), "punctuation is a token to a query");
         assert_eq!(run(&mut s, "[feats=\".*Mood=Imp.*\"]", None).unwrap().total, 1);
+        // Dependencies: a word's relation and its head's word and lemma.
+        let obj = run(&mut s, "[deprel=\"obj\" & headlemma=\"ir\"]", None).unwrap();
+        assert_eq!(obj.total, 1);
+        assert_eq!(obj.hits[0].words[obj.hits[0].at], "nos");
+        assert_eq!(run(&mut s, "[deprel=\"case\" & headword=\"mar\"] []", None).unwrap().total, 1);
+        assert_eq!(run(&mut s, "[headlemma=\"ir\"]", None).unwrap().total, 3, "nos, mar and the full stop hang on ir");
+        assert_eq!(run(&mut s, "[deprel=\"root\" & headword=\"\"]", None).unwrap().total, 1, "the root has no head");
         // Glossed words: lemmas come from the lexicon, glosses from the morphs.
         assert!(run(&mut s, "[gloss=\".*1SG.*\"]", None).unwrap().total >= 1);
         assert!(run(&mut s, "[lemma=\"kani\"]", None).unwrap().total >= 1);
