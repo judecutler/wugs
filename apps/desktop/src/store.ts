@@ -254,6 +254,21 @@ export function openEntry(id: string) {
   touchLexicon();
 }
 
+let wantedList: string | null = null;
+
+/** Ask the Lexicon panel to show one of its lists (Needs a gloss…) at its next draw. */
+export function openLexiconList(list: string) {
+  wantedList = list;
+  touchLexicon();
+}
+
+/** The list another panel asked the Lexicon to show, once. */
+export function takeWantedList(): string | null {
+  const w = wantedList;
+  wantedList = null;
+  return w;
+}
+
 /** The entry another panel asked to open, once. */
 export function takeWantedEntry(): string | null {
   const w = wantedEntry;
