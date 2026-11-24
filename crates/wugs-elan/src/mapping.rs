@@ -23,7 +23,13 @@ pub const PROP_TITLE: &str = "wugs.title";
 pub const TYPE_WORDS: &str = "wugs-words";
 pub const TYPE_MORPHS: &str = "wugs-morphs";
 pub const TYPE_GLOSSES: &str = "wugs-glosses";
-pub const ANALYSIS_TYPES: [&str; 3] = [TYPE_WORDS, TYPE_MORPHS, TYPE_GLOSSES];
+/// Other tiers on the words or morphs, written from `x.elan.<tier name>`
+/// fields an ELAN file's own glossing tiers left on them (`glossing.rs`).
+pub const TYPE_WORD_NOTES: &str = "wugs-word-notes";
+pub const TYPE_MORPH_NOTES: &str = "wugs-morph-notes";
+pub const ANALYSIS_TYPES: [&str; 5] = [TYPE_WORDS, TYPE_MORPHS, TYPE_GLOSSES, TYPE_WORD_NOTES, TYPE_MORPH_NOTES];
+/// The prefix of a word's or morph's field that an ELAN tier came from.
+pub const F_KEPT_TIER: &str = "x.elan.";
 
 pub const KIND_ALIGNED: &str = "time-aligned";
 pub const KIND_SUBDIVISION: &str = "symbolic-subdivision";

@@ -190,6 +190,9 @@ pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
         let mut glosses = XmlNode::new("TIER").with_attr("LINGUISTIC_TYPE_REF", TYPE_GLOSSES);
         let mut any_morph = false;
         let mut any_word = false;
+        // Tiers an ELAN file kept on its words or morphs (a part of speech), by name.
+        let mut word_notes: BTreeMap<String, XmlNode> = BTreeMap::new();
+        let mut morph_notes: BTreeMap<String, XmlNode> = BTreeMap::new();
         let mut fresh = |prefix: &str| loop {
             counter += 1;
             let candidate = format!("{prefix}{counter}");
@@ -209,6 +212,7 @@ pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
                 let form = p.field_str(&tok, "form")?.unwrap_or_default();
                 words = words.with_child(XmlNode::new("ANNOTATION").with_child(wn.with_child(XmlNode::new("ANNOTATION_VALUE").with_text(&form))));
                 any_word = true;
+                kept_notes(p, &tok, &wid, TYPE_WORD_NOTES, &mut word_notes, &mut fresh)?;
                 let ms: Vec<String> = p.members(&tok)?.into_iter().filter(|m| !p.is_tombstoned(m).unwrap_or(true)).collect();
                 let root_at = ms.iter().position(|m| p.field_str(m, "type").ok().flatten().as_deref() == Some("root"));
                 let mut prev_morph: Option<String> = None;
@@ -227,6 +231,7 @@ pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
                     let gn = XmlNode::new("REF_ANNOTATION").with_attr("ANNOTATION_ID", &gid).with_attr("ANNOTATION_REF", &mid);
                     glosses = glosses.with_child(XmlNode::new("ANNOTATION").with_child(gn.with_child(XmlNode::new("ANNOTATION_VALUE").with_text(&gloss))));
                     any_morph = true;
+                    kept_notes(p, m, &mid, TYPE_MORPH_NOTES, &mut morph_notes, &mut fresh)?;
                 }
             }
         }
@@ -241,11 +246,21 @@ pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
             words = words.with_attr("PARTICIPANT", pt);
         }
         tier_nodes.push(words);
+        for (name, node) in word_notes {
+            let id = unique(&name, &mut used_tier_ids);
+            tier_nodes.push(node.with_attr("TIER_ID", &id).with_attr("PARENT_REF", &words_id));
+            types.insert(TYPE_WORD_NOTES.into(), (false, Some("Symbolic_Association".into())));
+        }
         if any_morph {
             let morphs_id = unique(&format!("{base} morphs"), &mut used_tier_ids);
             tier_nodes.push(morphs.with_attr("TIER_ID", &morphs_id).with_attr("PARENT_REF", &words_id));
             let glosses_id = unique(&format!("{base} glosses"), &mut used_tier_ids);
             tier_nodes.push(glosses.with_attr("TIER_ID", &glosses_id).with_attr("PARENT_REF", &morphs_id));
+            for (name, node) in morph_notes {
+                let id = unique(&name, &mut used_tier_ids);
+                tier_nodes.push(node.with_attr("TIER_ID", &id).with_attr("PARENT_REF", &morphs_id));
+                types.insert(TYPE_MORPH_NOTES.into(), (false, Some("Symbolic_Association".into())));
+            }
         }
     }
     if analysis_types {
@@ -294,6 +309,20 @@ pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
         );
     }
     Ok(doc.to_xml())
+}
+
+/// A word's or morph's `x.elan.<tier>` fields, each an annotation on its own
+/// tier under the word or morph (`ann` its annotation id here).
+fn kept_notes(p: &wugs_projection::Projection, of: &str, ann: &str, kind: &str, tiers: &mut BTreeMap<String, XmlNode>, fresh: &mut impl FnMut(&str) -> String) -> Result<(), String> {
+    for (field, value) in p.fields_of(of)? {
+        let Some(name) = field.strip_prefix(F_KEPT_TIER) else { continue };
+        let Some(text) = value.as_str().filter(|t| !t.is_empty()) else { continue };
+        let id = fresh("x");
+        let node = XmlNode::new("REF_ANNOTATION").with_attr("ANNOTATION_ID", &id).with_attr("ANNOTATION_REF", ann);
+        let tier = tiers.entry(name.to_string()).or_insert_with(|| XmlNode::new("TIER").with_attr("LINGUISTIC_TYPE_REF", kind));
+        tier.children.push(XmlNode::new("ANNOTATION").with_child(node.with_child(XmlNode::new("ANNOTATION_VALUE").with_text(text))));
+    }
+    Ok(())
 }
 
 /// A morph as an interlinear line shows it: its Leipzig marker on the side

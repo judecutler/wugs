@@ -107,7 +107,11 @@ fn word_morph_and_gloss_tiers_become_the_glossing() {
     // Out again, the glossing is wugs's own word, morph and gloss tiers; the read tiers are not written twice.
     let out = export_eaf(&p, &text).unwrap();
     assert!(out.contains("TIER_ID=\"tx@A words\"") && out.contains("TIER_ID=\"tx@A glosses\""), "{out}");
-    assert!(!out.contains("TIER_ID=\"words@A\"") && !out.contains("TIER_ID=\"ge@A\"") && !out.contains("TIER_ID=\"ps@A\""), "{out}");
+    assert!(!out.contains("TIER_ID=\"words@A\"") && !out.contains("TIER_ID=\"ge@A\""), "{out}");
+    // The part of speech kept on the morph goes back out as its own tier under the morphs.
+    let ps = out.lines().find(|l| l.contains("TIER_ID=\"ps@A\"")).unwrap_or_else(|| panic!("{out}"));
+    assert!(ps.contains("wugs-morph-notes") && ps.contains("PARENT_REF=\"tx@A morphs\""), "{ps}");
+    assert!(out.contains(">v<"), "{out}");
     assert!(out.contains(">ni-<") && out.contains(">1SG<") && out.contains(">I counted stones<"));
     assert!(layouts(&p, &text).unwrap().is_empty(), "nothing left to read");
 
