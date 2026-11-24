@@ -5,12 +5,12 @@
 // grown from the texts, most used word first.
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, frequencies, lexiconAdd } from "../api";
+import { errorText, frequencies, lexiconAdd, lexiconAddWords } from "../api";
 import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { spreadReading } from "../concordance/plot";
 import { decades, zipfFit, zipfLine, zipfPoints } from "../frequencies/zipf";
-import { asTsv, dpCell, hasSpread, spreadNote, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
+import { ADD_AT_ONCE, addedLine, addLabel, asTsv, dpCell, hasSpread, spreadNote, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast, touchLexicon } from "../store";
 import { askConcordance } from "./concordance";
@@ -65,6 +65,9 @@ export const frequenciesPanel: PanelDef = {
     const count = h("p", { className: "note fq-count" });
     const missingOnly = h("input", { type: "checkbox" });
     const missingBox = h("label", { className: "fq-missing", title: "List only the words no lexicon entry or form is spelled as" }, missingOnly, " Only words not in the lexicon");
+    // Every shown word not in the lexicon as an entry, after a second click.
+    const addAll = h("button", { type: "button", className: "fq-add-all", title: "Make each word listed (after the filter) that no entry or form is spelled as an entry with an empty sense, to gloss in the Lexicon panel" });
+    let addArmed = false;
     const table = h("table", { className: "fq-table" });
     // Zipf's law: frequency against rank on log scales, drawn when opened.
     const zipf = h("details", { className: "fq-zipf" }, h("summary", { textContent: "Zipf plot" }));
@@ -173,6 +176,34 @@ export const frequenciesPanel: PanelDef = {
       count.textContent = summary(data, noun()) + rich + perWord + spreadNote(rankedRows) + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
       const withLexicon = marked();
       missingBox.hidden = !withLexicon;
+      // Words never broken into morphs either: a glossed word's root is what belongs in the lexicon (Checks adds those).
+      const missing = withLexicon ? rows.filter((r) => r.lexicon === "none") : [];
+      addAll.hidden = missing.length === 0;
+      addAll.textContent = addLabel(missing.length, addArmed);
+      addAll.onclick = () => {
+        if (!addArmed) {
+          addArmed = true;
+          drawRows();
+          return;
+        }
+        addArmed = false;
+        addAll.disabled = true;
+        const words = missing.slice(0, ADD_AT_ONCE);
+        void lexiconAddWords({ words: words.map((r) => r.item) }).then(
+          (added) => {
+            for (const r of words) r.lexicon = "entry";
+            touchLexicon();
+            addAll.disabled = false;
+            drawRows();
+            showToast({ tone: "info", lines: [addedLine(added, words.length)] });
+          },
+          (e) => {
+            addAll.disabled = false;
+            drawRows();
+            showToast({ tone: "error", lines: [`Could not add the words: ${errorText(e)}`] });
+          },
+        );
+      };
       const spread = hasSpread(rankedRows);
       const columns = ["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts", ...(spread ? ["DP"] : []), ...(withLexicon ? ["In lexicon"] : [])];
       const head = h("tr", {}, ...columns.map((t) => h("th", { textContent: t, scope: "col" })));
@@ -237,6 +268,7 @@ export const frequenciesPanel: PanelDef = {
     async function load(): Promise<void> {
       const mine = ++seq;
       count.textContent = "Counting…";
+      addArmed = false;
       // No row of an earlier count stays clickable while this one runs.
       data = null;
       rankedRows = [];
@@ -308,7 +340,7 @@ export const frequenciesPanel: PanelDef = {
       drawChips();
       drawScopes();
       drawSizer();
-      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, missingBox), count, zipf, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, missingBox, addAll), count, zipf, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };

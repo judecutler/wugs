@@ -575,6 +575,13 @@ def main():
             run.page.wait_for_timeout(300)
             if run.page.locator(".panel-frequencies .fq-table tbody tr").count() != 2:
                 failures.append("a word added with Add stayed among the words not in the lexicon")
+            # The rest at once, after a second click.
+            run.page.locator(".panel-frequencies .fq-add-all").click()
+            run.shot("state-frequencies-add-all", run.page.locator(".panel-frequencies"))
+            run.page.locator(".panel-frequencies .fq-add-all", has_text="Click again").click()
+            run.page.wait_for_timeout(300)
+            if run.page.locator(".panel-frequencies .fq-table tbody tr").count() != 1 or run.page.evaluate("window.__WUGS_ADDED_WORDS__") != 1:
+                failures.append("Add the words not in the lexicon did not add the one unglossed word left")
             run.page.locator(".panel-frequencies .fq-missing input").uncheck()
             run.page.locator(".panel-frequencies .fq-table tbody tr").first.click()
             run.page.wait_for_timeout(600)

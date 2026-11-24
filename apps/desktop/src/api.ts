@@ -684,6 +684,8 @@ export const importLexiconTable = (args: { path: string }) => invoke<import("./l
 /** Pair a text with another that translates it (`src-tauri/src/align.rs`). */
 export const alignPreview = (args: { source: string; translation: string }) => invoke<import("./align/logic").Alignment>("align_preview", args);
 export const alignWrite = (args: { source: string; translation: string }) => invoke<import("./align/logic").Alignment>("align_write", args);
+/** Words as entries with an empty sense each (`lexicon::lexicon_add_words`). */
+export const lexiconAddWords = (args: { words: string[] }) => invoke<number>("lexicon_add_words", args);
 export const exportLexiconTable = (args: { folder: string }) => invoke<string>("export_lexicon_table", args);
 export const projectAffixes = () => invoke<import("./affixes/logic").Affixes>("project_affixes");
 export const projectProgress = () => invoke<import("./progress/logic").Progress>("project_progress");

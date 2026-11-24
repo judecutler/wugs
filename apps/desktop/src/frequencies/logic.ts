@@ -106,6 +106,23 @@ export function lexiconCell(status: LexiconStatus | undefined): string {
 
 /** The sentence under a word list about what the lexicon lacks:
  * "41 of these 318 words are not in the lexicon yet (they are used 96 times)." */
+/** The most words Add all sends at once (the backend's MAX_WORDS). */
+export const ADD_AT_ONCE = 5000;
+
+/** The Add all button's words: the shown rows not in the lexicon, at most ADD_AT_ONCE. */
+export function addLabel(missing: number, armed: boolean): string {
+  const n = Math.min(missing, ADD_AT_ONCE);
+  const words = n === 1 ? "1 word" : `${n.toLocaleString("en")} words`;
+  return armed ? `Add ${words} as entries? Click again` : `Add the ${words} not in the lexicon`;
+}
+
+/** What Add all did, for the toast. */
+export function addedLine(added: number, asked: number): string {
+  if (added === 0) return "Every word was in the lexicon already.";
+  const made = added === 1 ? "1 entry" : `${added.toLocaleString("en")} entries`;
+  return `Made ${made}, each with an empty sense to gloss in the Lexicon panel (Needs a gloss lists them).${asked > added ? ` ${asked - added} were in the lexicon already or repeated a word.` : ""}`;
+}
+
 export function lexiconNote(rows: readonly FrequencyRow[]): string {
   const marked = rows.filter((r) => r.lexicon !== undefined);
   if (marked.length === 0) return "";

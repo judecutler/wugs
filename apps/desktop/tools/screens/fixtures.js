@@ -1316,6 +1316,10 @@ const LEXICON = [
     save_search: ({ search }) => (window.__WUGS_SAVED_SEARCHES__ = [...(window.__WUGS_SAVED_SEARCHES__ ?? []).filter((x) => x.name.toLowerCase() !== search.name.trim().toLowerCase()), { ...search, name: search.name.trim() }]),
     delete_saved_search: ({ name }) => (window.__WUGS_SAVED_SEARCHES__ = (window.__WUGS_SAVED_SEARCHES__ ?? []).filter((x) => x.name.toLowerCase() !== name.toLowerCase())),
     lexicon_add: () => ({ entry: lexiconEntry({ id: LEXICON[0].id }), notes: [] }),
+    lexicon_add_words: ({ words }) => {
+      window.__WUGS_ADDED_WORDS__ = words.length;
+      return words.length;
+    },
     // A paradigm answered for whatever axes the panel asks: every cell of the
     // grid, the first one filled, so the coverage line has something to count.
     lexicon_paradigm: ({ id, axes }) => {

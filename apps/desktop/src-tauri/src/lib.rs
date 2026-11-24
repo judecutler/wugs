@@ -1283,6 +1283,12 @@ fn consent_delete(s: State<SessionThread>, consent: String) -> Result<people::Pe
     s.run(move |s| people::delete_consent(s, &consent))
 }
 
+/// Words from a frequency list as entries, one empty sense each (`lexicon::lexicon_add_words`).
+#[tauri::command(async)]
+fn lexicon_add_words(s: State<SessionThread>, words: Vec<String>) -> Result<usize, String> {
+    s.run(move |s| lexicon::lexicon_add_words(s, &words))
+}
+
 #[tauri::command(async)]
 fn lexicon_add(s: State<SessionThread>, lemma: String, gloss: String) -> Result<lexicon::EntryEdit, String> {
     s.run(move |s| lexicon::lexicon_add(s, &lemma, &gloss))
@@ -2692,6 +2698,7 @@ pub fn run() {
             lexicon_list,
             lexicon_entry,
             lexicon_add,
+            lexicon_add_words,
             lexicon_set_field,
             lexicon_set_homograph,
             lexicon_number_homographs,
