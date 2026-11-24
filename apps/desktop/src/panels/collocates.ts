@@ -5,7 +5,9 @@
 import type { Where } from "../metadata/logic";
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { collocates, errorText } from "../api";
+import { collocates, errorText, saveDocument } from "../api";
+import { open as pickFolder } from "@tauri-apps/plugin-dialog";
+import { standalone } from "./vowels";
 import { network } from "../collocates/network";
 import { lemmaQuery, asTsv, COLLOCATE_SORTS, compareCollocates, compareLine, compareTsv, leansTo, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates, type CompareRow } from "../collocates/logic";
 import { emptyState, h } from "../dom";
@@ -174,7 +176,18 @@ export const collocatesPanel: PanelDef = {
         g.append(el2("title", {}, n.kind === "centre" ? (n.id === "c1" ? `${n.label}: click to go back to «${asked}» alone` : n.label) : `${n.label}: click to set it beside «${asked}» and see what they share`));
         svg.append(g);
       }
-      netBox.replaceChildren(svg, h("p", { className: "note", textContent: other === null ? "The 14 strongest collocates by logDice, stronger nearer, thicker lines for more times together. Click one to set it beside the word." : `Collocates «${asked}» and «${other.word}» share sit between them, each nearer the word it keeps closer company with.` }));
+      const save = h("button", { type: "button", className: "link-button", textContent: "Save picture…", title: "Save the network as an SVG file for a paper or slides" });
+      save.onclick = async () => {
+        const folder = await pickFolder({ directory: true, title: "Where should the picture go?" });
+        if (typeof folder !== "string") return;
+        try {
+          const out = await saveDocument({ folder, title: `${asked}${other === null ? "" : ` and ${other.word}`} collocates`, extension: "svg", contents: standalone(svg) });
+          showToast({ tone: "info", lines: [`Saved the network as ${out.path}.`] });
+        } catch (e) {
+          showToast({ tone: "error", lines: [errorText(e)] });
+        }
+      };
+      netBox.replaceChildren(svg, save, h("p", { className: "note", textContent: other === null ? "The 14 strongest collocates by logDice, stronger nearer, thicker lines for more times together. Click one to set it beside the word." : `Collocates «${asked}» and «${other.word}» share sit between them, each nearer the word it keeps closer company with.` }));
     };
 
     const drawRows = () => {
