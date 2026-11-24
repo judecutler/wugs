@@ -63,6 +63,8 @@ pub struct ImportReport {
     pub relations_created: usize,
     /// `<note>`s on entries and senses.
     pub notes: usize,
+    /// Entries whose `<etymology type="borrowed" source>` gave their `borrowed-from`.
+    pub loans: usize,
     /// Senses put in a semantic domain from a `semantic-domain-ddp4` trait.
     pub domains_linked: usize,
     /// Semantic-domain traits naming no domain of the project (kept as written).
@@ -100,6 +102,8 @@ struct Entry {
     traits: Vec<Value>,
     /// Other elements, as XML text.
     kept: Vec<String>,
+    /// The source language of its first `<etymology type="borrowed">`.
+    borrowed: Option<String>,
 }
 
 struct Sense {
@@ -238,6 +242,10 @@ pub fn import_lift(project: &mut Project, lift: &str) -> Result<ImportReport, Im
         push_opt(&mut fields, F_ID, &e.id);
         push_opt(&mut fields, F_GUID, &e.guid);
         push_notes(&mut fields, &e.notes, &mut report);
+        if let Some(b) = &e.borrowed {
+            fields.push(("borrowed-from", Value::str(b)));
+            report.loans += 1;
+        }
         if !e.traits.is_empty() {
             fields.push((F_TRAITS, Value::Arr(e.traits.clone())));
         }
@@ -549,6 +557,7 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
         notes: Vec::new(),
         traits: Vec::new(),
         kept: Vec::new(),
+        borrowed: None,
     };
     for c in &node.children {
         match c.name.as_str() {
@@ -584,6 +593,11 @@ fn parse_entry(node: &XmlNode, report: &mut ImportReport) -> Result<Entry, Impor
             "note" => e.notes.push(parse_note(c, report)),
             "trait" => e.traits.push(parse_trait(c, report)),
             _ => {
+                // A loan's source language is the entry's `borrowed-from`; the
+                // etymology itself stays as it came.
+                if c.name == "etymology" && e.borrowed.is_none() && c.attr("type").is_some_and(|t| t.eq_ignore_ascii_case("borrowed")) {
+                    e.borrowed = c.attr("source").map(str::trim).filter(|s| !s.is_empty()).map(str::to_string);
+                }
                 let x = keep(c, "entry", report);
                 e.kept.push(x);
             }
@@ -879,7 +893,27 @@ pub fn export_lift(project: &Project) -> Result<String, String> {
             v = with_attrs(v, field_value(project, &frm, F_ATTRS)?, &[]);
             entry.children.push(v);
         }
-        entry.children.extend(kept_nodes(project, lex)?);
+        // A borrowed etymology says the entry's `borrowed-from` as it reads
+        // now: its source follows an edit, a cleared one is left out, and a
+        // loan marked in wugs gets one.
+        let borrowed = p.field_str(lex, "borrowed-from")?.map(|b| b.trim().to_string()).filter(|b| !b.is_empty());
+        let mut said = false;
+        for mut k in kept_nodes(project, lex)? {
+            if k.name == "etymology" && k.attr("type").is_some_and(|t| t.eq_ignore_ascii_case("borrowed")) && !said {
+                said = true;
+                match &borrowed {
+                    Some(b) => match k.attrs.iter_mut().find(|(n, _)| n == "source") {
+                        Some(a) => a.1 = b.clone(),
+                        None => k.attrs.push(("source".into(), b.clone())),
+                    },
+                    None => continue,
+                }
+            }
+            entry.children.push(k);
+        }
+        if let (Some(b), false) = (&borrowed, said) {
+            entry.children.push(XmlNode::new("etymology").with_attr("type", "borrowed").with_attr("source", b));
+        }
         root.children.push(entry);
     }
     Ok(root.to_xml())
