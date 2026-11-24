@@ -1574,3 +1574,9 @@ body::before {
 .kw-alike-track::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; border-left: 1px solid var(--muted); }
 .kw-bar { position: absolute; left: 50%; top: 0; bottom: 0; background: var(--accent-bright); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
 .kw-bar-neg { left: auto; right: 50%; background: var(--muted); border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+
+/* Elicit sentences: lists made from frames. */
+.se-frames { display: grid; gap: 6px; margin: 6px 0 10px; padding: 8px; border-radius: var(--radius-sm); background: var(--emphasis); }
+.se-frames label { display: flex; gap: 6px; align-items: center; }
+.se-frame-text { font-family: inherit; width: 100%; box-sizing: border-box; }
+.se-hint { margin-left: 8px; font-family: var(--font-ipa); color: var(--accent); }

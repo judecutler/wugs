@@ -467,6 +467,12 @@ fn sentence_list_import(s: State<SessionThread>, path: String) -> Result<sentenc
     s.run(move |session| sentences::import(session, std::path::Path::new(&path)))
 }
 
+/// Keeps a prompt list made in the app (frames filled with lexicon entries).
+#[tauri::command(async)]
+fn sentence_list_make(s: State<SessionThread>, name: String, prompts: Vec<sentences::Prompt>) -> Result<sentences::PromptList, String> {
+    s.run(move |session| sentences::make(session, &name, prompts))
+}
+
 /// A prompt list with each prompt's answers.
 #[tauri::command(async)]
 fn sentence_list_view(s: State<SessionThread>, list: String) -> Result<sentences::PromptView, String> {
@@ -2221,6 +2227,7 @@ pub fn run() {
             sentence_lists,
             segment_timing,
             sentence_list_import,
+            sentence_list_make,
             sentence_list_view,
             sentence_answer,
             set_cognates,

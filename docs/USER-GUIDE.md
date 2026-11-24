@@ -601,6 +601,8 @@ The **Elicit sentences** panel works through a questionnaire: sentences in a lan
 
 The line at the top counts the prompts answered. **Only prompts to do** hides the rest. **Print a sheet…** saves the prompts as a form to print, with a header for the speaker, date and place and room for each sentence and notes, for a session without the laptop; with **Only prompts to do** ticked it holds only those, else every prompt with the answers already here in grey. Since the answers are ordinary sentences, they appear in the Concordance, the exports and the Interlinear tab; record the session and line the sentences up on the Timeline to hear them.
 
+**From frames…** makes a list from your lexicon instead, for frame elicitation: the frames tone and noun-class work uses, where each word is said in the same few sentences. Write one frame a line in the language you share with the speaker, with `___` where the word goes (`I see the ___.`, `The ___ is big.`; `___` alone asks for the word on its own), choose **Every entry** or one category, give the list a name and press **Make the list**. Each entry's gloss goes in each frame, entry by entry, so a word's frames come one after another. The entry's headword shows beside its prompt as a reminder, and is not saved with the answer: the translation is the frame as filled in. Entries without a gloss are left out, and the line under the frames says how many prompts that makes. Making a list of the same name again keeps the answers of the words and frames still in it.
+
 ## Record people and consent
 
 The **People** panel records who speaks in your recordings and what each person agreed to. It is optional.

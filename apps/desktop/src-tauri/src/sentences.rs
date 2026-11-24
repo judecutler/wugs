@@ -23,6 +23,10 @@ const MAX_PROMPTS: usize = 2000;
 pub struct Prompt {
     pub id: String,
     pub prompt: String,
+    /// Shown beside the prompt and never saved with the answer: the word a
+    /// frame asks for, as a list made from frames names it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -57,6 +61,7 @@ pub struct PromptRow {
     pub id: String,
     pub number: usize,
     pub prompt: String,
+    pub hint: Option<String>,
     pub answers: Vec<Answer>,
 }
 
@@ -107,13 +112,13 @@ pub(crate) fn read_prompts(text: &str, tabs: bool) -> Result<Vec<Prompt>, String
                 continue;
             }
             let given = id.and_then(|c| r.get(c)).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
-            out.push(Prompt { id: given.unwrap_or_else(|| (i + 1).to_string()), prompt: p });
+            out.push(Prompt { id: given.unwrap_or_else(|| (i + 1).to_string()), prompt: p, hint: None });
         }
     } else {
         for line in text.lines() {
             let p = line.split_whitespace().collect::<Vec<_>>().join(" ");
             if !p.is_empty() {
-                out.push(Prompt { id: (out.len() + 1).to_string(), prompt: p });
+                out.push(Prompt { id: (out.len() + 1).to_string(), prompt: p, hint: None });
             }
         }
     }
@@ -205,11 +210,43 @@ pub fn import(session: &mut Session, path: &std::path::Path) -> Result<PromptLis
     let p = project(session)?;
     let prompts: Vec<Prompt> = read_prompts(&p.proj.nfc(&text), tabs)?;
     let name = path.file_stem().map(|s| s.to_string_lossy().trim().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "Sentences".into());
-    let name = p.proj.nfc(&name);
+    keep(p, &name, prompts)
+}
+
+/// Keeps a prompt list made in the app (from frames and lexicon entries)
+/// under `name`; making one of the same name again replaces its prompts and
+/// keeps the answers of prompts whose ids stay.
+pub fn make(session: &mut Session, name: &str, prompts: Vec<Prompt>) -> Result<PromptList, String> {
+    let p = project(session)?;
+    let mut seen = std::collections::HashSet::new();
+    let mut clean = Vec::with_capacity(prompts.len());
+    for x in prompts {
+        let prompt = p.proj.nfc(&x.prompt.split_whitespace().collect::<Vec<_>>().join(" "));
+        if prompt.is_empty() || x.id.trim().is_empty() {
+            continue;
+        }
+        if !seen.insert(x.id.clone()) {
+            return Err(format!("two prompts share the id «{}»", x.id));
+        }
+        let hint = x.hint.map(|h| p.proj.nfc(h.trim())).filter(|h| !h.is_empty());
+        clean.push(Prompt { id: x.id, prompt, hint });
+    }
+    if clean.is_empty() {
+        return Err("no prompts to keep".into());
+    }
+    if clean.len() > MAX_PROMPTS {
+        return Err(format!("a prompt list holds at most {MAX_PROMPTS} prompts"));
+    }
+    let name = if name.trim().is_empty() { "Frames".to_string() } else { name.trim().to_string() };
+    keep(p, &name, clean)
+}
+
+fn keep(p: &mut Project, name: &str, prompts: Vec<Prompt>) -> Result<PromptList, String> {
+    let name = p.proj.nfc(name);
     let slug = slug(&name);
     let json = serde_json::to_string(&Stored { name, prompts }).map_err(|e| e.to_string())?;
     if json.len() > MAX_BYTES {
-        return Err("the prompts are too long to keep with the project (60 KB at most); split the file".into());
+        return Err("the prompts are too long to keep with the project (60 KB at most); split the list".into());
     }
     if p.setting(&format!("{PREFIX}{slug}"))?.as_deref() != Some(json.as_str()) {
         p.set_setting(&format!("{PREFIX}{slug}"), &json)?;
@@ -223,7 +260,7 @@ pub fn view(session: &mut Session, list: &str) -> Result<PromptView, String> {
     let s = stored(p, list)?;
     let text = text_of(p, list)?;
     let mut found = answers(p, text.as_deref())?;
-    let prompts = s.prompts.iter().enumerate().map(|(i, x)| PromptRow { id: x.id.clone(), number: i + 1, prompt: x.prompt.clone(), answers: found.remove(&x.id).unwrap_or_default() }).collect();
+    let prompts = s.prompts.iter().enumerate().map(|(i, x)| PromptRow { id: x.id.clone(), number: i + 1, prompt: x.prompt.clone(), hint: x.hint.clone(), answers: found.remove(&x.id).unwrap_or_default() }).collect();
     Ok(PromptView { list: summary(p, list, &s)?, prompts })
 }
 
@@ -274,9 +311,9 @@ mod tests {
     #[test]
     fn prompts_read_from_lines_and_tables() {
         let lines = read_prompts("The dog sleeps.\n\n  The   dog bit the man. \n", false).unwrap();
-        assert_eq!(lines, [Prompt { id: "1".into(), prompt: "The dog sleeps.".into() }, Prompt { id: "2".into(), prompt: "The dog bit the man.".into() }]);
+        assert_eq!(lines, [Prompt { id: "1".into(), prompt: "The dog sleeps.".into(), hint: None }, Prompt { id: "2".into(), prompt: "The dog bit the man.".into(), hint: None }]);
         let table = read_prompts("No,Prompt,Notes\n12,The dog sleeps.,intransitive\n12,The dog bit the man.,\n13,,\n", false).unwrap();
-        assert_eq!(table[0], Prompt { id: "12".into(), prompt: "The dog sleeps.".into() });
+        assert_eq!(table[0], Prompt { id: "12".into(), prompt: "The dog sleeps.".into(), hint: None });
         assert_eq!(table[1].id, "12-2", "a repeated id is made unique");
         assert_eq!(table.len(), 2);
         assert!(read_prompts("\n\n", false).is_err());
@@ -309,6 +346,26 @@ mod tests {
         // Loading the file again keeps the answers.
         assert_eq!(import(&mut s, &file).unwrap().answered, 1);
         assert_eq!(lists(&mut s).unwrap().len(), 1);
+        drop(s);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+    #[test]
+    fn a_list_made_from_frames_keeps_its_hints_out_of_the_translation() {
+        let dir = std::env::temp_dir().join(format!("wugs-sentences-{}", wugs_model::ulid()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut s: Session = None;
+        crate::session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let prompt = |id: &str, prompt: &str, hint: &str| Prompt { id: id.into(), prompt: prompt.into(), hint: Some(hint.into()) };
+        let l = make(&mut s, "Tone frames", vec![prompt("e1@1", "I see the  dog", "kuri"), prompt("e1@2", "dog", " kuri "), prompt("e2@1", "  ", "x")]).unwrap();
+        assert_eq!((l.id.as_str(), l.total), ("tone-frames", 2), "an empty prompt is left out");
+        let v = answer(&mut s, "tone-frames", "e1@1", "na mona kúri").unwrap();
+        assert_eq!(v.prompts[0].hint.as_deref(), Some("kuri"));
+        assert_eq!(v.prompts[1].hint.as_deref(), Some("kuri"), "hints trimmed");
+        let shown = crate::session::get_text(&mut s, v.list.text_id.as_deref().unwrap()).unwrap();
+        let tr = shown.segments.iter().find(|x| x.parent.is_some()).unwrap();
+        assert_eq!(tr.content, "I see the dog", "the translation is the prompt alone");
+        assert!(make(&mut s, "Twice", vec![prompt("a", "x", ""), prompt("a", "y", "")]).is_err());
+        assert!(make(&mut s, "Empty", Vec::new()).is_err());
         drop(s);
         std::fs::remove_dir_all(&dir).ok();
     }

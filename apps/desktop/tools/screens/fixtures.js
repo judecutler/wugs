@@ -1182,6 +1182,11 @@ const LEXICON = [
     }),
     sentence_lists: () => [{ ...promptView.list }],
     sentence_list_view: () => promptView,
+    // A list made from frames, kept for the probe to read back.
+    sentence_list_make: ({ name, prompts }) => {
+      window.__WUGS_MADE__ = { name, prompts };
+      return { id: "frames", name, total: prompts.length, answered: 0, textId: null };
+    },
     sentence_answer: ({ prompt, sentence }) => {
       const r = promptView.prompts.find((x) => x.id === prompt);
       r.answers.push({ segmentId: `se-${prompt}-${r.answers.length}`, tierId: "tier-utt", content: sentence });
