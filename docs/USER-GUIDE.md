@@ -1175,6 +1175,10 @@ Select a text in the **Texts** panel. Under the list, **Details** shows what is 
 
 To describe many texts at once, make a table with a row for each text: one column that names the text (its title, or the name of the file it came from), and a column for each detail. Keep it as a spreadsheet (`.xlsx`, `.xls`, `.ods`) or save it as `.csv` or `.tsv`, then press **Import details…** under Import and export. wugs reports the rows that named no text. Importing the same table again changes only what is different.
 
+### Bring in examples from a CLDF dataset
+
+Many grammars and collections publish their interlinear examples as CLDF, in a table called `examples.csv` (IMTVault, a grammar's data, or a wugs **Publish as CLDF…** folder). Choose that table with **Import a file…**. Each example whose analysed words and glosses match one for one becomes a glossed sentence with its translation. The examples of each text title, or of each language when the table has several, become one text, ready to search in the Concordance and to copy as examples. Examples with no analysis are left out and counted. Importing the same table again adds nothing.
+
 ### Bring in a SayMore project
 
 If you kept your recordings in SayMore, press **Import a SayMore project…** under Import and export and choose the SayMore project's folder (the one that holds `Sessions`; a single session's folder works too). Each session becomes a text: its ELAN transcription when it has one, else an empty text named after the session, ready to transcribe. Its recording is brought in and linked, so the text opens with its sound, and the session's date, place, genre, participants, setting, description and other fields become the text's details. Status, access and consent stages are SayMore's own bookkeeping and stay there. Importing the same project again adds nothing twice.

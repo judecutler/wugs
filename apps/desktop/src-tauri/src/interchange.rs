@@ -635,6 +635,33 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
             }
             (r.texts.first().or(r.matched.first()).cloned(), false)
         }
+        Format::Table { tabs } if !input.contains('\0') && crate::cldf_import::examples_as_igt(input, tabs, &stem).is_some() => {
+            // A CLDF ExampleTable: each example a glossed sentence, through the glossed-examples reader.
+            let groups = crate::cldf_import::examples_as_igt(input, tabs, &stem).unwrap_or_default();
+            let tier = session::utterance_tier(p)?;
+            let translation = if groups.iter().any(|g| wugs_legacy::igt_text::has_translations(&g.1)) { Some(session::translation_track(p, &tier, None)?) } else { None };
+            let (mut made, mut matched, mut examples, mut morphs, mut linked, mut unglossed, mut first) = (0usize, 0usize, 0usize, 0usize, 0usize, 0usize, None);
+            for (title, igt, left) in &groups {
+                unglossed += left;
+                if igt.is_empty() {
+                    continue;
+                }
+                let r = wugs_legacy::import_glossed_examples(p, igt, &p.proj.nfc(title), &tier, translation.as_deref()).map_err(|e| format!("{file_name}: {e}"))?;
+                (made, matched, examples, morphs, linked) = (made + r.texts.len(), matched + r.matched.len(), examples + r.sentences, morphs + r.morphs, linked + r.linked);
+                first = first.or(r.texts.first().or(r.matched.first()).cloned());
+            }
+            lines.push(format!("Read as a CLDF example table: {} with {} and {}.", plural(made, "new text", "new texts"), plural(examples, "glossed example", "glossed examples"), plural(morphs, "glossed morph", "glossed morphs")));
+            if matched > 0 {
+                lines.push(format!("{} matched a text already here, so nothing was added twice.", plural(matched, "group", "groups")));
+            }
+            if linked > 0 {
+                lines.push(format!("{} linked to the lexicon entry with the same form and gloss.", plural(linked, "root was", "roots were")));
+            }
+            if unglossed > 0 {
+                lines.push(format!("{} had no analysis whose words and glosses match one for one, so they were left out.", plural(unglossed, "example", "examples")));
+            }
+            (first, false)
+        }
         Format::Table { tabs } => {
             if input.contains('\0') {
                 return Err(format!("{file_name} is not valid UTF-8 or UTF-16 text; it may be damaged, so nothing was imported"));
