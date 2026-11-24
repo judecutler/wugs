@@ -1071,6 +1071,11 @@ def main():
             line = run.page.locator(".panel-sounds .sd-like-line").inner_text()
             if "Not a word of the texts" not in line or run.page.locator(".panel-sounds .sd-like-near button").count() < 4:
                 failures.append(f"Word likeness did not find the made-up word's neighbours: {line}")
+            together = run.page.locator(".panel-sounds .sd-together")
+            together.scroll_into_view_if_needed()
+            run.shot("state-sounds-together", run.page.locator(".panel-sounds"))
+            if together.locator("tbody tr").count() < 3 or "pairs of a vowel and the next vowel" not in run.page.locator(".panel-sounds .sd-together-note").inner_text():
+                failures.append("Sounds together drew no table of vowel pairs")
             run.page.locator(".panel-sounds .sd-bar button", has_text="Copy chart").click()
             run.page.wait_for_timeout(300)
             clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}

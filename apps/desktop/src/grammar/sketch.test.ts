@@ -185,3 +185,12 @@ test("endings shared by stems in the words get a section, even with nothing glos
   assert.match(html, /<h3>4\.\d Endings the words suggest<\/h3>/);
   assert.match(html, /<td class="ipa">∅ -la -li<\/td><td>3<\/td>/);
 });
+
+test("vowel harmony shows in the vowels section", () => {
+  const front = ["pi", "ti", "ki", "me", "le", "se"];
+  const back = ["pu", "tu", "ku", "mo", "lo", "so"];
+  const words = [...front.flatMap((a) => front.map((b) => a + b)), ...back.flatMap((a) => back.map((b) => a + b))].map((word) => ({ word, count: 1 }));
+  const html = grammarSketch({ ...base, words });
+  assert.match(html, /pairs of a vowel and the next vowel in a word.*avoided.*may point to vowel harmony/su);
+  assert.doesNotMatch(grammarSketch(base), /may point to vowel harmony/u, "no standout, no paragraph");
+});
