@@ -11,6 +11,8 @@ export type Find = {
   matchCase: boolean;
   /** One text, or every text. */
   text: string | null;
+  /** Read `find` as a regular expression, `$1` in `with` standing for its first group. */
+  regex?: boolean;
 };
 
 export type Change = {

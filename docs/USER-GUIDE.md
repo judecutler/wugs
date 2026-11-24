@@ -1230,7 +1230,7 @@ Search ignores accents in both directions, so `e` finds `é`.
 
 To change a spelling everywhere, for example after you settle on an orthography, click **Replace…** beside the scope buttons. The search box is now what to find, and a second box is what to write instead.
 
-1. Type what to find. It is matched exactly as you type it: no pattern syntax, and accents count, so `e` does not find `é`.
+1. Type what to find. It is matched exactly as you type it, and accents count, so `e` does not find `é`. Tick **As a pattern** to write a regular expression instead (see below).
 2. Type the replacement. Leave it empty to delete what you found.
 3. Choose **Transcriptions**, **Translations**, **Headwords** or **Glosses**, and tick **Whole words**, **Match case** or **Only the text on screen** if you need them. Without **Match case**, capitals do not matter.
 4. Every sentence that would change is listed with the change marked. Untick any you want to leave alone. Click a sentence to open it.
@@ -1242,6 +1242,8 @@ Each change is written as if you had typed it, so it syncs like any edit. A sent
 
 **Glosses** renames a gloss across every glossed word, for example `PST` to `PAST` when you change your abbreviations. Tick **Whole words** and **Match case** to change only the abbreviation itself: `SG` as a whole word does not touch `1SG`, which is one word. Each morph's gloss is written as if you had typed it in the Gloss panel, and **Undo** puts them back. Glosses of lexicon senses are not changed; edit those in the Lexicon.
 
+
+**As a pattern** reads what to find as a regular expression, for changes a plain spelling cannot say: `[aeiou]` is any of those vowels, `.` any character, `(…)` a group, `|` either side, `^` and `$` the start and end of the sentence. In the replacement, `$1` puts back what the first group found, `$2` the second; write `${1}` when a letter follows it, so it is not read as a longer name. For example, `ng([ie])` → `nj$1` writes *ng* before *i* or *e* as *nj*, and `([ptk])h` → `${1}ʰ` marks aspiration. The preview shows each place with what it becomes. A pattern that could match nothing at all, such as `x*`, is refused, as it would insert text everywhere.
 
 ## See every occurrence in context
 
