@@ -662,6 +662,13 @@ def main():
             run.shot("state-collocates", run.page.locator(".panel-collocates"))
             if run.page.locator(".panel-collocates .co-table tbody tr").count() == 0:
                 failures.append("collocates showed no rows")
+            # Only one part of speech as collocates.
+            run.page.locator(".panel-collocates .co-tag").select_option("ADJ")
+            run.page.wait_for_timeout(400)
+            if "Only adjectives (ADJ)" not in run.page.locator(".panel-collocates .fq-count").inner_text():
+                failures.append("Collocates did not say it counts only adjectives")
+            run.page.locator(".panel-collocates .co-tag").select_option("")
+            run.page.wait_for_timeout(300)
             # Two words' collocates side by side.
             run.page.locator(".panel-collocates .co-versus").fill("kesi")
             run.page.locator(".panel-collocates .co-versus").press("Enter")

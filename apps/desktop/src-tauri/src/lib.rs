@@ -406,8 +406,9 @@ fn texts_alike(s: State<SessionThread>, kind: concordance::Kind) -> Result<stylo
 
 /// Which words keep company with a word (Scrolls' collocates).
 #[tauri::command(async)]
-fn collocates(s: State<SessionThread>, node: String, kind: concordance::Kind, left: usize, right: usize, min_together: usize, text_id: Option<String>, within: Option<concordance::Where>) -> Result<collocates::Collocates, String> {
-    s.run(move |s| collocates::collocates(s, &node, kind, left, right, min_together, &concordance::Scope::of(text_id, within)))
+#[allow(clippy::too_many_arguments)]
+fn collocates(s: State<SessionThread>, node: String, kind: concordance::Kind, left: usize, right: usize, min_together: usize, text_id: Option<String>, within: Option<concordance::Where>, tag: Option<String>) -> Result<collocates::Collocates, String> {
+    s.run(move |s| collocates::collocates_tagged(s, &node, kind, left, right, min_together, &concordance::Scope::of(text_id, within), tag.as_deref()))
 }
 
 /// The words used in the same contexts as a word (src/similar.rs).

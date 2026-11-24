@@ -117,3 +117,27 @@ export function lemmaQuery(pattern: string, within: { key: string; value: string
   const q = `[lemma="${re}" %c]`;
   return within === null || within.key === "" ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
 }
+
+/** Parts of speech a collocate can be limited to: UD's tags in words, punctuation aside. */
+export const COLLOCATE_TAGS: readonly { tag: string; label: string }[] = [
+  { tag: "NOUN", label: "Nouns" },
+  { tag: "PROPN", label: "Proper nouns" },
+  { tag: "VERB", label: "Verbs" },
+  { tag: "AUX", label: "Auxiliaries" },
+  { tag: "ADJ", label: "Adjectives" },
+  { tag: "ADV", label: "Adverbs" },
+  { tag: "PRON", label: "Pronouns" },
+  { tag: "DET", label: "Determiners" },
+  { tag: "ADP", label: "Adpositions" },
+  { tag: "NUM", label: "Numerals" },
+  { tag: "PART", label: "Particles" },
+  { tag: "CCONJ", label: "Coordinating conjunctions" },
+  { tag: "SCONJ", label: "Subordinating conjunctions" },
+  { tag: "INTJ", label: "Interjections" },
+];
+
+/** The note's words for a limit to one tag, or "" with none. */
+export function tagNote(tag: string): string {
+  const t = COLLOCATE_TAGS.find((x) => x.tag === tag);
+  return t === undefined ? "" : ` Only ${t.label.toLowerCase()} (${t.tag}) are counted as collocates, so words with no tag drop out; tag a text in the Sentence panel first.`;
+}

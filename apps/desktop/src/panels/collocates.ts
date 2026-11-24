@@ -9,7 +9,7 @@ import { collocates, errorText, saveDocument } from "../api";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { standalone } from "./vowels";
 import { network } from "../collocates/network";
-import { lemmaQuery, asTsv, COLLOCATE_SORTS, compareCollocates, compareLine, compareTsv, leansTo, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates, type CompareRow } from "../collocates/logic";
+import { lemmaQuery, asTsv, COLLOCATE_SORTS, COLLOCATE_TAGS, tagNote, compareCollocates, compareLine, compareTsv, leansTo, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates, type CompareRow } from "../collocates/logic";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
@@ -57,6 +57,8 @@ export const collocatesPanel: PanelDef = {
     const right = picker("Words after", "How many words after it to look at", SPANS, 5, (n) => `${n} after`);
     const min = picker("Minimum together", "Leave out words met together fewer times than this", MINIMUMS, 2, (n) => (n === 1 ? "Every pair" : `Together ${n}+ times`));
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Look among" });
+    const tagPicker = h("select", { className: "co-tag", title: "Count only collocates with this part of speech (from tags: CoNLL-U, a tagger, or CHAT's %mor)" }, h("option", { value: "", textContent: "Any part of speech" }), ...COLLOCATE_TAGS.map((t) => h("option", { value: t.tag, textContent: t.label })));
+    tagPicker.setAttribute("aria-label", "Part of speech");
     const scopePicker = h("select", { title: "Look in the whole project, one text, or the texts with one detail (add details in the Texts panel)" });
     scopePicker.setAttribute("aria-label", "Where to look");
     const sorter = h("select", { className: "co-sort", title: "Order of the rows. Windows stop at a segment's edge, so numbers are close to AntConc's but not equal on the same file." }, ...COLLOCATE_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
@@ -77,6 +79,8 @@ export const collocatesPanel: PanelDef = {
           b.setAttribute("aria-checked", String(k.id === kind));
           b.onclick = () => {
             kind = k.id;
+            tagPicker.disabled = kind === "translation";
+            if (tagPicker.disabled) tagPicker.value = "";
             drawChips();
             void load();
           };
@@ -204,7 +208,7 @@ export const collocatesPanel: PanelDef = {
       sorter.hidden = false;
       const rows = sortCollocates(data.rows, sortBy);
       const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn (Copy table has them all).` : "";
-      note.textContent = summary(asked, data, Number(left.value), Number(right.value)) + cut;
+      note.textContent = summary(asked, data, Number(left.value), Number(right.value)) + tagNote(tagPicker.value) + cut;
       const head = h(
         "tr",
         {},
@@ -263,7 +267,7 @@ export const collocatesPanel: PanelDef = {
       }
       note.textContent = "Counting…";
       try {
-        const ask = (word: string) => collocates({ node: word, kind, left: Number(left.value), right: Number(right.value), minTogether: Number(min.value), textId: scopeOf(scope).textId, within: scopeOf(scope).within });
+        const ask = (word: string) => collocates({ node: word, kind, left: Number(left.value), right: Number(right.value), minTogether: Number(min.value), textId: scopeOf(scope).textId, within: scopeOf(scope).within, tag: tagPicker.value === "" ? null : tagPicker.value });
         const second = versus.value.trim();
         const [r, r2] = await Promise.all([ask(query), second === "" ? Promise.resolve(null) : ask(second)]);
         if (mine !== seq) return;
@@ -288,7 +292,7 @@ export const collocatesPanel: PanelDef = {
     versus.addEventListener("search", () => {
       if (versus.value === "") void load();
     });
-    for (const s of [left, right, min]) s.onchange = () => void load();
+    for (const s of [left, right, min, tagPicker]) s.onchange = () => void load();
     scopePicker.onchange = () => {
       scope = scopePicker.value;
       void load();
@@ -353,7 +357,7 @@ export const collocatesPanel: PanelDef = {
       el.replaceChildren(
         h("div", { className: "cc-bar" }, node, go, versus),
         chips,
-        h("div", { className: "cc-bar" }, left, right, min, scopePicker),
+        h("div", { className: "cc-bar" }, left, right, min, tagPicker, scopePicker),
         h("div", { className: "cc-bar" }, sorter, copy, netToggle),
         netBox,
         note,
