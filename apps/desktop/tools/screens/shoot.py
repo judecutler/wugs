@@ -641,6 +641,23 @@ def main():
             run.shot("state-wordsketch", run.page.locator(".panel-wordsketch"))
             if "Objects of «eat»" not in run.page.locator(".panel-wordsketch").inner_text():
                 failures.append("Word sketch did not name the objects")
+            # People: a person's details, and everyone copied as a table.
+            run.front("people", "People")
+            run.page.locator(".panel-people .pp-details summary").first.click()
+            ed = run.page.locator(".panel-people .pp-detail").nth(1)
+            ed.fill("female")
+            ed.press("Enter")
+            run.page.locator(".panel-people .pp-note").first.click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-people-details", run.page.locator(".panel-people"))
+            if "Details (4)" not in run.page.locator(".panel-people .pp-details summary").first.inner_text():
+                failures.append("People did not keep a person's detail")
+            run.page.locator(".panel-people .pp-copy").click()
+            run.page.wait_for_timeout(300)
+            clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}
+            if "Born (year)" not in clip.get("text", "") or "1952" not in clip.get("text", ""):
+                failures.append(f"People did not copy everyone as a table: {clip}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Elicit sentences: answer a prompt; focus moves to the next.
             run.front("sentences", "Elicit sentences")
             field = run.page.locator(".panel-sentences input.se-answer[data-prompt='2']")

@@ -449,6 +449,7 @@ const LEXICON = [
         id: "p-ama",
         name: "Ama Torvesi",
         roles: ["speaker"],
+        details: [["born", "1952"], ["from", "Kelani village"], ["languages", "Kanu (first), Tok Pisin, English"]],
         deleted: false,
         consents: [
           {
@@ -465,12 +466,13 @@ const LEXICON = [
         id: "p-kelo",
         name: "Kelo Marandi",
         roles: ["consultant", "translator"],
+        details: [],
         deleted: false,
         consents: [
           { id: "c-kelo-1", covers: "src-fox", terms: [["archive-ok", true], ["web-ok", null], ["community-only", true], ["AI-ok", false]], date: "2026-11-05", evidenceName: null, hasEvidence: false },
         ],
       },
-      { id: "p-demo", name: "D. Mo", roles: ["researcher"], deleted: false, consents: [] },
+      { id: "p-demo", name: "D. Mo", roles: ["researcher"], details: [], deleted: false, consents: [] },
     ],
   };
 
@@ -1106,6 +1108,11 @@ const LEXICON = [
     },
     conflicts_list: () => conflicts,
     people_view: () => peopleView,
+    person_set_detail: ({ person, key, value }) => {
+      const p = peopleView.people.find((x) => x.id === person);
+      p.details = [...p.details.filter(([k]) => k !== key), ...(value ? [[key, value]] : [])].sort();
+      return peopleView;
+    },
     search,
   };
 })();

@@ -595,6 +595,8 @@ To add a person:
 2. Choose a role, such as speaker or consultant.
 3. Click **Add person**.
 
+Under each person, **Details** opens fields for what an archive's list of participants asks for: the year they were born, sex or gender, the languages they speak, where they are from and where they live, ethnic group, education and notes. Each saves when you press Enter or leave the field, and the line shows how many are filled. Details are kept in the project's people records, the most restricted part of a project. **Copy as a table** above the list copies everyone, with their roles, details and what their consent records say, to paste into an archive's deposit form or a spreadsheet.
+
 To record what they agreed to:
 
 1. Click **Record what they agreed to**.

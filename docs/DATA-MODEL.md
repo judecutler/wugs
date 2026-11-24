@@ -100,7 +100,7 @@ Field types: `str`, `int`, `real`, `bool`, `ms` (milliseconds), `ref:<kind>`, `e
 ### People, ethics, context
 | Entity | Fields |
 | --- | --- |
-| **Person** `prs` | names `json` · roles `json` · default-access `enum` |
+| **Person** `prs` | names `json` · roles `json` · default-access `enum` · details as `meta:<key>` `str` fields (born, languages, from…; keys as a text's metadata) |
 | **Consent** `cns` | person `ref` · covers `ref:src|prj` · terms `json` (archive-ok, web-ok, community-only, AI-ok…) · date · evidence `blob?` |
 | **Session** `ses` | date, place `str` · method `str` · participants via link entities · notes `text` |
 

@@ -6,7 +6,8 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { errorText, peopleCommand, type Coverable, type PeopleCommand, type PeopleConsent as ConsentView, type PeoplePerson as PersonView, type PeopleView } from "../api";
 import { localDay } from "../dates";
 import { emptyState, h } from "../dom";
-import { termLabel, ROLES, type Answer } from "../people/logic";
+import { detailKeys, detailLabel, peopleTsv, termLabel, ROLES, type Answer } from "../people/logic";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { dataGeneration, getState, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -20,6 +21,8 @@ export const peoplePanel: PanelDef = {
     let seq = 0;
     /** Delete buttons armed by a first click: person or record ids. */
     const armed = new Set<string>();
+    /** People whose details are open. */
+    const detailsOpen = new Set<string>();
 
     const projectPath = () => {
       const s = getState();
@@ -36,7 +39,9 @@ export const peoplePanel: PanelDef = {
         const next = await peopleCommand(command, args);
         if (projectPath() !== path || mine !== seq) return;
         view = next;
-        draw();
+        // A detail saved on leaving its field must not redraw under the next one.
+        if (command === "person_set_detail" && editing()) pending = true;
+        else draw();
       } catch (e) {
         // An answer about a project no longer open says nothing about this one.
         if (projectPath() === path) showToast({ tone: "error", lines: [errorText(e)] });
@@ -168,10 +173,33 @@ export const peoplePanel: PanelDef = {
         ...ROLES.map((r) => h("option", { value: r, textContent: r, selected: p.roles[0] === r })),
       );
       if (p.roles[0] !== undefined && !ROLES.includes(p.roles[0])) role.append(h("option", { value: p.roles[0], textContent: p.roles[0], selected: true }));
+      const filled = p.details.filter(([, v]) => v !== "").length;
+      const box = h("details", { className: "pp-details", open: detailsOpen.has(p.id) });
+      box.ontoggle = () => (box.open ? detailsOpen.add(p.id) : detailsOpen.delete(p.id));
+      box.append(
+        h("summary", { textContent: filled === 0 ? "Details" : `Details (${filled})`, title: "Born, languages, where they are from…: what an archive's list of participants asks for" }),
+        ...detailKeys(p.details).map((key) => {
+          const had = p.details.find(([k]) => k === key)?.[1] ?? "";
+          const field = h("input", { value: had, className: "pp-detail", ariaLabel: `${detailLabel(key)} of ${p.name}` });
+          let sent = had;
+          const save = () => {
+            const next = field.value.trim();
+            if (next === sent) return;
+            sent = next;
+            void act("person_set_detail", { person: p.id, key, value: next });
+          };
+          field.onkeydown = (ev) => {
+            if (ev.key === "Enter") save();
+          };
+          field.onblur = save;
+          return h("label", { className: "pp-row pp-detail-row" }, h("span", { className: "pp-label", textContent: detailLabel(key) }), field);
+        }),
+      );
       return h(
         "section",
         { className: "pp-person" },
         h("div", { className: "pp-row" }, name, role, twoClick(p.id, "Delete", () => void act("person_delete", { person: p.id }))),
+        box,
         ...p.consents.map((c) => consentCard(p, c, coverable)),
         h("button", {
           type: "button",
@@ -213,6 +241,21 @@ export const peoplePanel: PanelDef = {
           "Optional. Write down who speaks in your recordings and what each person agreed to. The corrections export and sealed archive packages report what these records say; nothing in wugs is blocked by them. Your ethics board's rules are the ones that count.",
         ),
         add,
+        ...(v.people.length === 0
+          ? []
+          : [h("button", {
+              type: "button",
+              className: "pp-copy",
+              textContent: "Copy as a table",
+              title: "Everyone with their roles, details and consent records, to paste into an archive's list of participants or a spreadsheet",
+              onclick: () => {
+                const label = (id: string) => v.coverable.find((c) => c.id === id)?.label ?? id;
+                void writeText(peopleTsv(v.people, label)).then(
+                  () => showToast({ tone: "info", lines: ["Copied everyone as a table."] }),
+                  (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+                );
+              },
+            })]),
         ...(v.people.length === 0 ? [h("p", { className: "empty", textContent: "No one recorded yet." })] : v.people.map((p) => personCard(p, v.coverable))),
       );
     }

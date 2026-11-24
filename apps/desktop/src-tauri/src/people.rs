@@ -27,6 +27,8 @@ pub struct PersonView {
     pub id: String,
     pub name: String,
     pub roles: Vec<String>,
+    /// Born, languages, from… (`meta:<key>` fields), sorted by key.
+    pub details: Vec<(String, String)>,
     pub consents: Vec<ConsentView>,
     /// Deleted on another device while a record was added for them here.
     pub deleted: bool,
@@ -55,6 +57,7 @@ pub fn view(s: &mut Session) -> Result<PeopleView, String> {
         .people()?
         .into_iter()
         .map(|r| PersonView {
+            details: p.person_details(&r.id).unwrap_or_default(),
             id: r.id,
             name: r.name,
             roles: r.roles,
@@ -100,6 +103,11 @@ pub fn add_person(s: &mut Session, name: &str, role: &str) -> Result<PeopleView,
 
 pub fn set_name(s: &mut Session, person: &str, name: &str) -> Result<PeopleView, String> {
     project(s)?.set_person_name(person, name)?;
+    view(s)
+}
+
+pub fn set_detail(s: &mut Session, person: &str, key: &str, value: &str) -> Result<PeopleView, String> {
+    project(s)?.set_person_detail(person, key, value)?;
     view(s)
 }
 
@@ -208,6 +216,19 @@ pub fn consent_gaps(s: &mut Session) -> Result<ConsentGaps, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn details_show_in_the_view() {
+        let dir = std::env::temp_dir().join(format!("wugs-person-details-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::session::create_project(&mut s, dir.to_str().unwrap(), "prs_Ana").unwrap();
+        let v = add_person(&mut s, "Ana Reyes", "speaker").unwrap();
+        let ana = v.people[0].id.clone();
+        let v = set_detail(&mut s, &ana, "born", "1958").unwrap();
+        assert_eq!(v.people[0].details, vec![("born".to_string(), "1958".to_string())]);
+        drop(s);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn texts_without_consent_or_with_limits_are_listed() {
