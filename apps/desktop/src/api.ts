@@ -80,6 +80,7 @@ export const collocates = (args: { node: string; kind: "word" | "translation" | 
 export const collexemes = (args: { query: string; slot: number; lemma: boolean; textId: string | null }) => invoke<import("./collexemes/logic").Collexemes>("collexemes", args);
 export const distinctiveCollexemes = (args: { first: string; firstSlot: number; second: string; secondSlot: number; lemma: boolean; textId: string | null }) => invoke<import("./collexemes/logic").Distinctive>("distinctive_collexemes", args);
 export const phonPairs = () => invoke<import("./sounds/accuracy").PhonPairs>("phon_pairs");
+export const brownMorphemes = () => invoke<import("./progress/brown").BrownTrack[]>("brown_morphemes");
 export const similarWords = (args: { word: string; kind: "word" | "translation" | "lemma"; window: number; minFreq: number; textId: string | null; within?: import("./metadata/logic").Where | null }) =>
   invoke<import("./similar/logic").Similar>("similar_words", args);
 export const keywords = (args: { kind: import("./keywords/logic").KeywordKind; textId: string | null; within?: import("./metadata/logic").Where | null; againstText?: string | null; against?: import("./metadata/logic").Where | null; minCount: number; size?: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);

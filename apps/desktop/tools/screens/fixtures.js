@@ -1205,6 +1205,16 @@ const LEXICON = [
         { track: "tier-chi", text: "t-c2", title: "In the park", segment: "c3", target: "bɔl dɔɡi", actual: "bɔl dɔɡi" },
       ],
     }),
+    brown_morphemes: () => [
+      {
+        tier: "tier-chi",
+        name: "CHI",
+        sessions: [
+          { text: "t-c1", title: "Bath time", utterances: 120, counts: [6, 2, 1, 9, 0, 0, 3, 4, 0, 0, 0, 1, 2, 0] },
+          { text: "t-c2", title: "In the park", utterances: 102, counts: [11, 5, 3, 14, 2, 1, 6, 12, 1, 2, 0, 3, 5, 1] },
+        ],
+      },
+    ],
     gloss_still_to_gloss: () => ["u03", "u10"],
     // Sentences like the one on screen, with a translation for the first.
     like_sentences: ({ segmentId }) =>
