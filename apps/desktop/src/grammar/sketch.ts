@@ -10,6 +10,7 @@ import { chart, gridOf, inventory, MANNER_NAMES, PLACE_NAMES, type Sound } from 
 import { gapsNote, positions, shapes, share } from "../sounds/shapes.ts";
 import { syllableNote, syllableTypes } from "../sounds/syllables.ts";
 import { toneMelodies, tonesNote } from "../sounds/tones.ts";
+import { cooccurrence, cooccurrenceNote, standouts } from "../sounds/cooccur.ts";
 import { affixLabel, signatures } from "../affixes/signatures.ts";
 import { possibleAllophones } from "../sounds/allophones.ts";
 import { countsLine, total, verdict, type WordOrder } from "../wordorder/logic.ts";
@@ -207,7 +208,11 @@ export function grammarSketch(d: SketchInput): string {
           .join("")}</table>`,
       );
     parts.push(todo("Which of these contrast, and their allophones"));
-    parts.push(`<h3>2.2 Vowels</h3>`, vowelList(sounds), todo("Vowel contrasts, length, nasality, harmony"));
+    parts.push(`<h3>2.2 Vowels</h3>`, vowelList(sounds));
+    // Vowels together in a word: harmony shows as pairs avoided and preferred.
+    const together = cooccurrence(d.words, "V");
+    if (standouts(together).length > 0) parts.push(`<p>${esc(cooccurrenceNote(together, "V"))} Pairs well below 1 may point to vowel harmony.</p>`);
+    parts.push(todo("Vowel contrasts, length, nasality, harmony"));
     parts.push(`<h3>2.3 Frequency</h3>`, soundTable(sounds));
   }
   parts.push(`<h3>2.4 Word shapes, syllables and stress</h3>`);
