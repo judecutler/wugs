@@ -31,6 +31,12 @@ pub struct TableImport {
     pub columns: Vec<String>,
     /// Columns left out.
     pub ignored: Vec<String>,
+    /// Links of new senses to semantic domains, and domains named in the
+    /// table that the project has neither by code nor by name.
+    pub domains: usize,
+    pub domains_unmatched: Vec<String>,
+    /// Example sentences of new senses.
+    pub examples: usize,
 }
 
 fn name(header: &str) -> String {
@@ -59,6 +65,9 @@ struct Columns {
     homograph: Option<usize>,
     definition: Option<usize>,
     usage: Option<usize>,
+    domains: Option<usize>,
+    example: Option<usize>,
+    example_translation: Option<usize>,
     glosses: Vec<(usize, String)>,
 }
 
@@ -72,6 +81,9 @@ fn columns(header: &[String]) -> Result<Columns, String> {
         homograph: find(&["homograph", "hm", "homograph number"]),
         definition: find(&["definition", "def", "de", "dn"]),
         usage: find(&["usage", "usage note", "note", "notes"]),
+        domains: find(&["semantic domains", "semantic domain", "domains", "domain", "sd", "semantic field", "semantic fields"]),
+        example: find(&["example", "example sentence", "examples", "xv", "example vernacular"]),
+        example_translation: find(&["example translation", "translation of example", "example gloss", "xe", "example english", "example free translation"]),
         glosses: Vec::new(),
     };
     for (i, h) in header.iter().enumerate() {
@@ -89,7 +101,7 @@ fn columns(header: &[String]) -> Result<Columns, String> {
     }
     if c.lemma.is_none() {
         // Else the first column that is none of the others.
-        let taken: Vec<usize> = [c.gloss, c.category, c.citation, c.homograph, c.definition, c.usage].into_iter().flatten().chain(c.glosses.iter().map(|g| g.0)).collect();
+        let taken: Vec<usize> = [c.gloss, c.category, c.citation, c.homograph, c.definition, c.usage, c.domains, c.example, c.example_translation].into_iter().flatten().chain(c.glosses.iter().map(|g| g.0)).collect();
         c.lemma = (0..header.len()).find(|i| !taken.contains(i));
     }
     if c.lemma.is_none() {
@@ -107,6 +119,20 @@ pub fn import(session: &mut Session, path: &Path) -> Result<TableImport, String>
     let (header, rows, _) = crate::table_text::records(&text, tabs)?;
     let c = columns(&header)?;
     let cell = |r: &Vec<String>, i: Option<usize>| i.and_then(|i| r.get(i)).map(|s| s.trim().to_string()).unwrap_or_default();
+    // Domains by outline code (`1.1`, `1.1 Sky`) or by name; a table naming
+    // domains in a project with none loads the SIL list first, as LIFT does.
+    let named = c.domains.is_some() && rows.iter().any(|r| !cell(r, c.domains).is_empty());
+    let mut by_code: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut by_label: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    if named {
+        let p = project(session)?;
+        crate::lexicon::sil_domains_if_none(p)?;
+        for d in crate::lexicon::domains_list(session)? {
+            by_label.entry(d.label.trim().to_lowercase()).or_insert_with(|| d.id.clone());
+            by_code.insert(d.code.clone(), d.id);
+        }
+    }
+    let mut unmatched: Vec<String> = Vec::new();
     let mut no_lemma = 0;
     let mut table = Vec::new();
     for r in &rows {
@@ -124,11 +150,26 @@ pub fn import(session: &mut Session, path: &Path) -> Result<TableImport, String>
             glosses: c.glosses.iter().map(|(i, tag)| (tag.clone(), cell(r, Some(*i)))).collect(),
             definition: cell(r, c.definition),
             usage: cell(r, c.usage),
+            domains: cell(r, c.domains)
+                .split([';', '|'])
+                .map(str::trim)
+                .filter(|d| !d.is_empty())
+                .filter_map(|d| {
+                    let code = d.split_whitespace().next().filter(|w| w.chars().all(|ch| ch.is_ascii_digit() || ch == '.')).map(|w| w.trim_end_matches('.'));
+                    let found = code.and_then(|c| by_code.get(c)).or_else(|| by_label.get(&d.to_lowercase())).cloned();
+                    if found.is_none() && !unmatched.iter().any(|u| u == d) {
+                        unmatched.push(d.to_string());
+                    }
+                    found
+                })
+                .collect(),
+            example: cell(r, c.example),
+            example_translation: cell(r, c.example_translation),
         });
     }
     let p = project(session)?;
     let (r, _) = p.import_lexicon_rows(&table)?;
-    let mut read = vec![(c.lemma, "lemma".to_string()), (c.gloss, "gloss".into()), (c.category, "category".into()), (c.citation, "citation form".into()), (c.homograph, "homograph number".into()), (c.definition, "definition".into()), (c.usage, "usage".into())];
+    let mut read = vec![(c.lemma, "lemma".to_string()), (c.gloss, "gloss".into()), (c.category, "category".into()), (c.citation, "citation form".into()), (c.homograph, "homograph number".into()), (c.definition, "definition".into()), (c.usage, "usage".into()), (c.domains, "semantic domains".into()), (c.example, "example sentence".into()), (c.example_translation, "example's translation".into())];
     read.extend(c.glosses.iter().map(|(i, tag)| (Some(*i), format!("gloss in {tag}"))));
     let used: Vec<usize> = read.iter().filter_map(|(i, _)| *i).collect();
     Ok(TableImport {
@@ -139,6 +180,9 @@ pub fn import(session: &mut Session, path: &Path) -> Result<TableImport, String>
         no_lemma,
         columns: read.into_iter().filter_map(|(i, what)| i.map(|i| format!("{} → {what}", header[i].trim()))).collect(),
         ignored: header.iter().enumerate().filter(|(i, h)| !used.contains(i) && !h.trim().is_empty()).map(|(_, h)| h.trim().to_string()).collect(),
+        domains: r.domains,
+        domains_unmatched: unmatched,
+        examples: r.examples,
     })
 }
 
@@ -158,7 +202,7 @@ pub fn export(session: &mut Session, folder: &Path) -> Result<String, String> {
     let mut w = csv::WriterBuilder::new().from_writer(Vec::new());
     let mut head = vec!["lemma".to_string(), "homograph".into(), "category".into(), "citation".into(), "sense".into(), "gloss".into()];
     head.extend(tags.iter().map(|t| format!("gloss ({t})")));
-    head.extend(["definition".into(), "usage".into(), "semantic domains".into()]);
+    head.extend(["definition".into(), "usage".into(), "semantic domains".into(), "example".into(), "example translation".into()]);
     w.write_record(&head).map_err(|e| e.to_string())?;
     for v in &views {
         let senses = if v.senses.is_empty() { vec![None] } else { v.senses.iter().map(Some).collect() };
@@ -169,6 +213,10 @@ pub fn export(session: &mut Session, folder: &Path) -> Result<String, String> {
             rec.push(s.map(|s| s.definition.clone()).unwrap_or_default());
             rec.push(s.map(|s| s.usage.clone()).unwrap_or_default());
             rec.push(s.map(|s| s.domains.iter().map(|d| format!("{} {}", d.code, d.label)).collect::<Vec<_>>().join("; ")).unwrap_or_default());
+            // The first example; the table has room for one a sense.
+            let ex = s.and_then(|s| s.examples.first());
+            rec.push(ex.map(|e| e.sentence.clone()).unwrap_or_default());
+            rec.push(ex.map(|e| e.translation.clone()).unwrap_or_default());
             w.write_record(&rec).map_err(|e| e.to_string())?;
         }
     }
@@ -214,10 +262,19 @@ mod tests {
         let written = export(&mut session, &out).unwrap();
         let text = std::fs::read_to_string(&written).unwrap();
         assert!(text.starts_with('\u{feff}'));
-        assert!(text.contains("kuma,,n,,2,strength,force,,,"), "{text}");
+        assert!(text.contains("kuma,,n,,2,strength,force,,,,,"), "{text}");
         // What went out comes back in as nothing new.
         let back = import(&mut session, Path::new(&written)).unwrap();
         assert_eq!((back.entries, back.senses), (0, 0), "{:?}", back.columns);
+        // Semantic domains by code or name (the SIL list loaded for them) and an example sentence.
+        let more = out.join("more.csv");
+        std::fs::write(&more, "Word,Gloss,Semantic domain,Example,Example translation\nlangit,sky,1.1 Sky; weather; Moonbeams,langit biru,a blue sky\n").unwrap();
+        let r = import(&mut session, &more).unwrap();
+        assert_eq!((r.senses, r.domains, r.examples), (1, 2, 1), "{:?}", r.columns);
+        assert_eq!(r.domains_unmatched, vec!["Moonbeams".to_string()]);
+        let written = export(&mut session, &out).unwrap();
+        let text = std::fs::read_to_string(&written).unwrap();
+        assert!(text.contains("langit,,,,1,sky,,,,1.1 Sky; 1.1.3 Weather,langit biru,a blue sky"), "{text}");
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
         let _ = std::fs::remove_dir_all(&out);

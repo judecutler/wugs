@@ -954,9 +954,11 @@ To bring in a dictionary you keep in a spreadsheet, choose it as it is (`.xlsx`,
 - the word: **lemma**, **headword**, **word**, **lexeme** or **form** (else the first column);
 - its gloss: **gloss**, **english** or **meaning**;
 - glosses in other languages: **gloss (fr)**, **gloss_es** and the like;
-- **category** or **part of speech**, **citation**, **homograph**, **definition**, **usage** or **notes**.
+- **category** or **part of speech**, **citation**, **homograph**, **definition**, **usage** or **notes**;
+- **semantic domains** (or **domain**): one or more domains separated by `;`, each by its number (`1.1`, `1.1 Sky`) or its name (`Weather`). If the project has no semantic domains yet, wugs loads the SIL list first. A name it cannot find is listed in the message;
+- **example** and **example translation**: one example sentence of the sense and its translation.
 
-Rows with the same word become one entry with a sense per row. A word already in the lexicon gets the new senses, and a sense whose gloss it already has is skipped, so importing the same table twice adds nothing. The message after the import names the columns it read and the ones it left out. When several entries share a word, add a **homograph** column so wugs knows which one a row belongs to.
+**Export the lexicon** as a spreadsheet writes the same columns, with each sense's domains and first example, so a table you export, correct in Excel and import again keeps them. Rows with the same word become one entry with a sense per row. A word already in the lexicon gets the new senses, and a sense whose gloss it already has is skipped, so importing the same table twice adds nothing. The message after the import names the columns it read and the ones it left out. When several entries share a word, add a **homograph** column so wugs knows which one a row belongs to.
 
 wugs names the file after the text's title and never replaces a file that exists. It adds " (2)" to the name instead. You cannot export into the project folder itself.
 

@@ -515,6 +515,22 @@ mod tests {
         p.add_lexeme("lari", "river").unwrap();
         let (amb, _) = p.import_lexicon_rows(&[row("lari", "stream")]).unwrap();
         assert_eq!(amb.ambiguous, vec!["lari".to_string()]);
+        // A sense's domains and example come in with it; an id that is no domain is skipped.
+        let rows = vec![
+            crate::DomainRow { code: "1".into(), guid: "63403699-07C1-43F3-A47C-069D6E4316E5".into(), label: "Universe".into(), description: String::new() },
+            crate::DomainRow { code: "1.1".into(), guid: "999581C4-1611-4ACB-AE1B-5E6C1DFE6F0C".into(), label: "Sky".into(), description: String::new() },
+        ];
+        p.import_semantic_domains("semdom:v4", &rows).unwrap();
+        let sky = crate::domain_id("999581C4-1611-4ACB-AE1B-5E6C1DFE6F0C").unwrap();
+        let langit = LexiconRow { domains: vec![sky.clone(), sky.clone(), dog.clone()], example: " langit  biru ".into(), example_translation: "a blue sky".into(), ..row("langit", "sky") };
+        let (r, _) = p.import_lexicon_rows(&[langit]).unwrap();
+        assert_eq!((r.entries, r.senses, r.domains, r.examples), (1, 1, 1, 1));
+        let lx = p.proj.by_lookup_key("lexeme", "langit").unwrap();
+        let sense = p.proj.ordered_children("lexeme", &lx[0], "sense").unwrap()[0].clone();
+        assert_eq!(p.sense_domains(&sense).unwrap().iter().map(|(_, d)| d.clone()).collect::<Vec<_>>(), vec![sky]);
+        let ex = p.examples(&sense).unwrap();
+        assert_eq!(ex.len(), 1);
+        assert_eq!((ex[0].sentence.as_str(), ex[0].translation.as_str()), ("langit biru", "a blue sky"));
         drop(p);
         let _ = std::fs::remove_dir_all(root);
     }
@@ -684,6 +700,12 @@ pub struct LexiconRow {
     pub glosses: Vec<(String, String)>,
     pub definition: String,
     pub usage: String,
+    /// Semantic domains the sense is in, as domain entity ids (the caller
+    /// finds them by code or label); ids that name no live domain are skipped.
+    pub domains: Vec<String>,
+    /// An example sentence of the sense and its translation.
+    pub example: String,
+    pub example_translation: String,
 }
 
 /// What [`Project::import_lexicon_rows`] did.
@@ -691,6 +713,10 @@ pub struct LexiconRow {
 pub struct LexiconImport {
     pub entries: usize,
     pub senses: usize,
+    /// Links of the new senses to semantic domains.
+    pub domains: usize,
+    /// Example sentences of the new senses.
+    pub examples: usize,
     /// Rows whose entry already has a sense with that gloss.
     pub unchanged: usize,
     /// Rows naming a lemma several entries share, with no homograph number to tell them apart.
@@ -725,7 +751,7 @@ impl Project {
         let mut entries: std::collections::HashMap<(String, Option<u32>), Entry> = std::collections::HashMap::new();
         let mut sets: Vec<(String, &'static str, String)> = Vec::new();
         let mut new_entries: Vec<Vec<(&'static str, Value)>> = Vec::new();
-        let mut senses: Vec<(Owner, Vec<(String, Value)>)> = Vec::new();
+        let mut senses: Vec<(Owner, Vec<(String, Value)>, Vec<String>, Option<(String, String)>)> = Vec::new();
         for row in rows {
             let lemma = tidy(self, &row.lemma);
             if lemma.is_empty() {
@@ -800,7 +826,19 @@ impl Project {
                 Some(id) => Owner::Existing(id.clone()),
                 None => Owner::New(entry.new_index),
             };
-            senses.push((owner, fields));
+            let mut domains = Vec::new();
+            for d in &row.domains {
+                if !domains.contains(d) && self.proj.entity_kind(d)?.as_deref() == Some("domain") && !self.proj.is_tombstoned(d)? {
+                    domains.push(d.clone());
+                }
+            }
+            let example = tidy(self, &row.example);
+            let translation = tidy(self, &row.example_translation);
+            // An example the editor could not hold either (over 2000 characters) is left out.
+            let example = (!example.is_empty() && example.chars().count() <= 2000 && translation.chars().count() <= 2000).then_some((example, translation));
+            report.domains += domains.len();
+            report.examples += usize::from(example.is_some());
+            senses.push((owner, fields, domains, example));
             entry.glosses.push(folded);
             entry.last_pos = pos;
         }
@@ -814,14 +852,24 @@ impl Project {
             t.set("lexeme", id, SCOPE_LEXICON, field, Value::str(value))?;
         }
         let made: Vec<String> = new_entries.into_iter().map(|fields| t.create("lexeme", "lex", SCOPE_LEXICON, fields)).collect();
-        for (owner, fields) in senses {
+        for (owner, fields, domains, example) in senses {
             let lexeme = match owner {
                 Owner::Existing(id) => id,
                 Owner::New(i) => made[i].clone(),
             };
             let mut all = vec![("lexeme", Value::str(&lexeme))];
             all.extend(fields.iter().map(|(f, v)| (f.as_str(), v.clone())));
-            t.create("sense", "sen", SCOPE_LEXICON, all);
+            let sense = t.create("sense", "sen", SCOPE_LEXICON, all);
+            for d in domains {
+                t.create("sense-domain", "sdm", SCOPE_LEXICON, vec![("sense", Value::str(&sense)), ("domain", Value::str(&d))]);
+            }
+            if let Some((sentence, translation)) = example {
+                let mut fields = vec![("sense", Value::str(&sense)), ("pos", Value::str(&after(""))), ("sentence", Value::str(&sentence))];
+                if !translation.is_empty() {
+                    fields.push(("translation", Value::str(&translation)));
+                }
+                t.create("example", "exm", SCOPE_LEXICON, fields);
+            }
         }
         Ok((report, Some(t.commit()?)))
     }
