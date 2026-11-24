@@ -163,6 +163,52 @@ pub fn set_area(session: &mut Session, text: &str, segment: &str, area: Option<A
     view(session, text)
 }
 
+/// A picture's size in pixels from its first bytes: PNG, GIF, JPEG or WebP.
+pub fn image_size(b: &[u8]) -> Option<(u32, u32)> {
+    let be16 = |i: usize| Some(u16::from_be_bytes([*b.get(i)?, *b.get(i + 1)?]) as u32);
+    let le16 = |i: usize| Some(u16::from_le_bytes([*b.get(i)?, *b.get(i + 1)?]) as u32);
+    let le24 = |i: usize| Some(u32::from_le_bytes([*b.get(i)?, *b.get(i + 1)?, *b.get(i + 2)?, 0]));
+    let be32 = |i: usize| Some(u32::from_be_bytes([*b.get(i)?, *b.get(i + 1)?, *b.get(i + 2)?, *b.get(i + 3)?]));
+    let size = if b.starts_with(b"\x89PNG\r\n\x1a\n") {
+        (be32(16)?, be32(20)?)
+    } else if b.starts_with(b"GIF8") {
+        (le16(6)?, le16(8)?)
+    } else if b.starts_with(&[0xff, 0xd8]) {
+        // Walk the markers to the first start-of-frame.
+        let mut i = 2;
+        loop {
+            while *b.get(i)? != 0xff {
+                i += 1;
+            }
+            while *b.get(i)? == 0xff {
+                i += 1;
+            }
+            let m = *b.get(i)?;
+            i += 1;
+            if matches!(m, 0xd8 | 0x01 | 0xd0..=0xd7) {
+                continue;
+            }
+            if matches!(m, 0xc0..=0xcf) && !matches!(m, 0xc4 | 0xc8 | 0xcc) {
+                break (be16(i + 5)?, be16(i + 3)?);
+            }
+            i += be16(i)? as usize;
+        }
+    } else if b.len() >= 30 && &b[0..4] == b"RIFF" && &b[8..12] == b"WEBP" {
+        match &b[12..16] {
+            b"VP8 " => (le16(26)? & 0x3fff, le16(28)? & 0x3fff),
+            b"VP8L" => {
+                let v = u32::from_le_bytes([b[21], b[22], b[23], b[24]]);
+                ((v & 0x3fff) + 1, ((v >> 14) & 0x3fff) + 1)
+            }
+            b"VP8X" => (le24(24)? + 1, le24(27)? + 1),
+            _ => return None,
+        }
+    } else {
+        return None;
+    };
+    (size.0 > 0 && size.1 > 0).then_some(size)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -171,6 +217,21 @@ mod tests {
     const PNG: &[u8] = &[
         0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1f, 0x15, 0xc4, 0x89, 0, 0, 0, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0xf8, 0xcf, 0xc0, 0xf0, 0x1f, 0, 5, 0, 1, 0xff, 0x89, 0x99, 0x3d, 0x1d, 0, 0, 0, 0, 0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
     ];
+
+    #[test]
+    fn picture_sizes_are_read_from_their_headers() {
+        assert_eq!(image_size(PNG), Some((1, 1)));
+        let gif = [b"GIF89a".as_slice(), &[0x40, 0x01, 0xf0, 0x00]].concat();
+        assert_eq!(image_size(&gif), Some((320, 240)));
+        // A JPEG with an APP0 segment before its frame header.
+        let jpeg = [&[0xff, 0xd8, 0xff, 0xe0, 0x00, 0x04, 0x00, 0x00][..], &[0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xe0, 0x02, 0x80]].concat();
+        assert_eq!(image_size(&jpeg), Some((640, 480)));
+        let mut webp = b"RIFF\0\0\0\0WEBPVP8X".to_vec();
+        webp.extend([0u8; 8]);
+        webp.extend([0x1f, 0x03, 0x00, 0x57, 0x02, 0x00]);
+        assert_eq!(image_size(&webp), Some((800, 600)));
+        assert_eq!(image_size(b"not a picture at all, just text"), None);
+    }
 
     #[test]
     fn pages_are_added_marked_moved_and_taken_off() {

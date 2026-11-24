@@ -42,7 +42,7 @@ export function corpusLines(r: { path: string; corpus: string; texts: number; se
 }
 
 /** What "Publish as a website" wrote (src-tauri/src/website.rs). */
-export type Site = { path: string; texts: number; sentences: number; entries: number; clips: number; restrictedLeftOut: number; clipsMissing: number; headwordClips?: number };
+export type Site = { path: string; texts: number; sentences: number; entries: number; clips: number; restrictedLeftOut: number; clipsMissing: number; headwordClips?: number; pages?: number };
 
 export function siteLines(r: Site): string[] {
   const holds = [
@@ -54,6 +54,7 @@ export function siteLines(r: Site): string[] {
   const sentences = r.clips - words;
   if (sentences > 0) lines.push(`${plural(sentences, "sentence plays", "sentences play")} from ${sentences === 1 ? "its" : "their"} recording.`);
   if (words > 0) lines.push(`${plural(words, "dictionary headword plays", "dictionary headwords play")} as ${words === 1 ? "it is" : "they are"} said.`);
+  if ((r.pages ?? 0) > 0) lines.push(`Each line marked on a page image shows its piece of the page, from ${plural(r.pages ?? 0, "page", "pages")} in the pages folder.`);
   if (r.clipsMissing > 0) lines.push(`${plural(r.clipsMissing, "timed sentence has", "timed sentences have")} no sound: the recording is not on this computer, not linked, or not open.`);
   if (r.restrictedLeftOut > 0) lines.push(`${plural(r.restrictedLeftOut, "text that is not open was", "texts that are not open were")} left out.`);
   lines.push("Notes are never published. Check that the speakers agreed before you share it.");
