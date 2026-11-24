@@ -1,4 +1,5 @@
 // Keywords (Scrolls): display rules. Pure: no DOM.
+import { cqpLiteral } from "../frequencies/logic.ts";
 
 export type KeywordRow = { item: string; focus: number; reference: number; logLikelihood: number; logRatio: number; percentDiff: number; simpleMaths: number };
 export type Keywords = { rows: KeywordRow[]; focusTokens: number; referenceTokens: number; types: number; omitted: number; critical: number };
@@ -40,17 +41,36 @@ export function perThousand(count: number, tokens: number): string {
  * The line above the table. `against` names the reference when it is not the
  * rest of the project, written out ("«Hen»", "texts whose genre is «news»").
  */
-export function summary(title: string, k: Keywords, named = false, against: string | null = null): string {
+export function summary(title: string, k: Keywords, named = false, against: string | null = null, kind: KeywordKind = "word"): string {
   const n = (x: number) => x.toLocaleString("en");
   const who = named ? title : `«${title}»`;
-  if (k.focusTokens === 0) return `${who} ${named ? "have" : "has"} no words yet.`;
+  const words = unitOf(kind);
+  if (k.focusTokens === 0) return `${who} ${named ? "have" : "has"} no ${words} yet.${kind === "lemma" || kind === "tag" ? " Tag and parse the text in the Sentence panel, or gloss its words and link them to the lexicon." : ""}`;
   if (k.referenceTokens === 0)
     return against === null ? "There is nothing to compare with yet: keywords compare a text with the project's other texts." : `There is nothing to compare with: ${against} ${against.startsWith("«") ? "has" : "have"} no words outside ${named ? title.charAt(0).toLowerCase() + title.slice(1) : `«${title}»`}.`;
   const cut = k.omitted > 0 ? ` The ${n(k.omitted)} weakest are left out.` : "";
-  return `${who} (${n(k.focusTokens)} words) against ${against ?? "the project's other texts"} (${n(k.referenceTokens)} words). Rows marked • are significant at p < 0.05 after Bonferroni correction (log-likelihood ${k.critical.toFixed(2)} or more).${cut}`;
+  return `${who} (${n(k.focusTokens)} ${words}) against ${against ?? "the project's other texts"} (${n(k.referenceTokens)} ${words}). Rows marked • are significant at p < 0.05 after Bonferroni correction (log-likelihood ${k.critical.toFixed(2)} or more).${cut}`;
 }
 
-export function asTsv(rows: readonly KeywordRow[]): string {
+export function asTsv(rows: readonly KeywordRow[], kind: KeywordKind = "word"): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
-  return ["word\tin text\tin rest\tlog-likelihood (4-term)\tlog ratio\t%DIFF\tsimple maths", ...rows.map((r) => [clean(r.item), r.focus, r.reference, r.logLikelihood.toFixed(2), r.logRatio.toFixed(2), r.percentDiff.toFixed(1), r.simpleMaths.toFixed(3)].join("\t"))].join("\n");
+  return [`${kind === "translation" ? "word" : kind}\tin text\tin rest\tlog-likelihood (4-term)\tlog ratio\t%DIFF\tsimple maths`, ...rows.map((r) => [clean(r.item), r.focus, r.reference, r.logLikelihood.toFixed(2), r.logRatio.toFixed(2), r.percentDiff.toFixed(1), r.simpleMaths.toFixed(3)].join("\t"))].join("\n");
+}
+
+/** What keywords compare: transcribed words, translation words, lemmas or tags (UPOS). */
+export type KeywordKind = "word" | "translation" | "lemma" | "tag";
+
+/** The words each side's size counts, in the summary. */
+export const unitOf = (kind: KeywordKind): string => (kind === "lemma" ? "lemmatised words" : kind === "tag" ? "tagged words" : "words");
+
+/**
+ * The CQP query that finds a lemma or tag row in the Concordance: one token
+ * per lemma or tag of the row (a sequence row is written with spaces between
+ * them), and a detail as a text condition, as the Frequencies list asks.
+ */
+export function keywordQuery(kind: "lemma" | "tag", item: string, size: number, within: { key: string; value: string } | null): string {
+  const attr = kind === "lemma" ? "lemma" : "upos";
+  const parts = size > 1 ? item.split(" ") : [item];
+  const q = parts.map((v) => `[${attr}="${cqpLiteral(v)}"]`).join(" ");
+  return within === null || within.key === "" ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
 }

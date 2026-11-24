@@ -9,13 +9,13 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, keywords, textsAlike } from "../api";
 import { alikeLine, alikeTsv, barShare, nearest, SHORT, type Alike } from "../keywords/alike";
 import { emptyState, h } from "../dom";
-import { asTsv, KEYWORD_SORTS, keywordRows, perThousand, significant, summary, type KeywordSide, type KeywordSort, type Keywords } from "../keywords/logic";
+import { asTsv, KEYWORD_SORTS, keywordQuery, keywordRows, perThousand, significant, summary, type KeywordKind, type KeywordSide, type KeywordSort, type Keywords } from "../keywords/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
-type Kind = "word" | "translation";
+type Kind = KeywordKind;
 const MINIMUMS = [1, 2, 3, 5, 10];
 const DRAWN = 500;
 
@@ -91,7 +91,7 @@ export const keywordsPanel: PanelDef = {
         }),
       );
     const drawChips = () => {
-      chips(kinds, [{ id: "word" as Kind, label: "Words", title: "Compare transcribed words" }, { id: "translation" as Kind, label: "Translations", title: "Compare the words of free translations" }], () => kind, (v) => {
+      chips(kinds, [{ id: "word" as Kind, label: "Words", title: "Compare transcribed words" }, { id: "translation" as Kind, label: "Translations", title: "Compare the words of free translations" }, { id: "lemma" as Kind, label: "Lemmas", title: "Compare lemmas, so ran and runs count as run: from tagging and parsing, or a glossed word's lexicon entry" }, { id: "tag" as Kind, label: "Tags", title: "Compare parts of speech (UPOS): key tags, or with words in a row, key tag sequences such as ADJ NOUN" }], () => kind, (v) => {
         kind = v;
         drawChips();
         void load();
@@ -135,12 +135,12 @@ export const keywordsPanel: PanelDef = {
         return;
       }
       const rows = shown();
-      note.textContent = summary(title(), data, within() !== null, againstLabel()) + (rows.length === 0 && data.referenceTokens > 0 ? ` No word is used ${side === "more" ? "more" : "less"} here.` : "") + (rows.length > DRAWN ? ` The first ${DRAWN} are drawn.` : "");
+      note.textContent = summary(title(), data, within() !== null, againstLabel(), kind) + (rows.length === 0 && data.referenceTokens > 0 ? ` No word is used ${side === "more" ? "more" : "less"} here.` : "") + (rows.length > DRAWN ? ` The first ${DRAWN} are drawn.` : "");
       const head = h(
         "tr",
         {},
         ...[
-          ["Word", ""],
+          [kind === "lemma" ? "Lemma" : kind === "tag" ? "Tag" : "Word", ""],
           ["Here", "Times in this text (per 1000 words on hover)"],
           againstId === "" ? ["Rest", "Times in the project's other texts (per 1000 words on hover)"] : ["There", `Times in ${againstLabel() ?? "the other side"} (per 1000 words on hover)`],
           ["LL", "Log-likelihood (4-term, as AntConc): how sure the difference is; below zero when the text uses the word less"],
@@ -166,7 +166,11 @@ export const keywordsPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: r.logLikelihood.toFixed(2) }),
               h("td", { className: "fq-num", textContent: r.logRatio.toFixed(2) }),
             );
-            const open = () => (r.focus > 0 ? askConcordance(r.item, kind, text, true, sc.within) : againstId === "" ? askConcordance(r.item, kind, null) : askConcordance(r.item, kind, thereText, true, there.within));
+            const size = Number(sizer.value);
+            // Lemmas and tags open as the CQP query that finds them, as the Frequencies list does.
+            const ask = (t: { id: string; title: string } | null, w: typeof sc.within) =>
+              kind === "lemma" || kind === "tag" ? askConcordance(keywordQuery(kind, r.item, size, w), "query", t, true, null) : askConcordance(r.item, kind, t, true, w);
+            const open = () => (r.focus > 0 ? ask(text, sc.within) : againstId === "" ? (kind === "lemma" || kind === "tag" ? ask(null, null) : askConcordance(r.item, kind, null)) : ask(thereText, there.within));
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
@@ -185,7 +189,7 @@ export const keywordsPanel: PanelDef = {
     async function loadAlike(): Promise<void> {
       const mine = seq;
       try {
-        const r = await textsAlike(kind);
+        const r = await textsAlike(kind === "translation" ? "translation" : "word");
         if (mine !== seq) return;
         alike = r;
       } catch (e) {
@@ -247,7 +251,7 @@ export const keywordsPanel: PanelDef = {
     copy.onclick = () => {
       const rows = shown();
       if (rows.length === 0) return;
-      void writeText(asTsv(rows)).then(
+      void writeText(asTsv(rows, kind)).then(
         () => showToast({ tone: "info", lines: [`Copied ${rows.length} rows. Paste them into a spreadsheet.`] }),
         (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
       );
