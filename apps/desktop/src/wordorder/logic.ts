@@ -65,3 +65,37 @@ export function orderTsv(w: WordOrder): string {
   });
   return [["WALS", "Feature", "Counts", "Suggested", "WALS code"].join("\t"), ...rows].join("\n") + "\n";
 }
+
+/** Grambank's questions a WALS order answers, by WALS code: Grambank asks
+ * orders as one feature with "both" (GB024, GB025, GB065, GB130, GB193) or,
+ * for the clause, as verb-initial / medial / final present or absent. */
+const GRAMBANK: Record<string, Record<string, [string, string][]>> = {
+  "81A": {
+    "1": [["GB131", "0"], ["GB132", "0"], ["GB133", "1"]],
+    "2": [["GB131", "0"], ["GB132", "1"], ["GB133", "0"]],
+    "3": [["GB131", "1"], ["GB132", "0"], ["GB133", "0"]],
+    "4": [["GB131", "1"], ["GB132", "0"], ["GB133", "0"]],
+    "5": [["GB131", "0"], ["GB132", "1"], ["GB133", "0"]],
+    "6": [["GB131", "0"], ["GB132", "0"], ["GB133", "1"]],
+  },
+  "82A": { "1": [["GB130", "1"]], "2": [["GB130", "2"]], "3": [["GB130", "3"]] },
+  "86A": { "1": [["GB065", "1"]], "2": [["GB065", "2"]], "3": [["GB065", "3"]] },
+  "87A": { "1": [["GB193", "1"]], "2": [["GB193", "2"]], "3": [["GB193", "3"]] },
+  "88A": { "1": [["GB025", "1"]], "2": [["GB025", "2"]], "6": [["GB025", "3"]] },
+  "89A": { "1": [["GB024", "1"]], "2": [["GB024", "2"]], "3": [["GB024", "3"]] },
+};
+
+/** The Grambank answers a feature's counts suggest: from its verdict, or for
+ * adpositions from whether each kind is found at all (GB074 prepositions,
+ * GB075 postpositions: present when counted twice or more, absent when never
+ * counted among `MIN` or more adpositions). */
+export function grambankAnswers(p: Pattern): [string, string][] {
+  if (p.id === "85A") {
+    const n = total(p);
+    const of = (label: string) => p.orders.find((o) => o.label === label)?.count ?? 0;
+    const say = (id: string, c: number): [string, string][] => (c >= 2 ? [[id, "1"]] : c === 0 && n >= MIN ? [[id, "0"]] : []);
+    return [...say("GB074", of("Prepositions")), ...say("GB075", of("Postpositions"))];
+  }
+  const v = verdict(p);
+  return v.code === null ? [] : (GRAMBANK[p.id]?.[v.code] ?? []);
+}

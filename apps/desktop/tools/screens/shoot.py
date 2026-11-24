@@ -914,6 +914,15 @@ def main():
             text = run.page.locator(".panel-wordorder").inner_text()
             if "Use SOV as the answer" not in text or "Too few to tell" not in text:
                 failures.append("Word order did not suggest SOV or hold back on too few")
+            gb = run.page.locator(".panel-wordorder .wo-grambank", has_text="GB133")
+            if gb.count() != 1:
+                failures.append("Word order did not offer the Grambank answers SOV gives")
+            else:
+                gb.click()
+                run.page.wait_for_timeout(300)
+                if not any("Grambank GB131, GB132, GB133" in t for t in run.toasts()):
+                    failures.append(f"Word order did not write the Grambank answers: {run.toasts()}")
+                run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Sound changes: example rules over the lexicon's headwords.
             run.front("soundchanges", "Sound changes")
             run.page.locator(".panel-soundchanges button", has_text="Example rules").click()

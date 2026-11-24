@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { answerNote, countsLine, orderLine, orderTsv, verdict, type Pattern } from "./logic.ts";
+import { answerNote, countsLine, grambankAnswers, orderLine, orderTsv, verdict, type Pattern } from "./logic.ts";
 
 const p = (id: string, counts: [string, string, number][]): Pattern => ({ id, title: id, orders: counts.map(([label, code, count]) => ({ label, code, count, example: null })) });
 
@@ -18,4 +18,15 @@ test("the dominant order follows WALS's twice-as-common rule", () => {
   assert.match(orderLine({ parsed: 0, patterns: [] }), /^No sentence has a dependency parse yet/);
   assert.match(orderLine({ parsed: 120, patterns: [sov, p("82A", [["SV", "1", 1]])] }), /^Counted in 120 parsed sentences; 1 of 2 features/);
   assert.equal(orderTsv({ parsed: 1, patterns: [sov] }).split("\n")[1], "81A\t81A\tSOV 3, SVO 40\tSVO\t2");
+});
+
+test("an order's verdict answers the Grambank questions that ask it", () => {
+  const pattern = (id: string, counts: [string, string, number][]) => ({ id, title: id, orders: counts.map(([label, code, count]) => ({ label, code, count, example: null })) });
+  assert.deepEqual(grambankAnswers(pattern("89A", [["Numeral-Noun", "1", 9], ["Noun-Numeral", "2", 1]])), [["GB024", "1"]]);
+  assert.deepEqual(grambankAnswers(pattern("89A", [["Numeral-Noun", "1", 6], ["Noun-Numeral", "2", 5]])), [["GB024", "3"]], "no dominant order is Grambank's both");
+  assert.deepEqual(grambankAnswers(pattern("81A", [["SOV", "1", 12], ["SVO", "2", 2]])), [["GB131", "0"], ["GB132", "0"], ["GB133", "1"]]);
+  assert.deepEqual(grambankAnswers(pattern("85A", [["Postpositions", "1", 8], ["Prepositions", "2", 0]])), [["GB074", "0"], ["GB075", "1"]]);
+  assert.deepEqual(grambankAnswers(pattern("85A", [["Postpositions", "1", 1], ["Prepositions", "2", 0]])), [], "too few to say");
+  assert.deepEqual(grambankAnswers(pattern("90A", [["Noun-Relative clause", "1", 9], ["Relative clause-Noun", "2", 0]])), []);
+  assert.deepEqual(grambankAnswers(pattern("82A", [["SV", "1", 2], ["VS", "2", 0]])), [], "under the minimum");
 });
