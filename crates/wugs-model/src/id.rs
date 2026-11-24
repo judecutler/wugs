@@ -12,6 +12,9 @@ pub const CROCKFORD: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 thread_local! {
     static RNG: RefCell<Rng> = RefCell::new(Rng::seeded());
+    /// The last ULID this thread made (millisecond, random part), so ULIDs
+    /// made in one millisecond still sort in the order they were made.
+    static LAST: RefCell<(u64, u128)> = const { RefCell::new((0, 0)) };
 }
 
 struct Rng {
@@ -77,13 +80,28 @@ pub fn now_millis() -> u64 {
         .as_millis() as u64
 }
 
+/// A new ULID. Within one millisecond on one thread the random part counts
+/// up from the first one's (the spec's monotonic ULIDs), so ids sort in the
+/// order they were made: lists ordered by id (homographs numbered, tracks
+/// without a position) follow creation order.
 pub fn ulid() -> String {
     let ms = now_millis();
-    let (r1, r2) = RNG.with(|r| {
-        let mut r = r.borrow_mut();
-        (r.next(), r.next())
+    let fresh = || {
+        RNG.with(|r| {
+            let mut r = r.borrow_mut();
+            ((r.next() as u128) << 64 | r.next() as u128) & ((1u128 << 80) - 1)
+        })
+    };
+    let (ms, rand) = LAST.with(|last| {
+        let mut last = last.borrow_mut();
+        let (ms, rand) = match *last {
+            (prev, r) if prev >= ms && r < (1u128 << 80) - 1 => (prev, r + 1),
+            _ => (ms, fresh()),
+        };
+        *last = (ms, rand);
+        (ms, rand)
     });
-    encode_ulid(ms, r1, r2)
+    encode_ulid(ms, (rand >> 64) as u64, rand as u64)
 }
 
 fn encode_ulid(ms: u64, r1: u64, r2: u64) -> String {
@@ -110,6 +128,15 @@ pub fn new_id(prefix: &str) -> String {
 mod tests {
     use super::*;
     use std::collections::HashSet;
+
+    #[test]
+    fn ulids_made_one_after_another_sort_in_that_order() {
+        let ids: Vec<String> = (0..2000).map(|_| ulid()).collect();
+        let mut sorted = ids.clone();
+        sorted.sort();
+        assert_eq!(ids, sorted);
+        assert_eq!(ids.iter().collect::<HashSet<_>>().len(), ids.len());
+    }
 
     #[test]
     fn fallback_seeds_differ_within_one_clock_tick() {

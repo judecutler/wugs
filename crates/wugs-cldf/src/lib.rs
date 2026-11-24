@@ -292,7 +292,7 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
             };
             let translation = paired.or_else(timed);
             let meta = match translation {
-                Some(t) => match p.proj.field_str(&t.3, "language")? {
+                Some(t) => match p.proj.field_text(&t.3, "language")? {
                     Some(code) if !code.trim().is_empty() => {
                         let id = cldf_id(&format!("meta-{}", code.trim()));
                         meta_langs.entry(id.clone()).or_insert_with(|| code.trim().to_string());

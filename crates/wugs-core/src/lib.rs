@@ -1352,6 +1352,44 @@ impl Project {
         Ok((id, res))
     }
 
+    /// Rename a track and set the language its text is in (a BCP 47 tag such
+    /// as `en` or `tpi`, or a Glottocode; empty clears it), in one resolving
+    /// txn writing only what changed. The language is what exports name
+    /// translations by (CoNLL-U `# text_<lang>`, TEI `xml:lang`, the parallel
+    /// corpus, CLDF's Meta_Language_ID).
+    pub fn set_tier_details(&mut self, tier: &str, name: &str, language: &str) -> Result<Option<CommitResult>, String> {
+        self.require(tier, "tier")?;
+        let name = self.proj.nfc(name.trim());
+        if name.is_empty() {
+            return Err("a track needs a name".into());
+        }
+        if name.chars().count() > 120 {
+            return Err("a track's name is kept up to 120 characters".into());
+        }
+        let language = language.trim();
+        let tag = |l: &str| {
+            let mut parts = l.split('-');
+            let first = parts.next().unwrap_or_default();
+            (2..=3).contains(&first.len()) && first.chars().all(|c| c.is_ascii_alphabetic()) && parts.all(|p| (1..=8).contains(&p.len()) && p.chars().all(|c| c.is_ascii_alphanumeric()))
+        };
+        if !language.is_empty() && !tag(language) && !crate::language::valid_glottocode(language) {
+            return Err(format!("«{language}» is not a language code: write a code such as en, es or tpi (BCP 47), or a Glottocode such as stan1293"));
+        }
+        let now_name = self.proj.field_str(tier, "name")?.unwrap_or_default();
+        let now_lang = self.proj.field_text(tier, "language")?.unwrap_or_default();
+        if now_name == name && now_lang == language {
+            return Ok(None);
+        }
+        let mut t = self.intent("set-tier").resolving();
+        if now_name != name {
+            t.set("tier", tier, SCOPE_CONFIG, "name", Value::str(&name))?;
+        }
+        if now_lang != language {
+            t.set("tier", tier, SCOPE_CONFIG, "language", if language.is_empty() { Value::Null } else { Value::str(language) })?;
+        }
+        t.commit().map(Some)
+    }
+
     /// A translation track paired with `parent_tier`: a symbolic
     /// association (one translation per segment, linked by the segment's
     /// `parent`, as ELAN and FlexText hold them) with role `translation`.
@@ -2343,6 +2381,14 @@ mod tests {
         let (id, _) = p.add_tier("English", "time-aligned", Some("translation"), Some("lng_EN")).unwrap();
         assert_eq!(p.proj.field_str(&id, "role").unwrap().as_deref(), Some("translation"));
         assert_eq!(p.proj.field_str(&id, "language").unwrap().as_deref(), Some("lng_EN"));
+        assert!(p.set_tier_details(&id, "  ", "").is_err(), "a track needs a name");
+        assert!(p.set_tier_details(&id, "English", "English").is_err(), "a name is no language code");
+        assert!(p.set_tier_details(&id, "English", "en-GB").unwrap().is_some());
+        assert_eq!((p.proj.field_str(&id, "name").unwrap().as_deref(), p.proj.field_str(&id, "language").unwrap().as_deref()), (Some("English"), Some("en-GB")));
+        assert!(p.set_tier_details(&id, "English", "en-GB").unwrap().is_none(), "unchanged writes nothing");
+        p.set_tier_details(&id, "English", "stan1293").unwrap();
+        p.set_tier_details(&id, "English", "").unwrap();
+        assert_eq!(p.proj.field_text(&id, "language").unwrap(), None, "cleared");
         let (kit, _) = p.add_tier("Phones", "time-aligned", Some("phonetic"), None).unwrap();
         assert_eq!(p.proj.field_str(&kit, "role").unwrap().as_deref(), Some("phonetic"), "core never interprets the vocabulary");
         assert!(p.add_tier("x", "time-aligned", Some(" "), None).is_err());

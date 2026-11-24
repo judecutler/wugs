@@ -1421,6 +1421,12 @@ impl Projection {
             .map(|(v, _)| v.as_str().map(str::to_string).unwrap_or_else(|| v.to_json())))
     }
 
+    /// A field's text when it holds a non-empty string: a cleared field (Null,
+    /// which `field_str` shows as `null`) and an empty one read as None.
+    pub fn field_text(&self, target: &str, field: &str) -> Result<Option<String>, String> {
+        Ok(self.field(target, field)?.and_then(|(v, _)| v.as_str().filter(|s| !s.is_empty()).map(str::to_string)))
+    }
+
     pub fn field_num(&self, target: &str, field: &str) -> Result<Option<f64>, String> {
         Ok(self.field(target, field)?.and_then(|(v, _)| v.as_f64()))
     }

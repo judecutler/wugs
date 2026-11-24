@@ -1295,7 +1295,7 @@ pub(crate) fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<V
         }
         let content = p.proj.field_str(&child, "content")?.unwrap_or_default();
         if !content.trim().is_empty() {
-            out.push((p.proj.field_str(&tier, "language")?, content));
+            out.push((p.proj.field_text(&tier, "language")?, content));
         }
     }
     if out.is_empty() {
@@ -1321,7 +1321,7 @@ pub(crate) fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<V
             }
         }
         if let Some((_, tier, content)) = best {
-            out.push((p.proj.field_str(&tier, "language")?, content));
+            out.push((p.proj.field_text(&tier, "language")?, content));
         }
     }
     Ok(out)

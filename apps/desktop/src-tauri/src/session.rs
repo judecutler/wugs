@@ -408,7 +408,7 @@ pub fn get_text(session: &mut Session, text_id: &str) -> Result<TextDetail, Stri
             name: p.proj.field_str(&id, "name")?.unwrap_or_else(|| id.clone()),
             kind: p.proj.field_str(&id, "kind")?,
             role: tier_role(p, &id)?,
-            language: p.proj.field_str(&id, "language")?,
+            language: p.proj.field_text(&id, "language")?,
             parent: p.proj.field_str(&id, "parent")?.filter(|v| !v.is_empty()),
             utterance: p.proj.field_str(&id, "origin")?.as_deref() == Some(UTTERANCE_ORIGIN),
             id,
@@ -652,6 +652,11 @@ pub(crate) fn next_pos_index(p: &Project, text_id: &str) -> Result<usize, String
 }
 
 /// The project's utterance tier if it exists, writing nothing.
+/// Rename a track and set its language (`Project::set_tier_details`).
+pub fn set_tier(session: &mut Session, tier: &str, name: &str, language: &str) -> Result<(), String> {
+    project(session)?.set_tier_details(tier, name, language).map(|_| ())
+}
+
 pub(crate) fn find_utterance_tier(p: &Project) -> Result<Option<String>, String> {
     for id in p.proj.entities_of_kind("tier")? {
         if p.proj.field_str(&id, "origin")?.as_deref() == Some(UTTERANCE_ORIGIN) {

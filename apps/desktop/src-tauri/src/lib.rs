@@ -1986,6 +1986,11 @@ fn shift_track(s: State<SessionThread>, text_id: String, tier_id: String, delta_
 }
 
 #[tauri::command(async)]
+fn set_tier(s: State<SessionThread>, tier_id: String, name: String, language: String) -> Result<(), String> {
+    s.run(move |s| session::set_tier(s, &tier_id, &name, &language))
+}
+
+#[tauri::command(async)]
 fn rough_untime(s: State<SessionThread>, text_id: String, expect: Vec<session::SegmentCheckView>) -> Result<(), String> {
     s.run(move |s| rough_align::untime(s, &text_id, &expect))
 }
@@ -2787,6 +2792,7 @@ pub fn run() {
             rough_time,
             rough_untime,
             shift_track,
+            set_tier,
             export_unimorph,
             domain_suggestions,
             import_alignments,

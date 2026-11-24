@@ -4,7 +4,7 @@
 // tier gutter, the editing buttons (Auto-segment, Split, Merge, Undo, Redo)
 // and the perf toggle.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { addTier, errorText, importMedia, linkRecording, listSources, measureTrack, peaksInfo, saveClips, saveDocument, type SourceRow, type TierTemplate } from "../api";
+import { addTier, errorText, setTier, importMedia, linkRecording, listSources, measureTrack, peaksInfo, saveClips, saveDocument, type SourceRow, type TierTemplate } from "../api";
 import { clipsLines, measuredLines, trackToMeasure } from "../measure/logic";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
@@ -323,6 +323,7 @@ export const timelinePanel: PanelDef = {
       { id: "timeline:start", title: "Go to the start", group: "Timeline", keys: "Home", disabled: needsRecording, run: () => view?.seekTo(0) },
       { id: "timeline:split", title: "Split at the playhead", group: "Timeline", keys: "S", words: ["cut"], disabled: () => needsView() ?? view?.editRules().split ?? null, run: () => void view?.splitAtPlayhead() },
       { id: "timeline:merge", title: "Merge with the next segment", group: "Timeline", keys: "M", words: ["join", "combine"], disabled: () => needsView() ?? view?.editRules().merge ?? null, run: () => void view?.mergeWithNext() },
+      { id: "timeline:track", title: "Rename a track or set its language", group: "Timeline", words: ["track name", "tier", "language code", "speaker"], disabled: () => (view === null || view.editTrack() === null ? "Open a text first." : null), run: () => { const t = view?.editTrack(); if (t) editTrack(t.id); } },
       { id: "timeline:shift", title: "Shift a track's times earlier or later", group: "Timeline", words: ["offset", "move all", "sync", "delay"], disabled: () => (view === null || view.editTrack() === null ? "Open a text first." : null), run: () => openShift() },
       { id: "timeline:rough", title: "Time typed sentences against the recording", group: "Timeline", words: ["align", "untimed", "transcript", "rough", "sentences"], disabled: () => needsRecording() ?? asButton(roughButton)(), run: () => roughButton.click() },
       { id: "timeline:auto", title: "Auto-segment the recording", group: "Timeline", words: ["detect", "speech", "segments", "automatic"], disabled: () => needsRecording() ?? asButton(autoButton)(), run: () => autoButton.click() },
@@ -502,6 +503,49 @@ export const timelinePanel: PanelDef = {
       return div;
     }
 
+    /** A row under the transport for a track's name and language. */
+    const trackRow = h("div", { className: "tl-track-row" });
+    trackRow.hidden = true;
+
+    /** A track's name and language as fields: Enter or Save writes them. */
+    function editTrack(tierId: string): void {
+      const s = getState();
+      const tier = s.kind === "open" ? s.text?.tiers.find((t) => t.id === tierId) : undefined;
+      const name = h("input", { value: tier?.name ?? "", ariaLabel: "Track name", className: "tl-edit-name" });
+      const lang = h("input", { value: tier?.language ?? "", placeholder: "language (en, es, tpi…)", ariaLabel: "The language this track is in: a code such as en, or a Glottocode", className: "tl-edit-lang", size: 10 });
+      const close = () => {
+        trackRow.hidden = true;
+        trackRow.replaceChildren();
+      };
+      const save = () => {
+        void setTier({ tierId, name: name.value, language: lang.value }).then(
+          async () => {
+            close();
+            await refreshText();
+          },
+          (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+        );
+      };
+      for (const input of [name, lang]) {
+        input.onkeydown = (ev: KeyboardEvent) => {
+          if (ev.key === "Enter" && !ev.isComposing) save();
+          else if (ev.key === "Escape") close();
+        };
+      }
+      trackRow.replaceChildren(
+        h("span", { textContent: "Track name" }),
+        name,
+        h("span", { textContent: "in the language" }),
+        lang,
+        h("button", { type: "button", textContent: "Save", onclick: save }),
+        h("button", { type: "button", textContent: "Cancel", onclick: close }),
+        h("span", { className: "note", textContent: "The language is what exports name this track's text by (TEI, CoNLL-U, the parallel corpus, CLDF)." }),
+      );
+      trackRow.hidden = false;
+      name.focus();
+      name.select();
+    }
+
     /** Track headers: a name and its toggles, like a video editor's track header. */
     function drawGutter(): void {
       if (view === null) return;
@@ -523,7 +567,9 @@ export const timelinePanel: PanelDef = {
                   toggleButton(`lock:${tierId}`, row.locked, "lock", "unlock", `Lock ${row.name}`, () => v.toggleTrack(tierId, "locked")),
                   toggleButton(`hide:${tierId}`, row.hidden, "eyeOff", "eye", `Hide ${row.name}`, () => v.toggleTrack(tierId, "hidden")),
                 );
-          const div = placed("tl-gutter-tier", RULER_H + WAVE_H + i * TIER_H, TIER_H, h("span", { className: "tl-track-name", textContent: row.name, title: row.name }), toggles);
+          const nameEl = h("span", { className: "tl-track-name", textContent: row.name, title: `${row.name}: double-click to rename it or say what language it is in` });
+          if (tierId !== null) nameEl.ondblclick = () => editTrack(tierId);
+          const div = placed("tl-gutter-tier", RULER_H + WAVE_H + i * TIER_H, TIER_H, nameEl, toggles);
           div.classList.toggle("is-hidden", row.hidden);
           div.classList.toggle("is-locked", row.locked);
           return div;
@@ -579,7 +625,7 @@ export const timelinePanel: PanelDef = {
         view.onEditStateChange = updateEditButtons;
         view.onTracksChange = drawGutter;
         body.replaceChildren(view.element);
-        el.replaceChildren(toolbar, transport, shiftRow, praat.review, main);
+        el.replaceChildren(toolbar, transport, shiftRow, trackRow, praat.review, main);
         cancelAnimationFrame(tick);
         tick = requestAnimationFrame(follow);
         lastText = "";
