@@ -694,7 +694,7 @@ Use the clips in a Praat script that runs over a folder, as stimuli for a listen
 
 ### Save the Timeline as a picture
 
-For a figure in a paper or a slide, zoom the Timeline to the stretch you want, turn on the spectrogram or the pitch, intensity and formant curves if you want them, and click **Save picture…** in the toolbar. wugs saves what the Timeline shows as a PNG on white, at three times the screen's size so it prints sharp: the time ruler, the waveform, what is turned on over it, and every track with its segments. The playhead, the selection and the machine tints are left out. Track names are not drawn, so label the tracks in your figure's caption. The palette finds it too ("figure", "picture").
+For a figure in a paper or a slide, zoom the Timeline to the stretch you want, turn on the spectrogram or the pitch, intensity and formant curves if you want them, and click **Save picture…** in the toolbar. wugs saves what the Timeline shows as a PNG on white, at three times the screen's size so it prints sharp: the time ruler, the waveform, what is turned on over it, and every track with its segments and its name in a margin on the left. The playhead, the selection and the machine tints are left out; hidden tracks stay empty. The palette finds it too ("figure", "picture").
 
 ### Plot the vowel space
 

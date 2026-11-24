@@ -488,7 +488,8 @@ export class TimelineView {
 
   /** What the view shows as a PNG (data URL) for a paper or a handout: the
    * ruler, waveform, spectrogram and curves that are on, and every track,
-   * on white, at three times the screen's size so it prints sharp. Null with no text. */
+   * on white, at three times the screen's size so it prints sharp, each
+   * track's name in a margin on its left. Null with no text. */
   picture(scale = 3): string | null {
     if (this.text === null) return null;
     const rect = this.element.getBoundingClientRect();
@@ -501,13 +502,30 @@ export class TimelineView {
       this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
       this.draw();
       const out = document.createElement("canvas");
-      out.width = this.canvas.width;
-      out.height = this.canvas.height;
       const c = out.getContext("2d");
       if (c === null) return null;
+      // The margin is as wide as the longest track name.
+      const font = "12px system-ui";
+      c.font = font;
+      const margin = Math.ceil(Math.min(160, Math.max(0, ...this.lanes.map((l) => c.measureText(l.name).width))) + 16);
+      out.width = this.canvas.width + Math.round(margin * scale);
+      out.height = this.canvas.height;
       c.fillStyle = "#ffffff";
       c.fillRect(0, 0, out.width, out.height);
-      c.drawImage(this.canvas, 0, 0);
+      c.drawImage(this.canvas, Math.round(margin * scale), 0);
+      c.setTransform(scale, 0, 0, scale, 0, 0);
+      c.font = font;
+      c.fillStyle = this.colors.ink;
+      c.textBaseline = "middle";
+      this.lanes.forEach((lane, i) => {
+        if (this.isHidden(lane)) return;
+        c.save();
+        c.beginPath();
+        c.rect(0, 0, margin - 8, used);
+        c.clip();
+        c.fillText(lane.name, 6, RULER_H + WAVE_H + i * TIER_H + TIER_H / 2);
+        c.restore();
+      });
       return out.toDataURL("image/png");
     } finally {
       this.forPicture = false;
