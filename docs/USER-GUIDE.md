@@ -851,6 +851,21 @@ A concept is matched by its gloss or its Concepticon gloss, case and spacing ign
 
 Under the table, **Sound correspondences** aligns your words with one language's, sound by sound, and counts which sounds stand across from which: if your *t* is their *ʔ* in *eye*, *louse* and *skin*, that is a regular correspondence and good evidence the words are related, while a pair met once may be chance. Choose the language and how alike a pair of words must be to be aligned (lower takes in more real cognates, and more chance look-alikes). Each concept gives its closest pair. A sound with nothing across from it shows as **–**. Correspondences of different sounds met twice or more are in bold; **Only where the sounds differ** hides the sounds that stay the same. **Copy table** copies the list with the concepts each was met in.
 
+### Count word orders in the parsed sentences
+
+The **Word order** panel counts, in every sentence with a dependency parse (from CoNLL-U, TEI, or tagging and parsing in the Sentence panel), the orders the World Atlas of Language Structures describes. Open it with **Ctrl+K**, **Show Word order**. It counts:
+
+- subject, object and verb (WALS 81A);
+- subject and verb (82A);
+- object and verb (83A);
+- adposition and noun (85A);
+- genitive (86A), adjective (87A), demonstrative (88A), numeral (89A) and relative clause (90A) with the noun;
+- negative particle and verb (143A).
+
+Each feature shows how often each order occurs, as a bar. Click an order to open an example sentence in the Sentence panel. Under the bars is the order WALS would call dominant: one at least twice as common as any other, else "No dominant order" (or "Mixed"). Nothing is suggested from fewer than 5. As in WALS, subjects and objects count only when they are nouns, since pronouns often take other places.
+
+**Use … as the answer** writes the suggestion as the project's WALS answer, with the counts as its note, and the Typology panel shows it there. A tagger's parse can be wrong, so open the examples first. **Copy table** copies every feature with its counts.
+
 ### See what typology says about the language
 
 The **Typology** panel shows what [Grambank](https://grambank.clld.org) or the [World Atlas of Language Structures](https://wals.info) (WALS) says about the project's language. Choose **Grambank** (195 questions such as "Are there definite or specific articles?") or **WALS** (192 features such as "Order of Subject, Object and Verb") at the top; the choice is remembered. Each feature shows the dataset's answer for the language. Beside each answer it shows how the other coded languages of the same family answer, as a share of each answer and a bar. When the family has fewer than three coded languages, it compares with the languages of the same region instead. Open the panel from Settings (Closed panels) or with **Find an action**. It needs the project's Glottocode (see above).

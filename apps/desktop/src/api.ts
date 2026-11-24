@@ -659,6 +659,8 @@ export const morphosyntaxRun = (args: { textId: string; model: string }) => invo
 export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
 /** Bring in a CSV or TSV of document metadata, one row per text. */
 export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
+/** Word order counted from the parsed sentences, by WALS feature (src-tauri/src/word_order.rs). */
+export const wordOrder = () => invoke<import("./wordorder/logic").WordOrder>("word_order");
 /** PHOIBLE's inventories of a language and its relatives' phonemes (src-tauri/src/phoible.rs). */
 export const phoibleCompare = (args: { glottocode: string }) => invoke<import("./sounds/phoible").PhoibleCompared>("phoible_compare", args);
 export const projectLanguage = () => invoke<import("./cldf/logic").Language>("project_language");

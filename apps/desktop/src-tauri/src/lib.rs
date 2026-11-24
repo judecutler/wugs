@@ -56,6 +56,7 @@ pub mod wordsketch;
 pub mod soundchanges;
 pub mod compare;
 pub mod phoible;
+pub mod word_order;
 pub mod session;
 pub mod sounds;
 pub mod typology;
@@ -426,6 +427,12 @@ fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory,
 #[tauri::command(async)]
 fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option<String>) -> Result<sounds::SoundWords, String> {
     s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
+}
+
+/// Word order counted from the parsed sentences, by WALS feature (src/word_order.rs).
+#[tauri::command(async)]
+fn word_order(s: State<SessionThread>) -> Result<word_order::WordOrder, String> {
+    s.run(word_order::word_order)
 }
 
 /// PHOIBLE's inventories of a language and its relatives' phonemes (src/phoible.rs).
@@ -2083,6 +2090,7 @@ pub fn run() {
             glottolog_find,
             typology_profile,
             phoible_compare,
+            word_order,
             typology_answers,
             orthography_get,
             orthography_save,
