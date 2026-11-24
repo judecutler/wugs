@@ -565,6 +565,13 @@ fn typology_answers(s: State<SessionThread>, source: typology::Source) -> Result
     s.run(move |s| typology::answers(s, source))
 }
 
+/// The project's typology answers as a CLDF StructureDataset in a new folder.
+#[tauri::command(async)]
+fn export_typology(app: AppHandle, s: State<SessionThread>, source: typology::Source, folder: String, date: String) -> Result<typology::StructureExport, String> {
+    let generator = format!("wugs {}", app.package_info().version);
+    s.run(move |s| typology::export_structure(s, source, std::path::Path::new(&folder), &date, &generator))
+}
+
 /// Write (or clear) the project's answer to one feature.
 #[tauri::command(async)]
 fn set_typology_answer(s: State<SessionThread>, source: typology::Source, id: String, value: String, note: String) -> Result<typology::Ours, String> {
@@ -2332,6 +2339,7 @@ pub fn run() {
         vocabulary_growth,
         speaker_lengths,
         corpus_tracks,
+        export_typology,
         wikipedia_import,
         word_sketch,
         sound_changes,
