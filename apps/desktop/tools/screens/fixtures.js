@@ -1071,9 +1071,9 @@ const LEXICON = [
     lexicon_entry: lexiconEntry,
     gloss_word_types: () => ({
       rows: [
-        { form: "nikani", unanalysed: 4, uses: 9, suggestion: { morphs: [{ surface: "ni", type: "prefix", gloss: "1SG", glossesByLang: {}, sense: null }, { surface: "kani", type: "root", gloss: "count", glossesByLang: {}, sense: null }], count: 5, guessed: false } },
-        { form: "kanira", unanalysed: 3, uses: 3, suggestion: { morphs: [{ surface: "kani", type: "root", gloss: "count", glossesByLang: {}, sense: null }, { surface: "ra", type: "suffix", gloss: "PL", glossesByLang: {}, sense: null }], count: 0, guessed: true } },
-        { form: "wuno", unanalysed: 2, uses: 2, suggestion: null },
+        { form: "nikani", unanalysed: 4, uses: 9, suggestion: { morphs: [{ surface: "ni", type: "prefix", gloss: "1SG", glossesByLang: {}, sense: null }, { surface: "kani", type: "root", gloss: "count", glossesByLang: {}, sense: null }], count: 5, guessed: false }, meanings: [{ word: "counted", together: 4, of: 6, dice: 0.62 }] },
+        { form: "kanira", unanalysed: 3, uses: 3, suggestion: { morphs: [{ surface: "kani", type: "root", gloss: "count", glossesByLang: {}, sense: null }, { surface: "ra", type: "suffix", gloss: "PL", glossesByLang: {}, sense: null }], count: 0, guessed: true }, meanings: [] },
+        { form: "wuno", unanalysed: 2, uses: 2, suggestion: null, meanings: [{ word: "eats", together: 2, of: 2, dice: 0.8 }, { word: "food", together: 2, of: 2, dice: 0.5 }] },
       ],
       unbrokenWords: 14,
       unbrokenSentences: 3,

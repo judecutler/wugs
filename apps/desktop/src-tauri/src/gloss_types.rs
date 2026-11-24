@@ -26,6 +26,8 @@ pub struct TypeRow {
     pub uses: usize,
     /// The commonest earlier analysis of the form, else a guess from known morphs.
     pub suggestion: Option<SuggestionView>,
+    /// Translation words that stand with it in the same sentences' translations.
+    pub meanings: Vec<crate::meanings::Meaning>,
 }
 
 #[derive(Debug, Serialize)]
@@ -64,7 +66,7 @@ pub fn word_types(session: &mut Session, text: Option<&str>) -> Result<WordTypes
         .iter()
         .zip(unanalysed)
         .filter(|(_, n)| *n > 0)
-        .map(|(r, n)| TypeRow { form: r.item.clone(), unanalysed: n, uses: r.count, suggestion: None })
+        .map(|(r, n)| TypeRow { form: r.item.clone(), unanalysed: n, uses: r.count, suggestion: None, meanings: Vec::new() })
         .collect();
     // Stable: equal counts keep the frequency list's order.
     rows.sort_by(|a, b| b.unanalysed.cmp(&a.unanalysed));
@@ -76,6 +78,10 @@ pub fn word_types(session: &mut Session, text: Option<&str>) -> Result<WordTypes
             None => (p.guess_analysis(&inventory, &row.form).into_iter().next(), true),
         };
         row.suggestion = first.map(|s| SuggestionView { morphs: s.morphs.into_iter().map(Into::into).collect(), count: s.count, guessed });
+    }
+    let suggested: Vec<String> = rows.iter().take(SUGGESTED).map(|r| r.form.clone()).collect();
+    for (row, meanings) in rows.iter_mut().zip(crate::meanings::likely_meanings(p, &scope, &suggested)?) {
+        row.meanings = meanings;
     }
     Ok(WordTypes { rows, unbroken_words, unbroken_sentences, types: freq.types })
 }

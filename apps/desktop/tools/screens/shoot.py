@@ -684,6 +684,11 @@ def main():
             # Words to gloss: one analysis typed for every unanalysed use of a form.
             run.front("wordtypes", "Words to gloss")
             run.page.locator(".panel-wordtypes .wt-row").first.wait_for()
+            # A likely meaning from the translations fills the root's gloss.
+            run.page.locator(".panel-wordtypes .wt-meanings button", has_text="eats").click()
+            run.shot("state-wordtypes-meaning", run.page.locator(".panel-wordtypes"))
+            if run.page.locator('.panel-wordtypes [data-key="wt-g:wuno"]').input_value() != "eats" or run.page.locator('.panel-wordtypes [data-key="wt-b:wuno"]').input_value() != "wuno":
+                failures.append("Words to gloss: a likely meaning did not fill the fields")
             run.page.locator('.panel-wordtypes [data-key="wt-b:wuno"]').fill("wu- no")
             run.page.locator('.panel-wordtypes [data-key="wt-g:wuno"]').fill("3SG eat")
             run.shot("state-wordtypes", run.page.locator(".panel-wordtypes"))
