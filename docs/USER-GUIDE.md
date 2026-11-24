@@ -552,7 +552,12 @@ The **Elicit** panel collects words with a speaker in two ways. Every answer bec
 ### Work through a word list
 
 1. In **Elicit**, open **Word lists**.
-2. Click **Add a word list**, then click **Load** beside Swadesh 100, Swadesh 200, or Leipzig-Jakarta.
+2. Click **Add a word list**, then click **Load** beside a list:
+   - Swadesh 100 or Swadesh 200;
+   - Leipzig-Jakarta;
+   - ASJP 40, the list the ASJP project measures distances on, as Compare word lists does;
+   - Starostin 110, the Tower of Babel project's list;
+   - Dolgopolsky 15, the "ultra-stable" concepts.
 3. Type the speaker's word in the word field of the current concept. Add a gloss if you want one.
 4. Press **Enter**. wugs saves the answer and moves to the next concept still to do.
 

@@ -19,6 +19,9 @@ const BUNDLED: &[&str] = &[
     include_str!("../../../../kits/tongues/concepts/Swadesh-1955-100.jsonl"),
     include_str!("../../../../kits/tongues/concepts/Swadesh-1952-200.jsonl"),
     include_str!("../../../../kits/tongues/concepts/Tadmor-2009-100.jsonl"),
+    include_str!("../../../../kits/tongues/concepts/Holman-2008-40.jsonl"),
+    include_str!("../../../../kits/tongues/concepts/Starostin-1991-110.jsonl"),
+    include_str!("../../../../kits/tongues/concepts/Dolgopolsky-1964-15.jsonl"),
 ];
 
 #[derive(Debug, Serialize)]
@@ -457,6 +460,20 @@ pub fn domain_collect(session: &mut Session, domain: &str, form: &str, gloss: &s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_bundled_list_reads_whole() {
+        let lists = bundled().unwrap();
+        let sizes: Vec<(String, usize)> = lists.iter().map(|b| (b.source.clone(), b.rows.len())).collect();
+        assert_eq!(
+            sizes,
+            [("concepticon:Swadesh-1955-100", 100), ("concepticon:Swadesh-1952-200", 200), ("concepticon:Tadmor-2009-100", 100), ("concepticon:Holman-2008-40", 40), ("concepticon:Starostin-1991-110", 110), ("concepticon:Dolgopolsky-1964-15", 15)]
+                .map(|(s, n)| (s.to_string(), n))
+        );
+        for b in &lists {
+            assert!(b.rows.iter().all(|r| !r.gloss.is_empty() && !r.concepticon.is_empty()), "{}", b.source);
+        }
+    }
 
     #[test]
     fn domains_count_the_words_collected_in_them() {

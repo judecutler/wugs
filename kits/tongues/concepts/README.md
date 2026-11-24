@@ -8,6 +8,9 @@ reference catalogue that links published concept lists to shared concept sets.
 | `Swadesh-1955-100.jsonl` | Swadesh 100 (Swadesh 1955) | 100 |
 | `Swadesh-1952-200.jsonl` | Swadesh 200 (Swadesh 1952) | 200 |
 | `Tadmor-2009-100.jsonl` | Leipzig-Jakarta list (Tadmor, Haspelmath & Taylor 2010) | 100 |
+| `Holman-2008-40.jsonl` | ASJP 40 (Holman et al. 2008), the list ASJP's distances are measured on | 40 |
+| `Starostin-1991-110.jsonl` | Starostin 110 (1991), the Tower of Babel project's list | 110 |
+| `Dolgopolsky-1964-15.jsonl` | Dolgopolsky 15 (1964), the "ultra-stable" concepts | 15 |
 
 - **Source:** `concepticon/concepticon-data`, `concepticondata/conceptlists/<list>.tsv`, commit
   `7b5af5fcb18113ecc3b60129bc68d08594f2596e` (2026-11-06).
