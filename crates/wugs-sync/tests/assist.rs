@@ -148,17 +148,29 @@ fn a_verification_on_another_device_clears_the_mark_everywhere() {
 #[test]
 fn a_person_typing_while_the_machine_runs_elsewhere_wins_or_is_kept() {
     // Both write at once: B types, A's model fills the (to A) empty segment.
-    // Whatever wins, the mark is shown only when the machine text shows.
+    // Whatever wins, the machine text never shows unmarked. When B's text
+    // wins, the machine write stays an open version, so the mark may stay
+    // too (unseen machine text never passes as checked) until a person's
+    // next edit names it.
     let mut rig = Rig::new();
     let (mut a, mut b, text, seg) = rig.pair();
     b.edit_content(&text, &seg, "köpek").unwrap();
     a.machine_transcribe(&text, &seg, &heard("kopek", 0.3)).unwrap();
     sync(&mut a, &mut b);
     for p in [&a, &b] {
-        let shows_machine = content(p, &seg) == "kopek";
-        assert_eq!(p.machine_mark(&seg).unwrap().is_some(), shows_machine);
+        if content(p, &seg) == "kopek" {
+            assert!(p.machine_mark(&seg).unwrap().is_some(), "machine text shows marked");
+        }
     }
     assert_eq!(content(&a, &seg), content(&b, &seg));
+    assert_eq!(a.machine_mark(&seg).unwrap(), b.machine_mark(&seg).unwrap(), "both devices agree");
+    // A person's next edit names every open version and clears the mark.
+    let now = content(&b, &seg);
+    b.edit_content(&text, &seg, &format!("{now}!")).unwrap();
+    sync(&mut a, &mut b);
+    for p in [&a, &b] {
+        assert_eq!(p.machine_mark(&seg).unwrap(), None);
+    }
 }
 
 #[test]
