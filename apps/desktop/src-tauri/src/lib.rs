@@ -1055,6 +1055,12 @@ fn topics_overview(s: State<SessionThread>) -> Result<topics::Topics, String> {
     s.run(topics::overview)
 }
 
+/// File the sentences of the Concordance's lines under a topic.
+#[tauri::command(async)]
+fn file_under_topic(s: State<SessionThread>, lines: Vec<topics::LineRef>, name: String) -> Result<topics::Filed, String> {
+    s.run(move |s| topics::file_lines(s, &lines, &name))
+}
+
 /// Rename a topic everywhere, or fold it into another.
 #[tauri::command(async)]
 fn rename_topic(s: State<SessionThread>, from: String, to: String) -> Result<topics::Topics, String> {
@@ -2587,6 +2593,7 @@ pub fn run() {
             gloss_remove_topic,
             topics_overview,
             rename_topic,
+            file_under_topic,
             gloss_set_note,
             gloss_add_lexeme,
             gloss_lexicon,

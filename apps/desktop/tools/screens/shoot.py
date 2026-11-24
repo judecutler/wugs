@@ -722,6 +722,15 @@ def main():
             if "as numbered examples" not in " ".join(run.toasts()):
                 failures.append("Copy as examples said nothing")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            # The lines' sentences filed under a grammar topic.
+            run.page.locator(".panel-concordance .cc-bar button", has_text="File under a topic").click()
+            run.page.fill(".panel-concordance .cc-topic-name", "Numerals")
+            run.shot("state-concordance-topic", run.page.locator(".panel-concordance"))
+            run.page.locator(".panel-concordance .cc-topic-bar button.primary").click()
+            run.page.wait_for_timeout(500)
+            if "under «Numerals»" not in " ".join(run.toasts()):
+                failures.append(f"File under a topic said nothing: {run.toasts()}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # The Plot view: where in each text, and how evenly.
             run.page.locator(".panel-concordance .cc-bar button", has_text="Plot").click()
             run.page.wait_for_timeout(500)

@@ -965,6 +965,7 @@ const LEXICON = [
       ],
     }),
     rename_topic: () => ({ topics: [] }),
+    file_under_topic: (a) => ({ filed: Math.max(1, a.lines.length - 1), already: 1 }),
     all_notes: () => ({
       sentences: [
         { noteId: "n1", body: "Is wu- the third person or a plural? Ask again.", textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01", content: "wu no" },

@@ -80,6 +80,42 @@ pub fn overview(session: &mut Session) -> Result<Topics, String> {
     Ok(Topics { topics })
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LineRef {
+    pub text_id: String,
+    pub segment_id: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Filed {
+    /// Sentences newly filed under the topic.
+    pub filed: usize,
+    /// Sentences that were under it already.
+    pub already: usize,
+}
+
+/// File the sentences some lines come from under a topic (the Concordance's
+/// lines; a translation's line counts as its sentence), each sentence once.
+pub fn file_lines(session: &mut Session, lines: &[LineRef], name: &str) -> Result<Filed, String> {
+    let p = project(session)?;
+    let mut seen = std::collections::HashSet::new();
+    let mut out = Filed { filed: 0, already: 0 };
+    for l in lines {
+        let parent = p.proj.field_str(&l.segment_id, "parent")?.filter(|x| p.proj.field_str(x, "text").ok().flatten().as_deref() == Some(l.text_id.as_str()));
+        let sentence = parent.unwrap_or_else(|| l.segment_id.clone());
+        if !seen.insert(sentence.clone()) {
+            continue;
+        }
+        match p.add_segment_topic(&l.text_id, &sentence, name)? {
+            Some(_) => out.filed += 1,
+            None => out.already += 1,
+        }
+    }
+    Ok(out)
+}
+
 pub fn rename(session: &mut Session, from: &str, to: &str) -> Result<Topics, String> {
     project(session)?.rename_topic(from, to)?;
     overview(session)
@@ -111,6 +147,8 @@ mod tests {
         assert!(t.sentences[1..].iter().any(|x| x.translation.is_some()), "the sample's sentences are translated");
         let o = rename(&mut s, "numerals", "Counting").unwrap();
         assert_eq!((o.topics[0].name.as_str(), o.topics[0].sentences.len()), ("Counting", 3));
+        let f = file_lines(&mut s, &[LineRef { text_id: sample.clone(), segment_id: segs[0].clone() }, LineRef { text_id: sample.clone(), segment_id: segs[2].clone() }, LineRef { text_id: sample.clone(), segment_id: segs[2].clone() }], "counting").unwrap();
+        assert_eq!((f.filed, f.already), (1, 1), "each sentence once; one already there");
         let v = crate::gloss::gloss_remove_topic(&mut s, &sample, &segs[0], "counting").unwrap().view;
         assert!(v.topics.is_empty());
         drop(s);
