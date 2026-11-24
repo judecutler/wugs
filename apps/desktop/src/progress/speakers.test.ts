@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { brownStage, hasPeople, isChild, mluMorphemes, mluWords, SPEAKER_COLUMNS, speakerCells, speakerColumns, speakersNote, speakersTsv, type SpeakerRow } from "./speakers.ts";
 
-const row = (over: Partial<SpeakerRow>): SpeakerRow => ({ tier: "t", name: "CHI", texts: 1, utterances: 4, words: 10, types: 6, longest: 4, analysed: 4, morphemes: 9, mtld: null, person: "", sex: "", age: "", ...over });
+const row = (over: Partial<SpeakerRow>): SpeakerRow => ({ tier: "t", name: "CHI", texts: 1, utterances: 4, words: 10, types: 6, longest: 4, analysed: 4, morphemes: 9, mtld: null, person: "", sex: "", age: "", born: "", byText: [], ...over });
 
 test("MLU in words and in morphemes", () => {
   assert.equal(mluWords(row({})), 2.5);

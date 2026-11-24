@@ -1136,6 +1136,7 @@ body::before {
 .pg-chart .text-start { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .pg-chart .curve { fill: none; stroke: var(--accent); stroke-width: 2; }
 .pg-chart .tick, .pg-chart .axis { font-size: 10px; fill: var(--muted); }
+.pg-chart .pg-age-dot { fill: var(--accent); stroke: var(--surface-raised); stroke-width: 1.5; }
 .panel-soundchanges .sca-top { display: flex; gap: 12px; flex-wrap: wrap; }
 .cc-detail-fill { display: block; height: 100%; background: var(--accent-bright); border-radius: 2px; }
 .bin-details { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--radius-md); padding: 8px 10px; background: var(--surface-raised); }
