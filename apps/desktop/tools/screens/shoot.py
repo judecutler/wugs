@@ -1154,6 +1154,14 @@ def main():
             run.shot("state-transcribe-shortcuts", run.page.locator(".panel-transcribe"))
             if "3 typing shortcuts on" not in run.page.locator(".panel-transcribe .tx-shortcuts").inner_text():
                 failures.append("The Shortcuts box did not count the project's shortcuts")
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/keyboards'")
+            run.page.locator(".panel-transcribe .tx-shortcuts button", has_text="Keyman").click()
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            saved = run.page.evaluate("window.__WUGS_SAVED__") or {}
+            if saved.get("extension") != "kmn" or "U+003B + 'n' > U+014B" not in saved.get("contents", "") or saved.get("title") != "wugs_kanu":
+                failures.append(f"Make a Keyman keyboard did not save the shortcuts as a .kmn: {str(saved)[:200]}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.locator(".panel-transcribe button", has_text="Shortcuts").click()
             run.front("elicit", "Elicit")
             # Semantic domains: how many words each holds, and the next one still empty.
