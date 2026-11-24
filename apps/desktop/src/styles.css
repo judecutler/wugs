@@ -1298,6 +1298,16 @@ body::before {
 .cc-cross-table th, .cc-cross-table td { padding: 2px 8px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
 .cc-cross-table th[scope="row"], .cc-cross-table thead th:first-child { text-align: left; }
 .cc-cross[hidden] { display: none; }
+.cc-positions { margin: 4px 0; }
+.cc-positions summary { cursor: pointer; font-size: var(--text-sm); }
+.cc-positions[hidden] { display: none; }
+.cc-pos-grid { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; }
+.cc-pos-col { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
+.cc-pos-head { font-size: var(--text-xs); color: var(--muted); text-align: center; border-bottom: 1px solid var(--line); padding-bottom: 2px; }
+.cc-pos-match { justify-content: flex-start; align-items: center; font-family: var(--font-ipa, inherit); }
+.cc-pos-word { display: flex; justify-content: space-between; gap: 6px; padding: 1px 4px; border: none; background: none; cursor: pointer; font-family: var(--font-ipa, inherit); font-size: var(--text-sm); text-align: left; }
+.cc-pos-word:hover, .cc-pos-word:focus-visible { background: var(--accent-soft); }
+.cc-pos-n { color: var(--muted); font-variant-numeric: tabular-nums; }
 .cc-around p.cc-around-me { color: inherit; font-weight: 600; }
 .play-seg:disabled { opacity: 0.4; cursor: default; }
 .cc-left { grid-area: left; text-align: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; unicode-bidi: plaintext; }

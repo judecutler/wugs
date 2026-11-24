@@ -16,6 +16,7 @@ import { nearHits, nearLine, NEAR_SIDES, NEAR_WINDOWS, type NearSide } from "../
 import { savedLine, type SavedSearch, asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { linesUnder } from "../concordance/under";
 import { around } from "../concordance/around";
+import { positions, positionsTsv } from "../concordance/positions";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
@@ -342,6 +343,48 @@ export const concordancePanel: PanelDef = {
     const nearSide = h("select", { title: "On which side of the match" }, ...NEAR_SIDES.map((s) => h("option", { value: s.id, textContent: s.label })));
     nearSide.setAttribute("aria-label", "Which side");
     const nearBar = h("div", { className: "cc-bar cc-near" }, nearInput, nearWindow, nearSide);
+    // The commonest words at each position around the match, drawn while open.
+    const posBox = h("details", { className: "cc-positions" }, h("summary", { textContent: "Words around it" }));
+    const posBody = h("div", {});
+    posBox.append(posBody);
+    posBox.hidden = true;
+    const drawPositions = (lines: Hit[]) => {
+      posBox.hidden = lines.length === 0 || plotOn || clustersOn;
+      if (!posBox.open || posBox.hidden) {
+        posBody.replaceChildren();
+        return;
+      }
+      const cols = positions(lines);
+      const copyPos = h("button", { type: "button", textContent: "Copy table", title: "The commonest words at each position, to paste into a spreadsheet" });
+      copyPos.onclick = () =>
+        void writeText(positionsTsv(cols)).then(
+          () => showToast({ tone: "info", lines: ["Copied the words around it."] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      const column = (c: (typeof cols)[number]) =>
+        h(
+          "div",
+          { className: "cc-pos-col" },
+          h("div", { className: "cc-pos-head", textContent: c.label }),
+          ...c.rows.map((r) => {
+            const b = h("button", { type: "button", className: "cc-pos-word", title: `Keep only the lines with «${r.word}» ${c.label}` }, h("span", { textContent: r.word }), h("span", { className: "cc-pos-n", textContent: String(r.count) }));
+            b.onclick = () => {
+              nearInput.value = r.word;
+              const d = Math.abs(c.offset);
+              nearWindow.value = String(NEAR_WINDOWS.find((x) => x >= d) ?? 10);
+              nearSide.value = c.offset < 0 ? "before" : "after";
+              drawRows();
+            };
+            return b;
+          }),
+        );
+      posBody.replaceChildren(
+        h("div", { className: "cc-pos-grid" }, ...cols.filter((c) => c.offset < 0).map(column), h("div", { className: "cc-pos-col cc-pos-match" }, h("div", { className: "cc-pos-head", textContent: "match" }), h("strong", { textContent: asked })), ...cols.filter((c) => c.offset > 0).map(column)),
+        h("p", { className: "note", textContent: "Each word counted once per line, capitals and punctuation aside. Click a word to keep only the lines with it near the match." }),
+        h("div", { className: "cc-bar" }, copyPos),
+      );
+    };
+    posBox.addEventListener("toggle", () => drawPositions(chosen()));
     const nearOn = () => nearInput.value.trim() !== "";
     const kept = (): Hit[] => (nearOn() ? nearHits(hits, nearInput.value, Number(nearWindow.value), nearSide.value as NearSide) : hits);
     // Sorting the lines into categories (CQPweb's categorise): kept in the project per search.
@@ -760,6 +803,8 @@ export const concordancePanel: PanelDef = {
     };
 
     const drawRows = () => {
+      // Drawn again below for plain lines; the plot, clusters and an empty search have none.
+      posBox.hidden = true;
       if (plotOn && asked !== "") {
         drawPlot();
         return;
@@ -785,6 +830,7 @@ export const concordancePanel: PanelDef = {
         (thinned ? thinLine(thinTo, near, nearOn() ? near : total) : "");
       tagsToggle.hidden = !hasTags(hits);
       drawCats();
+      drawPositions(chosen());
       // The word the lines are sorted by is marked, as concordancers colour it.
       const mark = sortedWord(sortBy);
       const context = (text: string, side: "left" | "right"): HTMLElement => {
@@ -1139,7 +1185,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, savedPick, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, fileTopic, keepSearch, saveClipsButton), topicBar, keepBar, nearBar, catBar, catNote, crossBox, chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, savedPick, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, fileTopic, keepSearch, saveClipsButton), topicBar, keepBar, nearBar, catBar, catNote, crossBox, chips, count, posBox, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */
