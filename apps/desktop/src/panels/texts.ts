@@ -1,3 +1,4 @@
+import { allomorphSets, setNote, soundsLine } from "../affixes/allomorphs";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { glottologPlace, lexiconList, wordOrder, orthographyGet, projectAffixes, projectProgress, soundWords, typologyAnswers, typologyProfile } from "../api";
 import { featuresOf, grammarSketch, graphemesOf, morphemesOf, type Feature } from "../grammar/sketch";
@@ -379,6 +380,10 @@ async function exportSketch() {
     const morphemes = morphemesOf(entries);
     const affixes = await projectAffixes().catch(() => null);
     const slots = affixes === null ? [] : slotChart(affixes.affixes).map((c) => ({ label: slotLabel(c.slot), affixes: c.affixes.map((a) => `${marked(a)} ${a.gloss}`.trim()) }));
+    const allomorphs =
+      affixes === null
+        ? []
+        : allomorphSets(affixes.affixes).map((s) => ({ gloss: s.gloss, forms: s.members.map((m) => ({ form: marked(m.affix), uses: m.affix.uses, next: soundsLine(m.next), vowel: soundsLine(m.vowel) })), note: setNote(s) }));
     const graphemes = graphemesOf(toGrid(ortho.profile));
     const order = await wordOrder().catch(() => undefined);
     const place = language.glottocode === "" ? null : await glottologPlace({ glottocode: language.glottocode }).catch(() => null);
@@ -391,6 +396,7 @@ async function exportSketch() {
       graphemes,
       morphemes,
       slots,
+      allomorphs,
       entries: progress.entries,
       features,
       featureSource,

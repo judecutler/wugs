@@ -48,6 +48,9 @@ export type SketchInput = {
   /** The position-class chart read from the glossed words: each slot's
    * label and its affixes as written with their glosses (`ni- 1SG`). */
   slots?: { label: string; affixes: string[] }[];
+  /** Glosses written more than one way (src/affixes/allomorphs.ts): each
+   * gloss, its forms with their neighbours in words, and what may condition them. */
+  allomorphs?: { gloss: string; forms: { form: string; uses: number; next: string; vowel: string }[]; note: string }[];
   /** Word orders counted in the parsed sentences (src-tauri/src/word_order.rs). */
   order?: WordOrder;
   /** The person's own date for the title page, `YYYY-MM-DD`. */
@@ -250,6 +253,18 @@ export function grammarSketch(d: SketchInput): string {
       `<table class="chart"><tr>${slots.map((s) => `<th>${esc(s.label)}</th>`).join("")}</tr>${rows.join("")}</table>`,
       todo("Which slots are obligatory, and what the order says about the morphology"),
     );
+  }
+  const sets = d.allomorphs ?? [];
+  if (sets.length > 0) {
+    const n = byKind.length + (slots.some((s) => s.affixes.length > 0) ? 2 : 1);
+    parts.push(`<h3>4.${n} Allomorphy</h3>`, `<p>Glosses written more than one way on the same side of the root, with the sounds each form stands next to and the stem's nearest vowel.</p>`);
+    for (const s of sets) {
+      parts.push(
+        `<table><tr><th colspan="4" class="gl">${esc(s.gloss)}</th></tr><tr><th>Form</th><th>Uses</th><th>Next to</th><th>Nearest vowel</th></tr>${s.forms.map((f) => `<tr><td class="ipa">${esc(f.form)}</td><td>${f.uses}</td><td class="ipa">${esc(f.next)}</td><td class="ipa">${esc(f.vowel)}</td></tr>`).join("")}</table>`,
+        `<p>${esc(s.note)}</p>`,
+      );
+    }
+    parts.push(todo("The rules that choose each form, and the forms these data do not show"));
   }
   parts.push(todo("Word classes, inflection and derivation"));
 
