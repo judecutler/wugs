@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { importLines, keyOf, label, parseScope, queryHint, suggestions, whereOptions, whereValue, whereWords } from "./logic.ts";
+import { importLines, keyOf, label, parseScope, queryHint, suggestions, trackValue, whereOptions, whereValue, whereWords } from "./logic.ts";
 
 test("keys are made as the engine makes them", () => {
   assert.equal(keyOf("Text Genre"), "text_genre");
@@ -41,6 +41,8 @@ test("a scope picker's values round-trip", () => {
   assert.deepEqual(parseScope(""), { textId: null, within: null });
   assert.deepEqual(parseScope("txt_1"), { textId: "txt_1", within: null });
   assert.deepEqual(parseScope("where:{broken"), { textId: null, within: null });
+  assert.deepEqual(parseScope(trackValue("tier_1", "CHI")), { textId: null, within: { key: "", value: "", tier: "tier_1", trackName: "CHI" } });
+  assert.deepEqual(parseScope("track:[1"), { textId: null, within: null });
 });
 
 test("details with a value every text shares are not offered", () => {
@@ -54,4 +56,5 @@ test("details with a value every text shares are not offered", () => {
   assert.deepEqual(opts.map((o) => o.key), ["genre"]);
   assert.equal(opts[0]!.options[0]!.label, "Genre: news (2 texts)");
   assert.equal(whereWords({ key: "text_genre", value: "news" }), "texts whose text genre is «news»");
+  assert.equal(whereWords({ key: "", value: "", tier: "t1", trackName: "CHI" }), "the «CHI» track");
 });

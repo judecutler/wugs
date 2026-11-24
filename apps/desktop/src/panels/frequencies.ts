@@ -40,7 +40,7 @@ export const frequenciesPanel: PanelDef = {
     let countedAt = "";
     let seq = 0;
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Count" });
-    const scopePicker = h("select", { className: "fq-scope", title: "Count in the whole project, one text, or the texts with one detail (add details in the Texts panel)" });
+    const scopePicker = h("select", { className: "fq-scope", title: "Count in the whole project, one text, the texts with one detail (add details in the Texts panel), or one track (a speaker's, as CHAT files have)" });
     scopePicker.setAttribute("aria-label", "Where to count");
     let size = 1;
     const sizer = h(

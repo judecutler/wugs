@@ -1067,6 +1067,7 @@ const LEXICON = [
             { glottocode: "cypr1248", iso: "", name: "Cypriot Turkish", dialect: true, family: "Turkic", macroarea: "Eurasia", language: "Turkish" },
           ]
         : [],
+    corpus_tracks: () => [{ id: "tier-utt", name: "utterance" }, { id: "tier-ipa", name: "IPA" }],
     metadata_values: () => [
       { key: "genre", values: [["narrative", 2], ["procedural", 1]] },
       { key: "speaker", values: [["A. Speaker (synthetic)", 3]] },

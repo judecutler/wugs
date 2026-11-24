@@ -162,12 +162,23 @@ pub(crate) fn tests_word_counts(session: &mut Session) -> Vec<usize> {
     out
 }
 
-/// A document detail a corpus tool may pick texts by: texts whose
-/// metadata `key` (made with `metadata::key_of`) is exactly `value`.
+/// A part of the corpus a tool may read: texts whose metadata `key` (made
+/// with `metadata::key_of`) is exactly `value`, and/or only the segments of
+/// one track (`tier`: a speaker's track, as CHAT files have one per
+/// speaker). An empty key picks no texts by detail.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Where {
     pub key: String,
     pub value: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tier: Option<String>,
+}
+
+impl Where {
+    /// Texts whose detail `key` is `value`.
+    pub fn detail(key: &str, value: &str) -> Where {
+        Where { key: key.into(), value: value.into(), tier: None }
+    }
 }
 
 /// Which texts a corpus tool reads: one text, the texts a detail picks,
@@ -196,9 +207,14 @@ impl Scope {
         self.text.is_none() && self.r#where.is_none()
     }
 
+    /// The one track it reads, if it names one.
+    pub(crate) fn tier(&self) -> Option<&str> {
+        self.r#where.as_ref().and_then(|w| w.tier.as_deref())
+    }
+
     /// The texts it keeps, worked out once: None keeps every text.
     pub(crate) fn picked(&self, p: &Project) -> Result<Option<std::collections::HashSet<String>>, String> {
-        let Some(w) = &self.r#where else { return Ok(None) };
+        let Some(w) = self.r#where.as_ref().filter(|w| !w.key.is_empty()) else { return Ok(None) };
         let key = wugs_core::metadata::key_of(&w.key).ok_or_else(|| format!("«{}» is not a detail's name", w.key))?;
         let value = p.proj.nfc(w.value.trim());
         let mut out = std::collections::HashSet::new();
@@ -250,7 +266,11 @@ pub(crate) fn each_segment(
     let only_text = scope.text.as_deref();
     let picked = scope.picked(p)?;
     let keeps = |text: &str| picked.as_ref().is_none_or(|set| set.contains(text));
-    let (translation_tiers, transcription_tiers) = corpus_tiers(p)?;
+    let (mut translation_tiers, mut transcription_tiers) = corpus_tiers(p)?;
+    if let Some(only) = scope.tier() {
+        translation_tiers.retain(|t| t == only);
+        transcription_tiers.retain(|t| t == only);
+    }
     let mut titles: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut title_of = |text: &str| -> Result<String, String> {
         if let Some(t) = titles.get(text) {
@@ -302,6 +322,29 @@ pub(crate) struct CorpusMorph {
     pub gloss: String,
     pub kind: String,
     pub sense: Option<String>,
+}
+
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Track {
+    pub id: String,
+    pub name: String,
+}
+
+/// The live transcription tracks, by name: what a corpus tool can be
+/// narrowed to (one speaker's track).
+pub fn tracks(session: &mut Session) -> Result<Vec<Track>, String> {
+    let p = project(session)?;
+    let (_, transcription) = corpus_tiers(p)?;
+    let mut out = Vec::new();
+    for t in transcription {
+        if p.proj.is_tombstoned(&t)? {
+            continue;
+        }
+        out.push(Track { name: p.proj.field_str(&t, "name")?.unwrap_or_default(), id: t });
+    }
+    out.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(out)
 }
 
 pub(crate) fn morphs_of(p: &Project, token: &str) -> Result<Vec<CorpusMorph>, String> {

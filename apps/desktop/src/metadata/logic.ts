@@ -85,7 +85,9 @@ export function importLines(r: MetaImport): string[] {
 }
 
 /** Texts picked by a detail: those whose `key` is exactly `value`. */
-export type Where = { key: string; value: string };
+/** A part of the corpus: texts whose detail `key` is `value` (an empty key
+ * picks none by detail), and/or one track's segments (`tier`, named `trackName`). */
+export type Where = { key: string; value: string; tier?: string; trackName?: string };
 /** One detail's values across the project, most texts first. */
 export type MetaValues = { key: string; values: [string, number][] };
 /** What a corpus tool reads: one text, the texts a detail picks, or (neither) all. */
@@ -95,6 +97,12 @@ export type Scope = { textId: string | null; within: Where | null };
 export const MAX_VALUES = 40;
 
 const WHERE = "where:";
+const TRACK = "track:";
+
+/** A scope picker's option value for one track. */
+export function trackValue(id: string, name: string): string {
+  return TRACK + JSON.stringify([id, name]);
+}
 
 /** A scope picker's option value for a detail; a text's is its id, the whole project's "". */
 export function whereValue(w: Where): string {
@@ -103,6 +111,15 @@ export function whereValue(w: Where): string {
 
 /** A scope picker's value back as what the commands take. */
 export function parseScope(value: string): Scope {
+  if (value.startsWith(TRACK)) {
+    try {
+      const [id, name] = JSON.parse(value.slice(TRACK.length)) as [unknown, unknown];
+      if (typeof id === "string" && typeof name === "string") return { textId: null, within: { key: "", value: "", tier: id, trackName: name } };
+    } catch {
+      // As below: the whole project.
+    }
+    return { textId: null, within: null };
+  }
   if (value.startsWith(WHERE)) {
     try {
       const [key, v] = JSON.parse(value.slice(WHERE.length)) as [unknown, unknown];
@@ -122,6 +139,7 @@ export function whereLabel(w: Where, texts: number): string {
 
 /** The picked texts in a sentence: `texts whose genre is news`. */
 export function whereWords(w: Where): string {
+  if (w.tier !== undefined) return `the «${w.trackName ?? w.tier}» track`;
   return `texts whose ${label(w.key).toLowerCase()} is «${w.value}»`;
 }
 

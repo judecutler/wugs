@@ -21,7 +21,8 @@ export const cqpLiteral = (value: string): string => value.replace(/[\\.+*?()|[\
 /** The CQP query whose lines a lemma or tag row counts, limited to the texts a detail picks. */
 export function cqpFor(kind: "lemma" | "tag", item: string, within: { key: string; value: string } | null): string {
   const q = `[${kind === "lemma" ? "lemma" : "upos"}="${cqpLiteral(item)}"]`;
-  return within === null ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
+  // A track picks no texts, and CQP has no word for tracks: the query reads every track.
+  return within === null || within.key === "" ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
 }
 
 /** The note under a lemma or tag list: words not yet lemmatised or tagged. */

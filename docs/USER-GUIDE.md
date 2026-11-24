@@ -1037,6 +1037,8 @@ Details also come in with files: a TEI file's header (author, date, genre, licen
 
 Use details to study part of a corpus. In **Frequencies**, **Collocates** and **Keywords**, the list that picks where to look also offers the texts with one detail, such as **Genre: news (12 texts)**. Keywords then compares those texts with all the others. A row you open shows its lines in the Concordance from the same texts. In a CQP query, see [Search with CQP queries](#search-with-cqp-queries).
 
+When the project has more than one transcription track, the same list also offers **One track**. A CHAT file brings a track per speaker, so you can count only the child's words (`CHI`), find their collocates, or have Keywords compare the child's words with everyone else's. A track holds no translations, so with a track picked, **Translations** finds nothing. A lemma or tag row opened from Frequencies runs its CQP query on every track, as CQP queries have no condition for tracks.
+
 ### Publish the dictionary and examples as CLDF
 
 Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cldf-<date>` holding a CLDF Dictionary dataset: the CSV tables and metadata that pycldf, Zenodo, Dictionaria and other CLLD sites read.

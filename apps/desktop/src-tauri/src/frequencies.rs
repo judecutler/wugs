@@ -289,7 +289,7 @@ mod tests {
         assert_eq!(frequencies(&mut session, Kind::Word, &Scope::text("txt_none")).unwrap().tokens, 0);
         // Texts picked by a detail: the one text with it, then none.
         crate::metadata::set_text_metadata(&mut session, &text, "Genre", "counting").unwrap();
-        let by = |value: &str| Scope::of(None, Some(crate::concordance::Where { key: "genre".into(), value: value.into() }));
+        let by = |value: &str| Scope::of(None, Some(crate::concordance::Where::detail("genre", value)));
         assert_eq!(frequencies(&mut session, Kind::Word, &by("counting")).unwrap().tokens, words.tokens);
         assert_eq!(frequencies(&mut session, Kind::Word, &by("news")).unwrap().tokens, 0);
         assert_eq!(crate::concordance::concordance_in(&mut session, "wʌn", Kind::Word, crate::concordance::Match::Exact, &by("news")).unwrap().total, 0);

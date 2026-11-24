@@ -2,23 +2,20 @@
 // the texts a detail picks ("Genre: news"). Details' values are fetched in
 // the background and cached briefly; a picker fills from the cache at once
 // and again when fresh values arrive.
-import { metadataValues } from "../api";
+import { corpusTracks, metadataValues } from "../api";
 import { h } from "../dom";
 import { getState } from "../store";
-import { parseScope, whereOptions, type MetaValues, type Scope } from "./logic";
+import { parseScope, trackValue, whereOptions, type MetaValues, type Scope } from "./logic";
 
-let cache: { project: string; at: number; values: MetaValues[] } | null = null;
+let cache: { project: string; at: number; values: MetaValues[]; tracks: { id: string; name: string }[] } | null = null;
 let asking: Promise<void> | null = null;
 const waiting = new Set<() => void>();
 
 function refresh(project: string) {
   if (asking !== null) return;
-  asking = metadataValues()
-    .then((values) => {
-      cache = { project, at: Date.now(), values };
-    })
-    .catch(() => {
-      cache = { project, at: Date.now(), values: [] };
+  asking = Promise.all([metadataValues().catch(() => [] as MetaValues[]), corpusTracks().catch(() => [])])
+    .then(([values, tracks]) => {
+      cache = { project, at: Date.now(), values, tracks };
     })
     .finally(() => {
       asking = null;
@@ -49,6 +46,9 @@ export function fillScopes(select: HTMLSelectElement, value: string, again: () =
   const options: HTMLElement[] = [h("option", { value: "", textContent: whole })];
   if (s.texts.length > 0) options.push(h("optgroup", { label: "One text" }, ...s.texts.map((t) => h("option", { value: t.id, textContent: t.title || t.id }))));
   for (const g of groups) options.push(h("optgroup", { label: "Texts by detail" }, ...g.options.map((o) => h("option", { value: o.value, textContent: o.label }))));
+  // One speaker's track, when the project has more than one (a CHAT file brings one per speaker).
+  const tracks = cache?.project === project ? cache.tracks : [];
+  if (tracks.length > 1) options.push(h("optgroup", { label: "One track" }, ...tracks.map((t) => h("option", { value: trackValue(t.id, t.name), textContent: t.name || t.id }))));
   select.replaceChildren(...options);
   const offered = [...select.querySelectorAll("option")].some((o) => o.value === value);
   select.value = offered ? value : "";
