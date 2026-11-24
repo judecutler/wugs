@@ -947,7 +947,7 @@ It lists how much is recorded, how many sentences are transcribed and how much s
 
 A sentence is a segment on a transcription track. A word counts as glossed once it is broken into morphs. A recording that is not on this computer is not counted, and the panel says how many there are.
 
-It also says how long the sentences are in words, and how many morphs a glossed word has on average (Greenberg's index of synthesis: near 1 for an isolating language, 2–3 for an agglutinating one), project-wide and text by text under **Morphs per word**. The grammar sketch's morphology chapter starts with the same figure.
+It also says how long the sentences are in words, and how many morphs a glossed word has on average (Greenberg's index of synthesis: near 1 for an isolating language, 2–3 for an agglutinating one), project-wide and text by text under **Morphs per word**. The grammar sketch's morphology chapter starts with the same figure. **MTLD** gives how varied each text's words are, and on the totals row the whole corpus's (McCarthy and Jarvis 2010). Unlike the plain ratio of different words to running words, it does not fall as a text gets longer, so a short story and a long conversation can be compared; it is given from 100 words up. Genres differ here: a word list or a counting text scores low, a narrative higher.
 
 **The corpus by detail** breaks the texts down by one of their details (genre, speaker, date, place… as given in the Texts panel's Details or by **Import details…**): for each value, how many texts, sentences and words it has, its share of the words and how many words are glossed, with texts that do not give the detail last. Pick the detail above the table; **Copy table** copies it for the corpus description in a paper or a deposit form.
 

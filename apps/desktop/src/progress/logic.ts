@@ -16,6 +16,8 @@ export type TextProgress = {
   translated: number;
   /** The text's details, `[key, value]`, when read from the project. */
   meta?: [string, string][];
+  /** How varied its words are (MTLD), from 100 words up. */
+  mtld?: number | null;
 };
 
 export type Progress = {
@@ -27,6 +29,8 @@ export type Progress = {
   sensesWithoutGloss: number;
   people: number;
   consentRecords: number;
+  /** MTLD over every text's words. */
+  mtld?: number | null;
 };
 
 /** A length people read: "2 h 05 min", "12 min 30 s", "40 s", "—" for none. */
@@ -60,6 +64,7 @@ export function totals(p: Progress): TextProgress {
     glossedWords: sum((t) => t.glossedWords),
     morphs: sum((t) => t.morphs),
     translated: sum((t) => t.translated),
+    mtld: p.mtld ?? null,
   };
 }
 
@@ -91,7 +96,7 @@ function shapeLine(t: TextProgress): string[] {
   return [t.glossedWords === 0 ? `${words}.` : `${words}; glossed words average ${ratio(t.morphs, t.glossedWords)} morphs (the index of synthesis).`];
 }
 
-export const COLUMNS = ["Text", "Recording", "Sentences", "Transcribed", "Speech transcribed", "Words", "Glossed", "Morphs per word", "Translated"] as const;
+export const COLUMNS = ["Text", "Recording", "Sentences", "Transcribed", "Speech transcribed", "Words", "Glossed", "Morphs per word", "Translated", "MTLD"] as const;
 
 /** One table row's cells, in `COLUMNS` order. */
 export function rowCells(t: TextProgress): string[] {
@@ -106,14 +111,15 @@ export function rowCells(t: TextProgress): string[] {
     `${n(t.glossedWords)} (${percent(t.glossedWords, t.words)})`,
     ratio(t.morphs, t.glossedWords),
     `${n(t.translated)} (${percent(t.translated, t.transcribed)})`,
+    t.mtld === undefined || t.mtld === null ? "—" : t.mtld.toFixed(1),
   ];
 }
 
 /** Tab-separated, every text then the totals, numbers bare for a spreadsheet. */
 export function progressTsv(p: Progress): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
-  const head = ["text", "recording (min)", "sentences", "transcribed", "speech transcribed (min)", "words", "glossed words", "morphs", "translated"].join("\t");
+  const head = ["text", "recording (min)", "sentences", "transcribed", "speech transcribed (min)", "words", "glossed words", "morphs", "translated", "mtld"].join("\t");
   const min = (ms: number | null) => (ms === null ? "" : (ms / 60000).toFixed(1));
-  const row = (t: TextProgress) => [clean(t.title), min(t.recordingMs), t.sentences, t.transcribed, min(t.transcribedMs), t.words, t.glossedWords, t.morphs, t.translated].join("\t");
+  const row = (t: TextProgress) => [clean(t.title), min(t.recordingMs), t.sentences, t.transcribed, min(t.transcribedMs), t.words, t.glossedWords, t.morphs, t.translated, t.mtld === undefined || t.mtld === null ? "" : t.mtld.toFixed(2)].join("\t");
   return [head, ...p.texts.map(row), row(totals(p))].join("\n");
 }
