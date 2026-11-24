@@ -139,9 +139,20 @@ export function countLine(shown: number, total: number, texts: number): string {
 }
 
 /** The hits as tab-separated rows (left, keyword, right, text), for a spreadsheet. */
-export function asTsv(hits: readonly Hit[]): string {
+export function asTsv(hits: readonly Hit[], details?: ReadonlyMap<string, ReadonlyMap<string, string>>): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
-  return ["left\tkeyword\tright\ttext", ...hits.map((h) => [left(h), keyword(h), right(h), h.textTitle].map(clean).join("\t"))].join("\n");
+  if (details === undefined) return ["left\tkeyword\tright\ttext", ...hits.map((h) => [left(h), keyword(h), right(h), h.textTitle].map(clean).join("\t"))].join("\n");
+  // The fuller table, one line per hit with what a statistical analysis of
+  // the lines needs: where it is, its analysis, and its text's details.
+  const analysed = hits.some((h) => h.breakdown !== null || h.glosses !== null);
+  const keys = [...new Set(hits.flatMap((h) => [...(details.get(h.textId)?.keys() ?? [])]))].sort();
+  const secs = (ms: number | null) => (ms === null ? "" : (ms / 1000).toFixed(3));
+  const head = ["left", "keyword", "right", "text", "start_s", "end_s", ...(analysed ? ["breakdown", "glosses"] : []), ...keys];
+  const rows = hits.map((h) => {
+    const d = details.get(h.textId);
+    return [left(h), keyword(h), right(h), h.textTitle, secs(h.startMs), secs(h.endMs), ...(analysed ? [h.breakdown ?? "", h.glosses ?? ""] : []), ...keys.map((k) => d?.get(k) ?? "")].map(clean).join("\t");
+  });
+  return [head.map(clean).join("\t"), ...rows].join("\n");
 }
 
 const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

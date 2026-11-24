@@ -46,6 +46,15 @@ test("the count line says what is shown", () => {
 
 test("tab-separated rows keep tabs out of the cells", () => {
   assert.equal(asTsv([hit(["a\tb", "K", "c"], 1, "Title")]), "left\tkeyword\tright\ttext\na b\tK\tc\tTitle");
+  // With the texts' details: times, the analysis when any line has one, and a column per detail.
+  const one = { ...hit(["a", "K", "c"], 1, "Title"), textId: "t1", startMs: 1500, endMs: 2250, breakdown: "k-a", glosses: "go-PST" };
+  const two = { ...hit(["x", "K"], 1, "Other"), textId: "t2", startMs: null, endMs: null };
+  const details = new Map([["t1", new Map([["genre", "story"], ["speaker", "A\tB"]])], ["t2", new Map([["genre", "talk"]])]]);
+  assert.equal(
+    asTsv([one, two], details),
+    "left\tkeyword\tright\ttext\tstart_s\tend_s\tbreakdown\tglosses\tgenre\tspeaker\na\tK\tc\tTitle\t1.500\t2.250\tk-a\tgo-PST\tstory\tA B\nx\tK\t\tOther\t\t\t\t\ttalk\t",
+  );
+  assert.equal(asTsv([two], new Map()), "left\tkeyword\tright\ttext\tstart_s\tend_s\nx\tK\t\tOther\t\t");
 });
 
 test("a match of several words is the keyword whole, and the right context starts after it", () => {
