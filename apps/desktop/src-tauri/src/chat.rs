@@ -310,6 +310,56 @@ pub fn chat_date(iso: &str) -> Option<String> {
     Some(format!("{d}-{month}-{y}"))
 }
 
+/// What CHAT's `@Participants` and `@ID` say of a track's speaker, from the People panel.
+struct Speaker {
+    /// The name as CHAT writes it, spaces as `_`.
+    name: String,
+    role: String,
+    /// `y;mm.dd`, or a whole number of years as `y;`.
+    age: String,
+    /// `female` or `male`, else empty.
+    sex: String,
+    education: String,
+}
+
+/// CHAT's participant roles, as its depfile lists them.
+const CHAT_ROLES: &[&str] = &[
+    "Target_Child", "Target_Adult", "Child", "Mother", "Father", "Brother", "Sister", "Sibling", "Grandfather", "Grandmother", "Relative", "Participant", "Investigator", "Partner", "Boy", "Girl", "Adult", "Teenager",
+    "Male", "Female", "Visitor", "Friend", "Playmate", "Caretaker", "Environment", "Group", "Unidentified", "Uncertain", "Other", "Text", "Media", "Teacher", "Student", "Host", "Guest", "Leader", "Member", "Narrator",
+    "Speaker", "Audience", "Informant",
+];
+
+fn speaker_of(p: &wugs_core::Project, person: &str) -> Result<Speaker, String> {
+    let details = p.person_details(person)?;
+    let get = |k: &str| details.iter().find(|(key, _)| key == k).map(|(_, v)| v.trim().to_string()).unwrap_or_default();
+    let name: String = p
+        .proj
+        .field(person, "names")?
+        .and_then(|(v, _)| v.get_str("full").map(str::to_string))
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("_");
+    let roles: Vec<String> = match p.proj.field(person, "roles")? {
+        Some((wugs_model::Value::Arr(items), _)) => items.iter().filter_map(|v| v.as_str().map(str::to_string)).collect(),
+        _ => Vec::new(),
+    };
+    let role = roles
+        .iter()
+        .find_map(|r| CHAT_ROLES.iter().find(|c| c.eq_ignore_ascii_case(&r.replace(' ', "_"))))
+        .map_or("Participant", |c| *c)
+        .to_string();
+    let age = get("age");
+    let age = if !age.is_empty() && age.chars().all(|c| c.is_ascii_digit()) { format!("{age};") } else if age.contains(';') { age } else { String::new() };
+    let sex = match crate::speech_dataset::gender_of(&get("sex")) {
+        Some('f') => "female",
+        Some('m') => "male",
+        _ => "",
+    }
+    .to_string();
+    Ok(Speaker { name, role, age, sex, education: get("education").replace('|', "/") })
+}
+
 /// Header names kept as the text's details under a name of their own;
 /// any other header is kept under its own name.
 fn detail_key(header: &str) -> String {
@@ -726,17 +776,30 @@ pub fn export(p: &wugs_core::Project, text_id: &str) -> Result<(String, Vec<Stri
             language.iso.clone()
         }
     });
-    // A participant entry from the file (`CHI Ross Target_Child`), else one with no role known.
+    // A participant entry from the file (`CHI Ross Target_Child`), else one
+    // from the track's speaker in the People panel, else one with no role known.
     let given = get("participants").unwrap_or_default();
+    let mut speakers: Vec<Option<Speaker>> = Vec::new();
+    for (tier, _) in &codes {
+        speakers.push(match p.proj.field_text(tier, "speaker")? {
+            Some(person) if !p.proj.is_tombstoned(&person)? => Some(speaker_of(p, &person)?),
+            _ => None,
+        });
+    }
     let entries: Vec<String> = codes
         .iter()
-        .map(|(_, code)| {
+        .zip(&speakers)
+        .map(|((_, code), who)| {
             given
                 .split(',')
                 .map(str::trim)
                 .find(|e| e.split_whitespace().next() == Some(code.as_str()))
                 .map(str::to_string)
-                .unwrap_or_else(|| format!("{code} Unidentified"))
+                .unwrap_or_else(|| match who {
+                    Some(w) if !w.name.is_empty() => format!("{code} {} {}", w.name, w.role),
+                    Some(w) => format!("{code} {}", w.role),
+                    None => format!("{code} Unidentified"),
+                })
         })
         .collect();
     let mut headers: Vec<(String, String)> = vec![
@@ -744,11 +807,12 @@ pub fn export(p: &wugs_core::Project, text_id: &str) -> Result<(String, Vec<Stri
         ("Participants".into(), entries.join(", ")),
     ];
     let corpus = speaker_code(&p.proj.field_str(text_id, "title")?.unwrap_or_default());
-    for ((_, code), entry) in codes.iter().zip(&entries) {
+    for (((_, code), entry), who) in codes.iter().zip(&entries).zip(&speakers) {
         let role = entry.split_whitespace().last().unwrap_or("Unidentified");
+        let (age, sex, education) = who.as_ref().map_or((String::new(), String::new(), String::new()), |w| (w.age.clone(), w.sex.clone(), w.education.clone()));
         let id = get(&format!("id_{}", code.to_lowercase())).unwrap_or_else(|| {
             format!(
-                "{}|{}|{code}|||||{role}|||",
+                "{}|{}|{code}|{age}|{sex}|||{role}|{education}||",
                 lang.split(',').next().unwrap_or("und").trim(),
                 corpus.to_lowercase()
             )
@@ -899,6 +963,26 @@ mod tests {
             clean(&main_of("look at the dog, then!")),
             "look at the dog, then!"
         );
+    }
+
+    #[test]
+    fn a_tracks_speaker_fills_participants_and_id() {
+        let dir = std::env::temp_dir().join(format!("wugs-chat-speaker-{}", wugs_model::ulid()));
+        let mut s: crate::session::Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        let p = crate::session::project(&mut s).unwrap();
+        let person = p.add_named_person("Ana Sefo", &["consultant".to_string()]).unwrap();
+        p.set_person_detail(&person, "sex", "Female").unwrap();
+        p.set_person_detail(&person, "age", "34").unwrap();
+        let utt = crate::session::utterance_tier(p).unwrap();
+        p.set_tier_speaker(&utt, Some(&person)).unwrap();
+        let text = p.proj.entities_of_kind("text").unwrap()[0].clone();
+        let (out, _) = export(p, &text).unwrap();
+        let participants = out.lines().find(|l| l.starts_with("@Participants:")).unwrap();
+        assert!(participants.ends_with(" Ana_Sefo Participant"), "{participants}");
+        let id = out.lines().find(|l| l.starts_with("@ID:")).unwrap();
+        assert!(id.contains("|34;|female|||Participant|"), "{id}");
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]
