@@ -402,6 +402,8 @@ Under **Glosses against the Leipzig rules**, the panel lists glosses a journal's
 
 Click **Use «PL» for all 7**, then click again to confirm, to change every morph glossed that way.
 
+Under **Morphs without a gloss**, the panel lists the morphs that have no gloss yet, by spelling and type, the commonest first: a glossed example printed now would show `?` under them. When the same morph is glossed elsewhere, that gloss is offered in the field. Type or keep the gloss and click **Gloss all N**, then again to confirm, to gloss every one of them at once; click the text's name to see one first.
+
 ### Grow the lexicon from your glossed texts
 
 Under **Not in the lexicon**, the Checks panel lists every root you have glossed in your texts that has no lexicon entry yet, most used first. Each shows its glosses with how often each is used, and a link to a sentence that uses it. This happens a lot after importing glossed texts from Toolbox or FLEx without their lexicon.

@@ -109,6 +109,95 @@ pub fn glosses(session: &mut Session) -> Result<Vec<Inconsistent>, String> {
     Ok(out)
 }
 
+/// A morph left without a gloss (in the primary language), by spelling and
+/// type, with how often, where it first occurs and the glosses the same morph
+/// has elsewhere, commonest first: an example printed now would show `?`.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Unglossed {
+    pub surface: String,
+    pub key: String,
+    pub kind: String,
+    pub count: usize,
+    pub text_id: String,
+    pub text_title: String,
+    pub tier_id: String,
+    pub segment_id: String,
+    /// The glosses the same morph (key and type) has where it is glossed, with counts.
+    pub elsewhere: Vec<(String, usize)>,
+}
+
+/// The most morphs `unglossed` lists.
+pub const MAX_UNGLOSSED: usize = 500;
+
+/// Every morph with no gloss, grouped by its folded spelling and type, the commonest first.
+pub fn unglossed(session: &mut Session) -> Result<Vec<Unglossed>, String> {
+    let p = session::project(session)?;
+    let mut groups: BTreeMap<(String, String), Unglossed> = BTreeMap::new();
+    let mut glossed: BTreeMap<(String, String), BTreeMap<String, usize>> = BTreeMap::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            for m in p.proj.members(tok)? {
+                let surface = p.proj.nfc(&p.proj.field_str(&m, "surface")?.unwrap_or_default());
+                let key = wugs_model::lexicon_key(&surface);
+                if key.is_empty() {
+                    continue;
+                }
+                let kind = p.proj.field_str(&m, "type")?.unwrap_or_else(|| "root".into());
+                let gloss = p.proj.field_str(&m, "gloss")?.unwrap_or_default().trim().to_string();
+                if !gloss.is_empty() {
+                    *glossed.entry((key, kind)).or_default().entry(gloss).or_default() += 1;
+                    continue;
+                }
+                let g = groups.entry((key.clone(), kind.clone())).or_insert_with(|| Unglossed { surface: surface.clone(), key, kind, count: 0, text_id: seg.text.clone(), text_title: seg.title.clone(), tier_id: seg.tier.clone(), segment_id: seg.id.clone(), elsewhere: Vec::new() });
+                g.count += 1;
+            }
+        }
+        Ok(())
+    })?;
+    let mut out: Vec<Unglossed> = groups
+        .into_iter()
+        .map(|(k, mut u)| {
+            if let Some(gl) = glossed.remove(&k) {
+                u.elsewhere = gl.into_iter().collect();
+                u.elsewhere.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+            }
+            u
+        })
+        .collect();
+    out.sort_by(|a, b| b.count.cmp(&a.count).then(a.key.cmp(&b.key)));
+    out.truncate(MAX_UNGLOSSED);
+    Ok(out)
+}
+
+/// Gloss every unglossed morph of `key` and `kind` as `gloss`; how many.
+pub fn gloss_unglossed(session: &mut Session, key: &str, kind: &str, gloss: &str) -> Result<usize, String> {
+    let gloss = gloss.trim();
+    if gloss.is_empty() {
+        return Err("Type the gloss to give them.".into());
+    }
+    let p = session::project(session)?;
+    let mut targets: Vec<(String, String)> = Vec::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            for m in p.proj.members(tok)? {
+                let surface = p.proj.nfc(&p.proj.field_str(&m, "surface")?.unwrap_or_default());
+                if wugs_model::lexicon_key(&surface) == key
+                    && p.proj.field_str(&m, "type")?.unwrap_or_else(|| "root".into()) == kind
+                    && p.proj.field_str(&m, "gloss")?.unwrap_or_default().trim().is_empty()
+                {
+                    targets.push((seg.text.clone(), m));
+                }
+            }
+        }
+        Ok(())
+    })?;
+    for (text, m) in &targets {
+        p.set_gloss(text, m, gloss, None)?;
+    }
+    Ok(targets.len())
+}
+
 /// One gloss as written, with how many morphs carry it, how many of those
 /// are affixes or clitics (not roots), and where it first occurs.
 #[derive(Debug, Serialize)]
@@ -587,6 +676,30 @@ pub fn settle_drift(session: &mut Session, sense: &str, text_gloss: &str, use_le
 mod tests {
     use super::*;
     use crate::gloss;
+
+    #[test]
+    fn morphs_without_a_gloss_are_found_and_glossed() {
+        let dir = std::env::temp_dir().join(format!("wugs-unglossed-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        let text = session::list_texts(&mut s).unwrap()[0].id.clone();
+        let spec = |surface: &str, kind: &str, g: &str| gloss::MorphSpecView { surface: surface.into(), morph_type: kind.into(), gloss: (!g.is_empty()).then(|| g.into()), glosses_by_lang: Default::default(), sense: None };
+        for (i, (word, g)) in [("tamu", ""), ("tamu", ""), ("tamu", "guest")].iter().enumerate() {
+            let at = 60_000.0 + i as f64 * 2000.0;
+            let seg = session::add_segment(&mut s, &text, None, Some(at), Some(at + 1000.0), word).unwrap().id;
+            let view = gloss::gloss_tokenize(&mut s, &text, &seg, &[word.to_string()]).unwrap().view;
+            gloss::gloss_apply(&mut s, &text, &seg, &view.words[0].id, vec![spec(word, "root", g)]).unwrap();
+        }
+        let found = unglossed(&mut s).unwrap();
+        let tamu = found.iter().find(|u| u.key == "tamu").expect("tamu");
+        assert_eq!((tamu.count, tamu.kind.as_str()), (2, "root"));
+        assert_eq!(tamu.elsewhere, vec![("guest".to_string(), 1)], "the gloss it has elsewhere is offered");
+        assert!(gloss_unglossed(&mut s, "tamu", "root", " ").is_err());
+        assert_eq!(gloss_unglossed(&mut s, "tamu", "root", "guest").unwrap(), 2);
+        assert!(!unglossed(&mut s).unwrap().iter().any(|u| u.key == "tamu"));
+        drop(s);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn gloss_forms_are_counted_and_reglossed_everywhere() {

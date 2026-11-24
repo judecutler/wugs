@@ -213,6 +213,18 @@ fn gloss_consistency(s: State<SessionThread>) -> Result<Vec<consistency::Inconsi
     s.run(consistency::glosses)
 }
 
+/// Morphs without a gloss, for the Checks panel.
+#[tauri::command(async)]
+fn gloss_unglossed_morphs(s: State<SessionThread>) -> Result<Vec<consistency::Unglossed>, String> {
+    s.run(consistency::unglossed)
+}
+
+/// Gloss every unglossed morph of one spelling and type.
+#[tauri::command(async)]
+fn gloss_fill(s: State<SessionThread>, key: String, kind: String, gloss: String) -> Result<usize, String> {
+    s.run(move |s| consistency::gloss_unglossed(s, &key, &kind, &gloss))
+}
+
 /// Every gloss as written, with counts, for the Leipzig check.
 #[tauri::command(async)]
 fn gloss_forms(s: State<SessionThread>) -> Result<Vec<consistency::GlossForm>, String> {
@@ -2494,6 +2506,8 @@ pub fn run() {
             gloss_consistency,
             gloss_unify,
             gloss_forms,
+            gloss_unglossed_morphs,
+            gloss_fill,
             gloss_regloss,
             gloss_segmentations,
             like_sentences,
