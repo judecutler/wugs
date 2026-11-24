@@ -2,7 +2,9 @@
 // report, a deposit form or a supervisor (src-tauri/src/progress.rs). Words
 // and sums in ../progress/logic.ts. Read-only; a row opens its text.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog } from "../api";
+import { errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog, worldLand } from "../api";
+import { placesNote, textPlaces } from "../progress/places";
+import { mapView } from "../typology/map";
 import { dayLabel, workColumns, worklogLine, worklogTsv, type Day } from "../progress/worklog";
 import { localDay } from "../dates";
 import { SPEAKER_COLUMNS, speakerCells, speakersNote, speakersTsv, type SpeakerRow } from "../progress/speakers";
@@ -31,6 +33,8 @@ export const progressPanel: PanelDef = {
     const workBox = h("div", { className: "pg-work" });
     let work: Day[] = [];
     const speakersBox = h("div", { className: "pg-speakers" });
+    const placesBox = h("div", { className: "pg-places" });
+    let land: string | null = null;
     let speakers: SpeakerRow[] = [];
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every text's figures and the totals, to paste into a spreadsheet or a report" });
     const recount = h("button", { type: "button", textContent: "Count again" });
@@ -58,6 +62,7 @@ export const progressPanel: PanelDef = {
       if (data.texts.length > 1) parts.push(h("tfoot", {}, row(rowCells(totals(data)), null)));
       table.replaceChildren(...parts);
       drawMakeUp();
+      drawPlaces();
       note.textContent =
         "A sentence is a segment on a transcription track; a word is glossed once it is broken into morphs; speech transcribed adds up the timed sentences that have a transcription.";
     };
@@ -142,6 +147,54 @@ export const progressPanel: PanelDef = {
         h("div", { className: "pg-rows" }, h("table", { className: "pg-table" }, h("thead", {}, head), h("tbody", {}, ...body))),
         h("p", { className: "note", textContent: compositionNote(rows, detail) }),
       );
+    };
+
+    /** Where the texts were recorded, from their coordinates details, on Natural Earth's land. */
+    const drawPlaces = () => {
+      if (data === null) {
+        placesBox.replaceChildren();
+        return;
+      }
+      const found = textPlaces(data.texts.map((t) => ({ title: t.title, meta: t.meta ?? [] })));
+      if (found.places.length === 0) {
+        placesBox.replaceChildren(...(found.wordsOnly > 0 ? [h("h3", { className: "pg-head", textContent: "Where the texts were recorded" }), h("p", { className: "note", textContent: placesNote(found, data.texts.length) })] : []));
+        return;
+      }
+      if (land === null) {
+        void worldLand().then((l) => {
+          land = l;
+          drawPlaces();
+        }, () => undefined);
+        return;
+      }
+      // At least 8° across: Natural Earth 1:110m is too coarse to show a smaller area.
+      const view = mapView(found.places, { x: 8, y: 5 });
+      const { x, y, w, h: hh } = view.box;
+      const r = Math.max(w, hh) / 70;
+      const NS = "http://www.w3.org/2000/svg";
+      const node = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>, text?: string) => {
+        const e = document.createElementNS(NS, tag);
+        for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+        if (text !== undefined) e.textContent = text;
+        return e;
+      };
+      const map = node("svg", { viewBox: `${x} ${y} ${w} ${hh}`, class: "tm-map pg-map", role: "img", "aria-label": "Where the texts were recorded" });
+      map.append(node("rect", { x, y, width: w, height: hh, class: "tm-sea" }));
+      for (const dx of [0, 360]) map.append(node("path", { d: land, transform: `translate(${dx} 0)`, class: "tm-land", "stroke-width": r / 4 }));
+      // One dot per site, titled with the texts recorded there.
+      const sites = new Map<string, { x: number; y: number; titles: string[] }>();
+      for (const p of view.placed) {
+        const k = `${p.x.toFixed(4)},${p.y.toFixed(4)}`;
+        const s = sites.get(k) ?? { x: p.x, y: p.y, titles: [] };
+        s.titles.push(p.title || "(untitled)");
+        sites.set(k, s);
+      }
+      for (const s of sites.values()) {
+        const dot = node("circle", { cx: s.x, cy: s.y, r: r * Math.min(2, 1 + Math.log10(s.titles.length)), class: "tm-dot pg-site", "stroke-width": r / 4 });
+        dot.append(node("title", {}, s.titles.join(", ")));
+        map.append(dot);
+      }
+      placesBox.replaceChildren(h("h3", { className: "pg-head", textContent: "Where the texts were recorded" }), map, h("p", { className: "note", textContent: placesNote(found, data.texts.length) }));
     };
 
     /** Each speaker's utterance lengths: MLU in words and morphemes. */
@@ -260,7 +313,7 @@ export const progressPanel: PanelDef = {
         el.replaceChildren(emptyState("Progress", "Open a project to see how far it has come.", "The wug is keeping score."));
         return;
       }
-      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, makeUp, speakersBox, growthBox, workBox);
+      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, makeUp, placesBox, speakersBox, growthBox, workBox);
       void load();
     };
     return { element: el, render, dispose: unprovide };

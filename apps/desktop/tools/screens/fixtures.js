@@ -1283,9 +1283,9 @@ const LEXICON = [
     },
     project_progress: () => ({
       texts: [
-        { id: "t-count", title: "Counting to ten", recordingMs: 62_000, sentences: 10, transcribed: 10, transcribedMs: 41_000, words: 65, glossedWords: 52, morphs: 97, translated: 9, meta: [["genre", "procedural"], ["speaker", "A. Speaker"]] },
-        { id: "t-fox", title: "The fox and the well", recordingMs: 754_000, sentences: 24, transcribed: 17, transcribedMs: 402_000, words: 214, glossedWords: 60, morphs: 131, translated: 11, meta: [["genre", "narrative"], ["speaker", "B. Speaker"]] },
-        { id: "t-market", title: "Greetings at the market", recordingMs: null, sentences: 7, transcribed: 7, transcribedMs: 0, words: 38, glossedWords: 0, morphs: 0, translated: 7, meta: [["genre", "conversation"]] },
+        { id: "t-count", title: "Counting to ten", recordingMs: 62_000, sentences: 10, transcribed: 10, transcribedMs: 41_000, words: 65, glossedWords: 52, morphs: 97, translated: 9, meta: [["genre", "procedural"], ["speaker", "A. Speaker"], ["coordinates", "-8.51, 115.26"]] },
+        { id: "t-fox", title: "The fox and the well", recordingMs: 754_000, sentences: 24, transcribed: 17, transcribedMs: 402_000, words: 214, glossedWords: 60, morphs: 131, translated: 11, meta: [["genre", "narrative"], ["speaker", "B. Speaker"], ["gps", "8°27'S 115°20'E"]] },
+        { id: "t-market", title: "Greetings at the market", recordingMs: null, sentences: 7, transcribed: 7, transcribedMs: 0, words: 38, glossedWords: 0, morphs: 0, translated: 7, meta: [["genre", "conversation"], ["place", "the market"]] },
       ],
       recordedMs: 816_000,
       recordingsMissing: 0,
@@ -1295,6 +1295,7 @@ const LEXICON = [
       people: 2,
       consentRecords: 2,
     }),
+    world_land: () => window.__WUGS_SCREENS__.land,
     lexicon_add: () => ({ entry: lexiconEntry({ id: LEXICON[0].id }), notes: [] }),
     // A paradigm answered for whatever axes the panel asks: every cell of the
     // grid, the first one filled, so the coverage line has something to count.

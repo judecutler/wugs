@@ -916,6 +916,12 @@ def main():
             run.shot("state-makeup", run.page.locator(".panel-progress"))
             if "narrative" not in makeup.inner_text():
                 failures.append("Progress did not break the corpus down by genre")
+            places = run.page.locator(".panel-progress .pg-places")
+            places.locator(".pg-site").first.wait_for()
+            places.scroll_into_view_if_needed()
+            run.shot("state-progress-places", run.page.locator(".panel-progress"))
+            if places.locator(".pg-site").count() != 2 or "2 texts of 3 placed, at 2 sites. 1 text names a place in words only" not in places.inner_text():
+                failures.append(f"Progress did not map where the texts were recorded: {places.inner_text()}")
             growth = run.page.locator(".panel-progress .pg-chart")
             growth.wait_for()
             growth.scroll_into_view_if_needed()
