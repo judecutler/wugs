@@ -1690,6 +1690,14 @@ def main():
             if "1 loanword" not in run.page.locator(".panel-lexicon .lx-loans").inner_text() or "Malay 1" not in run.page.locator(".panel-lexicon .lx-loans").inner_text():
                 failures.append("Lexicon did not list the loanwords with their source")
             run.page.locator(".panel-lexicon .lx-show").select_option("all")
+            # The entries used in most words of the texts first, with their counts.
+            run.page.locator(".panel-lexicon .lx-order").select_option("commonest")
+            run.page.locator(".panel-lexicon .lx-uses").first.wait_for()
+            run.shot("state-lexicon-commonest", run.page.locator(".panel-lexicon"))
+            if run.page.locator(".panel-lexicon .lx-list li .lx-hw").first.inner_text() != "kani" or run.page.locator(".panel-lexicon .lx-uses").first.inner_text() != "×12":
+                failures.append("Commonest in the texts first did not put kani, used 12 times, first")
+            run.page.locator(".panel-lexicon .lx-order").select_option("alpha")
+            run.page.evaluate("localStorage.removeItem('wugs.lexicon.order')")
             # Notes on the entry and on each meaning.
             run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()
             notes = run.page.locator(".panel-lexicon textarea[data-key='notes:lx-kani']")

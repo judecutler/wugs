@@ -1272,6 +1272,8 @@ const LEXICON = [
       return LEXICON.filter((r) => q === "" || r.lemma.includes(q) || r.glosses.some((g) => g.includes(q)));
     },
     lexicon_entry: lexiconEntry,
+    // Words of the texts glossed with each entry, for the Commonest order.
+    lexicon_uses: () => ({ "lx-kani": 12, "lx-ngai": 5 }),
     gloss_word_types: () => ({
       rows: [
         { form: "nikani", unanalysed: 4, uses: 9, suggestion: { morphs: [{ surface: "ni", type: "prefix", gloss: "1SG", glossesByLang: {}, sense: null }, { surface: "kani", type: "root", gloss: "count", glossesByLang: {}, sense: null }], count: 5, guessed: false }, meanings: [{ word: "counted", together: 4, of: 6, dice: 0.62 }] },

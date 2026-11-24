@@ -593,6 +593,7 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .lx-list li.active, .lx-list li:focus { background: var(--accent-soft); outline: none; }
 .lx-hw { font-weight: 650; font-size: 15px; font-family: var(--font-ipa); }
 .lx-pos { font-style: italic; color: var(--muted); font-size: var(--text-xs); }
+.lx-uses { margin-left: auto; font-size: var(--text-xs); color: var(--chrome-ink); font-variant-numeric: tabular-nums; }
 .lx-gl { flex-basis: 100%; color: var(--chrome-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lx-entry { flex: 2 1 300px; min-width: 0; }
 .lx-entry .field-row label { width: 76px; }
