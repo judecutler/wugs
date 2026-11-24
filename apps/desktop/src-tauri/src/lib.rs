@@ -55,6 +55,7 @@ pub mod growth;
 pub mod wordsketch;
 pub mod soundchanges;
 pub mod compare;
+pub mod phoible;
 pub mod session;
 pub mod sounds;
 pub mod typology;
@@ -425,6 +426,12 @@ fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory,
 #[tauri::command(async)]
 fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option<String>) -> Result<sounds::SoundWords, String> {
     s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
+}
+
+/// PHOIBLE's inventories of a language and its relatives' phonemes (src/phoible.rs).
+#[tauri::command(async)]
+fn phoible_compare(glottocode: String) -> Result<phoible::Compared, String> {
+    phoible::compare(&glottocode)
 }
 
 /// What Grambank or WALS says about a language, beside its relatives (src/typology.rs).
@@ -2075,6 +2082,7 @@ pub fn run() {
             morphosyntax_choose_stanza,
             glottolog_find,
             typology_profile,
+            phoible_compare,
             typology_answers,
             orthography_get,
             orthography_save,

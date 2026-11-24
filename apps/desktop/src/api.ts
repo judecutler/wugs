@@ -659,6 +659,8 @@ export const morphosyntaxRun = (args: { textId: string; model: string }) => invo
 export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
 /** Bring in a CSV or TSV of document metadata, one row per text. */
 export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
+/** PHOIBLE's inventories of a language and its relatives' phonemes (src-tauri/src/phoible.rs). */
+export const phoibleCompare = (args: { glottocode: string }) => invoke<import("./sounds/phoible").PhoibleCompared>("phoible_compare", args);
 export const projectLanguage = () => invoke<import("./cldf/logic").Language>("project_language");
 /** A language or dialect in Glottolog (5.4, embedded; src-tauri/src/glottolog.rs). */
 export type Languoid = import("./cldf/logic").Languoid;
