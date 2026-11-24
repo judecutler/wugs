@@ -484,6 +484,7 @@ The **Interlinear** tab, beside Gloss, shows the selected text the way you would
 - Click **Next to gloss** (or choose **Go to the next sentence to gloss** with **Ctrl+K**) to open the next sentence with a word still to gloss in the Gloss panel.
 - Click a sentence, or move to it with the arrow keys and press Enter, to open it in the Gloss panel.
 - Click ▶ to hear a sentence that has times.
+- Click **Read along** to hear the whole text from its recording: each sentence is marked as it is heard and kept in view, a good way to proofread a transcription against the speaker. Click **Stop** to stop.
 
 Click **Abbreviations** to list every grammatical abbreviation the text's glosses use (`SG`, `PST`, `3` in `3SG`), the list a paper prints with its examples. Each one has a field for what it means:
 
