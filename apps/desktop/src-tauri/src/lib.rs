@@ -29,6 +29,7 @@ pub mod saved_searches;
 pub mod cldf_import;
 pub mod pangloss;
 pub mod align;
+pub mod trends;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -370,6 +371,12 @@ fn sentence_set(s: State<SessionThread>, text_id: String, segment_id: String, to
 }
 
 /// How often each word, morph, gloss or translation word occurs (Scrolls' frequency list).
+/// Words on the rise and falling over the years a detail gives (`trends.rs`).
+#[tauri::command(async)]
+fn frequency_trends(s: State<SessionThread>, kind: concordance::Kind, key: Option<String>, min_count: Option<usize>, text_id: Option<String>, within: Option<concordance::Where>) -> Result<trends::Trends, String> {
+    s.run(move |s| trends::trends(s, kind, key.as_deref(), min_count.unwrap_or(10), &concordance::Scope::of(text_id, within)))
+}
+
 #[tauri::command(async)]
 fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, within: Option<concordance::Where>, size: Option<usize>) -> Result<frequencies::Frequencies, String> {
     s.run(move |s| frequencies::frequencies_of(s, kind, &concordance::Scope::of(text_id, within), size.unwrap_or(1)))
@@ -2556,6 +2563,7 @@ pub fn run() {
             world_land,
             saved_searches,
             align_preview,
+            frequency_trends,
             align_write,
             save_search,
             delete_saved_search,

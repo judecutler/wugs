@@ -1633,9 +1633,18 @@ body::before {
 .tt-median { stroke: var(--ink); stroke-width: 2; }
 
 /* Zipf plot in Frequencies */
-.fq-zipf { margin: 4px 0 8px; }
-.fq-zipf summary { cursor: pointer; font-size: var(--text-sm); }
+.fq-zipf, .fq-trends { margin: 4px 0 8px; }
+.fq-zipf summary, .fq-trends summary { cursor: pointer; font-size: var(--text-sm); }
 .fq-zipf-plot { max-width: 460px; }
+.fq-trends-lists { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+.fq-trend-list h4 { margin: 6px 0 2px; font-size: var(--text-sm); }
+.fq-trend-table { border-collapse: collapse; font-size: var(--text-sm); }
+.fq-trend-table td { padding: 2px 6px; border-top: 1px solid var(--line); }
+.fq-trend-table td.fq-num { text-align: right; font-variant-numeric: tabular-nums; }
+.fq-trend-table tr { cursor: pointer; }
+.fq-trend-table tr:hover, .fq-trend-table tr:focus-visible { background: var(--accent-soft); outline: none; }
+.fq-spark { width: 64px; height: 24px; display: block; }
+.fq-spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-linejoin: round; }
 .fq-zipf-dot { fill: var(--accent-bright); stroke: var(--accent); stroke-width: 0.5; }
 .fq-zipf-fit { stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 5 3; }
 

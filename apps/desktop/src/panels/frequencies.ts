@@ -5,7 +5,8 @@
 // grown from the texts, most used word first.
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, frequencies, lexiconAdd, lexiconAddWords } from "../api";
+import { errorText, frequencies, frequencyTrends, lexiconAdd, lexiconAddWords } from "../api";
+import { fromTo, sparkPoints, steadiness, trendsLine, trendsTsv, type Trend, type Trends } from "../frequencies/trends";
 import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { spreadReading } from "../concordance/plot";
@@ -113,6 +114,109 @@ export const frequenciesPanel: PanelDef = {
       zipfBody.replaceChildren(root, h("p", { className: "note", textContent: zipfLine(fit, data.rows.length, data.rows.length < data.types) }));
     };
     zipf.addEventListener("toggle", drawZipf);
+
+    // Words on the rise and falling over the years a detail gives, read when opened.
+    const over = h("details", { className: "fq-trends" }, h("summary", { textContent: "Over time" }));
+    const overBody = h("div", {});
+    over.append(overBody);
+    let trendKey: string | null = null;
+    let trendMin = 10;
+    let trends: Trends | null = null;
+    let trendSeq = 0;
+    const loadTrends = () => {
+      if (!over.open) return;
+      if (kind !== "word" && kind !== "translation") {
+        overBody.replaceChildren(h("p", { className: "note", textContent: "Trends over time are counted for words and translation words." }));
+        return;
+      }
+      const mine = ++trendSeq;
+      overBody.replaceChildren(h("p", { className: "note", textContent: "Counting…" }));
+      const sc = scopeOf(scope);
+      void frequencyTrends({ kind, key: trendKey, minCount: trendMin, textId: sc.textId, within: sc.within }).then(
+        (t) => {
+          if (mine !== trendSeq) return;
+          trends = t;
+          trendKey = t.key === "" ? null : t.key;
+          drawTrends();
+        },
+        (e) => {
+          if (mine === trendSeq) overBody.replaceChildren(h("p", { className: "note", textContent: `Could not count: ${errorText(e)}` }));
+        },
+      );
+    };
+    const drawTrends = () => {
+      const t = trends;
+      if (t === null) return;
+      const keyPicker = h("select", { title: "The detail whose year places each text" }, ...t.keys.map((k) => h("option", { value: k, textContent: `By ${k.replace(/_/g, " ")}`, selected: k === t.key })));
+      keyPicker.setAttribute("aria-label", "Years from");
+      keyPicker.onchange = () => {
+        trendKey = keyPicker.value;
+        loadTrends();
+      };
+      const minPicker = h("select", { title: "Leave out words used fewer times than this" }, ...[5, 10, 20, 50].map((n) => h("option", { value: String(n), textContent: `${n}+ uses`, selected: n === trendMin })));
+      minPicker.setAttribute("aria-label", "Uses at least");
+      minPicker.onchange = () => {
+        trendMin = Number(minPicker.value);
+        loadTrends();
+      };
+      const copyTrends = h("button", { type: "button", textContent: "Copy table", title: "Copy both lists with each word's rate per 1000 words in every period" });
+      copyTrends.onclick = () =>
+        void writeText(trendsTsv(t)).then(
+          () => showToast({ tone: "info", lines: ["Copied the trends. Paste them into a spreadsheet to chart them."] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      const NS = "http://www.w3.org/2000/svg";
+      const spark = (x: Trend) => {
+        const e = document.createElementNS(NS, "svg");
+        e.setAttribute("viewBox", "-2 -2 64 24");
+        e.setAttribute("class", "fq-spark");
+        e.setAttribute("aria-hidden", "true");
+        const pts = sparkPoints(x.rates, 60, 20);
+        if (pts !== null) {
+          const line = document.createElementNS(NS, "polyline");
+          line.setAttribute("points", pts);
+          e.append(line);
+        }
+        return e;
+      };
+      const list = (title: string, rows: Trend[]) =>
+        h(
+          "div",
+          { className: "fq-trend-list" },
+          h("h4", { textContent: title }),
+          rows.length === 0
+            ? h("p", { className: "note", textContent: "None." })
+            : h(
+                "table",
+                { className: "fq-trend-table" },
+                h("tbody", {}, ...rows.slice(0, 50).map((x) => {
+                  const tr = h(
+                    "tr",
+                    { tabIndex: 0, title: `${x.item}: ${x.total} uses, its rate changing ${steadiness(x.tau)} (Kendall's tau ${x.tau.toFixed(2)}). Show every «${x.item}» in the Concordance` },
+                    h("td", { className: "fq-item", textContent: x.item }),
+                    h("td", {}, spark(x)),
+                    h("td", { className: "fq-num", textContent: fromTo(x) }),
+                    h("td", { className: "fq-num", textContent: String(x.total) }),
+                  );
+                  const sc = scopeOf(scope);
+                  const asked = kind === "translation" ? "translation" : "word";
+                  const open = () => askConcordance(x.item, asked, sc.textId === null ? null : { id: sc.textId, title: scopePicker.selectedOptions[0]?.textContent ?? "" }, true, sc.within);
+                  tr.onclick = open;
+                  tr.onkeydown = (e) => {
+                    if (e.key === "Enter") open();
+                  };
+                  return tr;
+                })),
+              ),
+        );
+      const live = t.periodWords.filter((w) => w > 0).length;
+      overBody.replaceChildren(
+        ...(t.keys.length === 0 ? [] : [h("div", { className: "cc-bar" }, keyPicker, minPicker, copyTrends)]),
+        h("p", { className: "note", textContent: trendsLine(t, trendMin) }),
+        ...(t.key === "" || live < 3 ? [] : [h("div", { className: "fq-trends-lists" }, list("Rising", t.rising), list("Falling", t.falling)), h("p", { className: "note", textContent: "Each line runs from the first period to the last, per 1000 words; the numbers are its first and last rates. Click a word to see its lines." })]),
+      );
+    };
+    over.addEventListener("toggle", loadTrends);
 
     const drawChips = () =>
       chips.replaceChildren(
@@ -279,6 +383,7 @@ export const frequenciesPanel: PanelDef = {
         if (mine !== seq) return;
         data = r;
         rankedRows = ranked(r.rows);
+        loadTrends();
         countedAt = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
         drawRows();
       } catch (e) {
@@ -336,11 +441,13 @@ export const frequenciesPanel: PanelDef = {
         filter.value = "";
         missingOnly.checked = false;
         data = null;
+        trendKey = null;
+        trends = null;
       }
       drawChips();
       drawScopes();
       drawSizer();
-      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, missingBox, addAll), count, zipf, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, missingBox, addAll), count, zipf, over, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };

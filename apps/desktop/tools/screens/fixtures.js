@@ -1316,6 +1316,19 @@ const LEXICON = [
     save_search: ({ search }) => (window.__WUGS_SAVED_SEARCHES__ = [...(window.__WUGS_SAVED_SEARCHES__ ?? []).filter((x) => x.name.toLowerCase() !== search.name.trim().toLowerCase()), { ...search, name: search.name.trim() }]),
     delete_saved_search: ({ name }) => (window.__WUGS_SAVED_SEARCHES__ = (window.__WUGS_SAVED_SEARCHES__ ?? []).filter((x) => x.name.toLowerCase() !== name.toLowerCase())),
     lexicon_add: () => ({ entry: lexiconEntry({ id: LEXICON[0].id }), notes: [] }),
+    frequency_trends: () => ({
+      keys: ["date"],
+      key: "date",
+      labels: ["1950s", "1960s", "1970s", "1980s", "1990s"],
+      periodWords: [820, 640, 0, 1210, 930],
+      undated: 1,
+      tested: 48,
+      rising: [
+        { item: "toruma", total: 31, rates: [2.4, 4.7, null, 9.1, 12.9], tau: 1 },
+        { item: "liwa", total: 18, rates: [1.2, 1.6, null, 3.3, 4.3], tau: 0.82 },
+      ],
+      falling: [{ item: "ŋai", total: 40, rates: [19.5, 14.1, null, 6.6, 3.2], tau: -1 }],
+    }),
     lexicon_add_words: ({ words }) => {
       window.__WUGS_ADDED_WORDS__ = words.length;
       return words.length;

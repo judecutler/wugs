@@ -575,6 +575,13 @@ def main():
             run.page.wait_for_timeout(300)
             if run.page.locator(".panel-frequencies .fq-table tbody tr").count() != 2:
                 failures.append("a word added with Add stayed among the words not in the lexicon")
+            # Words on the rise and falling over the years.
+            run.page.locator(".panel-frequencies .fq-trends summary").click()
+            run.page.locator(".panel-frequencies .fq-trend-list tr").first.wait_for()
+            run.shot("state-frequencies-trends", run.page.locator(".panel-frequencies"))
+            if run.page.locator(".panel-frequencies .fq-trend-list tr").count() != 3:
+                failures.append("Over time did not list the rising and falling words")
+            run.page.locator(".panel-frequencies .fq-trends summary").click()
             # The rest at once, after a second click.
             run.page.locator(".panel-frequencies .fq-add-all").click()
             run.shot("state-frequencies-add-all", run.page.locator(".panel-frequencies"))
