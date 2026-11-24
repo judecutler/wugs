@@ -1116,6 +1116,8 @@ When a search finds too many lines to read, choose **50**, **100**, **250** or *
 
 **Copy as examples** copies the sentences the lines come from, each once and in the order shown, as numbered glossed examples with their translations, ready to paste into a paper. It uses the format last chosen for **Copy example** in the Gloss panel (Word or Google Docs, LaTeX gb4e or ExPex, or plain text). A line from a translation brings the sentence it translates. At most 50 sentences are copied at once.
 
+**Save clips…** saves the sentences the lines come from as sound files: every token of a word or a morph, ready to open in Praat or to play in an experiment. Choose a folder outside the project. wugs makes a folder named after your search (`kani clips`) with a WAV per sentence, each cut from its text's own recording at the recording's quality and named after its transcription, and `clips.csv` listing each file with its start, end, transcription, translation, text and the word searched for. A sentence holding two matches is saved once. Lines with no times, and lines whose text has no recording picked on this computer, are left out, and the message says how many.
+
 **Clusters** (AntConc's Clusters tool) counts the word sequences that hold what you searched for: choose how many words (2 to 5) and whether the item comes first, last or anywhere in them. `kani` with 2 words, item first, lists `kani ŋai`, `kani haru` and so on, commonest first, with how many lines and texts each is in. Click a cluster to see its lines. Clusters are counted over the lines found (at most 2000); **Copy rows** copies them as a table.
 
 ### See where it occurs across your texts
