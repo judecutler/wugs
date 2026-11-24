@@ -376,6 +376,10 @@ A word linked to a lexicon sense keeps its own gloss in the text, so the two can
 - **Make «stream» the lexicon's gloss** changes the sense in the lexicon instead.
 - Click the headword to open the entry in the Lexicon.
 
+### Check segment times
+
+Under **Segment timing**, the Checks panel lists timed segments that overlap the one before them on the same track, are under 0.15 seconds long (often a stray click while segmenting), or are over 30 seconds long. Overlaps on one track confuse ELAN and Praat when you export, and speech tools take at most 30 seconds at a time. Click a segment's text to open it on the Timeline and fix it there by dragging its edges, merging or splitting. Segments without times are not checked.
+
 ### Find entries typed twice
 
 A lexicon gathered from imports, quick elicitation and several people often holds one word twice. Under **Entries that may be one word**, the Checks panel lists pairs of entries that share a meaning (a gloss, or one part of a gloss written with `;` or `,`, with a leading "to" ignored) and whose headwords are the same, differ only in accents (`kesi`, `kési`), or are one letter apart (`liwa`, `lima`, for headwords of four letters or more). Two numbered homographs of one headword are taken as told apart on purpose and left out.

@@ -662,6 +662,8 @@ export const morphosyntaxRun = (args: { textId: string; model: string }) => invo
 export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
 /** Bring in a CSV or TSV of document metadata, one row per text. */
 export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
+/** Segments that overlap, or are very short or long (src-tauri/src/timing.rs). */
+export const segmentTiming = () => invoke<import("./checks/logic").Timing>("segment_timing");
 /** Prompt lists for sentence elicitation (src-tauri/src/sentences.rs). */
 export const sentenceLists = () => invoke<import("./sentences/logic").PromptList[]>("sentence_lists");
 export const sentenceListImport = (args: { path: string }) => invoke<import("./sentences/logic").PromptList>("sentence_list_import", args);

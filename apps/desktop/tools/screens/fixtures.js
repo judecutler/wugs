@@ -1056,6 +1056,16 @@ const LEXICON = [
       { source: "Tadmor-2009-100", name: "Leipzig-Jakarta (100)", citation: "Tadmor 2009, via Concepticon", count: 100, listId: null },
     ],
     concept_lists: () => [listSummary],
+    segment_timing: () => ({
+      timed: 42,
+      overlaps: 1,
+      short: 1,
+      long: 0,
+      issues: [
+        { kind: "overlap", textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u03", sentence: "kesi mopa", startMs: 4100, endMs: 5600, other: "u02", overlapMs: 180 },
+        { kind: "short", textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u07", sentence: "a", startMs: 9000, endMs: 9080, other: null, overlapMs: null },
+      ],
+    }),
     sentence_lists: () => [{ ...promptView.list }],
     sentence_list_view: () => promptView,
     sentence_answer: ({ prompt, sentence }) => {

@@ -57,6 +57,7 @@ pub mod soundchanges;
 pub mod audacity;
 pub mod cognates;
 pub mod sentences;
+pub mod timing;
 pub mod compare;
 pub mod phoible;
 pub mod word_order;
@@ -430,6 +431,12 @@ fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory,
 #[tauri::command(async)]
 fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option<String>) -> Result<sounds::SoundWords, String> {
     s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
+}
+
+/// Segments that overlap, or are very short or long (src/timing.rs).
+#[tauri::command(async)]
+fn segment_timing(s: State<SessionThread>) -> Result<timing::Timing, String> {
+    s.run(timing::timing)
 }
 
 /// The project's prompt lists for sentence elicitation (src/sentences.rs).
@@ -2141,6 +2148,7 @@ pub fn run() {
             phoible_compare,
             cognates,
             sentence_lists,
+            segment_timing,
             sentence_list_import,
             sentence_list_view,
             sentence_answer,
