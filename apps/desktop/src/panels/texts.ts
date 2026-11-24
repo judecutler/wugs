@@ -16,7 +16,7 @@ import { translationLines } from "../gloss/translation";
 import { detailsSection, importMetadataTable } from "../metadata/section";
 import { megabytes } from "../assist/logic";
 import { localDay } from "../dates";
-import { readerDetails, readerHtml, type ReaderSentence } from "../reader/booklet";
+import { readerDetails, readerGlossary, readerHtml, type GlossedWord, type ReaderSentence } from "../reader/booklet";
 import { emptyState, h } from "../dom";
 import { attempt, getState, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { tableImportLines } from "../lexicon/logic";
@@ -482,6 +482,8 @@ async function exportExamples(text: TextDetail) {
 }
 
 let readerLayout: "beside" | "under" = "beside";
+/** Whether the reader ends with the words it uses and their meanings. */
+let readerWords = true;
 
 /** The Wikipedia form: open or not, and what is typed in it (the code kept on this computer). */
 const WIKI_KEY = "wugs.texts.wiki";
@@ -563,6 +565,10 @@ async function exportReader(text: TextDetail) {
         ...(speakers ? { speaker: text.tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}),
       }));
     const [language, meta] = await Promise.all([projectLanguage(), textMetadata({ textId: text.id })]);
+    // The words for the list at the end: each sentence's glossed words, read as the Gloss panel reads them.
+    const words: GlossedWord[] = [];
+    if (readerWords) for (const seg of segs) words.push(...(await glossGet({ textId: text.id, segmentId: seg.id })).words);
+    const glossary = readerWords ? readerGlossary(words) : undefined;
     const html = readerHtml({
       title: text.title || "Untitled",
       language: language.name,
@@ -570,6 +576,7 @@ async function exportReader(text: TextDetail) {
       sentences: rows,
       layout: readerLayout,
       date: localDay(new Date()),
+      ...(glossary === undefined ? {} : { glossary }),
     });
     const r = await saveDocument({ folder, title: `${text.title || "text"} reader`, extension: "html", contents: html });
     const missing = rows.filter((x) => x.translation === null || x.translation.trim() === "").length;
@@ -578,6 +585,7 @@ async function exportReader(text: TextDetail) {
       lines: [
         `Saved a reader of ${rows.length} ${rows.length === 1 ? "sentence" : "sentences"} in ${r.path}. Open it in a browser or Word to print it.`,
         ...(missing > 0 ? [`${missing} ${missing === 1 ? "sentence has" : "sentences have"} no translation yet and ${missing === 1 ? "prints" : "print"} alone.`] : []),
+        ...(glossary === undefined ? [] : [glossary.length === 0 ? "No word of it is glossed yet, so it has no word list at the end; gloss it in the Gloss panel first." : `It ends with ${glossary.length === 1 ? "1 word" : `${glossary.length} words`} and their meanings.`]),
       ],
     });
   });
@@ -717,6 +725,7 @@ export const textsPanel: PanelDef = {
                 readerLayout,
                 (v) => (readerLayout = v),
               ),
+              h("label", { className: "share-check", title: "End with the words the text uses and what they mean, read from its glosses (roots only, by their dictionary form)" }, h("input", { type: "checkbox", checked: readerWords, onchange: (e: Event) => (readerWords = (e.target as HTMLInputElement).checked) }), " words at the end"),
               h("button", {
                 type: "button",
                 textContent: busy === "reader" ? "Saving…" : "Save…",

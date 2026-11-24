@@ -2,7 +2,8 @@
 // translation beside it (or under it on a narrow page), as literacy
 // programmes and community language classes hand out. One HTML file that
 // prints to PDF or opens in Word; no glosses, nothing the reader needs to
-// know about linguistics. Pure, npm-tested.
+// know about linguistics, though it can end with a list of the words the
+// text uses and what they mean. Pure, npm-tested.
 
 /** One sentence; `speaker` names who said it in a transcript with a track per speaker. */
 export type ReaderSentence = { number: number; text: string; translation: string | null; speaker?: string };
@@ -17,7 +18,43 @@ export type ReaderInput = {
   /** How the pages are laid out: side by side, or each translation under its sentence. */
   layout: "beside" | "under";
   date: string;
+  /** "Words in this text", printed after it when given and not empty. */
+  glossary?: GlossaryEntry[];
 };
+
+/** A word the text uses, its meaning, and the forms it takes in the text. */
+export type GlossaryEntry = { word: string; meaning: string; forms: string[] };
+
+/** What the glossary reads from a glossed word (the Gloss panel's view of it). */
+export type GlossedWord = { form: string; morphs: { surface: string; type: string; gloss: string | null; senseLabel: string | null }[] };
+
+const ROOTS = new Set(["root", "stem", ""]);
+
+/**
+ * The words of a text as a learner's list: each root with a meaning, by its
+ * entry's headword and gloss when it is linked to one (`senseLabel` is
+ * «lemma – gloss»), else as written in the text; the word forms it is met in.
+ * Grammatical morphs and unglossed words are left out, as a reader has no
+ * use for 1SG. Sorted as the language's words, case aside.
+ */
+export function readerGlossary(words: readonly GlossedWord[]): GlossaryEntry[] {
+  const byKey = new Map<string, GlossaryEntry>();
+  for (const w of words) {
+    for (const m of w.morphs) {
+      if (!ROOTS.has(m.type)) continue;
+      const linked = m.senseLabel?.split(" – ") ?? [];
+      const word = (linked.length >= 2 ? linked[0]! : m.surface).trim();
+      const meaning = (linked.length >= 2 ? linked.slice(1).join(" – ") : (m.gloss ?? "")).trim();
+      if (word === "" || meaning === "") continue;
+      const key = `${word.normalize("NFC").toLocaleLowerCase()}\u001f${meaning.toLocaleLowerCase()}`;
+      const entry = byKey.get(key) ?? { word, meaning, forms: [] };
+      byKey.set(key, entry);
+      const form = w.form.normalize("NFC").toLocaleLowerCase().replace(/^[\p{P}]+|[\p{P}]+$/gu, "");
+      if (form !== "" && form !== word.normalize("NFC").toLocaleLowerCase() && !entry.forms.includes(form)) entry.forms.push(form);
+    }
+  }
+  return [...byKey.values()].sort((a, b) => a.word.localeCompare(b.word, undefined, { sensitivity: "base" }) || a.meaning.localeCompare(b.meaning));
+}
 
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
@@ -38,6 +75,10 @@ export function readerHtml(r: ReaderInput): string {
     return `<div class="s"><span class="n">${s.number}</span><div><p class="tx">${who}${esc(s.text)}</p>${t === "" ? "" : `<p class="tr">${esc(t)}</p>`}</div></div>`;
   });
   const body = r.layout === "beside" && translated ? `<table>${rows.join("\n")}</table>` : rows.join("\n");
+  const glossary =
+    r.glossary === undefined || r.glossary.length === 0
+      ? ""
+      : `<section class="words"><h2>Words in this text</h2><dl>${r.glossary.map((g) => `<div><dt>${esc(g.word)}</dt><dd>‘${esc(g.meaning)}’${g.forms.length === 0 ? "" : ` <span class="forms">(${g.forms.map(esc).join(", ")})</span>`}</dd></div>`).join("")}</dl></section>`;
   const details = r.details.length === 0 ? "" : `<p class="details">${r.details.map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(" · ")}</p>`;
   return `<!DOCTYPE html>
 <html>
@@ -61,6 +102,13 @@ td.tr { width: 50%; color: #333; font-style: italic; }
 .s .tx { font-weight: 600; }
 .who { font-weight: 700; color: #555; margin-right: 0.3em; }
 .s .tr { color: #333; font-style: italic; }
+.words { margin-top: 2.5em; break-before: page; }
+.words h2 { font-size: 16pt; margin: 0 0 0.6em; }
+.words dl { columns: 2; column-gap: 2em; margin: 0; font-size: 12pt; }
+.words div { break-inside: avoid; margin: 0 0 0.3em; }
+.words dt { display: inline; font-weight: 700; }
+.words dd { display: inline; margin: 0 0 0 0.4em; }
+.words .forms { color: #555; font-size: 10.5pt; }
 footer { margin-top: 2.5em; font-size: 9pt; color: #888; }
 </style>
 </head>
@@ -69,6 +117,7 @@ ${r.language.trim() === "" ? "" : `<p class="lang">${esc(r.language)}</p>`}
 <h1>${esc(r.title)}</h1>
 ${details}
 ${body}
+${glossary}
 <footer>Made with wugs on ${esc(r.date)}.</footer>
 </body>
 </html>

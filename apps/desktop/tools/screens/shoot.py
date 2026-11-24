@@ -431,6 +431,17 @@ def main():
                 failures.append(f"From Wikipedia did not ask for the articles typed: {asked}")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.locator(".panel-texts button", has_text="From Wikipedia").click()
+            # A reader to print ends with the words the text uses.
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/reader'")
+            run.page.locator(".panel-texts .share-row", has_text="Reader to print").locator("button", has_text="Save").click()
+            run.page.wait_for_timeout(800)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            reader = (run.page.evaluate("window.__WUGS_SAVED__") or {}).get("contents", "")
+            if "Words in this text" not in reader:
+                failures.append(f"the reader did not end with the text's words: {run.toasts()}")
+            else:
+                (run.out / "doc-reader.html").write_text(reader)
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # A spelling dictionary of the language, for LibreOffice and Firefox.
             run.page.evaluate("window.__WUGS_PICK__ = '/tmp/spell'")
             run.page.locator(".panel-texts button", has_text="Spelling dictionary").click()
