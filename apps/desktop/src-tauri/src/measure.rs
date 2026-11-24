@@ -42,6 +42,12 @@ pub struct Measured {
     /// point within a twentieth of the segment (at least one frame); None
     /// where the voice is off there. What tone and intonation studies plot.
     pub contour: [Option<f64>; CONTOUR_POINTS],
+    /// F1 and F2 at 20% and 80% of the segment (`[[F1, F2] at 20%, [F1, F2]
+    /// at 80%]`), each the mean of the frames within a twentieth of the
+    /// segment (at least one frame step) of that point: the two ends of a
+    /// vowel's trajectory, what diphthong and vowel-inherent spectral change
+    /// studies plot.
+    pub edges: [[Option<f64>; 2]; 2],
 }
 
 /// How many time-normalized pitch points each segment gets.
@@ -110,6 +116,11 @@ pub fn measure(target: &Target, chunks: &[Chunk]) -> Measured {
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(_, p)| f64::from(p))
     });
+    let edge = |at: f64| -> [Option<f64>; 2] {
+        let near: Vec<&Frame> = frames.iter().filter(|f| (f.t - at).abs() <= reach).collect();
+        std::array::from_fn(|k| mean(&near.iter().filter_map(|f| f.f[k].map(f64::from)).collect::<Vec<_>>()))
+    };
+    let edges = [edge(target.start_ms + 0.2 * span), edge(target.start_ms + 0.8 * span)];
     Measured {
         frames: frames.len(),
         f0_mean: mean(&pitch),
@@ -120,6 +131,7 @@ pub fn measure(target: &Target, chunks: &[Chunk]) -> Measured {
         mid: nearest.f.map(|v| v.map(f64::from)),
         middle_half: [formant_mean(0), formant_mean(1), formant_mean(2)],
         contour,
+        edges,
     }
 }
 
@@ -135,7 +147,7 @@ fn num(v: Option<f64>, places: usize) -> String {
 pub const COLUMNS: &[&str] = &[
     "text", "track", "segment", "label", "start_s", "end_s", "duration_ms", "f0_mean_hz", "f0_min_hz", "f0_max_hz", "voiced_percent", "intensity_db", "f1_mid_hz", "f2_mid_hz",
     "f3_mid_hz", "f1_mean_hz", "f2_mean_hz", "f3_mean_hz", "f0_05pct_hz", "f0_15pct_hz", "f0_25pct_hz", "f0_35pct_hz", "f0_45pct_hz", "f0_55pct_hz", "f0_65pct_hz",
-    "f0_75pct_hz", "f0_85pct_hz", "f0_95pct_hz", "frames", "analysed_by",
+    "f0_75pct_hz", "f0_85pct_hz", "f0_95pct_hz", "f1_20pct_hz", "f2_20pct_hz", "f1_80pct_hz", "f2_80pct_hz", "frames", "analysed_by",
 ];
 
 /// The table: a header, then a row per target in time order.
@@ -164,6 +176,7 @@ pub fn table(text: &str, track: &str, analysed_by: &str, rows: &[(Target, Measur
             num(m.middle_half[2], 0),
         ];
         cells.extend(m.contour.iter().map(|v| num(*v, 1)));
+        cells.extend(m.edges.iter().flatten().map(|v| num(*v, 0)));
         cells.extend([m.frames.to_string(), cell(analysed_by)]);
         out.push_str(&cells.join(","));
         out.push('\n');
@@ -270,6 +283,9 @@ pub struct PointView {
     pub f3: Option<f64>,
     /// F0 at 5%, 15% … 95% of the segment (`Measured::contour`), for the Pitch contours panel.
     pub contour: Vec<Option<f64>>,
+    /// F1 and F2 at 20% (`onset`) and 80% (`offset`) of the segment, for the Vowel space's trajectories.
+    pub onset: [Option<f64>; 2],
+    pub offset: [Option<f64>; 2],
 }
 
 #[derive(Debug, Serialize)]
@@ -286,7 +302,7 @@ pub fn points(p: &Prepared, app_data: &Path) -> Result<PointsView, String> {
         .into_iter()
         .map(|(t, m)| {
             let f = |k: usize| m.middle_half[k].or(m.mid[k]);
-            PointView { segment: t.segment, label: t.label, start_ms: t.start_ms, end_ms: t.end_ms, f0: m.f0_mean, f1: f(0), f2: f(1), f3: f(2), contour: m.contour.to_vec() }
+            PointView { segment: t.segment, label: t.label, start_ms: t.start_ms, end_ms: t.end_ms, f0: m.f0_mean, f1: f(0), f2: f(1), f3: f(2), contour: m.contour.to_vec(), onset: m.edges[0], offset: m.edges[1] }
         })
         .collect();
     Ok(PointsView { points, untimed: p.untimed, analysed_by })
@@ -336,6 +352,8 @@ mod tests {
         assert_eq!(m.middle_half, [Some(504.0), Some(1500.0), None]);
         // The contour: tenths of 100 ms at 5, 15 … 95 ms; the voice stops after 45 ms.
         assert_eq!(m.contour, [Some(100.0), Some(110.0), Some(120.0), Some(130.0), Some(140.0), Some(140.0), None, None, None, None]);
+        // The trajectory's ends: frames within 10 ms of 20 ms (15, 25) and of 80 ms (75, 85).
+        assert_eq!(m.edges, [[Some(501.5), Some(1500.0)], [Some(507.5), Some(1500.0)]]);
         // A stretch past the frames measures nothing.
         assert_eq!(measure(&target(200.0, 300.0), &c), Measured::default());
     }
@@ -353,7 +371,7 @@ mod tests {
         let t = table("Text, one", "utterance", "Acoustic analysis (built in)", &rows);
         let mut lines = t.lines();
         assert_eq!(lines.next().unwrap().split(',').count(), COLUMNS.len());
-        assert_eq!(lines.next().unwrap(), "\"Text, one\",utterance,s1,\"a, \"\"b\"\"\",1.000,1.250,250,118.2,,,80,,,,,,,,,,,,,,,,,,25,Acoustic analysis (built in)");
+        assert_eq!(lines.next().unwrap(), "\"Text, one\",utterance,s1,\"a, \"\"b\"\"\",1.000,1.250,250,118.2,,,80,,,,,,,,,,,,,,,,,,,,,,25,Acoustic analysis (built in)");
     }
 
     /// The tutorial project's utterance track, measured end to end with the

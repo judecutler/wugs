@@ -1450,6 +1450,9 @@ body::before {
 .vw-dot:hover, .vw-dot:focus { fill-opacity: 1; outline: none; stroke: var(--ink); stroke-width: 1.5; }
 .vw-dot.is-selected { fill: var(--error); fill-opacity: 1; }
 .vw-label { font-family: var(--font-ipa); font-size: 18px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface-raised); stroke-width: 4px; pointer-events: none; }
+.vw-path { stroke: var(--ink); stroke-width: 1.8; opacity: 0.85; }
+.vw-head { fill: var(--ink); }
+.vw-path-start { fill: var(--surface-raised); stroke: var(--ink); stroke-width: 1.2; }
 .vw-problem { color: var(--error); }
 .panel-contours { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .ct-frame { fill: none; stroke: var(--line); stroke-width: 1; }

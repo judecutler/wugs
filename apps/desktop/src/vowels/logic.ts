@@ -11,6 +11,9 @@ export type Point = {
   f1: number | null;
   f2: number | null;
   f3: number | null;
+  /** F1 and F2 at 20% and 80% of the segment, when the backend gives them. */
+  onset?: [number | null, number | null];
+  offset?: [number | null, number | null];
 };
 
 /** A point that plots: both F1 and F2 known, in the units shown. */
@@ -41,12 +44,47 @@ const sdOf = (v: number[]) => {
  * across this speaker's points: Lobanov 1971). */
 export function plotted(points: readonly Point[], normalize: boolean): Plotted[] {
   const usable = points.filter((p): p is Point & { f1: number; f2: number } => p.f1 !== null && p.f2 !== null);
-  if (!normalize) return usable.map((p) => ({ point: p, x: p.f2, y: p.f1, group: groupOf(p) }));
-  const f1 = usable.map((p) => p.f1);
-  const f2 = usable.map((p) => p.f2);
-  const [m1, s1, m2, s2] = [meanOf(f1), sdOf(f1), meanOf(f2), sdOf(f2)];
-  return usable.map((p) => ({ point: p, x: s2 === 0 ? 0 : (p.f2 - m2) / s2, y: s1 === 0 ? 0 : (p.f1 - m1) / s1, group: groupOf(p) }));
+  const to = scale(points, normalize);
+  return usable.map((p) => ({ point: p, ...to(p.f1, p.f2), group: groupOf(p) }));
 }
+
+/** F1 and F2 in the units shown: Hz, or z-scores against the speaker's
+ * midpoints (so a trajectory's ends share the points' scale). */
+function scale(points: readonly Point[], normalize: boolean): (f1: number, f2: number) => { x: number; y: number } {
+  if (!normalize) return (f1, f2) => ({ x: f2, y: f1 });
+  const usable = points.filter((p): p is Point & { f1: number; f2: number } => p.f1 !== null && p.f2 !== null);
+  const f1s = usable.map((p) => p.f1);
+  const f2s = usable.map((p) => p.f2);
+  const [m1, s1, m2, s2] = [meanOf(f1s), sdOf(f1s), meanOf(f2s), sdOf(f2s)];
+  return (f1, f2) => ({ x: s2 === 0 ? 0 : (f2 - m2) / s2, y: s1 === 0 ? 0 : (f1 - m1) / s1 });
+}
+
+export type Trajectory = { label: string; count: number; from: { x: number; y: number }; to: { x: number; y: number } };
+
+/** Each label's mean trajectory, from F1/F2 at 20% of its segments to F1/F2
+ * at 80%, over the segments where both ends were measured; most segments first. */
+export function trajectories(points: readonly Point[], normalize: boolean): Trajectory[] {
+  const to = scale(points, normalize);
+  const by = new Map<string, { from: { x: number; y: number }; to: { x: number; y: number } }[]>();
+  for (const p of points) {
+    const [a1, a2] = p.onset ?? [null, null];
+    const [b1, b2] = p.offset ?? [null, null];
+    if (a1 === null || a2 === null || b1 === null || b2 === null) continue;
+    const g = groupOf(p);
+    by.set(g, [...(by.get(g) ?? []), { from: to(a1, a2), to: to(b1, b2) }]);
+  }
+  return [...by.entries()]
+    .map(([label, list]) => ({
+      label,
+      count: list.length,
+      from: { x: meanOf(list.map((l) => l.from.x)), y: meanOf(list.map((l) => l.from.y)) },
+      to: { x: meanOf(list.map((l) => l.to.x)), y: meanOf(list.map((l) => l.to.y)) },
+    }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+}
+
+/** How far a trajectory moves, in the units shown (Euclidean over F1 and F2). */
+export const movement = (t: Trajectory): number => Math.hypot(t.to.x - t.from.x, t.to.y - t.from.y);
 
 /** One group per label, most points first, then by label. */
 export function groups(points: readonly Plotted[]): Group[] {
@@ -127,8 +165,10 @@ export function table(points: readonly Point[]): string {
   const cell = (v: number | null, places: number) => (v === null ? "" : v.toFixed(places));
   const clean = (s: string) => s.replace(/[\t\r\n]+/g, " ");
   return [
-    ["label", "start_s", "end_s", "f0_hz", "f1_hz", "f2_hz", "f3_hz"].join("\t"),
-    ...points.map((p) => [clean(p.label), (p.startMs / 1000).toFixed(3), (p.endMs / 1000).toFixed(3), cell(p.f0, 1), cell(p.f1, 0), cell(p.f2, 0), cell(p.f3, 0)].join("\t")),
+    ["label", "start_s", "end_s", "f0_hz", "f1_hz", "f2_hz", "f3_hz", "f1_20pct_hz", "f2_20pct_hz", "f1_80pct_hz", "f2_80pct_hz"].join("\t"),
+    ...points.map((p) =>
+      [clean(p.label), (p.startMs / 1000).toFixed(3), (p.endMs / 1000).toFixed(3), cell(p.f0, 1), cell(p.f1, 0), cell(p.f2, 0), cell(p.f3, 0), cell(p.onset?.[0] ?? null, 0), cell(p.onset?.[1] ?? null, 0), cell(p.offset?.[0] ?? null, 0), cell(p.offset?.[1] ?? null, 0)].join("\t"),
+    ),
   ].join("\n");
 }
 

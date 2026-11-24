@@ -699,8 +699,16 @@ const LEXICON = [
           // Its pitch: a tone per vowel quality, so the Pitch contours panel draws shapes.
           const shape = { i: [1, 0], e: [-1, 0], a: [0, 0], o: [0, 1], u: [1, -1] }[label];
           const contour = Array.from({ length: 10 }, (_, t) => (k % 7 === 0 && t > 7 ? null : 150 + 30 * shape[0] * (t / 9 - 0.5) + 25 * shape[1] * Math.sin((t / 9) * Math.PI) + 4 * w));
-          points.push({ segment: `v${k}`, label, startMs: k * 400, endMs: k * 400 + 180, f0: 120 + 10 * w, f1: f1 + 40 * w, f2: f2 + 120 * v + 60 * w, f3: 2700, contour });
+          // Monophthongs drift a little from 20% to 80%, toward the centre.
+          const onset = [f1 + 40 * w + (f1 > 500 ? 20 : -15), f2 + 120 * v + 60 * w + (f2 > 1500 ? 60 : -60)];
+          const offset = [f1 + 40 * w - (f1 > 500 ? 30 : -25), f2 + 120 * v + 60 * w - (f2 > 1500 ? 90 : -90)];
+          points.push({ segment: `v${k}`, label, startMs: k * 400, endMs: k * 400 + 180, f0: 120 + 10 * w, f1: f1 + 40 * w, f2: f2 + 120 * v + 60 * w, f3: 2700, contour, onset, offset });
         }
+      }
+      // A diphthong that glides from [a] to [i].
+      for (let j = 0; j < 4; j++) {
+        const w = Math.sin(j * 2.1);
+        points.push({ segment: `d${j}`, label: "ai", startMs: 14000 + j * 500, endMs: 14000 + j * 500 + 260, f0: 125, f1: 560 + 20 * w, f2: 1750 + 60 * w, f3: 2700, contour: Array(10).fill(140), onset: [720 + 25 * w, 1350 + 50 * w], offset: [380 + 20 * w, 2150 + 70 * w] });
       }
       points.push({ segment: "v-silent", label: "a", startMs: 13000, endMs: 13200, f0: null, f1: null, f2: null, f3: null, contour: Array(10).fill(null) });
       return { points, untimed: 1, analysedBy: "Acoustic analysis (built in)" };

@@ -676,8 +676,9 @@ Segment the recording so each vowel (or each word you want to compare) is one se
 
 - **Normalize** shows each formant as standard deviations from this speaker's mean (Lobanov normalization), so recordings of different speakers can be compared.
 - **Every token** shows or hides the dots, leaving only the means and ellipses.
+- **Trajectories** draws an arrow for each label from its mean F1 and F2 at 20% of its segments to its mean at 80%: a diphthong such as `ai` shows as a long arrow from the [a] region to the [i] region, and a monophthong's short arrow shows how much it moves (vowel-inherent spectral change).
 - Click a dot to hear its segment and open it on the Timeline.
-- **Copy table** copies every segment's label, times, pitch and F1 to F3 for a spreadsheet or R.
+- **Copy table** copies every segment's label, times, pitch, F1 to F3, and F1 and F2 at 20% and 80% for a spreadsheet or R. **Measure…** on the Timeline writes the same four values, in the columns `f1_20pct_hz` to `f2_80pct_hz`.
 
 ### Draw pitch contours
 
