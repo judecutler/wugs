@@ -702,7 +702,14 @@ The **Vowel space** panel puts every timed segment of a track at its F1 and F2, 
 
 Segment the recording so each vowel (or each word you want to compare) is one segment, and label each segment with its vowel. Choose the track and click **Plot**. wugs measures each segment's middle half, the steady part of a vowel, and draws a dot for it. Each label gets its mean, written in large letters, and an ellipse one standard deviation wide.
 
-- **Normalize** shows each formant as standard deviations from this speaker's mean (Lobanov normalization), so recordings of different speakers can be compared.
+- **Scale** chooses the units:
+  - **Hz**: as measured.
+  - **Bark** (Traunmüller 1990): the ear's scale.
+  - **Lobanov** (1971): each formant as standard deviations from this speaker's mean.
+  - **Nearey** (1978): each formant's logarithm against this speaker's mean logarithm, which keeps the vowels' proportions.
+  - **Watt–Fabricius** (2002, as Fabricius et al. 2009 modified it): each formant divided by the centre of this speaker's vowel triangle of /i/, /a/ and an /u/ at /i/'s F1. It finds /i/ and /a/ by their labels (`i`, `a`, `ɑ`, `æ`), else takes the vowel furthest front and high and the lowest, and the note under the plot names the corners it used.
+
+  The last three let you compare recordings of different speakers. The choice is remembered.
 - **Every token** shows or hides the dots, leaving only the means and ellipses.
 - **Trajectories** draws an arrow for each label from its mean F1 and F2 at 20% of its segments to its mean at 80%: a diphthong such as `ai` shows as a long arrow from the [a] region to the [i] region, and a monophthong's short arrow shows how much it moves (vowel-inherent spectral change).
 - Click a dot to hear its segment and open it on the Timeline.

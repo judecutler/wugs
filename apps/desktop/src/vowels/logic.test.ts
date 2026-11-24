@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ellipsePath, groups, movement, place, plotNote, plotted, ranges, table, ticks, trajectories, type Point } from "./logic.ts";
+import { bark, ellipsePath, groups, movement, parseMethod, place, plotNote, plotted, ranges, table, ticks, trajectories, wattCentroid, type Point } from "./logic.ts";
 
 const pt = (label: string, f1: number | null, f2: number | null, segment = label): Point => ({ segment, label, startMs: 1000, endMs: 1200, f0: 120, f1, f2, f3: 2500 });
 
 test("points without F1 or F2 do not plot; labels group, empty ones together", () => {
-  const ps = plotted([pt("i", 300, 2300), pt(" i ", 320, 2200), pt("a", null, 1300), pt("", 500, 1500)], false);
+  const ps = plotted([pt("i", 300, 2300), pt(" i ", 320, 2200), pt("a", null, 1300), pt("", 500, 1500)], "hz");
   assert.deepEqual(ps.map((p) => [p.group, p.x, p.y]), [["i", 2300, 300], ["i", 2200, 320], ["(no label)", 1500, 500]]);
 });
 
 test("Lobanov normalization gives z-scores", () => {
-  const ps = plotted([pt("i", 300, 2400), pt("a", 700, 1400), pt("u", 500, 900)], true);
+  const ps = plotted([pt("i", 300, 2400), pt("a", 700, 1400), pt("u", 500, 900)], "lobanov");
   assert.ok(Math.abs(ps[0].y - -1) < 1e-9 && Math.abs(ps[1].y - 1) < 1e-9 && Math.abs(ps[2].y) < 1e-9);
   const xs = ps.map((p) => p.x);
   assert.ok(Math.abs(xs.reduce((a, b) => a + b, 0)) < 1e-9);
@@ -18,7 +18,7 @@ test("Lobanov normalization gives z-scores", () => {
 
 test("a group's ellipse follows its spread", () => {
   // Spread along x only: the first axis is horizontal, the second is flat.
-  const ps = plotted([pt("e", 400, 1900), pt("e", 400, 2000), pt("e", 400, 2100), pt("o", 450, 900)], false);
+  const ps = plotted([pt("e", 400, 1900), pt("e", 400, 2000), pt("e", 400, 2100), pt("o", 450, 900)], "hz");
   const [e, o] = groups(ps);
   assert.equal(e.label, "e");
   assert.equal(e.count, 3);
@@ -28,7 +28,7 @@ test("a group's ellipse follows its spread", () => {
 });
 
 test("axes run the phonetician's way and widen to hold the data", () => {
-  const r = ranges(plotted([pt("i", 150, 3200)], false), false);
+  const r = ranges(plotted([pt("i", 150, 3200)], "hz"), "hz");
   assert.ok(r.y.lo < 150 && r.x.hi > 3200 && r.y.hi === 1000 && r.x.lo === 500);
   const box = { left: 0, top: 0, width: 100, height: 100 };
   // High F2 on the left, low F1 at the top.
@@ -57,12 +57,46 @@ test("an ellipse is traced around its mean", () => {
 
 test("a label's trajectory runs from its mean 20% point to its mean 80% point", () => {
   const ai = (f1a: number, f2a: number, f1b: number, f2b: number): Point => ({ ...pt("ai", 650, 1500), onset: [f1a, f2a], offset: [f1b, f2b] });
-  const ts = trajectories([ai(700, 1300, 400, 2000), ai(720, 1340, 420, 2100), pt("a", 700, 1300), { ...pt("e", 450, 2000), onset: [null, 1900], offset: [440, 2050] }], false);
+  const ts = trajectories([ai(700, 1300, 400, 2000), ai(720, 1340, 420, 2100), pt("a", 700, 1300), { ...pt("e", 450, 2000), onset: [null, 1900], offset: [440, 2050] }], "hz");
   assert.deepEqual(ts, [{ label: "ai", count: 2, from: { x: 1320, y: 710 }, to: { x: 2050, y: 410 } }]);
   assert.ok(Math.abs(movement(ts[0]!) - Math.hypot(730, 300)) < 1e-9);
   // Normalized ends use the midpoints' scale, so they line up with the dots.
-  const z = trajectories([ai(700, 1300, 400, 2000), pt("i", 300, 2400), pt("a", 700, 1400)], true);
-  const mids = plotted([ai(700, 1300, 400, 2000), pt("i", 300, 2400), pt("a", 700, 1400)], true);
+  const z = trajectories([ai(700, 1300, 400, 2000), pt("i", 300, 2400), pt("a", 700, 1400)], "lobanov");
+  const mids = plotted([ai(700, 1300, 400, 2000), pt("i", 300, 2400), pt("a", 700, 1400)], "lobanov");
   const a = mids.find((m) => m.group === "a")!;
   assert.ok(Math.abs(z[0]!.from.y - a.y) < 1e-9, "F1 700 at the onset sits level with the a dot");
+});
+
+test("the method chosen is read back, the old on meaning Lobanov", () => {
+  assert.equal(parseMethod("on"), "lobanov");
+  assert.equal(parseMethod("off"), "hz");
+  assert.equal(parseMethod(null), "hz");
+  assert.equal(parseMethod("nearey"), "nearey");
+});
+
+test("Bark follows Traunmüller's formula", () => {
+  assert.ok(Math.abs(bark(1000) - (26.81 * 1000) / 2960 + 0.53) < 1e-12);
+  const [p] = plotted([pt("i", 300, 2300)], "bark");
+  assert.ok(Math.abs(p!.x - bark(2300)) < 1e-12 && Math.abs(p!.y - bark(300)) < 1e-12);
+});
+
+test("Nearey: each formant's log against the speaker's mean log", () => {
+  const ps = plotted([pt("i", 300, 2400), pt("a", 700, 1200)], "nearey");
+  const m1 = (Math.log(300) + Math.log(700)) / 2;
+  assert.ok(Math.abs(ps[0]!.y - (Math.log(300) - m1)) < 1e-12);
+  assert.ok(Math.abs(ps[0]!.x + ps[1]!.x) < 1e-12, "two points sit either side of the mean");
+});
+
+test("Watt–Fabricius: over the centroid of i, a and u' at i's F1", () => {
+  const pts = [pt("i", 300, 2400), pt("a", 800, 1400), pt("o", 500, 900)];
+  const s = wattCentroid(pts as (Point & { f1: number; f2: number })[])!;
+  assert.deepEqual([s.i, s.a], ["i", "a"]);
+  assert.ok(Math.abs(s.f1 - (300 + 800 + 300) / 3) < 1e-9);
+  assert.ok(Math.abs(s.f2 - (2400 + 1400 + 300) / 3) < 1e-9);
+  const ps = plotted(pts, "watt-fabricius");
+  assert.ok(Math.abs(ps[0]!.x - 2400 / s.f2) < 1e-12);
+  // Labelled otherwise, the corners are found by where they sit.
+  const found = wattCentroid([pt("I", 280, 2500), pt("A", 850, 1300), pt("U", 320, 800)] as (Point & { f1: number; f2: number })[])!;
+  assert.deepEqual([found.i, found.a], ["I", "A"]);
+  assert.equal(wattCentroid([pt("i", 300, 2400)] as (Point & { f1: number; f2: number })[]), null);
 });

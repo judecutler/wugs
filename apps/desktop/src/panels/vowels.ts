@@ -12,7 +12,7 @@ import { hear, recordingForShown } from "../hear/hear";
 import { trackToMeasure } from "../measure/logic";
 import { provide } from "../palette/registry";
 import { getSelection, getState, showToast } from "../store";
-import { ellipsePath, groups, place, plotNote, plotted, ranges, table, ticks, trajectories, type Point } from "../vowels/logic";
+import { ellipsePath, groups, METHODS, parseMethod, place, plotNote, plotted, ranges, table, ticks, trajectories, wattCentroid, type Method, type Point } from "../vowels/logic";
 import type { PanelDef, PanelView } from "./panel";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -65,7 +65,7 @@ export const vowelsPanel: PanelDef = {
   title: "Vowel space",
   create(): PanelView {
     const el = h("div", { className: "panel panel-vowels" });
-    let normalize = localStorage.getItem(NORMALIZE_KEY) === "on";
+    let normalize: Method = parseMethod(localStorage.getItem(NORMALIZE_KEY));
     let showTokens = localStorage.getItem(TOKENS_KEY) !== "off";
     let showPaths = localStorage.getItem(PATHS_KEY) === "on";
     let tier: string | null = null;
@@ -114,7 +114,7 @@ export const vowelsPanel: PanelDef = {
         const { py } = place(rg.x.hi, t, rg, BOX);
         root.append(svg("line", { x1: BOX.left, x2: BOX.left + BOX.width, y1: py, y2: py, class: "vw-grid" }), svg("text", { x: BOX.left - 6, y: py + 4, class: "vw-tick", "text-anchor": "end" }, String(t)));
       }
-      const unit = normalize ? " (z)" : " (Hz)";
+      const unit = ` (${METHODS.find((m) => m.id === normalize)?.unit ?? "Hz"})`;
       root.append(
         svg("text", { x: BOX.left + BOX.width / 2, y: H - 8, class: "vw-axis", "text-anchor": "middle" }, `F2${unit} ←`),
         svg("text", { x: 14, y: BOX.top + BOX.height / 2, class: "vw-axis", "text-anchor": "middle", transform: `rotate(-90 14 ${BOX.top + BOX.height / 2})` }, `F1${unit} →`),
@@ -194,10 +194,11 @@ export const vowelsPanel: PanelDef = {
       };
       const go = h("button", { className: "primary", textContent: busy ? "Measuring…" : "Plot", disabled: busy, title: "Measure every timed segment of this track and plot F1 against F2" });
       go.onclick = () => void run();
-      const norm = h("input", { type: "checkbox", checked: normalize });
+      const norm = h("select", { className: "vw-method", title: METHODS.find((m) => m.id === normalize)?.about ?? "" }, ...METHODS.map((m) => h("option", { value: m.id, textContent: m.label, title: m.about, selected: m.id === normalize })));
+      norm.setAttribute("aria-label", "Scale");
       norm.onchange = () => {
-        normalize = norm.checked;
-        localStorage.setItem(NORMALIZE_KEY, normalize ? "on" : "off");
+        normalize = parseMethod(norm.value);
+        localStorage.setItem(NORMALIZE_KEY, normalize);
         paint();
       };
       const tok = h("input", { type: "checkbox", checked: showTokens });
@@ -230,7 +231,7 @@ export const vowelsPanel: PanelDef = {
           const folder = await pickFile({ directory: true, title: "Where should the picture go?" });
           if (typeof folder !== "string") return;
           try {
-            const r = await saveDocument({ folder, title: `${current.track} vowel space${normalize ? " (normalized)" : ""}`, extension: "svg", contents });
+            const r = await saveDocument({ folder, title: `${current.track} vowel space${normalize === "hz" ? "" : ` (${METHODS.find((m) => m.id === normalize)?.label ?? normalize})`}`, extension: "svg", contents });
             showToast({ tone: "info", lines: [`Saved the picture as ${r.path}.`] });
           } catch (e) {
             showToast({ tone: "error", lines: [errorText(e)] });
@@ -242,7 +243,7 @@ export const vowelsPanel: PanelDef = {
         { className: "vw-bar" },
         h("label", {}, "Track ", picker),
         go,
-        h("label", { title: "Lobanov normalization: each formant as standard deviations from this speaker's mean, so speakers can be compared" }, norm, " Normalize"),
+        h("label", { title: "Hz as measured, Bark, or normalized so speakers can be compared" }, "Scale ", norm),
         h("label", { title: "Show a dot for every segment, not only each label's mean" }, tok, " Every token"),
         h("label", { title: "An arrow for each label from F1/F2 at 20% of its segments to F1/F2 at 80%: how a diphthong, or any vowel, moves" }, paths, " Trajectories"),
         copy,
@@ -251,8 +252,13 @@ export const vowelsPanel: PanelDef = {
       const body: Node[] = [];
       if (problem !== null) body.push(h("p", { className: "note vw-problem", textContent: problem }));
       if (current !== null) {
-        const shown = plotted(current.points, false).length;
-        body.push(plot(), h("p", { className: "note", textContent: plotNote(current.points, shown, current.untimed, current.analysedBy) }));
+        const shown = plotted(current.points, "hz").length;
+        const notes = [plotNote(current.points, shown, current.untimed, current.analysedBy)];
+        if (normalize === "watt-fabricius") {
+          const s = wattCentroid(current.points.filter((p): p is Point & { f1: number; f2: number } => p.f1 !== null && p.f2 !== null && p.f1 > 0 && p.f2 > 0));
+          notes.push(s === null ? "Watt–Fabricius needs at least two vowels to find the triangle." : `The triangle's corners: /${s.i}/ as /i/ and /${s.a}/ as /a/; its centre at F1 ${Math.round(s.f1)} Hz, F2 ${Math.round(s.f2)} Hz.`);
+        }
+        body.push(plot(), h("p", { className: "note", textContent: notes.join(" ") }));
       } else if (problem === null) {
         body.push(
           h("p", {
