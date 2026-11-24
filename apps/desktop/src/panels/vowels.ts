@@ -12,7 +12,7 @@ import { hear, recordingForShown } from "../hear/hear";
 import { trackToMeasure } from "../measure/logic";
 import { provide } from "../palette/registry";
 import { getSelection, getState, showToast } from "../store";
-import { ellipsePath, groups, METHODS, parseMethod, place, plotNote, plotted, ranges, table, ticks, trajectories, wattCentroid, type Method, type Point } from "../vowels/logic";
+import { areaLine, hull, spansTheSpace, vowelArea, ellipsePath, groups, METHODS, parseMethod, place, plotNote, plotted, ranges, table, ticks, trajectories, wattCentroid, type Method, type Point } from "../vowels/logic";
 import type { PanelDef, PanelView } from "./panel";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -139,6 +139,13 @@ export const vowelsPanel: PanelDef = {
       const layer = svg("g", { "clip-path": "url(#vw-clip)" });
       root.append(svg("defs", {}), layer);
       root.querySelector("defs")!.append(clip);
+      // The vowel space: the hull of each speaker's means, under everything else.
+      for (const [list, two] of [[gs, false], [gs2, true]] as const) {
+        const corners = hull(list.filter(spansTheSpace));
+        if (corners.length < 3) continue;
+        const pts = corners.map((g) => place(g.x, g.y, rg, BOX)).map(({ px, py }) => `${px.toFixed(1)},${py.toFixed(1)}`).join(" ");
+        layer.append(svg("polygon", { points: pts, class: two ? "vw-hull vw-two" : "vw-hull" }));
+      }
       for (const g of gs) {
         // Traced in data units and placed point by point, so the flipped,
         // unequally scaled axes draw it exactly.
@@ -322,7 +329,9 @@ export const vowelsPanel: PanelDef = {
           const n2 = plotted(otherResult.points, "hz").length;
           notes.push(`Over it, ${otherResult.track}: ${n2} ${n2 === 1 ? "segment" : "segments"}, dashed.${normalize === "hz" || normalize === "bark" ? " In Hz or Bark, a longer vocal tract alone moves every vowel; choose a normalization to compare the vowels themselves." : " Each speaker is normalized against their own vowels."}`);
         }
-        body.push(plot(), h("p", { className: "note", textContent: notes.join(" ") }));
+        const areaOf = (ps: readonly Point[]) => vowelArea(groups(plotted(ps, normalize)), normalize);
+        const second = otherResult !== null && otherResult.key === `${current.textId}|${other}` ? { track: otherResult.track, area: areaOf(otherResult.points) } : undefined;
+        body.push(plot(), h("p", { className: "note", textContent: notes.join(" ") }), h("p", { className: "note vw-area", textContent: areaLine({ track: current.track, area: areaOf(current.points) }, second) }));
       } else if (problem === null) {
         body.push(
           h("p", {

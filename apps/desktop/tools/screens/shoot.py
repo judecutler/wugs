@@ -1246,6 +1246,8 @@ def main():
             run.shot("state-vowels-two", run.page.locator(".panel-vowels"))
             if run.page.locator(".panel-vowels .vw-key").count() != 1 or "Each speaker is normalized" not in run.page.locator(".panel-vowels").inner_text():
                 failures.append("Vowel space did not draw a second speaker over the first")
+            if run.page.locator(".panel-vowels .vw-hull").count() != 2 or "times as large" not in run.page.locator(".panel-vowels .vw-area").inner_text():
+                failures.append(f"Vowel space did not compare the two speakers' vowel space areas: {run.page.locator('.panel-vowels .vw-area').inner_text()}")
             run.page.locator(".panel-vowels select.vw-other").select_option("")
             run.page.locator(".panel-vowels select.vw-method").select_option("hz")
             # Agreement: the market conversation's two hearings compared.
