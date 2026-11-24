@@ -1646,3 +1646,6 @@ body::before {
 .fx-area:focus-visible { outline: var(--focus-ring, 2px solid var(--accent)); }
 .fx-draft { position: absolute; border: 2px dashed var(--warn); pointer-events: none; }
 .fx-next { margin-left: 6px; }
+.cmp-align td, .cmp-align th { text-align: center; }
+.cmp-align th[scope="row"] { text-align: left; font-family: var(--font-ui); font-weight: normal; }
+.cmp-align .cmp-kept { background: var(--accent-soft); }

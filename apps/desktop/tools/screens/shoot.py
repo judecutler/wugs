@@ -1120,6 +1120,11 @@ def main():
                 failures.append("Compare word lists did not align the pairs of words")
             if run.page.locator(".panel-compare .cmp-corr tbody tr").count() == 0:
                 failures.append("Compare word lists listed no sound correspondence")
+            align = run.page.locator(".panel-compare .cmp-align-block")
+            align.scroll_into_view_if_needed()
+            run.shot("state-compare-alignment", run.page.locator(".panel-compare"))
+            if align.locator(".cmp-align tbody tr").count() == 0:
+                failures.append("Compare word lists aligned no cognate under the project's word")
             # A tree of the languages, once three more lects are loaded.
             run.page.evaluate("window.__WUGS_PICK__ = ['/tmp/tree-lects.tsv']")
             run.page.locator(".panel-compare button", has_text="Load a word list").click()

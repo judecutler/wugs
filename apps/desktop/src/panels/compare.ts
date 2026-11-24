@@ -11,6 +11,7 @@ import { layout, ldndMatrix, midpointRoot, neighbourJoining, newick, phylip, tre
 import { standalone } from "./vowels";
 import { correspondenceLine, correspondences, correspondenceTsv } from "../compare/correspondences";
 import { distanceLine, distances, type Distance } from "../compare/distance";
+import { alignAll, alignmentLine, alignmentTsv, cognateForms, kept } from "../compare/alignment";
 import { cognacy, cognacyLine, edictorWithCognates, judgeKey, judgementOf, judgementsText, nextJudgement, parseJudgements, type Judgement } from "../compare/cognates";
 import { CLOSE, compareLine, compareRows, languagesOf, type OtherForm, type OurConcept, type Row } from "../compare/logic";
 import { emptyState, h } from "../dom";
@@ -77,6 +78,57 @@ export const comparePanel: PanelDef = {
       corrTable,
     );
 
+    // One concept's cognates aligned under the project's sounds.
+    const alignConcept = h("select", { className: "cmp-align-concept", title: "Which concept's words to align" });
+    alignConcept.setAttribute("aria-label", "Concept");
+    const closeBox = h("input", { type: "checkbox", checked: true });
+    const closeToo = h("label", { title: `Also align forms not judged yet that are ${Math.round(CLOSE * 100)}% alike or more` }, closeBox, " Close ones not judged yet");
+    const alignCopy = h("button", { type: "button", textContent: "Copy table", title: "Copy the alignment, a row per language and a column per sound" });
+    const alignLine = h("p", { className: "note" });
+    const alignTable = h("table", { className: "fq-table cmp-align" });
+    const alignBlock = h(
+      "section",
+      { className: "cmp-align-block" },
+      h("h3", { textContent: "Alignment" }),
+      h("p", { className: "note", textContent: "A concept's cognates set under the project's word sound by sound, as EDICTOR aligns a cognate set: a sound with nothing across from it joins the next cell, and a column where every word keeps the sound is shaded." }),
+      h("div", { className: "cc-bar" }, alignConcept, closeToo, alignCopy),
+      alignLine,
+      alignTable,
+    );
+
+    const drawAlignment = () => {
+      const langs = languagesOf(forms);
+      const offered = rows.filter((r) => r.ours.length > 0 && langs.some((l) => (r.others.get(l) ?? []).length > 0));
+      alignBlock.hidden = offered.length === 0;
+      if (offered.length === 0) return;
+      const pick = offered.find((r) => r.concept.id === alignConcept.value) ?? offered.find((r) => cognateForms(r, langs, judged, true).length > 0) ?? offered[0]!;
+      alignConcept.replaceChildren(...offered.map((r) => h("option", { value: r.concept.id, textContent: `${r.concept.number}. ${r.concept.gloss}`, selected: r === pick })));
+      const fs = cognateForms(pick, langs, judged, closeBox.checked);
+      const a = alignAll(pick.ours[0]!, fs);
+      const k = kept(a);
+      alignLine.textContent = alignmentLine(a, fs.filter((f) => f.judged).length);
+      alignTable.replaceChildren(
+        h("thead", {}, h("tr", {}, h("th", { scope: "col", textContent: "" }), ...a.columns.map((c, i) => h("th", { scope: "col", className: `ipa${a.rows.length > 0 && k[i] === a.rows.length ? " cmp-kept" : ""}`, textContent: c })))),
+        h(
+          "tbody",
+          {},
+          ...a.rows.map((r) =>
+            h(
+              "tr",
+              {},
+              h("th", { scope: "row", textContent: r.language, title: r.judged ? "Judged cognate" : "Close, not judged yet" }, r.judged ? " ✓" : ""),
+              ...r.cells.map((c, i) => h("td", { className: `ipa${c === a.columns[i] ? " cmp-kept" : ""}`, textContent: c })),
+            ),
+          ),
+        ),
+      );
+      alignCopy.onclick = () =>
+        void writeText(alignmentTsv(pick.concept.gloss, a)).then(
+          () => showToast({ tone: "info", lines: [`Copied the alignment of «${pick.concept.gloss}».`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+    };
+
     const draw = () => {
       rows = compareRows(concepts, forms);
       const langs = languagesOf(forms);
@@ -131,6 +183,7 @@ export const comparePanel: PanelDef = {
         ),
       );
       drawCorrespondences();
+      drawAlignment();
       const treeKey = `${memoKey}`;
       if (treeKey !== treeFor) {
         treeFor = treeKey;
@@ -198,6 +251,8 @@ export const comparePanel: PanelDef = {
     corrLang.onchange = drawCorrespondences;
     corrMin.onchange = drawCorrespondences;
     differBox.onchange = drawCorrespondences;
+    alignConcept.onchange = drawAlignment;
+    closeBox.onchange = drawAlignment;
     clear.onclick = () => {
       forms = [];
       draw();
@@ -321,7 +376,7 @@ export const comparePanel: PanelDef = {
       if (!sameProject) {
         forms = [];
         listId = "";
-        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, distanceBox, cognacyBox, h("div", { className: "cmp-rows" }, table, corrBlock, treeBlock));
+        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, distanceBox, cognacyBox, h("div", { className: "cmp-rows" }, table, corrBlock, alignBlock, treeBlock));
         judged = new Map();
         void cognates().then(
           (t) => {
