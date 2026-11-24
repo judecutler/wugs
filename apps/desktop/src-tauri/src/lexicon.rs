@@ -40,6 +40,8 @@ pub struct EntryRow {
     pub examples: bool,
     /// Every sense is in a semantic domain (false with no senses).
     pub domains: bool,
+    /// The semantic domains its senses are in, as `(code, label)`, each once.
+    pub in_domains: Vec<(String, String)>,
 }
 
 #[derive(Debug, Serialize)]
@@ -318,12 +320,20 @@ pub fn lexicon_list(session: &mut Session, query: &str) -> Result<Vec<EntryRow>,
         let mut used = false;
         let mut examples = true;
         let mut domains = true;
+        let mut in_domains: Vec<(String, String)> = Vec::new();
         let sense_ids = senses(p, &id)?;
         for s in &sense_ids {
             glosses.push(str_field(p, s, "gloss")?);
             used = used || linked_in_a_text(p, s)?;
             examples = examples && !p.examples(s)?.is_empty();
-            domains = domains && !p.sense_domains(s)?.is_empty();
+            let linked = p.sense_domains(s)?;
+            domains = domains && !linked.is_empty();
+            for (_, dom) in linked {
+                let d = (str_field(p, &dom, "code")?, str_field(p, &dom, "label")?);
+                if !in_domains.contains(&d) {
+                    in_domains.push(d);
+                }
+            }
         }
         let examples = examples && !sense_ids.is_empty();
         let domains = domains && !sense_ids.is_empty();
@@ -332,7 +342,7 @@ pub fn lexicon_list(session: &mut Session, query: &str) -> Result<Vec<EntryRow>,
             || glosses.iter().any(|g| fold_key(&p.proj.nfc(g)).contains(&q));
         if hit {
             let heard = p.pronunciations(&id)?.iter().filter_map(|pr| pr.audio.as_ref()).any(|a| p.proj.is_tombstoned(&a.source).map(|dead| !dead).unwrap_or(false));
-            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, borrowed_from: str_field(p, &id, "borrowed-from")?, id, lemma, glosses, used, heard, examples, domains });
+            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, borrowed_from: str_field(p, &id, "borrowed-from")?, id, lemma, glosses, used, heard, examples, domains, in_domains });
         }
     }
     rows.sort_by_cached_key(|r| (fold_key(&r.lemma), r.homograph, r.id.clone()));

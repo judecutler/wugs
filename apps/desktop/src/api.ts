@@ -448,7 +448,7 @@ export const captureRecoveredDiscard = (args: { id: string }) => invoke<void>("c
 
 // ---------------------------------------------------------------- lexicon (roadmap 22)
 
-export type EntryRow = { id: string; lemma: string; homograph: number | null; posOfSpeech: string; glosses: string[]; used: boolean; borrowedFrom: string; heard: boolean; examples: boolean; domains: boolean };
+export type EntryRow = { id: string; lemma: string; homograph: number | null; posOfSpeech: string; glosses: string[]; used: boolean; borrowedFrom: string; heard: boolean; examples: boolean; domains: boolean; inDomains: [string, string][] };
 export type DomainRef = { id: string; code: string; label: string };
 export type SenseView = {
   id: string;
