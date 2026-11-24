@@ -1009,6 +1009,12 @@ At the top is a position-class chart: a column for each slot, counted from the r
 
 An affix is told apart by its spelling, type and gloss, so `-ler` PL and `-ler` 3PL are two rows. A word with no morph marked as a root is left out, and the panel says how many there are. **Copy chart** and **Copy table** copy them to paste into a document or a spreadsheet, and **Grammar sketch…** prints the chart in its morphology chapter.
 
+### Read a text against its page images
+
+The **Facsimile** panel (in front in Glyphs; in Tongues, press **Ctrl+K** and choose **Show Facsimile**) shows the pages a text was read from: photos or scans of a manuscript, an inscription, a notebook or a printed source. Press **Add pages…** and choose the images in order (PNG, JPEG, GIF or WebP; save a TIFF scan as PNG first). The numbered buttons turn the page, ◀ and ▶ move a page earlier or later, **Take this page off** (press it twice) removes it from the text, and **−**, **Fit** and **+** zoom.
+
+To mark where a line stands on the page, select it in Transcribe or Interlinear, then drag a box around it on the page. With **then the next line** ticked, the next line on the same track that has no box yet is selected, so you can mark a page line after line. Click a box to select its line in the other panels; selecting a marked line elsewhere turns to its page. Drag again to move a box, or press **Clear its area**. The boxes are kept as shares of the page's width and height, so they stay right whatever the image's size, and they sync with the project like any edit.
+
 ### Count the signs of a script
 
 The **Signs** panel (open it with **Ctrl+K**, **Show Signs**) asks of a script the first questions a decipherer asks. It reads the words of a track, or of every track, as they are written: an inscription transcribed sign by sign, a manuscript, or a text in a practical orthography.

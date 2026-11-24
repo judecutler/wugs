@@ -1632,3 +1632,17 @@ body::before {
 .bin-names td.bin-new { color: var(--accent); font-weight: 600; }
 .bin-names tr.bin-nofit th { color: var(--muted); }
 .bin-levels tr.bin-flag th { color: var(--attention, var(--accent)); }
+
+/* Facsimile: a page image with a box per marked segment. */
+.panel-facsimile { display: flex; flex-direction: column; min-height: 0; }
+.fx-bar { flex-wrap: wrap; align-items: center; }
+.fx-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.fx-zoom { display: inline-flex; gap: 4px; margin-left: auto; }
+.fx-scroll { flex: 1; overflow: auto; min-height: 120px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--panel); }
+.fx-page { position: relative; cursor: crosshair; user-select: none; touch-action: none; }
+.fx-page img { display: block; width: 100%; height: auto; }
+.fx-area { position: absolute; padding: 0; border: 2px solid var(--accent-bright); background: color-mix(in srgb, var(--accent-bright) 12%, transparent); border-radius: 2px; cursor: pointer; }
+.fx-area.fx-on { border-color: var(--warn); background: color-mix(in srgb, var(--warn) 18%, transparent); }
+.fx-area:focus-visible { outline: var(--focus-ring, 2px solid var(--accent)); }
+.fx-draft { position: absolute; border: 2px dashed var(--warn); pointer-events: none; }
+.fx-next { margin-left: 6px; }

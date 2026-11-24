@@ -513,6 +513,12 @@ export const lexiconSetSenseGloss = (args: { senseId: string; gloss: string; lan
   invoke<EntryEdit>("lexicon_set_sense_gloss", args);
 export const lexiconSetSenseText = (args: { senseId: string; field: "definition" | "usage" | "notes"; text: string }) =>
   invoke<EntryEdit>("lexicon_set_sense_text", args);
+// Facsimiles (src-tauri/src/facsimile.rs): a text's page images and where each segment stands on them.
+export const facsimileView = (args: { text: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_view", args);
+export const facsimileAddPage = (args: { text: string; path: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_add_page", args);
+export const facsimileRemovePage = (args: { text: string; source: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_remove_page", args);
+export const facsimileMovePage = (args: { text: string; source: string; by: number }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_move_page", args);
+export const facsimileSetArea = (args: { text: string; segment: string; area: import("./facsimile/logic").Area | null }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_set_area", args);
 export const lexiconSetPicture = (args: { sense: string; path: string }) => invoke<EntryEdit>("lexicon_set_picture", args);
 export const lexiconClearPicture = (args: { sense: string }) => invoke<EntryEdit>("lexicon_clear_picture", args);
 export const lexiconAddAllomorph = (args: { id: string; form: string }) => invoke<EntryEdit>("lexicon_add_allomorph", args);
