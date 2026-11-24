@@ -605,6 +605,7 @@ async function exportSketch() {
       allomorphs,
       entries: progress.entries,
       loans: loanSources(entries),
+      pronouns: entries.map((e) => ({ lemma: e.homograph === null ? e.lemma : `${e.lemma}${e.homograph}`, category: e.posOfSpeech, gloss: e.glosses[0] ?? "" })),
       features,
       featureSource,
       texts: progress.texts.map((t) => ({ title: t.title, sentences: t.sentences, words: t.words, glossed: t.glossedWords, morphs: t.morphs })),
