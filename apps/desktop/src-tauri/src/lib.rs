@@ -2339,13 +2339,13 @@ fn speech_dataset_summary(s: State<SessionThread>, id: State<Identity>) -> Resul
 async fn speech_dataset_export(s: State<'_, SessionThread>, id: State<'_, Identity>, folder: String, flagged: bool, date: String) -> Result<speech_dataset::Exported, String> {
     let key = id.key().ok();
     let into = std::path::PathBuf::from(&folder);
-    let (jobs, sum) = s.run(move |s| {
+    let (jobs, sum, lexicon) = s.run(move |s| {
         interchange::outside_project(s, std::path::Path::new(&folder))?;
         let guest = session::is_guest(s, key.as_deref())?;
         speech_dataset::prepare(s, guest, flagged)
     })?;
     let date = corrections::date_or_today(&date);
-    tauri::async_runtime::spawn_blocking(move || speech_dataset::write(&jobs, &sum, &into, &date)).await.map_err(|e| e.to_string())?
+    tauri::async_runtime::spawn_blocking(move || speech_dataset::write(&jobs, &sum, &lexicon, &into, &date)).await.map_err(|e| e.to_string())?
 }
 
 /// The start of `assist_suggest`'s refusal when the model changed under a run.
