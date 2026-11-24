@@ -235,7 +235,7 @@ fn origin_map(
     kind: &str,
 ) -> Result<HashMap<String, String>, String> {
     let mut out = HashMap::new();
-    for id in project.proj.children_by_ref(ref_field, text, kind)? {
+    for id in project.proj.children_by_ref_with_deleted(ref_field, text, kind)? {
         if let Some(origin) = project.proj.field_str(&id, F_ORIGIN)? {
             out.insert(origin, id);
         }
