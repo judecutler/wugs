@@ -1,9 +1,11 @@
 import { token } from "../theme/tokens";
 import { THEME_EVENT } from "../theme/theme";
-import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, mediaOverview, sourceSetDetail, type Recovered, type SourceRow } from "../api";
+import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, mediaOverview, recordingLevels, sourceSetDetail, type Recovered, type SourceRow } from "../api";
 import { CARD_TYPE, cardDrag, cards, detailsLine, duration, normalized, recordingDetailKeys, recordingDetailLabel, wavePath, type Card } from "../media/logic";
 import { canRecord } from "../capture/recorder.ts";
 import { parsePattern, readName, writesFor } from "../media/names";
+import { dbLabel, levelNotes, levelsTsv, type Levels } from "../media/levels";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { defaultLabel, formatElapsed, meterFill } from "../capture/pcm.ts";
 import {
   armDiscard,
@@ -140,7 +142,78 @@ export const mediaPanel: PanelDef = {
       }
       drawList();
     };
-    el.append(bar, recoveredBox, list, namesBox);
+    // Recording levels: peak, loudness, the room's noise, clipping.
+    const levelsNote = h("p", { className: "note" });
+    const levelsTable = h("table", { className: "pg-table bin-levels" });
+    const checkLevels = h("button", { type: "button", textContent: "Check levels", title: "Read every recording here once: its peak, how loud the speech is against the room's noise, and where it clips" });
+    const copyLevels = h("button", { type: "button", textContent: "Copy table", disabled: true });
+    let levelRows: { name: string; levels: Levels }[] = [];
+    const levelsBox = h(
+      "details",
+      { className: "bin-levels-box" },
+      h("summary", { textContent: "Recording levels" }),
+      h("p", { className: "note", textContent: "How well each recording was made: the loudest moment, the speech level and the room's noise under it (in dB below full scale), and where it clips. Worth a look before analysing pitch or formants, and before depositing." }),
+      h("div", { className: "cc-bar" }, checkLevels, copyLevels),
+      levelsNote,
+      h("div", { className: "pg-rows" }, levelsTable),
+    );
+    const drawLevels = () => {
+      const flagged = levelRows.filter((r) => levelNotes(r.levels).length > 0).length;
+      levelsNote.textContent = levelRows.length === 0 ? "" : flagged === 0 ? `All ${levelRows.length} recordings read look fine.` : `${flagged} of ${levelRows.length} recordings have something to look at.`;
+      copyLevels.disabled = levelRows.length === 0;
+      levelsTable.replaceChildren(
+        ...(levelRows.length === 0
+          ? []
+          : [
+              h("thead", {}, h("tr", {}, ...["Recording", "Length", "Peak", "Speech", "Room", "Clips", "Notes"].map((t) => h("th", { scope: "col", textContent: t })))),
+              h(
+                "tbody",
+                {},
+                ...levelRows.map(({ name, levels: l }) => {
+                  const notes = levelNotes(l);
+                  return h(
+                    "tr",
+                    { className: notes.length > 0 ? "bin-flag" : "" },
+                    h("th", { scope: "row", textContent: name }),
+                    h("td", { textContent: duration(l.durationMs) }),
+                    h("td", { className: "num", textContent: dbLabel(l.peakDb) }),
+                    h("td", { className: "num", textContent: dbLabel(l.speechDb) }),
+                    h("td", { className: "num", textContent: dbLabel(l.floorDb) }),
+                    h("td", { className: "num", textContent: String(l.clips) }),
+                    h("td", { textContent: notes.length === 0 ? "Fine" : notes.join(" ") }),
+                  );
+                }),
+              ),
+            ]),
+      );
+    };
+    checkLevels.onclick = async () => {
+      checkLevels.disabled = true;
+      levelRows = [];
+      const audio = sources.filter((x) => x.kind === "audio" && x.hasMedia);
+      let missing = 0;
+      try {
+        for (const [i, src] of audio.entries()) {
+          levelsNote.textContent = `Reading ${i + 1} of ${audio.length}…`;
+          const l = await recordingLevels({ sourceId: src.id });
+          if (l === null) missing += 1;
+          else levelRows.push({ name: src.label || "(unnamed)", levels: l });
+          drawLevels();
+        }
+      } catch (e) {
+        showToast({ tone: "error", lines: [`Could not read the levels: ${errorText(e)}`] });
+      } finally {
+        checkLevels.disabled = false;
+      }
+      drawLevels();
+      if (missing > 0) levelsNote.textContent += ` ${missing} ${missing === 1 ? "recording is" : "recordings are"} not on this computer.`;
+    };
+    copyLevels.onclick = () =>
+      void writeText(levelsTsv(levelRows)).then(
+        () => showToast({ tone: "info", lines: ["Copied the recording levels as a table."] }),
+        (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+      );
+    el.append(bar, recoveredBox, list, namesBox, levelsBox);
     let sources: SourceRow[] = [];
     let recovered: Recovered[] = [];
     let recoveredError: string | null = null;

@@ -251,6 +251,8 @@ export type SourceRow = {
   /** Date, place, recorded by… as [key, value], sorted by key. */
   details: [string, string][];
 };
+/** A recording's peak, loudness, noise floor and clips; null when its audio is not here. */
+export const recordingLevels = (args: { sourceId: string }) => invoke<import("./media/levels").Levels | null>("recording_levels", args);
 export const sourceSetDetail = (args: { source: string; key: string; value: string }) => invoke<SourceRow[]>("source_set_detail", args);
 
 export type SearchRow = {

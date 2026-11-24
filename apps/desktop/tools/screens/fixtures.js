@@ -662,6 +662,10 @@ const LEXICON = [
       return { path: `${folder}/${query} clips`, clips: hits.length - 1, untimed: 0, missing: 1 };
     },
     export_spelling: ({ folder, date }) => ({ path: `${folder}/wugs-spelling-${date}`, words: 212, fromLexicon: 48, once: 31, code: "und" }),
+    recording_levels: ({ sourceId }) =>
+      sourceId === "src-fox"
+        ? { durationMs: 20000, sampleRate: 16000, channels: 1, peakDb: -0.0, rmsDb: -21.4, floorDb: -33.0, speechDb: -15.2, clips: 4, clipTimesMs: [7420, 7480, 9010, 12300] }
+        : { durationMs: 20000, sampleRate: 16000, channels: 1, peakDb: -4.1, rmsDb: -26.0, floorDb: -61.5, speechDb: -18.3, clips: 0, clipTimesMs: [] },
     list_texts: () => texts,
     link_recording: () => null,
     concordance_query: () => ({
