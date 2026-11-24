@@ -12,7 +12,7 @@ import { hear, recordingForShown } from "../hear/hear";
 import { trackToMeasure } from "../measure/logic";
 import { provide } from "../palette/registry";
 import { getSelection, getState, showToast } from "../store";
-import { areaLine, hull, spansTheSpace, vowelArea, ellipsePath, groups, METHODS, parseMethod, place, plotNote, plotted, ranges, table, ticks, trajectories, wattCentroid, type Method, type Point } from "../vowels/logic";
+import { outliers, outliersLine, OUTLIER_MIN_TOKENS, areaLine, hull, spansTheSpace, vowelArea, ellipsePath, groups, METHODS, parseMethod, place, plotNote, plotted, ranges, table, ticks, trajectories, wattCentroid, type Method, type Point } from "../vowels/logic";
 import type { PanelDef, PanelView } from "./panel";
 
 const SVG = "http://www.w3.org/2000/svg";
@@ -332,6 +332,31 @@ export const vowelsPanel: PanelDef = {
         const areaOf = (ps: readonly Point[]) => vowelArea(groups(plotted(ps, normalize)), normalize);
         const second = otherResult !== null && otherResult.key === `${current.textId}|${other}` ? { track: otherResult.track, area: areaOf(otherResult.points) } : undefined;
         body.push(plot(), h("p", { className: "note", textContent: notes.join(" ") }), h("p", { className: "note vw-area", textContent: areaLine({ track: current.track, area: areaOf(current.points) }, second) }));
+        // Tokens far from the rest of their vowel: likely a wrong label or a bad formant track.
+        const shownPoints = plotted(current.points, normalize);
+        const checked = groups(shownPoints).filter((g) => g.count >= OUTLIER_MIN_TOKENS && g.label !== "(no label)").length;
+        const strays = outliers(shownPoints);
+        const outLine = outliersLine(strays, checked);
+        if (outLine !== "") {
+          const cur = current;
+          body.push(
+            h("h3", { textContent: "Possible outliers" }),
+            h("p", { className: "note vw-outliers-note", textContent: outLine }),
+            ...(strays.length === 0
+              ? []
+              : [
+                  h(
+                    "ul",
+                    { className: "vw-outliers" },
+                    ...strays.slice(0, 30).map((o) => {
+                      const b = h("button", { type: "button", className: "link-button", textContent: `▶ /${o.label}/`, title: "Hear it and open it on the Timeline" });
+                      b.onclick = () => void hear({ textId: cur.textId, tierId: cur.tierId, segmentId: o.point.segment, startMs: o.point.startMs, endMs: o.point.endMs });
+                      return h("li", {}, b, ` F1 ${Math.round(o.point.f1 ?? 0)} Hz, F2 ${Math.round(o.point.f2 ?? 0)} Hz, ${o.distance.toFixed(1)} SD from the others`);
+                    }),
+                  ),
+                ]),
+          );
+        }
       } else if (problem === null) {
         body.push(
           h("p", {

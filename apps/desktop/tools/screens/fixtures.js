@@ -787,6 +787,8 @@ const LEXICON = [
         points.push({ segment: `d${j}`, label: "ai", startMs: 14000 + j * 500, endMs: 14000 + j * 500 + 260, f0: 125, f1: 560 + 20 * w, f2: 1750 + 60 * w, f3: 2700, contour: Array(10).fill(140), onset: [720 + 25 * w, 1350 + 50 * w], offset: [380 + 20 * w, 2150 + 70 * w] });
       }
       points.push({ segment: "v-silent", label: "a", startMs: 13000, endMs: 13200, f0: null, f1: null, f2: null, f3: null, contour: Array(10).fill(null) });
+      // An [a] labelled i by a slip, for the Vowels panel's possible outliers.
+      points.push({ segment: "v-stray", label: "i", startMs: 16200, endMs: 16380, f0: 118, f1: 740, f2: 1320, f3: 2700, contour: Array(10).fill(150), onset: [740, 1320], offset: [740, 1320] });
       if (k0 !== 1)
         for (const p of points) {
           if (p.f1 !== null) [p.f1, p.f2] = [p.f1 * k0, p.f2 * k0];

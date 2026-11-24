@@ -1249,6 +1249,12 @@ def main():
             run.shot("state-vowels-trajectories", run.page.locator(".panel-vowels"))
             if run.page.locator(".panel-vowels .vw-path").count() != 6:
                 failures.append("Vowel space did not draw a trajectory per label")
+            outliers = run.page.locator(".panel-vowels .vw-outliers li")
+            if outliers.count() != 1 or "/i/" not in outliers.first.inner_text():
+                failures.append(f"Vowel space did not list the [a] labelled i as a possible outlier: {run.page.locator('.panel-vowels').inner_text()[-1500:]}")
+            else:
+                outliers.first.scroll_into_view_if_needed()
+                run.shot("state-vowels-outliers", run.page.locator(".panel-vowels"))
             run.page.locator(".panel-vowels label", has_text="Trajectories").locator("input").uncheck()
             # Normalized by Watt and Fabricius: the triangle's corners named under the plot.
             run.page.locator(".panel-vowels select.vw-method").select_option("watt-fabricius")

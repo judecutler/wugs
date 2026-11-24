@@ -123,3 +123,28 @@ test("vowel space area: the hull of the means and its area", async () => {
   assert.match(areaLine({ track: "A", area: a }, { track: "B", area: b }), /B's vowel space covers 0\.46 kHz² .*, 1\.50 times as large\.$/);
   assert.match(areaLine({ track: "A", area: null }), /needs at least three/);
 });
+
+test("tokens far from the rest of their vowel are listed as possible outliers", async () => {
+  const { outliers, outliersLine, leaveOneOut, criticalD2 } = await import("./logic.ts");
+  // F(2, 3) at .99 is 30.82: against 5 others the cut is 3.2 × 30.82; with many it nears χ²(2) = 9.21.
+  assert.ok(Math.abs(criticalD2(5) - 3.2 * 30.8166) < 0.01);
+  assert.ok(Math.abs(criticalD2(100000) - 9.2103) < 0.01);
+  assert.equal(criticalD2(2), Infinity);
+  const pt = (i: number, label: string, f1: number, f2: number) => ({ segment: `s${i}`, label, startMs: 0, endMs: 100, f0: null, f1, f2, f3: null });
+  // Eight /i/ around F1 300, F2 2200 and one /i/ that sounds like /a/.
+  const near = [[300, 2200], [310, 2250], [290, 2150], [305, 2180], [295, 2230], [315, 2210], [285, 2190], [300, 2240]];
+  const ps = [...near.map(([f1, f2], i) => pt(i, "i", f1!, f2!)), pt(99, "i", 750, 1300), pt(50, "a", 760, 1300)];
+  const plotted = ps.map((p) => ({ point: p, x: p.f2, y: p.f1, group: p.label }));
+  const found = outliers(plotted);
+  // Left out of its own mean and spread, the stray token stands far off; no ordinary /i/ does.
+  assert.deepEqual(found.map((o) => o.point.segment), ["s99"]);
+  assert.ok(found[0]!.distance > 10);
+  assert.equal(found[0]!.label, "i");
+  // Others at (0, 1), (1, 3) and (2, 2): a point at their mean (1, 2) is 0 away; others with no spread give none.
+  assert.ok(leaveOneOut({ n: 3, sx: 3, sy: 6, sxx: 5, syy: 14, sxy: 7 }, 1, 2)! < 1e-9);
+  assert.equal(leaveOneOut({ n: 3, sx: 3, sy: 3, sxx: 3, syy: 3, sxy: 3 }, 2, 2), null);
+  // /a/ has one token: too few to check.
+  assert.match(outliersLine(found, 1), /^1 token lies further from the other tokens of its label than chance would put it \(p < \.01\)/);
+  assert.match(outliersLine([], 1), /^No token lies/);
+  assert.equal(outliersLine([], 0), "");
+});
