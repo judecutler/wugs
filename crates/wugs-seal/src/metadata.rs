@@ -15,6 +15,59 @@ pub struct TextEntry {
     pub title: String,
     /// bag payload paths (relative to data/) exported for this text
     pub files: Vec<String>,
+    /// The session's particulars for IMDI, from the text's details, else its recording's.
+    pub session: SessionInfo,
+}
+
+/// What IMDI's Session asks for, as the project knows it.
+#[derive(Default)]
+pub struct SessionInfo {
+    pub date: Option<String>,
+    pub place: Option<String>,
+    pub description: Option<String>,
+    pub genre: Option<String>,
+    pub actors: Vec<Actor>,
+}
+
+/// A participant: a person with a consent record covering the text or its recording.
+pub struct Actor {
+    pub role: String,
+    pub name: String,
+    pub details: Vec<(String, String)>,
+}
+
+/// The session's particulars of one text: its own details first, then its
+/// recording's; the people whose consent records cover the text or its
+/// recording, with their details.
+pub fn session_info(project: &Project, text: &str) -> Result<SessionInfo, String> {
+    let own = project.text_metadata(text)?;
+    let source = project.text_recording(text)?.map(|(s, _)| s);
+    let recorded = match &source {
+        Some(s) => project.source_details(s)?,
+        None => Vec::new(),
+    };
+    let pick = |keys: &[&str]| {
+        keys.iter()
+            .find_map(|k| own.iter().find(|(m, _)| m == k).map(|(_, v)| v.clone()))
+            .or_else(|| keys.iter().find_map(|k| recorded.iter().find(|(m, _)| m == k).map(|(_, v)| v.clone())))
+    };
+    let mut actors = Vec::new();
+    for person in project.people()? {
+        if person.deleted {
+            continue;
+        }
+        let covers = person.consents.iter().any(|c| c.covers == text || source.as_deref() == Some(c.covers.as_str()));
+        if covers {
+            actors.push(Actor { role: person.roles.first().cloned().unwrap_or_else(|| "Unspecified".into()), name: person.name.clone(), details: project.person_details(&person.id)? });
+        }
+    }
+    Ok(SessionInfo {
+        date: pick(&["date", "recorded", "recording_date"]),
+        place: pick(&["place", "location"]),
+        description: pick(&["description", "summary"]),
+        genre: pick(&["genre"]),
+        actors,
+    })
 }
 
 pub fn olac(project: &Project, title: &str, date: &str, has_lexicon: bool) -> Result<String, String> {
@@ -55,9 +108,10 @@ pub fn olac(project: &Project, title: &str, date: &str, has_lexicon: bool) -> Re
     Ok(rec.to_xml())
 }
 
-/// Minimal IMDI: one Session per text with its name and exported files.
-/// IMDI 3.0 expects one Session per METATRANSCRIPT and a full MDGroup; this
-/// is a skeleton to enrich when Person/Session entities land (roadmap 11).
+/// IMDI: one Session per text with its name, date, description, an MDGroup
+/// (location, genre and the actors whose consent records cover it, with
+/// their details) and the exported files. IMDI 3.0 expects one Session per
+/// METATRANSCRIPT; this keeps them together in one file, not yet schema-valid.
 pub fn imdi(texts: &[TextEntry], date: &str) -> String {
     let mut root = XmlNode::new("METATRANSCRIPT")
         .with_attr("xmlns", "http://www.mpi.nl/IMDI/Schema/IMDI")
@@ -74,13 +128,39 @@ pub fn imdi(texts: &[TextEntry], date: &str) -> String {
                     .with_child(XmlNode::new("Format").with_text(format_of(f))),
             );
         }
-        root.children.push(
-            XmlNode::new("Session")
-                .with_child(XmlNode::new("Name").with_text(&t.id))
-                .with_child(XmlNode::new("Title").with_text(&t.title))
-                .with_child(XmlNode::new("Date").with_text(date))
-                .with_child(resources),
-        );
+        let info = &t.session;
+        let mut session = XmlNode::new("Session")
+            .with_child(XmlNode::new("Name").with_text(&t.id))
+            .with_child(XmlNode::new("Title").with_text(&t.title))
+            .with_child(XmlNode::new("Date").with_text(info.date.as_deref().unwrap_or(date)));
+        if let Some(d) = &info.description {
+            session.children.push(XmlNode::new("Description").with_text(d));
+        }
+        let mut group = XmlNode::new("MDGroup");
+        if let Some(place) = &info.place {
+            group.children.push(XmlNode::new("Location").with_child(XmlNode::new("Address").with_text(place)));
+        }
+        if let Some(genre) = &info.genre {
+            group.children.push(XmlNode::new("Content").with_child(XmlNode::new("Genre").with_text(genre)));
+        }
+        let mut actors = XmlNode::new("Actors");
+        for a in &info.actors {
+            let detail = |k: &str| a.details.iter().find(|(key, _)| key == k).map(|(_, v)| v.clone());
+            let mut actor = XmlNode::new("Actor").with_child(XmlNode::new("Role").with_text(&a.role)).with_child(XmlNode::new("Name").with_text(&a.name)).with_child(XmlNode::new("FullName").with_text(&a.name));
+            for (key, element) in [("ethnic_group", "EthnicGroup"), ("born", "BirthDate"), ("sex", "Sex"), ("education", "Education")] {
+                if let Some(v) = detail(key) {
+                    actor.children.push(XmlNode::new(element).with_text(&v));
+                }
+            }
+            if let Some(v) = detail("languages") {
+                actor.children.push(XmlNode::new("Languages").with_child(XmlNode::new("Description").with_text(&v)));
+            }
+            actors.children.push(actor);
+        }
+        group.children.push(actors);
+        session.children.push(group);
+        session.children.push(resources);
+        root.children.push(session);
     }
     root.to_xml()
 }

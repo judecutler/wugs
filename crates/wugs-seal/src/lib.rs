@@ -12,8 +12,8 @@
 //! - `exports/cldf/`: the lexicon and every glossed sentence as a CLDF
 //!   Dictionary dataset (`wugs-cldf`), restricted texts included like
 //!   everything else in the bag, when the project has entries or glosses
-//! - `metadata/olac.xml` (one OLAC record), `metadata/imdi.xml` (minimal
-//!   IMDI; enrich when Person/Session entities land, roadmap item 11),
+//! - `metadata/olac.xml` (one OLAC record), `metadata/imdi.xml` (a Session per
+//!   text with its details and actors; not yet XSD-valid),
 //!   `metadata/access.json` (access levels, people, consent)
 //! - `metadata/third-party.txt`, only when the project holds reference
 //!   lists made by others (SIL Semantic Domains, Concepticon concept lists):
@@ -171,7 +171,8 @@ fn write_bag(project: &Project, staging: &Path, opts: &SealOptions) -> Result<Se
         let flextext = format!("exports/flextext/{stem}.flextext");
         bag.put(&flextext, wugs_flex::export_flextext(project, &id)?.as_bytes())?;
         let title = project.proj.field_str(&id, "title")?.unwrap_or_else(|| id.clone());
-        texts.push(metadata::TextEntry { id, title, files: vec![eaf, flextext] });
+        let session = metadata::session_info(project, &id)?;
+        texts.push(metadata::TextEntry { id, title, files: vec![eaf, flextext], session });
     }
     let lexemes = live_of_kind(project, "lexeme")?.len();
     if lexemes > 0 {

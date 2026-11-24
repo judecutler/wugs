@@ -985,7 +985,7 @@ Texts that are not open are left out unless you tick **Include texts that are no
 1. Click **Seal a version for the archive…**.
 2. Choose a folder outside the project folder.
 
-wugs writes a BagIt package named `wugs-sealed-<date>`. It holds ELAN, FLEx, LIFT and CLDF copies, OLAC and IMDI metadata, every recording, the full history, and checksums for every file. ELAR, PARADISEC, and AILLA accept BagIt deposits.
+wugs writes a BagIt package named `wugs-sealed-<date>`. It holds ELAN, FLEx, LIFT and CLDF copies, OLAC and IMDI metadata, every recording, the full history, and checksums for every file. ELAR, PARADISEC, and AILLA accept BagIt deposits. The IMDI metadata gives each text as a session with its date, place, genre and description (from the text's details, else its recording's) and, as its actors, the people whose consent records cover the text or its recording, with their role and details from the People panel.
 
 If any of the project is restricted, the message says so. The package then holds restricted data, so treat the whole package as restricted.
 
