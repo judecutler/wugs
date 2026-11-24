@@ -527,6 +527,12 @@ def main():
             if run.page.locator(".panel-concordance .cc-sorted").count() == 0:
                 failures.append("Concordance: the word sorted by was not marked")
             run.page.locator(".panel-concordance select.cc-sort").first.select_option("text")
+            run.page.locator(".panel-concordance button", has_text="Copy rows").click()
+            run.page.wait_for_timeout(300)
+            copied = run.page.evaluate("() => window.__WUGS_CLIPBOARD__")
+            if not copied or "<b>" not in (copied.get("html") or "") or "left\tkeyword" not in (copied.get("text") or ""):
+                failures.append("Concordance: Copy rows did not give a KWIC table and its text")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Thinning a short concordance keeps every line.
             before = run.page.locator(".panel-concordance .cc-row").count()
             run.page.select_option(".panel-concordance .cc-thin", "50")

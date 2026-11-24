@@ -7,7 +7,7 @@ import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { byDetail, detailTsv, marks, NOT_GIVEN, per1000, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
-import { asTsv, clip, countLine, hasTags, isRtl, keyword, left, markWord, sortedWord, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
+import { asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
@@ -128,7 +128,7 @@ export const concordancePanel: PanelDef = {
     const chips = h("div", { className: "scopes", role: "radiogroup", ariaLabel: "Look in" });
     const sorter = h("select", { className: "cc-sort", title: "Order of the rows" }, ...SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
     sorter.setAttribute("aria-label", "Sort");
-    const copy = h("button", { type: "button", textContent: "Copy rows", title: "Copy every row as a table to paste into a spreadsheet" });
+    const copy = h("button", { type: "button", textContent: "Copy rows", title: "Copy every row as a table to paste into a spreadsheet, or into a document as lined-up concordance lines" });
     const copyExamples = h("button", { type: "button", textContent: "Copy as examples", title: "Copy the sentences these lines come from as numbered glossed examples for a paper (at most 50)" });
     const plotToggle = h("button", { type: "button", textContent: "Plot", title: "Show where in each text it occurs, and how evenly it is spread (AntConc's Plot)" });
     plotToggle.setAttribute("aria-pressed", "false");
@@ -514,11 +514,13 @@ export const concordancePanel: PanelDef = {
         return;
       }
       if (hits.length === 0) return;
-      void writeText(asTsv(sortHits(shownHits(), sortBy))).then(
+      // As a KWIC table for a word processor, and tab-separated text beside it for anything else.
+      const lines = sortHits(shownHits(), sortBy);
+      void writeHtml(kwicHtml(lines), asTsv(lines)).then(
         () =>
           showToast({
             tone: "info",
-            lines: [total > hits.length ? `Copied the first ${hits.length} of ${total} rows. Narrow the search to copy the rest.` : `Copied ${hits.length} rows. Paste them into a spreadsheet.`],
+            lines: [total > hits.length ? `Copied the first ${hits.length} of ${total} rows. Narrow the search to copy the rest.` : `Copied ${hits.length} rows. Paste them into a spreadsheet, or into Word as a lined-up table.`],
           }),
         (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
       );
