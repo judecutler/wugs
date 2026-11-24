@@ -1547,3 +1547,10 @@ body::before {
 
 .sd-rule { font-size: var(--text-sm); margin: 2px 0 6px; }
 .sd-rule .ipa { font-weight: 600; }
+
+/* Sounds: distinctive features */
+.sd-features th, .sd-features td { text-align: center; padding: 2px 4px; font-variant-numeric: tabular-nums; }
+.sd-features th.ipa { font-family: var(--font-ipa); font-weight: normal; }
+.sd-feat { font-size: var(--text-xs); padding: 1px 4px; min-width: 0; }
+.sd-feat.is-on { background: var(--accent-soft); border-color: var(--accent); }
+.sd-feat-out td, .sd-feat-out th { opacity: 0.3; }
