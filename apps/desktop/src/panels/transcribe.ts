@@ -2,12 +2,14 @@
 // segments in time order, the selected one editable in place. Enter saves
 // and plays the next, so hearing and typing never leave the keyboard.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { assistSuggest, characterInventory, editSegmentContent, errorText, projectLanguage, saveDocument, setTypingShortcuts, soundWords, type SegmentRow, type TierRow } from "../api";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { cropStyle, type FacsimileView } from "../facsimile/logic";
+import { assistSuggest, characterInventory, editSegmentContent, errorText, facsimileView, projectLanguage, saveDocument, setTypingShortcuts, soundWords, type SegmentRow, type TierRow } from "../api";
 import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
 import { hear, playButton, recordingForShown } from "../hear/hear";
-import { activeKit, capability, getSelection, getState, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
+import { activeKit, capability, dataGeneration, getSelection, getState, refreshConflicts, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
 import { IPA_GROUPS, projectGroup, type IpaGroup } from "../transcribe/ipa";
 import { countWords, didYouMean, spellIndex, type SpellIndex } from "../checks/spelling";
 import { forms, tokenize } from "../gloss/tokenizer";
@@ -179,6 +181,50 @@ export const transcribePanel: PanelDef = {
       updateSpellHint(typing);
     };
     const selRow = h("div", { className: "tx-row selected" }, selPlay, selTime, field, xsampaHint, spellHint, suggestButton, selBadge);
+    // The selected line's piece of its page image, when it is marked on one
+    // (Facsimile): the selected row's first child, so it scrolls with it.
+    const selCrop = h("div", { className: "tx-crop" });
+    selCrop.setAttribute("role", "img");
+    let facs: { key: string; view: FacsimileView | null } = { key: "", view: null };
+    const sizes = new Map<string, { width: number; height: number }>();
+    /** The crop to show above the selected row, or null; asks for what it lacks and redraws when it comes. */
+    function cropFor(textIdNow: string, segmentId: string): HTMLElement | null {
+      const key = `${textIdNow}|${dataGeneration()}`;
+      if (facs.key !== key) {
+        facs = { key, view: null };
+        void facsimileView({ text: textIdNow }).then(
+          (v) => {
+            if (facs.key !== key) return;
+            facs = { key, view: v };
+            if (v.marked.length > 0) draw(true);
+          },
+          () => {},
+        );
+        return null;
+      }
+      const m = facs.view?.marked.find((x) => x.segment === segmentId);
+      const page = m === undefined ? undefined : facs.view?.pages.find((p) => p.source === m.area.source);
+      if (m === undefined || !page?.path) return null;
+      const url = convertFileSrc(page.path);
+      const natural = sizes.get(url);
+      if (natural === undefined) {
+        const img = new Image();
+        img.onload = () => {
+          sizes.set(url, { width: img.naturalWidth || 1000, height: img.naturalHeight || 1000 });
+          draw(true);
+        };
+        img.src = url;
+        return null;
+      }
+      const st = cropStyle(m.area, natural);
+      selCrop.style.backgroundImage = `url("${url}")`;
+      selCrop.style.backgroundSize = st.backgroundSize;
+      selCrop.style.backgroundPosition = st.backgroundPosition;
+      selCrop.style.aspectRatio = st.aspectRatio;
+      selCrop.title = `${page.label}: the line to transcribe`;
+      selCrop.setAttribute("aria-label", `The line on ${page.label}`);
+      return selCrop;
+    }
     let suggesting = false;
 
     /** Ask whatever powers phone transcription for the selected empty segment. */
@@ -469,7 +515,8 @@ export const transcribePanel: PanelDef = {
       const selIndex = selId === null ? 0 : ordered.findIndex((x) => x.id === selId);
       const [from, to] = renderWindow(ordered.length, selIndex, WINDOW_ROWS);
       moving = true;
-      const rows = ordered.slice(from, to).map((seg) => {
+      const crop = selId === null ? null : cropFor(text.id, selId);
+      const rows = ordered.slice(from, to).flatMap((seg): HTMLElement[] => {
         const label = c.label(seg.id, seg.content);
         const machine = seg.machine === null ? "" : ` machine-${tint(seg.machine)}`;
         if (seg.id === selId) {
@@ -480,7 +527,9 @@ export const transcribePanel: PanelDef = {
           suggestButton.disabled = suggesting;
           selTime.textContent = formatRange(seg.startMs, seg.endMs);
           selBadge.textContent = label.unsaved ? "not saved, press Enter to retry" : "";
-          return selRow;
+          if (crop === null) selCrop.remove();
+          else if (selCrop.parentNode !== selRow) selRow.prepend(selCrop);
+          return [selRow];
         }
         const row = h(
           "div",
@@ -491,7 +540,7 @@ export const transcribePanel: PanelDef = {
           ...(label.unsaved ? [h("span", { className: "tx-unsaved", textContent: "not saved", title: "The last save failed. Select this segment and press Enter to retry." })] : []),
         );
         row.onmousedown = (ev) => { ev.preventDefault(); choose(seg); };
-        return row;
+        return [row];
       });
       const items: HTMLElement[] =
         ordered.length === 0

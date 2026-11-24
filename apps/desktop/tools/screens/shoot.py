@@ -484,6 +484,7 @@ def main():
                 failures.append("Facsimile: page 1 did not show its two marked lines")
             boxes.nth(1).click()
             run.page.locator(".panel-facsimile .fx-area.fx-on").wait_for()
+            run.page.locator(".panel-facsimile .fx-help label", has_text="each box a new line").locator("input").uncheck()
             page_box = run.page.locator(".panel-facsimile .fx-page img").bounding_box()
             if page_box:
                 run.page.mouse.move(page_box["x"] + page_box["width"] * 0.1, page_box["y"] + page_box["height"] * 0.4)
@@ -494,6 +495,20 @@ def main():
             run.shot("state-facsimile", run.page.locator(".panel-facsimile"))
             if boxes.count() != 2:
                 failures.append("Facsimile: dragging moved the selected line's box rather than adding one: " + str(boxes.count()))
+            # With "each box a new line", a box drawn makes a new line on the page.
+            run.page.locator(".panel-facsimile .fx-help label", has_text="each box a new line").locator("input").check()
+            before = boxes.count()
+            page_box = run.page.locator(".panel-facsimile .fx-page img").bounding_box()
+            if page_box:
+                run.page.mouse.move(page_box["x"] + page_box["width"] * 0.1, page_box["y"] + page_box["height"] * 0.3)
+                run.page.mouse.down()
+                run.page.mouse.move(page_box["x"] + page_box["width"] * 0.7, page_box["y"] + page_box["height"] * 0.36, steps=4)
+                run.page.mouse.up()
+                run.page.wait_for_timeout(300)
+            if boxes.count() != before + 1:
+                failures.append("Facsimile: a box drawn as a new line did not add one")
+            run.shot("state-facsimile-new-line", run.page.locator(".panel-facsimile"))
+            run.page.locator(".panel-facsimile .fx-help label", has_text="each box a new line").locator("input").uncheck()
             run.page.click(".kit-switcher")
             run.page.wait_for_timeout(200)
             run.page.locator(".menu-list [role=menuitemradio]", has_text="Scrolls").click()
@@ -1338,6 +1353,10 @@ def main():
             run.page.keyboard.press("Escape")
             # Transcribe: the project's typing shortcuts.
             run.front("transcribe", "Transcribe")
+            # The selected line marked on a page image shows its crop above the field.
+            run.page.evaluate("async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u02' })")
+            run.page.locator(".panel-transcribe .tx-crop").wait_for()
+            run.shot("state-transcribe-crop", run.page.locator(".panel-transcribe"))
             run.page.locator(".panel-transcribe button", has_text="Shortcuts").click()
             run.page.locator(".panel-transcribe .tx-shortcuts textarea").wait_for()
             run.shot("state-transcribe-shortcuts", run.page.locator(".panel-transcribe"))

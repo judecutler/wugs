@@ -1209,6 +1209,11 @@ const LEXICON = [
       if (area !== null && s) facsimile.marked.push({ segment, tier: s.tier, content: s.content, area });
       return facsimile;
     },
+    facsimile_add_line: ({ area }) => {
+      const segment = `u-new-${facsimile.marked.length}`;
+      facsimile.marked.push({ segment, tier: "tier-utt", content: "", area });
+      return { segment, tier: "tier-utt", view: facsimile };
+    },
     facsimile_add_page: () => facsimile,
     facsimile_remove_page: () => facsimile,
     facsimile_move_page: () => facsimile,

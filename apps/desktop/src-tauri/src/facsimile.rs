@@ -155,6 +155,41 @@ pub fn move_page(session: &mut Session, text: &str, source: &str, by: i32) -> Re
     view(session, text)
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NewLine {
+    pub segment: String,
+    pub tier: String,
+    pub view: FacsimileView,
+}
+
+/// A new, empty line where a box was drawn: an untimed segment on the track
+/// the text's marked lines are on (else the utterance track), after the
+/// text's last segment, standing on `area`. Its transcription is typed in
+/// Transcribe.
+pub fn add_line(session: &mut Session, text: &str, area: Area) -> Result<NewLine, String> {
+    let tier = {
+        let p = project(session)?;
+        let mut tier = None;
+        for seg in p.proj.ordered_children("text", text, "segment")? {
+            if p.segment_region(&seg)?.is_some() {
+                tier = p.proj.field_str(&seg, "tier")?;
+            }
+        }
+        tier
+    };
+    let added = crate::session::add_segment(session, text, tier.as_deref(), None, None, "")?;
+    let p = project(session)?;
+    let tier = p.proj.field_str(&added.id, "tier")?.unwrap_or_default();
+    let region = Region { source: area.source, x: area.x, y: area.y, w: area.w, h: area.h };
+    if let Err(e) = p.set_segment_region(text, &added.id, Some(&region)) {
+        // A line that cannot stand on the page is not left behind empty.
+        let _ = p.delete_segment(text, &added.id);
+        return Err(e);
+    }
+    Ok(NewLine { segment: added.id, tier, view: view(session, text)? })
+}
+
 /// Mark or clear where a segment stands on a page.
 pub fn set_area(session: &mut Session, text: &str, segment: &str, area: Option<Area>) -> Result<FacsimileView, String> {
     let p = project(session)?;
@@ -262,6 +297,15 @@ mod tests {
         assert!(view(&mut s, &text).unwrap().pages[2].path.is_none());
         let v = set_page_image(&mut s, &text, &bare, dir.join("page 1.png").to_str().unwrap()).unwrap();
         assert!(v.pages[2].path.is_some());
+        // A box drawn with no line chosen becomes a new, empty line on the marked lines' track.
+        let line = add_line(&mut s, &text, Area { source: second.clone(), x: 0.1, y: 0.3, w: 0.5, h: 0.05 }).unwrap();
+        assert_eq!(line.view.marked.len(), 2);
+        let first_tier = line.view.marked.iter().find(|m| m.segment == seg).unwrap().tier.clone();
+        assert_eq!(line.tier, first_tier);
+        assert!(line.view.marked.iter().any(|m| m.segment == line.segment && m.content.is_empty()));
+        assert!(add_line(&mut s, &text, Area { source: second.clone(), x: 0.9, y: 0.3, w: 0.5, h: 0.05 }).is_err());
+        assert_eq!(view(&mut s, &text).unwrap().marked.len(), 2, "a refused box leaves no empty line");
+        crate::session::project(&mut s).unwrap().delete_segment(&text, &line.segment).unwrap();
         let v = move_page(&mut s, &text, &second, -1).unwrap();
         assert_eq!(v.pages[0].source, second);
         let v = remove_page(&mut s, &text, &second).unwrap();
