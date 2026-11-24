@@ -1023,6 +1023,11 @@ def main():
             run.shot("state-affixes-forms", run.page.locator(".panel-affixes"))
             if forms.count() != 1 or "vowel harmony" not in (forms.first.text_content() or ""):
                 failures.append("Affixes: -si and -su PL were not found conditioned by the stem's vowel")
+            gb = run.page.locator(".panel-affixes .af-grambank li")
+            gb.first.scroll_into_view_if_needed()
+            run.shot("state-affixes-grambank", run.page.locator(".panel-affixes"))
+            if [(x or "")[:5] for x in gb.all_text_contents()] != ["GB044", "GB080", "GB083"]:
+                failures.append("Affixes: the glosses did not speak for GB044, GB080 and GB083: " + str(gb.all_text_contents()))
             guess = run.page.locator(".panel-affixes .af-guess")
             guess.locator("tbody tr").first.wait_for()
             guess.scroll_into_view_if_needed()

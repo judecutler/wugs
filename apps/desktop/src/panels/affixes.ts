@@ -3,7 +3,7 @@
 // and a table behind it. Words and tables in ../affixes/logic.ts. Read-only:
 // an affix opens the Concordance on it, an example opens its sentence.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, projectAffixes, soundWords } from "../api";
+import { errorText, projectAffixes, setTypologyAnswer, soundWords, typologyAnswers } from "../api";
 import { affixLabel, guessedLine, signatures, signaturesTsv, type Side, type WordCount } from "../affixes/signatures";
 import { allomorphSets, allomorphsTsv, setNote, soundsLine } from "../affixes/allomorphs";
 import { affixTsv, chartTsv, elsewhere, marked, productivityCell, productivityLine, pairLine, pairNote, pairs, pairsSummary, pairsTsv, slotChart, slotLabel, summaryLine, type Affix, type Affixes } from "../affixes/logic";
@@ -11,6 +11,8 @@ import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, selectSegment, showToast } from "../store";
+import { evidenceLine, evidenceNote, glossEvidence } from "../typology/glosses";
+import type { Ours } from "../typology/logic";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -35,6 +37,46 @@ export const affixesPanel: PanelDef = {
     const formsNote = h("p", { className: "note" });
     const forms = h("div", { className: "af-forms" });
     const copyForms = h("button", { type: "button", textContent: "Copy forms", title: "Every gloss written more than one way, each form with the sounds next to it and the stem's nearest vowel" });
+
+    const gbNote = h("p", { className: "note" });
+    const gbList = h("ul", { className: "af-grambank" });
+    let grambank = new Map<string, Ours>();
+
+    /** Grambank features the glossed affixes show present, each with Answer
+     * when the project's answer is not already "present". */
+    const drawGrambank = () => {
+      const found = data === null ? [] : glossEvidence(data.affixes);
+      const open = found.filter((e) => grambank.get(e.id)?.value !== "1");
+      gbNote.textContent = evidenceLine(found.length, open.length);
+      gbList.replaceChildren(
+        ...found.map((e) => {
+          const ours = grambank.get(e.id)?.value ?? "";
+          const answered = ours === "1";
+          const use = answered ? null : h("button", { type: "button", textContent: ours === "" ? "Answer present" : "Change the answer to present", title: `Write 1 (present) as this project's answer to Grambank ${e.id}, with the affixes as its note` });
+          if (use !== null)
+            use.onclick = async () => {
+              try {
+                grambank.set(e.id, await setTypologyAnswer({ source: "grambank", id: e.id, value: "1", note: evidenceNote(e) }));
+                showToast({ tone: "info", lines: [`Kept as this project's answer to Grambank ${e.id}. The Typology panel shows it under Grambank.`] });
+              } catch (err) {
+                showToast({ tone: "error", lines: [errorText(err)] });
+              }
+              drawGrambank();
+            };
+          return h(
+            "li",
+            {},
+            h("strong", { textContent: e.id }),
+            ` ${e.says}: `,
+            ...e.affixes.slice(0, 4).flatMap((a, i) => [...(i > 0 ? [", "] : []), marked(a), " ", gloss(a.gloss), ` (${a.uses})`]),
+            e.affixes.length > 4 ? `, and ${e.affixes.length - 4} more` : "",
+            answered ? h("span", { className: "note", textContent: " · answered present" }) : ours === "" ? "" : h("span", { className: "note", textContent: ` · this project's answer is ${ours}` }),
+            use === null ? "" : " ",
+            use ?? "",
+          );
+        }),
+      );
+    };
 
     let words: WordCount[] | null = null;
     let side: Side = "suffix";
@@ -239,15 +281,17 @@ export const affixesPanel: PanelDef = {
         },
       );
       try {
-        const r = await projectAffixes();
+        const [r, g] = await Promise.all([projectAffixes(), typologyAnswers({ source: "grambank" }).catch(() => [] as Ours[])]);
         if (mine !== seq) return;
         data = r;
+        grambank = new Map(g.map((x) => [x.id, x]));
       } catch (e) {
         if (mine !== seq) return;
         data = null;
         summary.textContent = `Could not read the affixes: ${errorText(e)}`;
       }
       draw();
+      drawGrambank();
     }
 
     const copy = (what: string, text: () => string | null) => {
@@ -297,6 +341,9 @@ export const affixesPanel: PanelDef = {
         h("div", { className: "cc-bar" }, copyForms),
         formsNote,
         forms,
+        h("h3", { textContent: "Grambank from the glosses" }),
+        gbNote,
+        gbList,
         h("h3", { textContent: "Guessed from the words" }),
         h("div", { className: "cc-bar" }, sidePick, copyGuess),
         guessNote,

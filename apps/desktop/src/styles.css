@@ -1544,6 +1544,8 @@ body::before {
 .af-order th[scope="row"] { font-family: var(--font-ipa); font-weight: normal; text-align: left; }
 .af-order .af-note { color: var(--warn); font-family: var(--font-ui); font-size: var(--text-sm); }
 .af-forms { display: flex; flex-direction: column; gap: 10px; }
+.af-grambank { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }
+.af-grambank button { margin-left: 4px; }
 .af-set { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 8px 10px; }
 .af-set-told { border-color: var(--accent); }
 .af-set-head { margin-bottom: 4px; }
