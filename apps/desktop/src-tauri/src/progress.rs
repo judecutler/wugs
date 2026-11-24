@@ -32,6 +32,8 @@ pub struct TextProgress {
     pub translated: usize,
     /// The text's details (`meta:<key>`), for the corpus's make-up by detail.
     pub meta: Vec<(String, String)>,
+    /// How varied its words are (MTLD, `mlu::mtld`), from 100 words up.
+    pub mtld: Option<f64>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -47,6 +49,8 @@ pub struct Progress {
     pub senses_without_gloss: usize,
     pub people: usize,
     pub consent_records: usize,
+    /// MTLD over every text's words, read text after text.
+    pub mtld: Option<f64>,
 }
 
 /// A WAV's length from its header, without reading its samples.
@@ -71,6 +75,10 @@ fn live(p: &wugs_core::Project, kind: &str) -> Result<Vec<String>, String> {
 pub fn progress(session: &mut Session) -> Result<Progress, String> {
     let p = project(session)?;
     let mut by_text: HashMap<String, TextProgress> = HashMap::new();
+    // Each text's running words as ids, for MTLD; folded as the corpus tools count them.
+    let mut ids: HashMap<String, u32> = HashMap::new();
+    let mut runs: HashMap<String, Vec<u32>> = HashMap::new();
+    let mut order: Vec<String> = Vec::new();
     each_segment(p, Read::Analyses, &Scope::all(), |seg| {
         let row = by_text.entry(seg.text.clone()).or_insert_with(|| TextProgress { id: seg.text.clone(), title: seg.title.clone(), ..TextProgress::default() });
         row.sentences += 1;
@@ -79,6 +87,18 @@ pub fn progress(session: &mut Session) -> Result<Progress, String> {
         }
         row.transcribed += 1;
         row.words += seg.words.len();
+        let run = runs.entry(seg.text.clone()).or_insert_with(|| {
+            order.push(seg.text.clone());
+            Vec::new()
+        });
+        for w in &seg.words {
+            let k = wugs_model::fold_key(&p.proj.nfc(w));
+            if k.is_empty() {
+                continue;
+            }
+            let next = ids.len() as u32;
+            run.push(*ids.entry(k).or_insert(next));
+        }
         for token in &seg.tokens {
             let morphs = p.proj.members(token)?.len();
             if morphs > 0 {
@@ -102,6 +122,7 @@ pub fn progress(session: &mut Session) -> Result<Progress, String> {
             row.title = p.proj.field_str(&text, "title")?.unwrap_or_default();
         }
         row.meta = p.text_metadata(&text)?;
+        row.mtld = runs.get(&text).filter(|r| r.len() >= crate::mlu::MTLD_MIN).and_then(|r| crate::mlu::mtld(r));
         if let Some((_, blob)) = p.text_recording(&text)? {
             let length = lengths
                 .entry(blob.clone())
@@ -113,6 +134,8 @@ pub fn progress(session: &mut Session) -> Result<Progress, String> {
     }
     out.texts.sort_by_cached_key(|t| (wugs_model::fold_key(&t.title), t.id.clone()));
     out.recorded_ms = lengths.values().flatten().sum();
+    let all: Vec<u32> = order.iter().filter_map(|t| runs.get(t)).flatten().copied().collect();
+    out.mtld = (all.len() >= crate::mlu::MTLD_MIN).then(|| crate::mlu::mtld(&all)).flatten();
     out.recordings_missing = lengths.values().filter(|l| l.is_none()).count();
     let entries = live(p, "lexeme")?;
     out.entries = entries.len();
@@ -150,6 +173,17 @@ mod tests {
         assert!(rec > 3000.0 && t.transcribed_ms > 0.0 && t.transcribed_ms < rec, "{t:?}");
         assert_eq!(r.recorded_ms, rec);
         assert!(r.entries >= 5 && r.senses >= r.entries && r.senses_without_gloss == 0, "{r:?}");
+        assert_eq!((t.mtld, r.mtld), (None, None), "five words are too few to measure how varied they are");
+        // A long enough text gets one: a text of 120 words from a small vocabulary.
+        let words: Vec<String> = (0..12).map(|i| (0..10).map(|j| ["ka", "ti", "mo", "su", "ne", "ra", "lo", "pe"][(i * 3 + j * 5) % 8]).collect::<Vec<_>>().join(" ")).collect();
+        let p = crate::session::project(&mut session).unwrap();
+        let utt = crate::session::find_utterance_tier(p).unwrap().unwrap();
+        let refs: Vec<&str> = words.iter().map(String::as_str).collect();
+        p.import_written_text("Long", &utt, &refs).unwrap();
+        let r2 = progress(&mut session).unwrap();
+        let long = r2.texts.iter().find(|x| x.title == "Long").unwrap();
+        assert!(long.mtld.is_some_and(|m| m > 1.0 && m < 120.0), "{:?}", long.mtld);
+        assert!(r2.mtld.is_some());
         // A text's details come with its row, for the corpus by detail.
         let text = t.id.clone();
         crate::session::project(&mut session).unwrap().set_text_metadata(&text, "genre", "counting").unwrap();

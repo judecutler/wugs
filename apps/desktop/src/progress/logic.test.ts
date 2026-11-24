@@ -44,10 +44,11 @@ test("the summary and table add the texts up", () => {
   assert.equal(lines[2], "40 words; 30 glossed (75%); 8 sentences translated (100%).");
   assert.equal(lines[3], "Sentences average 5.0 words; glossed words average 2.2 morphs (the index of synthesis).");
   assert.equal(lines[4], "Lexicon: 12 entries, 15 senses, 2 still without a gloss.");
-  assert.deepEqual(rowCells(progress.texts[1]!), ["Market", "—", "4", "0 (0%)", "—", "0", "0 (—)", "—", "0 (—)"]);
+  assert.deepEqual(rowCells(progress.texts[1]!), ["Market", "—", "4", "0 (0%)", "—", "0", "0 (—)", "—", "0 (—)", "—"]);
+  assert.equal(rowCells({ ...progress.texts[1]!, mtld: 48.26 })[9], "48.3");
   const tsv = progressTsv(progress).split("\n");
   assert.equal(tsv.length, 4);
-  assert.equal(tsv[1], "Fox\t2.1\t10\t8\t0.3\t40\t30\t63\t8");
+  assert.equal(tsv[1], "Fox\t2.1\t10\t8\t0.3\t40\t30\t63\t8\t");
   assert.equal(tsv[3]!.split("\t")[0], "All texts");
 });
 
