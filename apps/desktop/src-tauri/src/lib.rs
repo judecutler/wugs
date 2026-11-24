@@ -210,6 +210,18 @@ fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String,
     s.run(move |s| consistency::unify(s, &key, &kind, &from, &to))
 }
 
+/// Word forms analysed with more than one breakdown (the Checks panel).
+#[tauri::command(async)]
+fn gloss_segmentations(s: State<SessionThread>) -> Result<Vec<consistency::Segmented>, String> {
+    s.run(consistency::segmentations)
+}
+
+/// Give every analysed word of this token's form its analysis.
+#[tauri::command(async)]
+fn gloss_use_breakdown(s: State<SessionThread>, token_id: String) -> Result<usize, String> {
+    s.run(move |s| consistency::use_breakdown(s, &token_id))
+}
+
 /// Glossed roots with no lexicon entry (the Checks panel).
 #[tauri::command(async)]
 fn consent_gaps(s: State<SessionThread>) -> Result<people::ConsentGaps, String> {
@@ -2308,6 +2320,8 @@ pub fn run() {
             abbreviation_meanings,
             gloss_consistency,
             gloss_unify,
+            gloss_segmentations,
+            gloss_use_breakdown,
             gloss_missing,
             gloss_sense_drift,
             gloss_settle_drift,

@@ -4,11 +4,11 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSegmentations, glossUseBreakdown, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
 import { sequenceWords, unusualLine, unusualWords, type Unusual } from "../checks/sequences";
-import { readinessLine, readinessNote, timingLine, timingNote, twiceLine, twiceNote, type Duplicates, type Readiness, type Timing, type TimingIssue, type Twice } from "../checks/logic";
+import { breakdownNote, breakdownsLine, breakdownUsedLine, useBreakdownLabel, type Breakdown, type Segmented, readinessLine, readinessNote, timingLine, timingNote, twiceLine, twiceNote, type Duplicates, type Readiness, type Timing, type TimingIssue, type Twice } from "../checks/logic";
 import { addedLine, addLabel, consentLine, consentNote, type ConsentGaps, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
 import { headwordOf } from "../notes/logic";
@@ -40,6 +40,7 @@ export const checksPanel: PanelDef = {
     let doubles: { pairs: LikelyPair[]; entries: number } | null = null;
     let timing: Timing | null = null;
     let twice: Duplicates | null = null;
+    let breakdowns: Segmented[] | null = null;
     let gaps: { without: number; fillable: number } | null = null;
     let trees: { sentences: TreeProblem[]; total: number; annotated: number } | null = null;
     let showAllChars = false;
@@ -53,9 +54,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null)]).then(
-        ([r, m, c, w, g, t, d, k, l, tm, ar, du]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null), glossSegmentations().catch(() => null)]).then(
+        ([r, m, c, w, g, t, d, k, l, tm, ar, du, bd]) => {
           if (mine !== seq) return;
+          breakdowns = bd;
           twice = du;
           ready = ar;
           timing = tm;
@@ -91,6 +93,44 @@ export const checksPanel: PanelDef = {
       armed = null;
       await refreshAll();
       load();
+    };
+
+    const useBreakdown = async (v: Breakdown) => {
+      busy = true;
+      paint();
+      try {
+        const changed = await glossUseBreakdown({ tokenId: v.tokenId });
+        showToast({ tone: "info", lines: [breakdownUsedLine(changed, v.breakdown)] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      busy = false;
+      armed = null;
+      await refreshAll();
+      load();
+    };
+
+    const breakdownsSection = (): HTMLElement[] => {
+      if (breakdowns === null) return [];
+      const card = (s: Segmented): HTMLElement => {
+        const variants = s.variants.map((v) => {
+          const id = `breakdown\u0001${v.tokenId}`;
+          const use = h("button", { type: "button", className: armed === id ? "danger" : "", textContent: useBreakdownLabel(v, s, armed === id), disabled: busy, title: `Break every analysed «${s.form}» into ${v.breakdown} with its glosses` });
+          use.onclick = () => {
+            if (armed !== id) {
+              armed = id;
+              paint();
+              return;
+            }
+            void useBreakdown(v);
+          };
+          const show = h("button", { type: "button", className: "ck-show", textContent: `in «${v.textTitle || "(untitled)"}»`, title: "Open a sentence where it is broken up this way" });
+          show.onclick = () => selectSegment({ textId: v.textId, tierId: v.tierId, segmentId: v.segmentId });
+          return h("li", { className: "ck-variant" }, h("span", { className: "ck-morph", textContent: v.breakdown }), glossNode(v.glosses), h("span", { className: "ck-count", textContent: `× ${v.count}` }), show, use);
+        });
+        return h("li", { className: "ck-card" }, h("div", { className: "ck-head" }, h("span", { className: "ck-morph", textContent: s.form })), h("p", { className: "note", textContent: breakdownNote(s) }), h("ul", { className: "ck-variants" }, ...variants));
+      };
+      return [h("h3", { className: "ck-title", textContent: "Words broken up more than one way" }), h("p", { className: "note", textContent: breakdownsLine(breakdowns) }), h("ul", { className: "ck-list" }, ...breakdowns.slice(0, 100).map(card))];
     };
 
     /** Make lexicon entries for these roots (all of them when `keys` is empty). */
@@ -514,6 +554,7 @@ export const checksPanel: PanelDef = {
         h("h3", { className: "ck-title", textContent: "Glosses" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: summary(rows) }), again),
         h("ul", { className: "ck-list" }, ...rows.map(card)),
+        ...breakdownsSection(),
         h("h3", { className: "ck-title", textContent: "Not in the lexicon" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
         h("ul", { className: "ck-list" }, ...missing.map(missingCard)),

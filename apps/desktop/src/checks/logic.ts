@@ -225,3 +225,31 @@ export function twiceNote(t: Twice): string {
   const texts = new Set(t.copies.map((c) => c.textId)).size;
   return texts === 1 ? `${t.copies.length} times in «${t.copies[0]!.textTitle}»` : `${t.copies.length} times in ${texts} texts`;
 }
+
+/** One way a word is broken into morphs (src-tauri/src/consistency.rs `segmentations`). */
+export type Breakdown = { breakdown: string; glosses: string; count: number; tokenId: string; textId: string; textTitle: string; tierId: string; segmentId: string };
+export type Segmented = { form: string; key: string; total: number; variants: Breakdown[] };
+
+/** The line over the words broken up more than one way. */
+export function breakdownsLine(list: readonly Segmented[]): string {
+  if (list.length === 0) return "Every analysed word is broken into morphs the same way each time it occurs.";
+  return `${n(list.length, "word is", "words are")} broken into morphs more than one way. One may be a slip, or two words that are spelled alike (then keep both).`;
+}
+
+/** What tells a form's breakdowns apart, in words. */
+export function breakdownNote(s: Segmented): string {
+  const whole = s.variants.find((v) => !v.breakdown.includes("-"));
+  if (whole !== undefined && s.variants.length === 2) return `Analysed as one morph ${whole.count === 1 ? "once" : `${whole.count} times`} and in parts elsewhere.`;
+  const glosses = new Set(s.variants.map((v) => v.glosses));
+  return glosses.size === 1 ? "Cut in different places with the same glosses." : "Cut differently, with different glosses.";
+}
+
+/** The button that makes one breakdown everyone's. */
+export function useBreakdownLabel(v: Breakdown, s: Segmented, armed: boolean): string {
+  return armed ? `Change ${s.total - v.count}: sure?` : `Use «${v.breakdown}» for all ${s.total}`;
+}
+
+/** The toast after it. */
+export function breakdownUsedLine(changed: number, breakdown: string): string {
+  return changed === 0 ? "Nothing needed changing any more." : `${n(changed, "word is", "words are")} now «${breakdown}».`;
+}

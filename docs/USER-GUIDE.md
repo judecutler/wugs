@@ -376,6 +376,8 @@ It lists every morph glossed more than one way across the project, the ones that
 
 Two morphs that sound alike but mean different things (a plural `-s` and a third-person `-s`) show up too. Leave them, or link each one to its own lexicon entry in the Gloss panel, and they drop off the list.
 
+Under **Words broken up more than one way**, the panel lists each word form that is cut into morphs differently in different sentences. An example is *tokami*, cut as `to-ka-mi` in two sentences and left whole as `tokami` in a third. Each way is shown with its glosses, how many words have it, and a link to a sentence. Click **Use «to-ka-mi» for all**, then click again to confirm. Every analysed word of that form then gets exactly that analysis: the same morphs, types, glosses and lexicon links. Capitals and punctuation do not count as a different form. Words not analysed yet are left alone (the Words to gloss panel is for those). Two different words that happen to be spelled alike will show up here too; leave them as they are.
+
 ### Grow the lexicon from your glossed texts
 
 Under **Not in the lexicon**, the Checks panel lists every root you have glossed in your texts that has no lexicon entry yet, most used first. Each shows its glosses with how often each is used, and a link to a sentence that uses it. This happens a lot after importing glossed texts from Toolbox or FLEx without their lexicon.

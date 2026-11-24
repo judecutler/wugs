@@ -744,6 +744,22 @@ const LEXICON = [
         }
       return { points, untimed: 1, analysedBy: "Acoustic analysis (built in)" };
     },
+    // One word broken up two ways; the token asked to copy kept for the probe.
+    gloss_segmentations: () => [
+      {
+        form: "nikani",
+        key: "nikani",
+        total: 5,
+        variants: [
+          { breakdown: "ni-kani", glosses: "1SG-count", count: 4, tokenId: "tok-a", textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01" },
+          { breakdown: "nikani", glosses: "count", count: 1, tokenId: "tok-b", textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03" },
+        ],
+      },
+    ],
+    gloss_use_breakdown: ({ tokenId }) => {
+      window.__WUGS_BREAKDOWN__ = tokenId;
+      return 1;
+    },
     gloss_consistency: () => [
       { surface: "ma", kind: "clitic", key: "ma", total: 9, slip: true, variants: [
         { gloss: "FOC", count: 7, textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01" },

@@ -139,6 +139,135 @@ pub fn unify(session: &mut Session, key: &str, kind: &str, from: &str, to: &str)
     Ok(targets.len())
 }
 
+/// One way a word is broken into morphs, with where it first occurs.
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Breakdown {
+    /// The morphs as written, joined at `-`.
+    pub breakdown: String,
+    /// Their glosses, joined the same way (`?` for none).
+    pub glosses: String,
+    pub count: usize,
+    /// A word broken up this way: `use_breakdown` copies its analysis.
+    pub token_id: String,
+    pub text_id: String,
+    pub text_title: String,
+    pub tier_id: String,
+    pub segment_id: String,
+}
+
+/// A word form analysed with more than one breakdown (`nikani` as
+/// `ni-kani` here and `nikani` there).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Segmented {
+    /// The spelling met most often.
+    pub form: String,
+    /// `wugs_model::fold_key` of the form, as the Concordance keys words.
+    pub key: String,
+    pub total: usize,
+    /// Most used first.
+    pub variants: Vec<Breakdown>,
+}
+
+/// Every analysed word form on transcription tracks broken into morphs in
+/// more than one way (by the morphs' `lexicon_key`s, so `-ler` and `ler`
+/// are one), the forms whose minority breakdowns have most uses first.
+/// Words not analysed yet are the Words to gloss panel's, and left out.
+pub fn segmentations(session: &mut Session) -> Result<Vec<Segmented>, String> {
+    let p = session::project(session)?;
+    struct Seen {
+        spellings: BTreeMap<String, usize>,
+        variants: BTreeMap<Vec<String>, Breakdown>,
+    }
+    let mut forms: BTreeMap<String, Seen> = BTreeMap::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            let morphs = p.proj.members(tok)?;
+            if morphs.is_empty() {
+                continue;
+            }
+            let form = p.proj.nfc(&p.proj.field_str(tok, "form")?.unwrap_or_default());
+            let key = wugs_model::fold_key(&form);
+            if key.is_empty() {
+                continue;
+            }
+            let mut surfaces = Vec::new();
+            let mut glosses = Vec::new();
+            for m in &morphs {
+                surfaces.push(p.proj.nfc(&p.proj.field_str(m, "surface")?.unwrap_or_default()));
+                let g = p.proj.field_str(m, "gloss")?.unwrap_or_default().trim().to_string();
+                glosses.push(if g.is_empty() { "?".to_string() } else { g });
+            }
+            let shape: Vec<String> = surfaces.iter().map(|s| wugs_model::lexicon_key(s)).collect();
+            let seen = forms.entry(key).or_insert_with(|| Seen { spellings: BTreeMap::new(), variants: BTreeMap::new() });
+            *seen.spellings.entry(form).or_default() += 1;
+            let v = seen.variants.entry(shape).or_insert_with(|| Breakdown {
+                breakdown: surfaces.join("-"),
+                glosses: glosses.join("-"),
+                count: 0,
+                token_id: tok.clone(),
+                text_id: seg.text.clone(),
+                text_title: seg.title.clone(),
+                tier_id: seg.tier.clone(),
+                segment_id: seg.id.clone(),
+            });
+            v.count += 1;
+        }
+        Ok(())
+    })?;
+    let mut out: Vec<Segmented> = forms
+        .into_iter()
+        .filter(|(_, s)| s.variants.len() > 1)
+        .map(|(key, s)| {
+            let mut variants: Vec<Breakdown> = s.variants.into_values().collect();
+            variants.sort_by(|a, b| b.count.cmp(&a.count).then(a.breakdown.cmp(&b.breakdown)));
+            let form = s.spellings.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))).map(|(f, _)| f.clone()).unwrap_or_default();
+            Segmented { form, key, total: variants.iter().map(|v| v.count).sum(), variants }
+        })
+        .collect();
+    let minority = |s: &Segmented| s.total - s.variants[0].count;
+    out.sort_by(|a, b| minority(b).cmp(&minority(a)).then(a.key.cmp(&b.key)));
+    out.truncate(LIMIT);
+    Ok(out)
+}
+
+/// Give every analysed word of `token`'s form whose breakdown differs the
+/// analysis `token` has (its morphs, types, glosses and sense links), one
+/// person's choice each, so each write settles conflicts on it. Returns how
+/// many words changed.
+pub fn use_breakdown(session: &mut Session, token: &str) -> Result<usize, String> {
+    let p = session::project(session)?;
+    if p.proj.entity_kind(token)?.as_deref() != Some("token") || p.proj.is_tombstoned(token)? {
+        return Err("That word is no longer in the project.".into());
+    }
+    let model = p.proj.members(token)?;
+    if model.is_empty() {
+        return Err("That word has no analysis to copy.".into());
+    }
+    let specs = model.iter().map(|m| p.morph_spec(m)).collect::<Result<Vec<_>, _>>()?;
+    let shape_of = |morphs: &[String]| -> Result<Vec<String>, String> { morphs.iter().map(|m| Ok(wugs_model::lexicon_key(&p.proj.nfc(&p.proj.field_str(m, "surface")?.unwrap_or_default())))).collect() };
+    let shape = shape_of(&model)?;
+    let key = wugs_model::fold_key(&p.proj.nfc(&p.proj.field_str(token, "form")?.unwrap_or_default()));
+    let mut targets: Vec<(String, String)> = Vec::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            if wugs_model::fold_key(&p.proj.nfc(&p.proj.field_str(tok, "form")?.unwrap_or_default())) != key {
+                continue;
+            }
+            let morphs = p.proj.members(tok)?;
+            if !morphs.is_empty() && shape_of(&morphs)? != shape {
+                targets.push((seg.text.clone(), tok.clone()));
+            }
+        }
+        Ok(())
+    })?;
+    for (text, tok) in &targets {
+        p.apply_analysis(text, tok, &specs)?;
+    }
+    Ok(targets.len())
+}
+
 /// A root glossed in the texts with no lexicon entry of its form: what a
 /// dictionary is still missing, as FLEx's word list shows.
 #[derive(Debug, Serialize)]
@@ -391,6 +520,45 @@ pub fn settle_drift(session: &mut Session, sense: &str, text_gloss: &str, use_le
 mod tests {
     use super::*;
     use crate::gloss;
+
+    #[test]
+    fn a_word_broken_up_two_ways_is_found_and_made_one() {
+        let dir = std::env::temp_dir().join(format!("wugs-segmentations-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        let text = session::list_texts(&mut s).unwrap()[0].id.clone();
+        let spec = |surface: &str, kind: &str, g: &str| gloss::MorphSpecView { surface: surface.into(), morph_type: kind.into(), gloss: Some(g.into()), glosses_by_lang: Default::default(), sense: None };
+        // «Tokami» as to-ka-mi twice, as tokami once; «mi» alone stays one way.
+        let mut tokens = Vec::new();
+        for (i, (words, analyses)) in [
+            (["tokami", "mi"], [vec![spec("to", "root", "dog"), spec("ka", "suffix", "PL"), spec("mi", "suffix", "ERG")], vec![spec("mi", "root", "water")]]),
+            (["Tokami", "mi"], [vec![spec("to", "root", "dog"), spec("ka", "suffix", "PL"), spec("mi", "suffix", "ERG")], vec![spec("mi", "root", "water")]]),
+            (["tokami", "mi"], [vec![spec("tokami", "root", "dogs")], vec![spec("mi", "root", "water")]]),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let at = 40_000.0 + i as f64 * 2000.0;
+            let seg = session::add_segment(&mut s, &text, None, Some(at), Some(at + 1000.0), &words.join(" ")).unwrap().id;
+            let forms: Vec<String> = words.iter().map(|w| w.to_string()).collect();
+            let view = gloss::gloss_tokenize(&mut s, &text, &seg, &forms).unwrap().view;
+            for (w, morphs) in view.words.iter().zip(analyses) {
+                gloss::gloss_apply(&mut s, &text, &seg, &w.id, morphs).unwrap();
+            }
+            tokens.push(view.words[0].id.clone());
+        }
+        let found = segmentations(&mut s).unwrap();
+        let tokami = found.iter().find(|f| f.key == "tokami").expect("tokami found");
+        assert_eq!((tokami.form.as_str(), tokami.total), ("tokami", 3));
+        assert_eq!(tokami.variants.iter().map(|v| (v.breakdown.as_str(), v.glosses.as_str(), v.count)).collect::<Vec<_>>(), [("to-ka-mi", "dog-PL-ERG", 2), ("tokami", "dogs", 1)]);
+        assert!(!found.iter().any(|f| f.key == "mi"), "one breakdown is no finding");
+        // The commoner breakdown for every word of the form.
+        assert_eq!(use_breakdown(&mut s, &tokami.variants[0].token_id).unwrap(), 1);
+        assert!(!segmentations(&mut s).unwrap().iter().any(|f| f.key == "tokami"));
+        assert_eq!(use_breakdown(&mut s, &tokens[2]).unwrap(), 0, "nothing left to change");
+        drop(s);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn slips_and_two_meanings_are_found_and_unified() {

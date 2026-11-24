@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addedLine, consentLine, consentNote, driftSummary, settledLine, exampleGapsLine, examplesAddedLine, treesLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
+import { breakdownNote, breakdownsLine, breakdownUsedLine, useBreakdownLabel, addedLine, consentLine, consentNote, driftSummary, settledLine, exampleGapsLine, examplesAddedLine, treesLine, addLabel, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory } from "./logic.ts";
 
 const v = (gloss: string, count: number) => ({ gloss, count, textId: "t", textTitle: "T", tierId: "u", segmentId: "s" });
 const ka: Inconsistent = { surface: "ka", kind: "suffix", key: "ka", total: 3, variants: [v("PL", 2), v("pl.", 1)], slip: true };
@@ -111,4 +111,16 @@ test("sentences written twice are counted in words", async () => {
   assert.equal(twiceNote({ ...t, copies: t.copies.slice(0, 2) }), "2 times in «Fish»");
   assert.match(twiceLine({ listed: [t], groups: 1, extra: 2, read: 40 }), /^1 sentence is written more than once .*2 copies beyond the first/);
   assert.equal(twiceLine({ listed: [], groups: 0, extra: 0, read: 40 }), "None of the 40 sentences of four words or more is written twice.");
+});
+
+test("words broken up more than one way", () => {
+  const b = (breakdown: string, glosses: string, count: number) => ({ breakdown, glosses, count, tokenId: "k", textId: "t", textTitle: "T", tierId: "u", segmentId: "s" });
+  const tokami = { form: "tokami", key: "tokami", total: 3, variants: [b("to-ka-mi", "dog-PL-ERG", 2), b("tokami", "dogs", 1)] };
+  assert.match(breakdownsLine([]), /^Every analysed word/);
+  assert.match(breakdownsLine([tokami]), /^1 word is broken into morphs more than one way/);
+  assert.equal(breakdownNote(tokami), "Analysed as one morph once and in parts elsewhere.");
+  assert.equal(breakdownNote({ ...tokami, variants: [b("tok-ami", "dog-PL", 2), b("to-kami", "dog-PL", 1)] }), "Cut in different places with the same glosses.");
+  assert.equal(useBreakdownLabel(tokami.variants[0]!, tokami, false), "Use «to-ka-mi» for all 3");
+  assert.equal(useBreakdownLabel(tokami.variants[0]!, tokami, true), "Change 1: sure?");
+  assert.equal(breakdownUsedLine(1, "to-ka-mi"), "1 word is now «to-ka-mi».");
 });
