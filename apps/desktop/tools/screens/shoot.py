@@ -782,6 +782,19 @@ def main():
                 failures.append("Elicit sentences did not count the new answer")
             if run.page.evaluate("document.activeElement && document.activeElement.dataset.prompt") != "3":
                 failures.append("Elicit sentences did not move to the next prompt")
+            # A list made from frames: each entry's gloss in each frame, the headword as a hint.
+            run.page.locator(".panel-sentences button", has_text="From frames").click()
+            run.page.locator(".panel-sentences .se-frame-text").fill("I see the ___.\n___")
+            run.page.wait_for_timeout(200)
+            run.shot("state-sentences-frames", run.page.locator(".panel-sentences"))
+            frame_note = run.page.locator(".panel-sentences .se-frames .note").inner_text()
+            run.page.locator(".panel-sentences button", has_text="Make the list").click()
+            run.page.wait_for_timeout(400)
+            made = run.page.evaluate("window.__WUGS_MADE__") or {}
+            first = (made.get("prompts") or [{}])[0]
+            if "in 2 frames" not in frame_note or not first.get("prompt", "").startswith("I see the ") or not first.get("hint"):
+                failures.append(f"Elicit sentences did not make a list from frames: {frame_note} {first}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Word order: WALS orders counted in the parsed sentences.
             # Durations: a text whose labels repeat, so the strip plot and the comparison show.
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); window.__keptSelection = st.getSelection(); await st.selectText('t-fox'); }")

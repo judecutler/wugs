@@ -674,6 +674,7 @@ export const segmentTiming = () => invoke<import("./checks/logic").Timing>("segm
 /** Prompt lists for sentence elicitation (src-tauri/src/sentences.rs). */
 export const sentenceLists = () => invoke<import("./sentences/logic").PromptList[]>("sentence_lists");
 export const sentenceListImport = (args: { path: string }) => invoke<import("./sentences/logic").PromptList>("sentence_list_import", args);
+export const sentenceListMake = (args: { name: string; prompts: { id: string; prompt: string; hint: string }[] }) => invoke<import("./sentences/logic").PromptList>("sentence_list_make", args);
 export const sentenceListView = (args: { list: string }) => invoke<import("./sentences/logic").PromptView>("sentence_list_view", args);
 export const sentenceAnswer = (args: { list: string; prompt: string; sentence: string }) => invoke<import("./sentences/logic").PromptView>("sentence_answer", args);
 /** The project's cognate judgements, a line each (src-tauri/src/cognates.rs). */

@@ -6,10 +6,10 @@
 // ../sentences/logic.ts.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { elicitationSheet } from "../elicit/sheet";
-import { errorText, projectLanguage, saveDocument, sentenceAnswer, sentenceListImport, sentenceLists, sentenceListView } from "../api";
+import { errorText, lexiconList, projectLanguage, saveDocument, sentenceAnswer, sentenceListImport, sentenceListMake, sentenceLists, sentenceListView, type EntryRow } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
-import { NO_LISTS, nextToDo, progressLine, shownPrompts, type PromptList, type PromptRow, type PromptView } from "../sentences/logic";
+import { framedLine, framePrompts, NO_LISTS, nextToDo, progressLine, shownPrompts, type PromptList, type PromptRow, type PromptView } from "../sentences/logic";
 import { dataGeneration, getState, selectSegment, selectText, showToast } from "../store";
 import { typeWithShortcuts } from "../typing";
 import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
@@ -37,6 +37,29 @@ export const sentencesPanel: PanelDef = {
     const toDo = h("label", { title: "List only the prompts that have no answer yet" }, toDoBox, " Only prompts to do");
     const print = h("button", { type: "button", textContent: "Print a sheet…", title: "These prompts as a form to print and fill in by hand: a header for the speaker, date and place, then a row per prompt with room for the sentence and notes. With Only prompts to do ticked, only those" });
     const line = h("p", { className: "note se-line" });
+    // A list made from frames: each lexicon entry's gloss put in sentence frames.
+    const framesButton = h("button", { type: "button", textContent: "From frames…", title: "Make a list from frames you write, such as «I see the ___»: each lexicon entry's gloss in each frame, the headword beside it, as tone and noun-class frames are asked" });
+    const frameName = h("input", { type: "text", value: "Frames", ariaLabel: "Name of the list" });
+    const frameText = h("textarea", { rows: 4, className: "se-frame-text", placeholder: "I see the ___.\nThe ___ is big.\n___", ariaLabel: "Frames, one a line, ___ where the word goes" });
+    const frameCategory = h("select", { ariaLabel: "Which entries" });
+    const frameNote = h("p", { className: "note" });
+    const frameMake = h("button", { type: "button", textContent: "Make the list" });
+    const frameBox = h(
+      "div",
+      { className: "se-frames", hidden: true },
+      h("label", {}, "Name ", frameName),
+      h("label", {}, "Entries ", frameCategory),
+      frameText,
+      frameNote,
+      h("div", { className: "cc-bar" }, frameMake),
+    );
+    let frameEntries: EntryRow[] = [];
+    const framed = () => framePrompts(frameText.value, frameEntries, frameCategory.value === "" ? null : frameCategory.value);
+    const drawFramed = () => {
+      const f = framed();
+      frameNote.textContent = frameText.value.trim() === "" ? "Write one frame a line, with ___ where the word goes; ___ alone asks for the word on its own." : framedLine(f);
+      frameMake.disabled = f.prompts.length === 0;
+    };
     const list = h("ol", { className: "se-prompts" });
 
     const fetchView = async () => {
@@ -106,7 +129,7 @@ export const sentencesPanel: PanelDef = {
       line.textContent = progressLine(v.list);
       list.replaceChildren(
         ...shownPrompts(v.prompts, toDoOnly).map((r) => {
-          const field = typeWithShortcuts(h("input", { type: "text", className: "se-answer", placeholder: r.answers.length === 0 ? "Say it in the language…" : "Another way to say it…", value: drafts.get(r.id) ?? "" }));
+          const field = typeWithShortcuts(h("input", { type: "text", className: "se-answer", placeholder: r.answers.length === 0 ? (r.hint ? `Say it with «${r.hint}»…` : "Say it in the language…") : "Another way to say it…", value: drafts.get(r.id) ?? "" }));
           field.setAttribute("aria-label", `Answer to prompt ${r.number}: ${r.prompt}`);
           field.dataset.prompt = r.id;
           field.oninput = () => drafts.set(r.id, field.value);
@@ -124,7 +147,7 @@ export const sentencesPanel: PanelDef = {
           return h(
             "li",
             { className: `se-row${r.answers.length > 0 ? " se-done" : ""}` },
-            h("div", { className: "se-prompt" }, h("span", { className: "se-num", textContent: `${r.number}.` }), h("span", { textContent: r.prompt })),
+            h("div", { className: "se-prompt" }, h("span", { className: "se-num", textContent: `${r.number}.` }), h("span", { textContent: r.prompt }), r.hint ? h("span", { className: "se-hint", textContent: r.hint, title: "The word this frame asks for" }) : null),
             chips.length === 0 ? null : h("div", { className: "se-chips" }, ...chips),
             field,
           );
@@ -148,7 +171,7 @@ export const sentencesPanel: PanelDef = {
         const contents = elicitationSheet({
           list: { name: v.list.name, citation: "" },
           language: language.name,
-          concepts: v.prompts.map((r) => ({ number: r.number, gloss: r.prompt, concepticonGloss: "", skipped: false, answers: r.answers.map((a) => ({ lemma: a.content, gloss: "" })) })),
+          concepts: v.prompts.map((r) => ({ number: r.number, gloss: r.hint ? `${r.prompt} [${r.hint}]` : r.prompt, concepticonGloss: "", skipped: false, answers: r.answers.map((a) => ({ lemma: a.content, gloss: "" })) })),
           which: toDoOnly ? "todo" : "all",
           withAnswers: !toDoOnly,
           generator: "wugs",
@@ -156,6 +179,40 @@ export const sentencesPanel: PanelDef = {
         });
         const r = await saveDocument({ folder, title: `${v.list.name} sheet`, extension: "html", contents });
         showToast({ tone: "info", lines: [`Saved a sheet to print in ${r.path}. Open it in a browser or Word and print it.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    };
+    framesButton.onclick = async () => {
+      frameBox.hidden = !frameBox.hidden;
+      if (frameBox.hidden) return;
+      try {
+        frameEntries = await lexiconList({ query: "" });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+        return;
+      }
+      const counts = new Map<string, number>();
+      for (const e of frameEntries) if (e.posOfSpeech !== "") counts.set(e.posOfSpeech, (counts.get(e.posOfSpeech) ?? 0) + 1);
+      const was = frameCategory.value;
+      frameCategory.replaceChildren(
+        h("option", { value: "", textContent: `Every entry (${frameEntries.length})` }),
+        ...[...counts].sort((a, b) => b[1] - a[1]).map(([c, n]) => h("option", { value: c, textContent: `${c} (${n})`, selected: c === was })),
+      );
+      drawFramed();
+      frameText.focus();
+    };
+    frameText.oninput = drawFramed;
+    frameCategory.onchange = drawFramed;
+    frameMake.onclick = async () => {
+      const f = framed();
+      if (f.prompts.length === 0) return;
+      try {
+        const l = await sentenceListMake({ name: frameName.value, prompts: f.prompts });
+        listId = l.id;
+        frameBox.hidden = true;
+        showToast({ tone: "info", lines: [`${l.name}: ${l.total} prompts, ${l.answered} answered already.`] });
+        await fetchLists();
       } catch (e) {
         showToast({ tone: "error", lines: [errorText(e)] });
       }
@@ -210,7 +267,7 @@ export const sentencesPanel: PanelDef = {
         listId = "";
         view = null;
         drafts.clear();
-        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, toDo, print), line, list);
+        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, framesButton, toDo, print), frameBox, line, list);
         void fetchLists();
         return;
       }
