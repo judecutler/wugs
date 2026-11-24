@@ -1,7 +1,7 @@
 import { allomorphSets, setNote, soundsLine } from "../affixes/allomorphs";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { glottologPlace, lexiconList, wordOrder, orthographyGet, projectAffixes, projectProgress, soundWords, typologyAnswers, typologyProfile } from "../api";
-import { featuresOf, grammarSketch, graphemesOf, morphemesOf, type Feature } from "../grammar/sketch";
+import { featuresOf, grammarSketch, graphemesOf, morphemesOf, sketchAbbreviations, type Feature } from "../grammar/sketch";
 import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
@@ -592,7 +592,12 @@ async function exportSketch() {
     const order = await wordOrder().catch(() => undefined);
     const place = language.glottocode === "" ? null : await glottologPlace({ glottocode: language.glottocode }).catch(() => null);
     const topics = await topicExamples().catch(() => []);
+    // The abbreviations the sketch's glosses use, with the project's meanings, else Leipzig's.
+    const usedAbbrs = sketchAbbreviations({ slots, allomorphs, morphemes, topics });
+    const abbrMeanings = usedAbbrs.length === 0 ? [] : await abbreviationMeanings(usedAbbrs).catch(() => usedAbbrs.map(() => null));
+    const abbreviations = abbreviationList(usedAbbrs, new Map(usedAbbrs.flatMap((a, i) => (abbrMeanings[i] ? [[a, abbrMeanings[i]!] as [string, string]] : []))));
     const html = grammarSketch({
+      abbreviations,
       topics,
       place,
       order,

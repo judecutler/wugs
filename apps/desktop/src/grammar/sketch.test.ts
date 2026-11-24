@@ -217,3 +217,16 @@ test("the lexicon's pronouns make a person and number table", () => {
   assert.ok(html.includes("<tr><th>1</th><td class=\"ipa\">na</td><td class=\"ipa\"></td></tr>"));
   assert.doesNotMatch(grammarSketch(base), /Personal pronouns/u);
 });
+
+test("the abbreviations the sketch's glosses use come before the first chapter", async () => {
+  const { sketchAbbreviations } = await import("./sketch.ts");
+  const used = sketchAbbreviations({ ...base, slots: [{ label: "−1", affixes: ["ni- 1SG", "ra- 3PL.ERG"] }], allomorphs: [{ gloss: "PL", forms: [], note: "" }] });
+  // Person digits apart and first; then A to Z.
+  assert.deepEqual(used, ["1", "3", "ERG", "PL", "PST", "SG"]);
+  const html = grammarSketch({ ...base, abbreviations: [{ abbr: "ERG", meaning: "ergative", source: "leipzig" }, { abbr: "XYZ", meaning: null, source: "none" }] });
+  const at = html.indexOf("<h2>Abbreviations</h2>");
+  assert.ok(at > 0 && at < html.indexOf("<h2>1. Introduction</h2>"));
+  assert.match(html, /<td class="gl">erg<\/td><td>ergative<\/td>/);
+  assert.match(html, /<td class="gl">xyz<\/td><td><p class="todo">\[meaning\]<\/p><\/td>/);
+  assert.ok(!grammarSketch(base).includes("<h2>Abbreviations</h2>"));
+});
