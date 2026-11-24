@@ -31,6 +31,7 @@ pub mod pangloss;
 pub mod align;
 pub mod trends;
 pub mod unclear;
+pub mod tei_lex;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;

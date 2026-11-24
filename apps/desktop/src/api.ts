@@ -666,7 +666,7 @@ export const assistDelete = (args: { id: string }) => invoke<void>("assist_delet
 export const assistSuggest = (args: { text: string; segment: string; source: string; expect: string }) => invoke<Suggested>("assist_suggest", args);
 // Import and export in other tools' formats: src-tauri/src/interchange.rs.
 export type TextFormat = "elan" | "flextext" | "textgrid" | "conllu" | "tei" | "vertical" | "antconc" | "toolboxtext" | "plaintext" | "table" | "srt" | "vtt" | "audacity" | "chat" | "exmaralda" | "pangloss";
-export type LexiconFormat = "lift" | "toolbox";
+export type LexiconFormat = "lift" | "toolbox" | "teilex0";
 /** `text`: the text to show afterwards; `lexicon`: the lexicon changed; `lines`: what happened, in words. */
 export type Imported = { format: string; text: string | null; lexicon: boolean; lines: string[] };
 export type Exported = { path: string; notes: string[] };
