@@ -1550,6 +1550,12 @@ def main():
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             if run.page.locator(".panel-lexicon .lx-list li").count() != 7:
                 failures.append("the num category did not list its seven entries")
+            # A semantic domain lists its subdomains' entries too.
+            run.page.locator(".panel-lexicon .lx-show").select_option("dom:8.1.1")
+            run.page.wait_for_timeout(200)
+            run.shot("state-lexicon-domain", run.page.locator(".panel-lexicon"))
+            if run.page.locator(".panel-lexicon .lx-list li").count() != 8:
+                failures.append(f"the domain 8.1.1 did not list its seven numbers and kani: {run.page.locator('.panel-lexicon .lx-list li').count()}")
             # Loanwords, with where they come from.
             run.page.locator(".panel-lexicon .lx-show").select_option("loans")
             run.page.wait_for_timeout(200)

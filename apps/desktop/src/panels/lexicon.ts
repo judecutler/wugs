@@ -21,7 +21,7 @@ import { typeWithShortcuts } from "../typing";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
-import { loansLine, categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
+import { domainsOf, loansLine, categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, paradigmSheet, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry, takeWantedList } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
@@ -407,11 +407,16 @@ export const lexiconPanel: PanelDef = {
       showPicker.title = current.title;
       const cats = categoriesOf(rows, show);
       if (show.startsWith("pos:")) showPicker.title = `Entries whose category is «${show.slice(4)}»`;
+      const doms = domainsOf(rows, show);
+      if (show.startsWith("dom:")) showPicker.title = `Entries with a sense in the semantic domain ${show.slice(4)} or one under it`;
       showPicker.replaceChildren(
         ...LIST_SHOWS.map((x) => h("option", { value: x.id, textContent: showLabel(rows, x), title: x.title, selected: x.id === show })),
         ...(cats.length === 0
           ? []
           : [h("optgroup", { label: "Category" }, ...cats.map((c) => h("option", { value: `pos:${c.category}`, textContent: `${c.category} (${c.count.toLocaleString("en")})`, selected: `pos:${c.category}` === show })))]),
+        ...(doms.length === 0
+          ? []
+          : [h("optgroup", { label: "Semantic domain" }, ...doms.map((d) => h("option", { value: `dom:${d.code}`, textContent: `${d.code} ${d.label} (${d.count.toLocaleString("en")})`, selected: `dom:${d.code}` === show })))]),
       );
     }
 
@@ -419,7 +424,7 @@ export const lexiconPanel: PanelDef = {
       drawShowPicker();
       const listed = rows.filter((r) => shows(r, show));
       if (rows.length > 0 && listed.length === 0) {
-        list.replaceChildren(h("li", { className: "empty", textContent: show.startsWith("pos:") ? `No entry found has the category «${show.slice(4)}».` : (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).done }));
+        list.replaceChildren(h("li", { className: "empty", textContent: show.startsWith("pos:") ? `No entry found has the category «${show.slice(4)}».` : show.startsWith("dom:") ? `No entry found is in the semantic domain ${show.slice(4)}.` : (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).done }));
         return;
       }
       if (rows.length === 0) {
@@ -1348,7 +1353,7 @@ export const lexiconPanel: PanelDef = {
       }
       const folder = await pickFile({ directory: true, title: "Where should the checklist go?" });
       if (typeof folder !== "string") return;
-      const which = show.startsWith("pos:") ? show.slice(4) : (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).label;
+      const which = show.startsWith("pos:") ? show.slice(4) : show.startsWith("dom:") ? `Semantic domain ${show.slice(4)} ${domainsOf(rows, show).find((d) => d.code === show.slice(4))?.label ?? ""}`.trim() : (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).label;
       try {
         const language = await projectLanguage().then((l) => l.name, () => "");
         const r = await saveDocument({ folder, title: `${language.trim() === "" ? "Lexicon" : language.trim()} checklist`, extension: "html", contents: checklistSheet(listed, language, search.value.trim() === "" ? which : `${which}, matching «${search.value.trim()}»`) });

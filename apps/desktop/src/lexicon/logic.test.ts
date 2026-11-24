@@ -139,3 +139,12 @@ test("loanwords and where they come from", () => {
   assert.equal(loansLine(rows), "3 loanwords (60% of 5 entries): Spanish 2, English 1.");
   assert.match(loansLine([r("")]), /^No entry is marked/u);
 });
+
+test("the list picks the entries of a semantic domain and its subdomains", async () => {
+  const { domainsOf, shows } = await import("./logic.ts");
+  const row = (inDomains: [string, string][]) => ({ glosses: ["x"], posOfSpeech: "n", used: true, inDomains });
+  const rows = [row([["1.1", "Sky"]]), row([["1.1.3", "Weather"], ["2", "Person"]]), row([["1.10", "Water"]]), row([])];
+  assert.deepEqual(rows.map((r) => shows(r, "dom:1.1")), [true, true, false, false]);
+  assert.deepEqual(domainsOf(rows).map((d) => `${d.code} ${d.count}`), ["1.1 2", "1.1.3 1", "1.10 1", "2 1"]);
+  assert.deepEqual(domainsOf([], "dom:9").map((d) => d.code), ["9"]);
+});

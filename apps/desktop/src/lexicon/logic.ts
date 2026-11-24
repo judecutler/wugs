@@ -99,8 +99,8 @@ export function relatedName(r: { otherLemma: string; otherHomograph: number | nu
 }
 
 /** Which entries the list shows: every one, or those with work left to do. */
-export type ListShow = "all" | "gloss" | "category" | "sound" | "example" | "domain" | "unused" | "loans" | `pos:${string}`;
-export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean; borrowedFrom?: string; heard?: boolean; examples?: boolean; domains?: boolean };
+export type ListShow = "all" | "gloss" | "category" | "sound" | "example" | "domain" | "unused" | "loans" | `pos:${string}` | `dom:${string}`;
+export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean; borrowedFrom?: string; heard?: boolean; examples?: boolean; domains?: boolean; inDomains?: readonly (readonly [string, string])[] };
 
 export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; done: string }[] = [
   { id: "all", label: "Every entry", title: "List every entry", done: "No entries match." },
@@ -116,6 +116,11 @@ export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; 
 /** Whether an entry belongs in the list shown. */
 export function shows(r: ListRow, show: ListShow): boolean {
   if (show.startsWith("pos:")) return r.posOfSpeech.trim() === show.slice(4);
+  // A domain lists its subdomains' entries too: 1.1 holds 1.1.3.
+  if (show.startsWith("dom:")) {
+    const code = show.slice(4);
+    return (r.inDomains ?? []).some(([c]) => c === code || c.startsWith(`${code}.`));
+  }
   if (show === "gloss") return r.glosses.length === 0 || r.glosses.some((g) => g.trim() === "");
   if (show === "category") return r.posOfSpeech.trim() === "";
   if (show === "sound") return r.heard !== true;
@@ -137,6 +142,20 @@ export function categoriesOf(rows: readonly ListRow[], keep: ListShow | null = n
   }
   if (keep !== null && keep.startsWith("pos:") && !n.has(keep.slice(4))) n.set(keep.slice(4), 0);
   return [...n].map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count || a.category.localeCompare(b.category));
+}
+
+/** The semantic domains the entries are in, in outline order (1.1 before 1.10), each with how many entries it lists with its subdomains'. */
+export function domainsOf(rows: readonly ListRow[], keep: ListShow | null = null): { code: string; label: string; count: number }[] {
+  const labels = new Map<string, string>();
+  for (const r of rows) for (const [c, l] of r.inDomains ?? []) if (c.trim() !== "") labels.set(c, l);
+  if (keep !== null && keep.startsWith("dom:") && !labels.has(keep.slice(4))) labels.set(keep.slice(4), "");
+  const order = (c: string) => c.split(".").map((x) => Number(x) || 0);
+  const cmp = (a: string, b: string) => {
+    const [x, y] = [order(a), order(b)];
+    for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? -1) !== (y[i] ?? -1)) return (x[i] ?? -1) - (y[i] ?? -1);
+    return a.localeCompare(b);
+  };
+  return [...labels].map(([code, label]) => ({ code, label, count: rows.filter((r) => shows(r, `dom:${code}`)).length })).sort((a, b) => cmp(a.code, b.code));
 }
 
 /** The picker's label with how many entries it would list: "Needs a gloss (12)". */
