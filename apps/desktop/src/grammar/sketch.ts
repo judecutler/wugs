@@ -9,6 +9,7 @@
 import { chart, gridOf, inventory, MANNER_NAMES, PLACE_NAMES, type Sound } from "../sounds/ipa.ts";
 import { gapsNote, positions, shapes, share } from "../sounds/shapes.ts";
 import { syllableNote, syllableTypes } from "../sounds/syllables.ts";
+import { possibleAllophones } from "../sounds/allophones.ts";
 import { countsLine, total, verdict, type WordOrder } from "../wordorder/logic.ts";
 import type { Grid } from "../orthography/logic.ts";
 import type { Answer, Ours } from "../typology/logic.ts";
@@ -194,7 +195,16 @@ export function grammarSketch(d: SketchInput): string {
     parts.push(`<p>No transcriptions to read sounds from yet.</p>`);
   } else {
     parts.push(`<p>The sounds below are read from the «${esc(d.soundTrack)}» track as written, so they are phones of the transcription, not yet a phonemic analysis.</p>`);
-    parts.push(`<h3>2.1 Consonants</h3>`, consonantTable(sounds), todo("Which of these contrast, and their allophones"));
+    parts.push(`<h3>2.1 Consonants</h3>`, consonantTable(sounds));
+    // Similar sounds that never share an environment: where the phonemic analysis starts.
+    const allophones = possibleAllophones(d.words).slice(0, 12);
+    if (allophones.length > 0)
+      parts.push(
+        `<p>Similar sounds that never occur in the same environment in these words, so may be allophones of one phoneme (a rule to try where one side's neighbours form a natural class):</p><table><tr><th>Sounds</th><th>Uses</th><th>Rule to try</th></tr>${allophones
+          .map((x) => `<tr><td class="ipa">${esc(`${x.a} ~ ${x.b}`)}</td><td>${x.countA}, ${x.countB}</td><td class="ipa">${esc(x.rule ?? "")}</td></tr>`)
+          .join("")}</table>`,
+      );
+    parts.push(todo("Which of these contrast, and their allophones"));
     parts.push(`<h3>2.2 Vowels</h3>`, vowelList(sounds), todo("Vowel contrasts, length, nasality, harmony"));
     parts.push(`<h3>2.3 Frequency</h3>`, soundTable(sounds));
   }
