@@ -224,6 +224,8 @@ To type the same way outside wugs (in Word, an email, a phone message), click **
 
 As you type, wugs checks each finished word against the words already in the project. A word used once or twice that is only accents, or one letter, away from a word used far more often shows up beside the field as a suggestion, such as **toɾuma → toɾumo?**. Click it to write the common spelling instead, or ignore it: it is only a hint, and a word you keep using soon counts as the project's own. It uses the same rules as **Spellings to check** in the Checks panel, which lists the slips already saved.
 
+As you type a word, the commonest word of the project that starts with the same letters shows beside the field, such as **kanima →** after *ka*. Press → at the end of the line, or click it, to write the rest of the word; keep typing to ignore it. Only words used at least twice are offered, from two letters on, and a word you save is known at once. Your capitals are kept: *Ka* becomes *Kanima*.
+
 ### Get machine suggestions
 
 Speech assist suggests a phonetic transcription, in IPA, for empty segments. The model runs on your computer. Your recordings are never sent anywhere.

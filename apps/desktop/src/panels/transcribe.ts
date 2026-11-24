@@ -14,6 +14,7 @@ import { IPA_GROUPS, projectGroup, type IpaGroup } from "../transcribe/ipa";
 import { countWords, didYouMean, spellIndex, type SpellIndex } from "../checks/spelling";
 import { forms, tokenize } from "../gloss/tokenizer";
 import { matchCase, replaceWord } from "../transcribe/spell";
+import { accept, addWord, complete, completionIndex, wordAt, type CompletionIndex } from "../transcribe/complete";
 import { EXAMPLE_TABLE, keymanId, keymanSource, parseShortcuts, shortcutsLine } from "../transcribe/shortcuts";
 import { loadShortcuts, rememberShortcuts, shortcutCount, shortcutTable, typeWithShortcuts } from "../typing";
 import { createFieldController, type FieldController } from "../transcribe/field";
@@ -35,7 +36,7 @@ export const transcribePanel: PanelDef = {
     const tierSelect = h("select", { className: "tx-tier", title: "The track being transcribed. It follows the Timeline: selecting a segment there switches to its track." });
     const hint = h("span", { className: "tx-hint" });
     const paletteToggle = h("button", { textContent: "IPA", title: "Show or hide the IPA symbol palette" });
-    const keys = h("span", { className: "tx-keys", textContent: "Enter next · Shift+Enter back · Tab replay · Esc revert", title: "Tab replays the segment, so it stays in the field. Shift+Tab leaves the field. Ctrl/Cmd+Enter also replays." });
+    const keys = h("span", { className: "tx-keys", textContent: "Enter next · Shift+Enter back · Tab replay · Esc revert · → completes", title: "Tab replays the segment, so it stays in the field. Shift+Tab leaves the field. Ctrl/Cmd+Enter also replays. → at the end of the line writes the word offered beside the field." });
     const xsampaToggle = h("button", { textContent: "X-SAMPA", title: "Type IPA on a plain keyboard in X-SAMPA (S for ʃ, N for ŋ, t_h for tʰ, r\\ for ɹ): what you type is turned into IPA when the segment is saved, with a preview beside it" });
     let xsampa = localStorage.getItem(XSAMPA_KEY) === "on";
     const showXsampa = () => {
@@ -176,11 +177,49 @@ export const transcribePanel: PanelDef = {
       }
       if (typing && done.length < words.length) spellTimer = window.setTimeout(() => updateSpellHint(false), 700);
     };
+    /** The commonest project word the one being typed starts, taken with → at the end of the line or a click. */
+    const completeHint = h("button", { type: "button", className: "tx-complete" });
+    completeHint.onmousedown = (ev) => ev.preventDefault();
+    completeHint.hidden = true;
+    let completions: CompletionIndex | null = null;
+    let offered: string | null = null;
+    const takeCompletion = (): boolean => {
+      if (offered === null || ctl?.segmentId == null) return false;
+      const caret = field.selectionEnd ?? field.value.length;
+      const r = accept(field.value, caret, offered);
+      field.value = r.text;
+      field.setSelectionRange(r.caret, r.caret);
+      ctl.type(r.text);
+      updateHints();
+      return true;
+    };
+    completeHint.onclick = () => {
+      takeCompletion();
+      field.focus();
+    };
+    const updateCompleteHint = (): void => {
+      offered = null;
+      const caret = field.selectionEnd ?? field.value.length;
+      // Only while the caret ends a word (nothing but space or the end after it).
+      const after = field.value.slice(caret);
+      const typed = completions === null || !/^(\s|$)/u.test(after) ? "" : wordAt(field.value, caret).word;
+      const c = typed === "" || completions === null ? null : complete(completions, typed);
+      if (c === null) {
+        completeHint.hidden = true;
+        return;
+      }
+      offered = c.word;
+      const shown = typed + c.word.slice(typed.length);
+      completeHint.hidden = false;
+      completeHint.textContent = `${shown} →`;
+      completeHint.title = `«${shown}» is used ${c.count} times in this project. Press → at the end of the line, or click, to write it.`;
+    };
     const updateHints = (typing = false): void => {
       updateXsampaHint();
       updateSpellHint(typing);
+      updateCompleteHint();
     };
-    const selRow = h("div", { className: "tx-row selected" }, selPlay, selTime, field, xsampaHint, spellHint, suggestButton, selBadge);
+    const selRow = h("div", { className: "tx-row selected" }, selPlay, selTime, field, xsampaHint, completeHint, spellHint, suggestButton, selBadge);
     // The selected line's piece of its page image, when it is marked on one
     // (Facsimile): the selected row's first child, so it scrolls with it.
     const selCrop = h("div", { className: "tx-crop" });
@@ -301,7 +340,11 @@ export const transcribePanel: PanelDef = {
         }
         updateHints();
       }
-      if (spelling !== null && ctl?.segmentId != null && stored(ctl.segmentId)?.content !== field.value) countWords(spelling, forms(field.value));
+      if (spelling !== null && ctl?.segmentId != null && stored(ctl.segmentId)?.content !== field.value) {
+        const words = forms(field.value);
+        countWords(spelling, words);
+        if (completions !== null) for (const w of words) addWord(completions, w);
+      }
       void ctl?.commit();
     };
     xsampaToggle.onmousedown = (ev) => ev.preventDefault();
@@ -352,6 +395,12 @@ export const transcribePanel: PanelDef = {
     field.addEventListener("compositionstart", () => composition.start());
     field.addEventListener("compositionend", () => composition.end());
     field.onkeydown = (ev) => {
+      // → at the very end of the line takes the offered word; anywhere else it moves the caret.
+      if (ev.key === "ArrowRight" && !ev.shiftKey && !ev.altKey && !ev.ctrlKey && !ev.metaKey && !composition.active && field.selectionStart === field.value.length && field.selectionEnd === field.value.length && offered !== null) {
+        ev.preventDefault();
+        takeCompletion();
+        return;
+      }
       const action = keyAction(ev, composition.active);
       if (action === null) return;
       ev.preventDefault();
@@ -360,6 +409,11 @@ export const transcribePanel: PanelDef = {
       else if (action === "revert") revertField();
       else if (ctl?.segmentId != null) play(stored(ctl.segmentId));
     };
+    // The offer follows the caret.
+    field.onkeyup = (ev) => {
+      if (ev.key.startsWith("Arrow") || ev.key === "Home" || ev.key === "End") updateCompleteHint();
+    };
+    field.addEventListener("click", updateCompleteHint);
     field.oninput = () => {
       ctl?.type(field.value);
       updateHints(true);
@@ -389,10 +443,12 @@ export const transcribePanel: PanelDef = {
         });
         spellFor = projectId;
         spelling = null;
+        completions = null;
         soundWords({ tierId: null, textId: null }).then(
           (r) => {
             if (spellFor !== projectId) return;
             spelling = spellIndex(r.words);
+            completions = completionIndex(spelling.counts);
             updateSpellHint();
           },
           () => {},
