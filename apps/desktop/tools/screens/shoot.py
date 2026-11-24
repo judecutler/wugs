@@ -897,6 +897,14 @@ def main():
             run.shot("state-gloss-like", run.page.locator(".panel-gloss"))
             if like.locator(".gl-like-row").count() != 2 or "Then I counted one by one." not in like.inner_text():
                 failures.append("the Gloss panel did not list sentences like this one")
+            # Next to gloss: skips the glossed sentences after this one.
+            run.page.locator(".panel-gloss .gl-next").click()
+            run.page.wait_for_timeout(500)
+            now = run.page.evaluate("async () => (await import('/src/store.ts')).getSelection()?.segmentId")
+            if now != "u03":
+                failures.append(f"Next to gloss went to {now}, not u03")
+            run.page.evaluate("async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u01' })")
+            run.page.wait_for_timeout(400)
             # Interlinear: only the sentences still to gloss, and Next to gloss.
             run.front("interlinear", "Interlinear")
             run.page.wait_for_timeout(600)

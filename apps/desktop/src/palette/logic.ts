@@ -117,6 +117,7 @@ export const SHORTCUTS: { where: string; keys: [string, string][] }[] = [
     where: "Gloss (in a field)",
     keys: [
       ["Enter", "Save the field (on an empty breakdown: accept the suggestion)"],
+      ["Ctrl+Shift+N", "Go to the next sentence with a word still to gloss"],
       ["Shift+Enter", "Save and go back a field"],
       ["Tab / Shift+Tab", "Next / previous field"],
       ["↑ / ↓", "Move through the lexicon suggestions"],

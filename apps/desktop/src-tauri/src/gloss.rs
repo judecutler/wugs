@@ -472,6 +472,27 @@ mod tests {
     use crate::session;
 
     #[test]
+    fn still_to_gloss_lists_sentences_with_unglossed_words() {
+        let dir = std::env::temp_dir().join(format!("wugs-gloss-still-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        let text = session::list_texts(&mut s).unwrap()[0].id.clone();
+        assert_eq!(still_to_gloss(&mut s, &text).unwrap(), Vec::<String>::new(), "the tutorial's sentences are glossed and «sɪks» is empty");
+        let seg = session::add_segment(&mut s, &text, None, Some(20_000.0), Some(21_000.0), "sɪks wʌn").unwrap().id;
+        assert_eq!(still_to_gloss(&mut s, &text).unwrap(), vec![seg.clone()], "not broken into words");
+        let forms: Vec<String> = ["sɪks", "wʌn"].iter().map(|f| f.to_string()).collect();
+        let view = gloss_tokenize(&mut s, &text, &seg, &forms).unwrap().view;
+        assert_eq!(still_to_gloss(&mut s, &text).unwrap(), vec![seg.clone()], "words without morphs");
+        for w in &view.words {
+            let m = vec![MorphSpecView { surface: w.form.clone(), morph_type: "root".into(), gloss: Some("x".into()), glosses_by_lang: BTreeMap::new(), sense: None }];
+            gloss_apply(&mut s, &text, &seg, &w.id, m).unwrap();
+        }
+        assert_eq!(still_to_gloss(&mut s, &text).unwrap(), Vec::<String>::new());
+        drop(s);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_new_word_gets_a_guess_from_known_morphs() {
         let dir = std::env::temp_dir().join(format!("wugs-gloss-guess-{}", wugs_model::ulid()));
         let mut s: Session = None;
@@ -539,4 +560,29 @@ mod tests {
         drop(s);
         std::fs::remove_dir_all(dir).ok();
     }
+}
+
+/// A text's transcribed sentences not yet glossed through: never broken into
+/// words, or with a word that has no morphs. What the Gloss panel's Next to
+/// gloss goes through, in the corpus tools' reading of the text.
+pub fn still_to_gloss(session: &mut Session, text_id: &str) -> Result<Vec<String>, String> {
+    let p = project(session)?;
+    let mut out = Vec::new();
+    crate::concordance::each_segment(p, crate::concordance::Read::Analyses, &crate::concordance::Scope::of(Some(text_id.to_string()), None), |seg| {
+        if seg.words.is_empty() {
+            return Ok(());
+        }
+        let mut open = seg.tokens.is_empty();
+        for t in &seg.tokens {
+            if open {
+                break;
+            }
+            open = p.proj.members(t)?.is_empty();
+        }
+        if open {
+            out.push(seg.id.clone());
+        }
+        Ok(())
+    })?;
+    Ok(out)
 }

@@ -818,6 +818,7 @@ export const exportArchiveSheet = (args: { folder: string }) => invoke<import(".
 export const tierGlossing = (textId: string) => invoke<import("./elan/glossing").TierGlossing[]>("tier_glossing", { textId });
 export const chatMorSummary = (textId: string) => invoke<import("./chat/mor").MorRead>("chat_mor_summary", { textId });
 export const chatReadMor = (textId: string) => invoke<import("./chat/mor").MorRead>("chat_read_mor", { textId });
+export const glossStillToGloss = (textId: string) => invoke<string[]>("gloss_still_to_gloss", { textId });
 export const readTierGlossing = (textId: string, index: number) => invoke<import("./elan/glossing").ReadGlossing>("read_tier_glossing", { textId, index });
 export const exportParallel = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Parallel>("export_parallel", args);
 export const exportSpelling = (args: { folder: string; date: string }) => invoke<import("./cldf/logic").Spelling>("export_spelling", args);

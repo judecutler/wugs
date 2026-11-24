@@ -314,6 +314,8 @@ The same folder is ready for forced alignment with the Montreal Forced Aligner, 
 
 The **Gloss** panel shows one segment as interlinear glossed text, in Leipzig style. Select a segment on the Timeline or in Transcribe to gloss it.
 
+To work through a text, click **Next to gloss** at the top of the panel, or press **Ctrl+Shift+N** (**Cmd+Shift+N** on a Mac). It goes to the next sentence on the same track that is not yet broken into words, or that has a word without morphs. It skips the sentences already glossed and starts again from the top after the last one.
+
 ### Break a segment into words
 
 Click **Break into words**. wugs splits the transcription on spaces and keeps punctuation out of the words.
