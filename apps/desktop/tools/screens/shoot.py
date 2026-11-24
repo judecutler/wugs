@@ -617,6 +617,18 @@ def main():
             if near_rows != 1 or "1 line of 3 has «ŋai» right before or after it" not in run.page.locator(".panel-concordance .cc-count").inner_text():
                 failures.append(f"Concordance Near did not keep the one line with ŋai next to the match: {near_rows} rows")
             run.page.fill(".panel-concordance .cc-near-word", "")
+            # Sorting the lines into categories of one's own.
+            run.page.locator(".panel-concordance .cc-sort-toggle").click()
+            run.page.locator(".panel-concordance .cc-cats-input").wait_for()
+            run.page.fill(".panel-concordance .cc-cats-input", "literal, figurative")
+            run.page.locator(".panel-concordance .cc-cats-input").press("Enter")
+            run.page.locator(".panel-concordance select.cc-cat").first.wait_for()
+            run.page.locator(".panel-concordance select.cc-cat").first.select_option("figurative")
+            run.page.wait_for_timeout(300)
+            run.shot("state-concordance-categories", run.page.locator(".panel-concordance"))
+            if "figurative 1 (33%)" not in run.page.locator(".panel-concordance .cc-cats-note").inner_text():
+                failures.append(f"Concordance did not count a line sorted into a category: {run.page.locator('.panel-concordance .cc-cats-note').inner_text()}")
+            run.page.locator(".panel-concordance .cc-sort-toggle").click()
             # Translations under the lines, read from each text.
             run.page.locator(".panel-concordance .cc-under-toggle").click()
             run.page.wait_for_timeout(500)

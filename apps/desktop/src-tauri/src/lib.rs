@@ -7,6 +7,7 @@ pub mod chat;
 pub mod exmaralda;
 pub mod like_sentences;
 pub mod worklog;
+pub mod hit_categories;
 pub mod mlu;
 pub mod wikipedia;
 pub mod characters;
@@ -211,6 +212,24 @@ fn gloss_consistency(s: State<SessionThread>) -> Result<Vec<consistency::Inconsi
 #[tauri::command(async)]
 fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String, to: String) -> Result<usize, String> {
     s.run(move |s| consistency::unify(s, &key, &kind, &from, &to))
+}
+
+/// A search's categories and the lines sorted into them.
+#[tauri::command(async)]
+fn hit_categories(s: State<SessionThread>, kind: String, query: String) -> Result<hit_categories::Sorted, String> {
+    s.run(move |s| hit_categories::get(s, &kind, &query))
+}
+
+/// Name a search's categories.
+#[tauri::command(async)]
+fn set_hit_categories(s: State<SessionThread>, kind: String, query: String, categories: Vec<String>) -> Result<hit_categories::Sorted, String> {
+    s.run(move |s| hit_categories::set_categories(s, &kind, &query, &categories))
+}
+
+/// Put a line of a search in a category (empty takes it out).
+#[tauri::command(async)]
+fn set_hit_category(s: State<SessionThread>, kind: String, query: String, segment_id: String, at: usize, category: String) -> Result<hit_categories::Sorted, String> {
+    s.run(move |s| hit_categories::set_line(s, &kind, &query, &segment_id, at, &category))
 }
 
 /// What was done in the project day by day, read from the op log.
@@ -2344,6 +2363,9 @@ pub fn run() {
             gloss_segmentations,
             like_sentences,
             work_log,
+            hit_categories,
+            set_hit_categories,
+            set_hit_category,
             gloss_use_breakdown,
             gloss_missing,
             gloss_sense_drift,

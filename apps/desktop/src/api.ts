@@ -218,6 +218,10 @@ type SegmentArgs = { textId: string; segmentId: string };
 
 /** The project's sentences most like this one, best first, with their translations. */
 /** What was done in the project day by day (the op log), newest first. */
+/** A search's categories and its lines sorted into them (CQPweb's categorise). */
+export const hitCategories = (args: { kind: string; query: string }) => invoke<import("./concordance/categories").Sorted>("hit_categories", args);
+export const setHitCategories = (args: { kind: string; query: string; categories: string[] }) => invoke<import("./concordance/categories").Sorted>("set_hit_categories", args);
+export const setHitCategory = (args: { kind: string; query: string; segmentId: string; at: number; category: string }) => invoke<import("./concordance/categories").Sorted>("set_hit_category", args);
 export const workLog = (args: { offsetMinutes: number; days: number }) => invoke<import("./progress/worklog").Day[]>("work_log", args);
 export const likeSentences = (args: { segmentId: string }) => invoke<import("./gloss/like").Like[]>("like_sentences", args);
 export const glossGet = (args: SegmentArgs) => invoke<GlossView>("gloss_get", args);
