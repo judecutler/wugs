@@ -60,6 +60,10 @@ pub struct WrittenRow<'a> {
     /// Its start and end in milliseconds, when the source timed it (a
     /// subtitle cue, a table with start and end columns); else untimed.
     pub span: Option<(f64, f64)>,
+    /// The track the segment goes on, when not the import's own (a
+    /// transcript with a track per speaker, as CHAT keeps them). Such a row
+    /// takes no translation.
+    pub tier: Option<&'a str>,
 }
 
 pub struct Project {
@@ -1119,7 +1123,7 @@ impl Project {
     /// A written text in one txn (a corpus document): the text and one
     /// untimed segment per unit on `tier`, in order. Empty units are left out.
     pub fn import_written_text(&mut self, title: &str, tier: &str, units: &[&str]) -> Result<(String, CommitResult), String> {
-        let rows: Vec<WrittenRow> = units.iter().map(|u| WrittenRow { text: u, translation: "", extras: Vec::new(), span: None }).collect();
+        let rows: Vec<WrittenRow> = units.iter().map(|u| WrittenRow { text: u, translation: "", extras: Vec::new(), span: None, tier: None }).collect();
         self.import_written_rows(title, tier, None, &rows)
     }
 
@@ -1137,11 +1141,19 @@ impl Project {
         if let Some(tt) = translation_tier {
             self.require_paired_tier(tt, tier)?;
         }
+        for row in rows {
+            if let Some(own) = row.tier {
+                self.require(own, "tier")?;
+                if !row.translation.trim().is_empty() {
+                    return Err("a row on a track of its own cannot carry a translation".into());
+                }
+            }
+        }
         let mut t = self.intent("import-written-text");
         let id = t.create_scope_root("text", "txt", vec![("title", Value::str(title))]);
         for (i, row) in rows.iter().filter(|r| !r.text.trim().is_empty()).enumerate() {
             let pos = wugs_model::pos_seq(i);
-            let mut fields = vec![("text", Value::str(&id)), ("tier", Value::str(tier)), ("pos", Value::str(&pos)), ("content", Value::str(row.text.trim()))];
+            let mut fields = vec![("text", Value::str(&id)), ("tier", Value::str(row.tier.unwrap_or(tier))), ("pos", Value::str(&pos)), ("content", Value::str(row.text.trim()))];
             if let Some((start, end)) = row.span.filter(|(a, b)| a.is_finite() && b.is_finite() && *a >= 0.0 && b > a) {
                 fields.push(("start", Value::Num(start.round())));
                 fields.push(("end", Value::Num(end.round())));
@@ -2746,15 +2758,35 @@ mod tests {
     }
 
     #[test]
+    fn written_rows_can_each_name_their_track() {
+        let (root, mut p) = temp_project("prs_Alice");
+        let (chi, _) = p.add_tier("CHI", "time-aligned", Some("transcription"), None).unwrap();
+        let (mot, _) = p.add_tier("MOT", "time-aligned", Some("transcription"), None).unwrap();
+        let rows = [
+            WrittenRow { text: "look", translation: "", extras: Vec::new(), span: Some((0.0, 900.0)), tier: Some(&mot) },
+            WrittenRow { text: "ball", translation: "", extras: Vec::new(), span: Some((1000.0, 1500.0)), tier: Some(&chi) },
+        ];
+        let (txt, _) = p.import_written_rows("Turns", &chi, None, &rows).unwrap();
+        let segs = p.proj.ordered_children("text", &txt, "segment").unwrap();
+        let tiers: Vec<_> = segs.iter().map(|s| p.proj.field_str(s, "tier").unwrap().unwrap()).collect();
+        assert_eq!(tiers, [mot.clone(), chi.clone()], "each row on its own track, in file order");
+        let bad = [WrittenRow { text: "a", translation: "b", extras: Vec::new(), span: None, tier: Some(&mot) }];
+        assert!(p.import_written_rows("X", &chi, None, &bad).is_err(), "no translation on a row's own track");
+        let missing = [WrittenRow { text: "a", translation: "", extras: Vec::new(), span: None, tier: Some(&txt) }];
+        assert!(p.import_written_rows("X", &chi, None, &missing).is_err(), "a row's track must be a tier");
+        fs::remove_dir_all(root).ok();
+    }
+
+    #[test]
     fn written_rows_pair_their_translations_by_parent() {
         let (root, mut p) = temp_project("prs_Alice");
         let (tier, _) = p.add_tier("utterance", "time-aligned", Some("transcription"), None).unwrap();
         let (timed, _) = p.add_tier("translation", "time-aligned", Some("translation"), None).unwrap();
         let (free, _) = p.add_translation_tier("translation", &tier).unwrap();
         let rows = [
-            WrittenRow { text: "kesi bara", translation: "the dog runs", extras: vec![("x.csv.speaker".into(), "A".into())], span: None },
-            WrittenRow { text: "  ", translation: "orphan", extras: Vec::new(), span: None },
-            WrittenRow { text: "lo", translation: " ", extras: Vec::new(), span: Some((1200.4, 2500.0)) },
+            WrittenRow { text: "kesi bara", translation: "the dog runs", extras: vec![("x.csv.speaker".into(), "A".into())], span: None, tier: None },
+            WrittenRow { text: "  ", translation: "orphan", extras: Vec::new(), span: None, tier: None },
+            WrittenRow { text: "lo", translation: " ", extras: Vec::new(), span: Some((1200.4, 2500.0)), tier: None },
         ];
         let (txt, _) = p.import_written_rows("Sentences", &tier, Some(&free), &rows).unwrap();
         let segs = p.proj.ordered_children("text", &txt, "segment").unwrap();

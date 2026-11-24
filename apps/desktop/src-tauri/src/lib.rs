@@ -3,6 +3,7 @@ pub mod assist;
 pub mod capability;
 pub mod clips;
 pub mod capture;
+pub mod chat;
 pub mod characters;
 pub mod concordance;
 pub mod cqp;

@@ -45,6 +45,8 @@ pub enum Format {
     Subtitles { vtt: bool },
     /// An Audacity label track (`.txt`, `start<TAB>end<TAB>label`; `audacity`).
     Audacity,
+    /// CHAT (`.cha`), CLAN's format and the TalkBank corpora's (`chat`).
+    Chat,
 }
 
 impl Format {
@@ -65,6 +67,7 @@ impl Format {
             "srt" => Format::Subtitles { vtt: false },
             "vtt" => Format::Subtitles { vtt: true },
             "audacity" => Format::Audacity,
+            "chat" => Format::Chat,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -84,6 +87,7 @@ impl Format {
             Format::AntConc | Format::Audacity => "txt",
             Format::Subtitles { vtt: false } => "srt",
             Format::Subtitles { vtt: true } => "vtt",
+            Format::Chat => "cha",
         }
     }
 
@@ -105,6 +109,7 @@ impl Format {
             Format::Audacity => "Audacity labels",
             Format::Subtitles { vtt: false } => "SubRip subtitles",
             Format::Subtitles { vtt: true } => "WebVTT subtitles",
+            Format::Chat => "CHAT transcript",
         }
     }
 }
@@ -127,6 +132,7 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "tei" => return Some(Format::Tei),
         "srt" => return Some(Format::Subtitles { vtt: false }),
         "vtt" => return Some(Format::Subtitles { vtt: true }),
+        "cha" => return Some(Format::Chat),
         _ => {}
     }
     let head = sniff(&bytes[..bytes.len().min(4096)]);
@@ -208,7 +214,7 @@ fn sniff(head: &[u8]) -> String {
 }
 
 /// A text with this title whose transcription segments are exactly these units, if any.
-fn same_text(p: &wugs_core::Project, title: &str, units: &[String]) -> Result<Option<String>, String> {
+pub(crate) fn same_text(p: &wugs_core::Project, title: &str, units: &[String]) -> Result<Option<String>, String> {
     let mut candidates = Vec::new();
     for t in p.proj.entities_of_kind("text")? {
         if p.proj.field_str(&t, "title")?.as_deref() == Some(title) {
@@ -270,7 +276,7 @@ pub struct Imported {
     pub lines: Vec<String>,
 }
 
-fn plural(n: usize, one: &str, many: &str) -> String {
+pub(crate) fn plural(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
 
@@ -338,12 +344,12 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, a .csv/.tsv/.xlsx/.ods table of sentences, .srt or .vtt subtitles, or a plain .txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, CHAT .cha, a .csv/.tsv/.xlsx/.ods table of sentences, .srt or .vtt subtitles, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } | Format::Audacity => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } | Format::Audacity | Format::Chat => decode_xml(&bytes, file_name)?,
         Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
@@ -503,7 +509,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 let rows: Vec<wugs_core::WrittenRow> = labels
                     .iter()
                     .enumerate()
-                    .map(|(i, l)| wugs_core::WrittenRow { text: &units[i], translation: "", extras: Vec::new(), span: (l.end > l.start).then_some((l.start, l.end)) })
+                    .map(|(i, l)| wugs_core::WrittenRow { text: &units[i], translation: "", extras: Vec::new(), span: (l.end > l.start).then_some((l.start, l.end)), tier: None })
                     .collect();
                 let (text, _) = p.import_written_rows(&stem, &tier, None, &rows)?;
                 lines.push(format!("A new text with {}, one per Audacity label.", plural(units.len(), "segment", "segments")));
@@ -514,6 +520,11 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 lines.push("Pick the recording in the Timeline (or the Media panel) to hear it.".into());
                 (Some(text), false)
             }
+        }
+        Format::Chat => {
+            let (text, mut report) = crate::chat::import(p, input, &stem).map_err(|e| format!("{file_name}: {e}"))?;
+            lines.append(&mut report);
+            (text, false)
         }
         Format::Subtitles { .. } => {
             let cues = crate::subtitles::read(input).map_err(|e| format!("{file_name}: {e}"))?;
@@ -532,7 +543,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 let translated = translations.iter().filter(|t| !t.is_empty()).count();
                 let translation_tier = if translated > 0 { Some(session::translation_track(p, &tier, None)?) } else { None };
                 let rows: Vec<wugs_core::WrittenRow> =
-                    cues.iter().enumerate().map(|(i, c)| wugs_core::WrittenRow { text: &units[i], translation: &translations[i], extras: speakers[i].clone(), span: c.span }).collect();
+                    cues.iter().enumerate().map(|(i, c)| wugs_core::WrittenRow { text: &units[i], translation: &translations[i], extras: speakers[i].clone(), span: c.span, tier: None }).collect();
                 let (text, _) = p.import_written_rows(&stem, &tier, translation_tier.as_deref(), &rows)?;
                 lines.push(format!("A new text with {}, one per cue.", plural(units.len(), "segment", "segments")));
                 if translated > 0 {
@@ -620,7 +631,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                         t
                     }
                     None => {
-                        let refs: Vec<wugs_core::WrittenRow> = rows.iter().map(|(t, tr, x, span)| wugs_core::WrittenRow { text: t, translation: tr, extras: x.clone(), span: *span }).collect();
+                        let refs: Vec<wugs_core::WrittenRow> = rows.iter().map(|(t, tr, x, span)| wugs_core::WrittenRow { text: t, translation: tr, extras: x.clone(), span: *span, tier: None }).collect();
                         made += 1;
                         segments += refs.len();
                         translations += rows.iter().filter(|(_, tr, _, _)| !tr.is_empty()).count();
@@ -893,6 +904,11 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             if left_out > 0 {
                 notes.push(format!("{} with no time or no text {} left out.", plural(left_out, "sentence", "sentences"), if left_out == 1 { "was" } else { "were" }));
             }
+            out
+        }
+        Format::Chat => {
+            let (out, mut more) = crate::chat::export(p, text_id)?;
+            notes.append(&mut more);
             out
         }
         Format::Elan => wugs_elan::export_eaf(p, text_id)?,
@@ -1543,6 +1559,50 @@ mod tests {
         fs::write(&plain, "kesi\ntoru\n").unwrap();
         let untimed = import_file(&mut t, plain.to_str().unwrap()).unwrap().text.unwrap();
         assert!(export_text(&mut t, &untimed, Format::Subtitles { vtt: false }, &out).is_err());
+        drop(t);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_chat_transcript_comes_in_by_speaker_and_goes_back_out() {
+        let dir = std::env::temp_dir().join(format!("wugs-chat-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        let file = dir.join("lunch.cha");
+        let chat = "@UTF8\n@Begin\n@Languages:\teng\n@Participants:\tCHI Target_Child, MOT Mother\n@ID:\teng|Synth|CHI|2;03.12|female|||Target_Child|||\n@ID:\teng|Synth|MOT|||||Mother|||\n@Date:\t12-JAN-1990\n*MOT:\twhat is that ? \u{15}0_1200\u{15}\n%mor:\tpro:int|what cop|be&3S pro:dem|that ?\n*CHI:\tdoggie@c . \u{15}1300_2000\u{15}\n*CHI:\t0 [=! laughs] .\n*MOT:\tyes , a <big> [/] big doggie . \u{15}2100_3600\u{15}\n@End\n";
+        fs::write(&file, chat).unwrap();
+        let r = import_file(&mut s, file.to_str().unwrap()).unwrap();
+        assert!(r.format.contains("CHAT"), "{}", r.format);
+        let text = r.text.unwrap();
+        let shown = session::get_text(&mut s, &text).unwrap();
+        let name_of = |tier: &str| shown.tiers.iter().find(|t| t.id == tier).map(|t| t.name.clone()).unwrap_or_default();
+        let said: Vec<(String, String)> = shown.segments.iter().map(|x| (name_of(&x.tier), x.content.clone())).collect();
+        assert_eq!(said, [("MOT".into(), "what is that?".into()), ("CHI".into(), "doggie.".into()), ("MOT".into(), "yes, a big big doggie.".into())], "a retracing was said: {:?}", r.lines);
+        assert!(r.lines.iter().any(|l| l.contains("no words")), "{:?}", r.lines);
+        let meta = session::project(&mut s).unwrap().text_metadata(&text).unwrap();
+        assert!(meta.contains(&("age_chi".into(), "2;03.12".into())) && meta.contains(&("date".into(), "1990-01-12".into())), "{meta:?}");
+        // Again: matched, nothing added.
+        assert!(import_file(&mut s, file.to_str().unwrap()).unwrap().lines.iter().any(|l| l.contains("matched")));
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let e = export_text(&mut s, &text, Format::Chat, &out).unwrap();
+        let written = fs::read_to_string(&e.path).unwrap();
+        assert!(written.contains("@Participants:\tMOT Mother, CHI Target_Child\n@ID:\teng|Synth|MOT|||||Mother|||\n@ID:\teng|Synth|CHI|2;03.12"), "{written}");
+        assert!(written.contains("@Date:\t12-JAN-1990\n*MOT:\twhat is that ? \u{15}0_1200\u{15}\n%mor:\tpro:int|what"), "{written}");
+        assert!(written.contains("*MOT:\tyes , a <big> [/] big doggie . \u{15}2100_3600\u{15}\n@End\n"), "{written}");
+        // An edited utterance is written from its text, its %mor left out.
+        let first = shown.segments[0].id.clone();
+        session::edit_segment_content(&mut s, &text, &first, "what is this?").unwrap();
+        let again = fs::read_to_string(export_text(&mut s, &text, Format::Chat, &out).unwrap().path).unwrap();
+        assert!(again.contains("*MOT:\twhat is this ? \u{15}0_1200\u{15}\n*CHI:"), "{again}");
+        drop(s);
+        // What wugs wrote reads back the same in another project.
+        let mut t: Session = None;
+        session::create_project(&mut t, dir.join("q").to_str().unwrap(), "prs_Ben").unwrap();
+        let back = import_file(&mut t, &e.path).unwrap();
+        let shown = session::get_text(&mut t, &back.text.unwrap()).unwrap();
+        assert_eq!(shown.segments.iter().map(|x| x.content.as_str()).collect::<Vec<_>>(), ["what is that?", "doggie.", "yes, a big big doggie."]);
+        assert!(shown.segments.iter().all(|x| x.start_ms.is_some()));
         drop(t);
         fs::remove_dir_all(dir).ok();
     }

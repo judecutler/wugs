@@ -127,7 +127,7 @@ mod tests {
             ("waka tela", "the cat eats"),
             ("waka mopa", "the cat sleeps"),
         ];
-        let written: Vec<wugs_core::WrittenRow> = rows.iter().map(|(v, t)| wugs_core::WrittenRow { text: v, translation: t, extras: Vec::new(), span: None }).collect();
+        let written: Vec<wugs_core::WrittenRow> = rows.iter().map(|(v, t)| wugs_core::WrittenRow { text: v, translation: t, extras: Vec::new(), span: None, tier: None }).collect();
         p.import_written_rows("Animals", &tier, Some(&trans), &written).unwrap();
         let forms = vec!["kuri".to_string(), "mopa".to_string(), "senu".to_string()];
         let m = likely_meanings(p, &Scope::all(), &forms).unwrap();
