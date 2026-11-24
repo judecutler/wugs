@@ -870,12 +870,12 @@ const LEXICON = [
           : kind !== "word"
           ? [{ item: "one", count: 9, texts: 2 }, { item: "two", count: 7, texts: 2 }]
           : [
-              { item: "nikani", count: 23, texts: 3, lexicon: "analysed" },
-              { item: "ŋai", count: 19, texts: 3, lexicon: "entry" },
-              { item: "kesi", count: 11, texts: 2, lexicon: "entry" },
-              { item: "toruma", count: 7, texts: 1, lexicon: "none" },
-              { item: "tekama", count: 4, texts: 2, lexicon: "entry" },
-              { item: "liwa", count: 1, texts: 1, lexicon: "none" },
+              { item: "nikani", count: 23, texts: 3, lexicon: "analysed", dp: 0.08 },
+              { item: "ŋai", count: 19, texts: 3, lexicon: "entry", dp: 0.14 },
+              { item: "kesi", count: 11, texts: 2, lexicon: "entry", dp: 0.41 },
+              { item: "toruma", count: 7, texts: 1, lexicon: "none", dp: 0.86 },
+              { item: "tekama", count: 4, texts: 2, lexicon: "entry", dp: 0.52 },
+              { item: "liwa", count: 1, texts: 1, lexicon: "none", dp: 0.93 },
             ],
         }),
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),

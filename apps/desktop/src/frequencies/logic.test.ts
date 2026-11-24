@@ -84,3 +84,23 @@ test("lexical richness of a word list", () => {
   assert.equal(richness({ ...f, types: 9 }), " Type/token ratio 1.13 (Guiraud's index 3.2).", "a list cut short says nothing of hapaxes");
   assert.equal(richness({ rows: [], tokens: 0, types: 0 }), "");
 });
+
+test("DP: a column, a sort with the core vocabulary first, and a note", async () => {
+  const { dpCell, hasSpread, spreadNote } = await import("./logic.ts");
+  const rows = ranked([
+    { item: "a", count: 9, texts: 1, dp: 0.9 },
+    { item: "b", count: 4, texts: 3, dp: 0.1 },
+    { item: "c", count: 6, texts: 3, dp: 0.1 },
+    { item: "d", count: 2, texts: 1, dp: null },
+  ]);
+  assert.deepEqual(sortRows(rows, "spread").map((r) => r.item), ["c", "b", "a", "d"]);
+  assert.equal(dpCell(0.123), "0.12");
+  assert.equal(dpCell(null), "");
+  assert.ok(hasSpread(rows));
+  assert.ok(!hasSpread([{ item: "x", count: 1, texts: 1, dp: null }]));
+  assert.match(spreadNote(rows), /0 in step with each text's size/u);
+  assert.equal(spreadNote([{ item: "x", count: 1, texts: 1 }]), "");
+  const tsv = asTsv(rows, 21).split("\n");
+  assert.equal(tsv[0], "rank\titem\tcount\tper 1000 words\ttexts\tDP");
+  assert.equal(tsv[4], "4\td\t2\t95\t1\t");
+});
