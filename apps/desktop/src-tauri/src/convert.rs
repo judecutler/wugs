@@ -14,7 +14,7 @@ use symphonia::core::codecs::{DecoderOptions, CODEC_TYPE_NULL};
 use symphonia::core::errors::Error;
 use symphonia::core::formats::FormatOptions;
 use symphonia::core::io::MediaSourceStream;
-use symphonia::core::meta::MetadataOptions;
+use symphonia::core::meta::{MetadataOptions, MetadataRevision, StandardTagKey};
 use symphonia::core::probe::Hint;
 
 /// The WAV data chunk's size field is 32-bit.
@@ -46,6 +46,28 @@ pub struct Converted {
     pub sample_rate: u32,
     pub channels: u16,
     pub frames: u64,
+    /// What the file's tags say of the recording, as details (`date`, `recorded_by`, `description`).
+    pub details: Vec<(String, String)>,
+}
+
+/// A file's tags (ID3, MP4 `ilst`, Vorbis comments) as recording details.
+fn details_of(revisions: &[&MetadataRevision]) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for rev in revisions {
+        for tag in rev.tags() {
+            let value = tag.value.to_string().split_whitespace().collect::<Vec<_>>().join(" ");
+            let (key, value) = match tag.std_key {
+                Some(StandardTagKey::Date | StandardTagKey::OriginalDate) => ("date", crate::wav_info::date(&value).unwrap_or_default()),
+                Some(StandardTagKey::Artist) => ("recorded_by", value),
+                Some(StandardTagKey::Comment | StandardTagKey::Description) => ("description", value),
+                _ => continue,
+            };
+            if !value.is_empty() && !out.iter().any(|(k, _)| k == key) {
+                out.push((key.to_string(), value));
+            }
+        }
+    }
+    out
 }
 
 /// Decode `input` into a new 16-bit PCM WAV at `output`. On failure the
@@ -74,7 +96,15 @@ fn decode(input: &Path, output: &Path, name: &str) -> Result<Converted, String> 
         // what other players show for the same file.
         .format(&hint, mss, &FormatOptions { enable_gapless: true, ..Default::default() }, &MetadataOptions::default())
         .map_err(unreadable)?;
+    let mut probed_meta = probed.metadata;
     let mut format = probed.format;
+    let details = {
+        let outer = probed_meta.get();
+        let outer_rev = outer.as_ref().and_then(|m| m.current().cloned());
+        let inner_rev = format.metadata().current().cloned();
+        let revs: Vec<&MetadataRevision> = outer_rev.iter().chain(inner_rev.iter()).collect();
+        details_of(&revs)
+    };
     let track = format
         .tracks()
         .iter()
@@ -152,7 +182,7 @@ fn decode(input: &Path, output: &Path, name: &str) -> Result<Converted, String> 
     w.write_all(&wav_header(rate, channels, data_bytes as u32)).map_err(|e| e.to_string())?;
     let file = w.into_inner().map_err(|e| e.to_string())?;
     file.sync_all().map_err(|e| e.to_string())?;
-    Ok(Converted { sample_rate: rate, channels, frames: data_bytes / (2 * channels as u64) })
+    Ok(Converted { sample_rate: rate, channels, frames: data_bytes / (2 * channels as u64), details })
 }
 
 fn wav_header(rate: u32, channels: u16, data: u32) -> [u8; 44] {

@@ -36,6 +36,7 @@ pub mod saymore;
 pub mod imdi;
 pub mod rough_align;
 pub mod unimorph;
+pub mod wav_info;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -954,9 +955,22 @@ fn import_recording(s: &SessionThread, file: &std::path::Path, label: String, ex
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     convert::sweep(&dir);
     let wav = dir.join(format!("{}.wav", wugs_model::ulid()));
-    convert::to_wav(file, &wav)?;
+    let tags = convert::to_wav(file, &wav)?.details;
     let converted = wav.clone();
-    let row = s.run(move |s| session::import_media_named(s, &converted, &label, expected_root.as_deref()));
+    let row = s.run(move |s| {
+        let mut row = session::import_media_named(s, &converted, &label, expected_root.as_deref())?;
+        // The compressed file's own tags (a date, who recorded it), as a WAV's bext is read.
+        if !tags.is_empty() {
+            let p = session::project(s)?;
+            for (key, value) in &tags {
+                if !row.details.iter().any(|(k, _)| k == key) {
+                    p.set_source_detail(&row.id, key, value)?;
+                }
+            }
+            row.details = p.source_details(&row.id)?;
+        }
+        Ok(row)
+    });
     std::fs::remove_file(&wav).ok();
     row
 }
