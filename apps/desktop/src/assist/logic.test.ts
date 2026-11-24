@@ -69,3 +69,12 @@ test("a speech dataset's holdings in words", async () => {
     "43 transcribed segments: 40 ready, 3 left out unless you include them. Not exported: 5 transcribed segments without times; 3 machine suggestions not checked yet.",
   );
 });
+
+test("alignments brought back are reported in words", async () => {
+  const { alignedLines } = await import("./logic.ts");
+  assert.deepEqual(alignedLines({ files: 3, clips: 2, words: 9, phones: 30, unmatched: ["X-gone"], text: "t" }), [
+    "Brought in 9 aligned words and 30 aligned sounds from 2 clips, on the tracks «words (aligned)» and «phones (aligned)». Durations, Measure and the vowel chart can now work sound by sound.",
+    "1 file names no segment of this project (X-gone); they were left out.",
+  ]);
+  assert.match(alignedLines({ files: 2, clips: 0, words: 0, phones: 0, unmatched: [], text: null })[0]!, /nothing new/);
+});

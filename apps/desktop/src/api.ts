@@ -807,6 +807,8 @@ export const exportParallel = (args: { folder: string; date: string; includeRest
 export const exportSpelling = (args: { folder: string; date: string }) => invoke<import("./cldf/logic").Spelling>("export_spelling", args);
 /** The project's semantic domains a gloss suggests, from SIL's example words (`domain_suggest.rs`). */
 export const domainSuggestions = (args: { gloss: string }) => invoke<{ id: string; code: string; label: string }[]>("domain_suggestions", args);
+/** A forced aligner's TextGrids (one per speech-dataset clip) brought back as aligned words and phones (`alignments.rs`). */
+export const importAlignments = (args: { folder: string }) => invoke<import("./assist/logic").Aligned>("import_alignments", args);
 export const exportUnimorph = (args: { folder: string; date: string }) => invoke<import("./cldf/logic").UniMorph>("export_unimorph", args);
 export const exportFlashcards = (args: { folder: string; date: string; includeRestricted: boolean; order?: import("./cldf/logic").CardOrder }) => invoke<import("./cldf/logic").Flashcards>("export_flashcards", args);
 export const exportWebsite = (args: { folder: string; date: string; includeRestricted: boolean; audio: boolean }) => invoke<import("./cldf/logic").Site>("export_website", args);
