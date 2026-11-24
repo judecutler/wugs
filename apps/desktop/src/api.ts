@@ -726,6 +726,9 @@ export const projectLanguage = () => invoke<import("./cldf/logic").Language>("pr
 export type Languoid = import("./cldf/logic").Languoid;
 /** Glottolog's languages and dialects a typed name or code fits, best first (at most 8). */
 /** What Grambank or WALS says about a language, beside its relatives (src-tauri/src/typology.rs). */
+export const savedSearches = () => invoke<import("./concordance/logic").SavedSearch[]>("saved_searches");
+export const saveSearch = (search: import("./concordance/logic").SavedSearch) => invoke<import("./concordance/logic").SavedSearch[]>("save_search", { search });
+export const deleteSavedSearch = (name: string) => invoke<import("./concordance/logic").SavedSearch[]>("delete_saved_search", { name });
 export const worldLand = () => invoke<string>("world_land");
 export const glottologPlace = (args: { glottocode: string }) => invoke<import("./grammar/sketch").Place | null>("glottolog_place", args);
 export const phoibleMap = (args: { glottocode: string; phoneme: string }) => invoke<import("./typology/map").FeatureMap>("phoible_map", args);

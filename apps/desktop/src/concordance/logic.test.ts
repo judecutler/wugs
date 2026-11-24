@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { asTsv, kwicHtml, clip, countLine, hasTags, isRtl, withTags, keyword, left, right, sortHits, type Hit, speakerOf } from "./logic.ts";
+import { savedLine, asTsv, kwicHtml, clip, countLine, hasTags, isRtl, withTags, keyword, left, right, sortHits, type Hit, speakerOf } from "./logic.ts";
 
 const hit = (words: string[], at: number, title = "T"): Hit => ({ textId: title, textTitle: title, segmentId: words.join("_"), tierId: "u", startMs: 0, endMs: 1, words, at, breakdown: null, glosses: null });
 
@@ -144,4 +144,11 @@ test("a conversation's lines name their speaker", () => {
   const tsv = asTsv([hit("m"), hit("c")], new Map(), undefined, who).split("\n");
   assert.equal(tsv[0], "left\tkeyword\tright\ttext\tspeaker\tstart_s\tend_s");
   assert.equal(tsv[2], "big\tdoggie\t\tLunch\tCHI\t0.000\t1.000");
+});
+
+test("a saved search says what it looks for", () => {
+  const base = { name: "n", textId: null, textTitle: null, exact: false, within: null };
+  assert.equal(savedLine({ ...base, kind: "query", query: '[upos="VERB"]' }), 'the CQP query [upos="VERB"]');
+  assert.equal(savedLine({ ...base, kind: "gloss", query: "NEG", exact: true, textId: "t", textTitle: "Fox" }), "glosses matching «NEG» exactly in «Fox»");
+  assert.equal(savedLine({ ...base, kind: "word", query: "ka*", within: { key: "genre", value: "news" } }), "words matching «ka*» in texts whose genre is «news»");
 });

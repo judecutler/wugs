@@ -25,6 +25,7 @@ pub mod frequencies;
 pub mod keywords;
 pub mod elan_glossing;
 pub mod topics;
+pub mod saved_searches;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -692,6 +693,22 @@ fn orthography_convert(s: State<SessionThread>, profile: String, tier_id: String
 #[tauri::command]
 fn world_land() -> &'static str {
     typology::LAND
+}
+
+/// The Concordance's saved searches (`saved_searches.rs`).
+#[tauri::command(async)]
+fn saved_searches(s: State<SessionThread>) -> Result<Vec<saved_searches::SavedSearch>, String> {
+    s.run(saved_searches::list)
+}
+
+#[tauri::command(async)]
+fn save_search(s: State<SessionThread>, search: saved_searches::SavedSearch) -> Result<Vec<saved_searches::SavedSearch>, String> {
+    s.run(move |s| saved_searches::save(s, search))
+}
+
+#[tauri::command(async)]
+fn delete_saved_search(s: State<SessionThread>, name: String) -> Result<Vec<saved_searches::SavedSearch>, String> {
+    s.run(move |s| saved_searches::delete(s, &name))
 }
 
 /// Where Glottolog places a language and its nearest languages, for a grammar sketch's locator map.
@@ -2502,6 +2519,9 @@ pub fn run() {
             glottolog_find,
             glottolog_place,
             world_land,
+            saved_searches,
+            save_search,
+            delete_saved_search,
             typology_profile,
             typology_map,
             phoible_compare,

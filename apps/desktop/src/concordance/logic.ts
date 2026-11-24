@@ -225,3 +225,13 @@ export function thinLine(shown: number, read: number, total: number): string {
   const of = read < total ? `the first ${read.toLocaleString()} found` : `${read.toLocaleString()} lines`;
   return ` Thinned to ${shown.toLocaleString()} at random of ${of}; the same query gives the same ${shown.toLocaleString()}.`;
 }
+
+/** A search kept with the project (src-tauri/src/saved_searches.rs). */
+export type SavedSearch = { name: string; kind: string; query: string; textId: string | null; textTitle: string | null; exact: boolean; within: import("../metadata/logic.ts").Where | null };
+
+/** What a saved search looks for, in words, for its title in the list. */
+export function savedLine(s: SavedSearch): string {
+  const what = s.kind === "query" ? `the CQP query ${s.query}` : `${s.kind === "word" ? "words" : s.kind === "morph" ? "morphs" : s.kind === "gloss" ? "glosses" : "translation words"} matching «${s.query}»${s.exact ? " exactly" : ""}`;
+  const where = s.textTitle ? ` in «${s.textTitle}»` : s.within ? (s.within.tier ? " on one track" : ` in texts whose ${s.within.key} is «${s.within.value}»`) : "";
+  return `${what}${where}`;
+}

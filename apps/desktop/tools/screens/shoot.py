@@ -728,6 +728,15 @@ def main():
             if "as numbered examples" not in " ".join(run.toasts()):
                 failures.append("Copy as examples said nothing")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            # Keep the search with the project, then run it again from the list.
+            run.page.locator(".panel-concordance .cc-bar button", has_text="Keep search").click()
+            run.page.fill(".panel-concordance .cc-keep-name", "Counting verbs")
+            run.page.locator(".panel-concordance .cc-keep-bar button.primary").click()
+            run.page.wait_for_timeout(300)
+            if run.page.locator(".panel-concordance .cc-saved option[value='r:Counting verbs']").count() != 1:
+                failures.append("Keep search did not list the search")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.shot("state-concordance-saved", run.page.locator(".panel-concordance"))
             # The lines' sentences filed under a grammar topic.
             run.page.locator(".panel-concordance .cc-bar button", has_text="File under a topic").click()
             run.page.fill(".panel-concordance .cc-topic-name", "Numerals")
