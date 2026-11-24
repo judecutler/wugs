@@ -1193,6 +1193,8 @@ The **Frequencies** panel lists the words of the project with how often each occ
 
 For **Words** and **Translations**, the line above the list also gives the vocabulary's richness: the type/token ratio (different words over running words), Guiraud's index (different words over the square root of running words, which changes less with the length of the text, so texts of different lengths compare better), and how many words are met only once (hapax legomena).
 
+**Zipf plot**, under that line, opens a chart of each item's count against its rank on log scales, with the straight line Zipf's law predicts. The panel gives the line's exponent: close to 1 in most texts of most languages (the second commonest word half as frequent as the first, the third a third), steeper when a few items take most of the uses, flatter when uses spread over many. Hover over a dot to see its item. With more than 5,000 different items, only the commonest 5,000 are plotted.
+
 ### Find the words your dictionary still lacks
 
 A list of **Words** has an **In lexicon** column. **Yes** means a lexicon entry, or one of its other forms (an allomorph or a paradigm form), is spelled that way. **Glossed only** means the word is broken into morphs in a text but has no entry spelled that way, which is usual for inflected words. **No** means neither. The line above the list says how many words the lexicon lacks and how often they are used.
