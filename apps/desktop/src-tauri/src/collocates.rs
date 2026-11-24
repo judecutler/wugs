@@ -77,8 +77,8 @@ struct Tally {
 
 #[allow(clippy::too_many_arguments)]
 pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, right: usize, min_together: usize, scope: &Scope) -> Result<Collocates, String> {
-    if !matches!(kind, Kind::Word | Kind::Translation) {
-        return Err("collocates are counted between words or translation words".into());
+    if !matches!(kind, Kind::Word | Kind::Translation | Kind::Lemma) {
+        return Err("collocates are counted between words, translation words or lemmas".into());
     }
     if left == 0 && right == 0 {
         return Err("the window needs at least one word on one side".into());
@@ -94,22 +94,37 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
     let mut near: HashMap<String, Tally> = HashMap::new();
     let (mut tokens, mut nodes, mut slots) = (0usize, 0usize, 0usize);
     each_segment(p, Read::of(kind), scope, |seg| {
-        let words: Vec<(String, String)> = seg
-            .words
-            .iter()
-            .map(|w| {
-                let spelling = p.proj.nfc(w);
-                (wugs_model::fold_key(&spelling), spelling)
-            })
-            .filter(|(k, _)| !k.is_empty())
-            .collect();
-        tokens += words.len();
-        for (k, _) in &words {
+        // Lemmas as CQP reads them (punctuation left out); a word with no
+        // lemma keeps its place in the window but is counted on no side.
+        let words: Vec<Option<(String, String)>> = if kind == Kind::Lemma {
+            crate::cqp::tokens_of(p, &seg.id)?
+                .into_iter()
+                .filter(|t| t.upos != "PUNCT")
+                .map(|t| {
+                    let spelling = p.proj.nfc(&t.lemma);
+                    let k = wugs_model::fold_key(&spelling);
+                    (!k.is_empty()).then_some((k, spelling))
+                })
+                .collect()
+        } else {
+            seg.words
+                .iter()
+                .map(|w| {
+                    let spelling = p.proj.nfc(w);
+                    (wugs_model::fold_key(&spelling), spelling)
+                })
+                .filter(|(k, _)| !k.is_empty())
+                .map(Some)
+                .collect()
+        };
+        for (k, _) in words.iter().flatten() {
+            tokens += 1;
             *freq.entry(k.clone()).or_default() += 1;
         }
         // Each slot once, owned by the nearest node: (node index, distance).
         let mut owner: Vec<Option<(usize, usize)>> = vec![None; words.len()];
-        for (i, (k, _)) in words.iter().enumerate() {
+        for (i, w) in words.iter().enumerate() {
+            let Some((k, _)) = w else { continue };
             if !glob(&pattern, &k.chars().collect::<Vec<_>>()) {
                 continue;
             }
@@ -124,7 +139,7 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
         }
         for (j, slot) in owner.iter().enumerate() {
             let Some((i, _)) = slot else { continue };
-            let (ck, spelling) = &words[j];
+            let Some((ck, spelling)) = &words[j] else { continue };
             slots += 1;
             let t = near.entry(ck.clone()).or_default();
             t.together += 1;
@@ -234,6 +249,31 @@ mod tests {
         let very = v.rows.iter().find(|r| r.item == "very").expect("very near very");
         assert!(very.together <= very.freq);
         assert!(v.rows.iter().all(|r| r.log_dice <= 14.0 && r.t_score.is_finite()));
+        drop(session);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lemmas_keep_company_across_their_forms() {
+        let dir = std::env::temp_dir().join(format!("wugs-coll-lemma-{}", wugs_model::ulid()));
+        let mut session: Session = None;
+        crate::session::create_project(&mut session, dir.to_str().unwrap(), "prs_Ana").unwrap();
+        let p = project(&mut session).unwrap();
+        let tier = crate::session::utterance_tier(p).unwrap();
+        let row = |i: usize, form: &str, lemma: &str, upos: &str| format!("{i}\t{form}\t{lemma}\t{upos}\t_\t_\t_\t_\t_\t_\n");
+        let ud = [
+            row(1, "dogs", "dog", "NOUN"), row(2, "bark", "bark", "VERB"), row(3, ".", ".", "PUNCT"), "\n".into(),
+            row(1, "The", "the", "DET"), row(2, "dog", "dog", "NOUN"), row(3, "barked", "bark", "VERB"), "\n".into(),
+            row(1, "a", "_", "DET"), row(2, "dog", "dog", "NOUN"), row(3, "sleeps", "sleep", "VERB"), "\n".into(),
+        ]
+        .concat();
+        wugs_conllu::import_conllu(p, &ud, "dogs", &tier).unwrap();
+        let c = collocates(&mut session, "dog", Kind::Lemma, 1, 1, 1, &Scope::all()).unwrap();
+        assert_eq!(c.node, 3);
+        assert_eq!(c.tokens, 7, "punctuation and the unlemmatised «a» are not counted");
+        let bark = c.rows.iter().find(|r| r.item == "bark").expect("bark");
+        assert_eq!((bark.together, bark.right, bark.freq), (2, 2, 2), "bark and barked under one lemma");
+        assert!(c.rows.iter().all(|r| r.item != "."));
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

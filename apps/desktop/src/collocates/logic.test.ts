@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { asTsv, compareCollocates, compareLine, compareTsv, leansTo, sortCollocates, summary, type CollocateRow } from "./logic.ts";
+import { asTsv, lemmaQuery, compareCollocates, compareLine, compareTsv, leansTo, sortCollocates, summary, type CollocateRow } from "./logic.ts";
 
 const row = (item: string, together: number, ll: number, mi: number): CollocateRow => ({ item, together, left: together, right: 0, freq: together * 2, logLikelihood: ll, mutualInformation: mi, logDice: mi + 8, tScore: together / 2 });
 const rows = [row("old", 3, 12.5, 3.1), row("a", 1, 0.4, 6.0), row("the", 3, 5.0, 1.0)];
@@ -40,4 +40,10 @@ test("two words' collocates compared", () => {
   assert.equal(compareLine("strong", "powerful", c(4), c(3), rows), "«strong» (4) against «powerful» (3): 2 collocates go with «strong», 1 with «powerful» and 1 with both alike (within 1 logDice). Those typical of «strong» first.");
   assert.equal(compareLine("strong", "mighty", c(4), c(0), rows), "«mighty» does not occur here.");
   assert.equal(compareTsv("strong", "powerful", rows).split("\n")[4], "engine\t0\t\t3\t11.00\t-11.00");
+});
+
+test("a lemma pattern opens as a CQP query", () => {
+  assert.equal(lemmaQuery("dog", null), '[lemma="dog" %c]');
+  assert.equal(lemmaQuery("walk*", null), '[lemma="walk.*" %c]');
+  assert.equal(lemmaQuery("a.b?", { key: "genre", value: "news" }), '[lemma="a\\.b." %c] :: match.text_genre="news"');
 });

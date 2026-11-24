@@ -1,4 +1,5 @@
 // Collocates (Scrolls): display rules. Pure: no DOM.
+import { cqpLiteral } from "../frequencies/logic.ts";
 
 export type CollocateRow = {
   item: string;
@@ -104,4 +105,15 @@ export function compareTsv(a: string, b: string, rows: readonly CompareRow[]): s
     ["collocate", `${a} together`, `${a} logDice`, `${b} together`, `${b} logDice`, "difference"].map(clean).join("\t"),
     ...rows.map((r) => [clean(r.item), r.a?.together ?? 0, r.a === null ? "" : score(r.a.logDice), r.b?.together ?? 0, r.b === null ? "" : score(r.b.logDice), score(r.diff)].join("\t")),
   ].join("\n");
+}
+
+/**
+ * The CQP query that finds a lemma pattern in the Concordance (`*` any
+ * letters, `?` one, as the Collocates field reads them), capitals aside, and
+ * a detail as a text condition: what a lemma row opens.
+ */
+export function lemmaQuery(pattern: string, within: { key: string; value: string } | null): string {
+  const re = [...pattern.trim()].map((c) => (c === "*" ? ".*" : c === "?" ? "." : cqpLiteral(c))).join("");
+  const q = `[lemma="${re}" %c]`;
+  return within === null || within.key === "" ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
 }
