@@ -19,6 +19,7 @@ import { againstRelatives, checkInventory, phoibleLine, phonemeKey, shareOf, typ
 import { chartClipboard } from "../sounds/chartcopy";
 import { EXAMPLE_FORMATS, FORMAT_KEY, parseFormat } from "../gloss/example";
 import { syllableNote, syllableTypes, type SyllableType } from "../sounds/syllables";
+import { toneMelodies, tonesNote, tonesTsv, withoutTone, type Tones } from "../sounds/tones";
 import { distributionNote, envLabel, environments, environmentsTsv, suggestedRule, type NeighbourRow } from "../sounds/environments";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
@@ -34,7 +35,7 @@ const PAD = 26;
 /** Room on the left for unrounded vowels with several spellings (i ĩ iː). */
 const PADX = 72;
 
-type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[]; clusters: Cluster[]; clustersNote: string; words: { word: string; count: number }[]; syllables: SyllableType[] };
+type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[]; clusters: Cluster[]; clustersNote: string; words: { word: string; count: number }[]; syllables: SyllableType[]; tones: Tones };
 
 const clustersOf = (words: readonly { word: string; count: number }[]) => {
   const clusters = consonantClusters(words);
@@ -72,6 +73,16 @@ export const soundsPanel: PanelDef = {
     let phonemeMap: FeatureMap | null = null;
     let phonemeGlottocode = "";
 
+    const TONE_KEY = "wugs.sounds.toneApart";
+    /** Whether tone marks are read as tone, apart from the vowels they sit on. */
+    let toneApart = (() => {
+      try {
+        return localStorage.getItem(TONE_KEY) === "on";
+      } catch {
+        return false;
+      }
+    })();
+
     const shownText = (): { id: string; title: string } | null => {
       const s = getState();
       return s.kind === "open" && s.text !== null ? { id: s.text.id, title: s.text.title } : null;
@@ -87,8 +98,10 @@ export const soundsPanel: PanelDef = {
           if (track !== "") r = await soundWords({ tierId: track, textId: text?.id ?? null });
         }
         if (mine !== seq) return;
-        const sounds = inventory(r.words);
-        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words), where: positions(r.words, sounds.map((x) => x.sound)), shapes: shapes(r.words), ...clustersOf(r.words), words: r.words, syllables: syllableTypes(r.words) };
+        // Tone read apart: every table but the melodies sees the words without tone marks.
+        const words = toneApart ? withoutTone(r.words) : r.words;
+        const sounds = inventory(words);
+        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: words.length, pairs: minimalPairs(words), where: positions(words, sounds.map((x) => x.sound)), shapes: shapes(words), ...clustersOf(words), words, syllables: syllableTypes(words), tones: toneMelodies(r.words) };
         problem = null;
       } catch (e) {
         if (mine !== seq) return;
@@ -281,6 +294,28 @@ export const soundsPanel: PanelDef = {
       ];
     };
 
+    const toneSection = (l: Loaded): HTMLElement[] => {
+      const t = l.tones;
+      const head = [h("h4", { className: "sd-h", textContent: "Tone melodies" }), h("p", { className: "note sd-tone-note", textContent: tonesNote(t) })];
+      if (t.marked === 0) return head;
+      const copy = h("button", { type: "button", textContent: "Copy table", title: "Every melody listed, with its number of syllables, word forms, running words and an example" });
+      copy.onclick = () =>
+        writeText(tonesTsv(t)).then(
+          () => showToast({ tone: "info", lines: [`${t.melodies.length} tone melodies copied.`] }),
+          (err) => showToast({ tone: "error", lines: [errorText(err)] }),
+        );
+      const rows = t.melodies.map((m) => {
+        const example = h("button", { type: "button", className: "sd-sound ipa", textContent: m.example, title: "Every line with this word in the Concordance" });
+        example.onclick = () => askConcordance(m.example, "word", onlyThisText ? shownText() : null);
+        return h("tr", {}, h("td", { className: "num", textContent: String(m.syllables) }), h("td", { className: "ipa", textContent: m.melody }), h("td", { className: "num", textContent: m.words.toLocaleString() }), h("td", { className: "num", textContent: m.running.toLocaleString() }), h("td", {}, example));
+      });
+      return [
+        ...head,
+        h("div", { className: "cc-bar" }, copy),
+        h("div", { className: "sd-scroll" }, h("table", { className: "fq-table sd-tones" }, h("thead", {}, h("tr", {}, ...["Syllables", "Melody", "Words", "Running", "Example"].map((x) => h("th", { textContent: x })))), h("tbody", {}, ...rows))),
+      ];
+    };
+
     const whereSection = (l: Loaded): HTMLElement[] => {
       if (l.where.length === 0) return [];
       const cell = (n: number, total: number) => h("td", { className: `num${n === 0 ? " sd-gap" : ""}`, textContent: n === 0 ? "–" : share(n, total), title: n.toLocaleString() });
@@ -296,6 +331,7 @@ export const soundsPanel: PanelDef = {
         h("p", { className: "note", textContent: "Each word as consonants (C) and vowels (V), by share of running words. ? is a letter the chart does not place." }),
         h("div", { className: "sd-list" }, ...shapeChips),
         ...syllableSection(l),
+        ...toneSection(l),
         ...clusterSection(l),
         h("h4", { className: "sd-h", textContent: "Where sounds occur" }),
         ...(gaps === "" ? [] : [h("p", { className: "note", textContent: gaps })]),
@@ -591,6 +627,16 @@ export const soundsPanel: PanelDef = {
         localStorage.setItem(WHOLE_KEY, whole ? "on" : "off");
         paint();
       };
+      const toneBox = h("input", { type: "checkbox", checked: toneApart });
+      toneBox.onchange = () => {
+        toneApart = toneBox.checked;
+        try {
+          localStorage.setItem(TONE_KEY, toneApart ? "on" : "off");
+        } catch {
+          /* kept for this session */
+        }
+        void load();
+      };
       const copy = h("button", { type: "button", textContent: "Copy table", disabled: loaded.sounds.length === 0 });
       copy.onclick = copyTable;
       const c = loaded.chart;
@@ -613,7 +659,7 @@ export const soundsPanel: PanelDef = {
       const vowels = vowelChart(c);
       const omitted = loaded.omitted > 0 ? [h("p", { className: "note", textContent: `The ${loaded.omitted.toLocaleString()} rarest word types were left out.` })] : [];
       el.replaceChildren(
-        h("div", { className: "sd-bar" }, pick, scope, h("label", {}, wholeBox, " Whole IPA chart"), copy, copyChart),
+        h("div", { className: "sd-bar" }, pick, scope, h("label", {}, wholeBox, " Whole IPA chart"), h("label", { title: "Take tone marks (á à â ǎ a̋ ȁ, and ā), tone letters and tone numbers off the vowels, so á and à count as the vowel a. Leave it off where a macron means a long vowel." }, toneBox, " Tone apart"), copy, copyChart),
         h("p", { className: "note", textContent: soundsNote(loaded.sounds, c, loaded.running) }),
         ...omitted,
         ...(consonants === null ? [] : [h("h4", { className: "sd-h", textContent: "Consonants (pulmonic)" }), consonants]),
