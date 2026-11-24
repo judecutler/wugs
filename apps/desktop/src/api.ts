@@ -740,6 +740,9 @@ export type PeopleCommand =
   | "people_view" | "person_add" | "person_set_name" | "person_set_roles" | "person_set_detail" | "person_delete"
   | "consent_add" | "consent_set_term" | "consent_set_covers" | "consent_set_date" | "consent_attach" | "consent_detach" | "consent_delete";
 export const peopleCommand = (command: PeopleCommand, args: Record<string, unknown> = {}) => invoke<PeopleView>(command, args);
+/** The fieldwork log's commands, each returning the whole log (src-tauri/src/field_sessions.rs). */
+export const fieldSessions = (command: "field_sessions_view" | "field_session_add" | "field_session_set" | "field_session_person" | "field_session_delete", args: Record<string, unknown> = {}) =>
+  invoke<import("./sessions/logic").SessionsView>(command, args);
 // Corrections export: src-tauri/src/corrections.rs (roadmap 57).
 /** `recordedNo`: a consent record says no to AI use; `restricted`: a restricted or community access level. Both start left out; the person decides. */
 /** `partial`: why this device may not know every consent record (a guest, records still arriving), or null. */

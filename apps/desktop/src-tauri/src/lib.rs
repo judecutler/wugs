@@ -37,6 +37,7 @@ pub mod media_bin;
 pub mod metadata;
 pub mod morphosyntax;
 pub mod people;
+pub mod field_sessions;
 pub mod plaintext;
 pub mod replace;
 pub mod website;
@@ -970,6 +971,26 @@ fn person_set_name(s: State<SessionThread>, person: String, name: String) -> Res
 #[tauri::command(async)]
 fn person_set_roles(s: State<SessionThread>, person: String, roles: Vec<String>) -> Result<people::PeopleView, String> {
     s.run(move |s| people::set_roles(s, &person, &roles))
+}
+#[tauri::command(async)]
+fn field_sessions_view(s: State<SessionThread>) -> Result<field_sessions::SessionsView, String> {
+    s.run(field_sessions::view)
+}
+#[tauri::command(async)]
+fn field_session_add(s: State<SessionThread>, date: String) -> Result<field_sessions::SessionsView, String> {
+    s.run(move |s| field_sessions::add(s, &date))
+}
+#[tauri::command(async)]
+fn field_session_set(s: State<SessionThread>, session: String, field: String, value: String) -> Result<field_sessions::SessionsView, String> {
+    s.run(move |s| field_sessions::set(s, &session, &field, &value))
+}
+#[tauri::command(async)]
+fn field_session_person(s: State<SessionThread>, session: String, person: String, add: bool) -> Result<field_sessions::SessionsView, String> {
+    s.run(move |s| field_sessions::person(s, &session, &person, add))
+}
+#[tauri::command(async)]
+fn field_session_delete(s: State<SessionThread>, session: String) -> Result<field_sessions::SessionsView, String> {
+    s.run(move |s| field_sessions::delete(s, &session))
 }
 #[tauri::command(async)]
 fn person_set_detail(s: State<SessionThread>, person: String, key: String, value: String) -> Result<people::PeopleView, String> {
@@ -2239,6 +2260,11 @@ pub fn run() {
             person_set_name,
             person_set_roles,
             person_set_detail,
+            field_sessions_view,
+            field_session_add,
+            field_session_set,
+            field_session_person,
+            field_session_delete,
             person_delete,
             consent_add,
             consent_set_term,

@@ -43,6 +43,7 @@ PANELS = [
     ("vowels", "Vowel space"),
     ("contours", "Pitch contours"),
     ("durations", "Durations"),
+    ("sessions", "Sessions"),
     ("sounds", "Sounds"),
     ("typology", "Typology"),
     ("progress", "Progress"),
@@ -705,6 +706,16 @@ def main():
                 failures.append("Durations: two labels with several segments each were not compared")
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); await st.selectText('t-count'); st.selectSegment(window.__keptSelection); }")
             run.page.wait_for_timeout(300)
+            # Sessions: a new session dated today goes on top, its notes ready to type in.
+            run.front("sessions", "Sessions")
+            run.page.locator(".panel-sessions .ss-card").first.wait_for()
+            run.page.locator(".panel-sessions button", has_text="New session").click()
+            run.page.wait_for_timeout(400)
+            run.shot("state-sessions-new", run.page.locator(".panel-sessions"))
+            if run.page.locator(".panel-sessions .ss-card").count() != 3:
+                failures.append("Sessions: New session did not add a card")
+            elif run.page.evaluate("() => document.activeElement?.classList.contains('ss-notes')") is not True:
+                failures.append("Sessions: the new session's notes were not focused")
             # Affixes: the order of two affixes met in one word.
             run.front("affixes", "Affixes")
             order = run.page.locator(".panel-affixes .af-order")

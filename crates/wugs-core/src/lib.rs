@@ -22,6 +22,7 @@ pub mod assist;
 pub mod conflicts;
 pub mod converted;
 pub mod examples;
+pub mod field_sessions;
 pub mod pronunciations;
 pub mod relations;
 mod elicitation;
