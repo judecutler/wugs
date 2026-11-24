@@ -1460,14 +1460,14 @@ mod tests {
         assert!(!r.lexicon && r.text.is_some(), "{:?}", r.lines);
         assert!(r.lines[0].starts_with("2 new texts with 3 sentences, 7 words and 9 glossed morphs"), "{:?}", r.lines);
         assert!(r.lines.iter().any(|l| l.contains("2 free translations, 1 note, times for 1 sentence")), "{:?}", r.lines);
-        assert!(r.lines.iter().any(|l| l.contains("\\ps")), "{:?}", r.lines);
+        assert!(!r.lines.iter().any(|l| l.contains("\\ps")), "a \\ps line under the morphs is carried: {:?}", r.lines);
         // The free translations sit on a translation track the Gloss panel shows.
         let text = r.text.unwrap();
         let out = dir.join("out");
         fs::create_dir_all(&out).unwrap();
         let e = export_text(&mut s, &text, Format::ToolboxText, &out).unwrap();
         let written = fs::read_to_string(&e.path).unwrap();
-        assert!(e.path.ends_with("Counting.txt") && written.contains("\\ge 1SG- count one\n\\ft I count one.\n"), "{written}");
+        assert!(e.path.ends_with("Counting.txt") && written.contains("\\ge 1SG- count one\n\\ps pro- v     num\n\\ft I count one.\n"), "{written}");
         // A lexicon file is still a lexicon.
         let lex = dir.join("lexicon.db");
         fs::write(&lex, "\\_sh v3.0  400  MDF 4.0\n\n\\lx kani\n\\ge count\n").unwrap();

@@ -124,9 +124,9 @@ fn morphs(word: &str, gloss: &str) -> Option<Vec<Morph>> {
         };
         let (surface, inner) = infix(w);
         let (gloss, inner_gloss) = infix(g);
-        out.push(Morph { surface, kind, gloss, sense: None });
+        out.push(Morph { surface, kind, gloss, sense: None, ps: String::new() });
         if let Some(x) = inner {
-            out.push(Morph { surface: x, kind: "infix", gloss: inner_gloss.unwrap_or_default(), sense: None });
+            out.push(Morph { surface: x, kind: "infix", gloss: inner_gloss.unwrap_or_default(), sense: None, ps: String::new() });
         }
     }
     Some(out)
