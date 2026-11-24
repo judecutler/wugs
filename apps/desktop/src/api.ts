@@ -103,6 +103,8 @@ export const glossAddMissing = (args: { keys: string[] }) => invoke<import("./ch
 export const glossSegmentations = () => invoke<import("./checks/logic").Segmented[]>("gloss_segmentations");
 /** Give every analysed word of this token's form its breakdown; returns how many changed. */
 export const glossUseBreakdown = (args: { tokenId: string }) => invoke<number>("gloss_use_breakdown", args);
+export const glossForms = () => invoke<import("./checks/leipzig").GlossForm[]>("gloss_forms");
+export const glossRegloss = (args: { from: string; to: string }) => invoke<number>("gloss_regloss", args);
 export const glossUnify = (args: { key: string; kind: string; from: string; to: string }) => invoke<number>("gloss_unify", args);
 export const abbreviationMeanings = (abbreviations: string[]) => invoke<(string | null)[]>("abbreviation_meanings", { abbreviations });
 export const setAbbreviationMeaning = (abbreviation: string, meaning: string) => invoke<void>("set_abbreviation_meaning", { abbreviation, meaning });

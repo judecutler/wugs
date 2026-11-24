@@ -109,6 +109,73 @@ pub fn glosses(session: &mut Session) -> Result<Vec<Inconsistent>, String> {
     Ok(out)
 }
 
+/// One gloss as written, with how many morphs carry it, how many of those
+/// are affixes or clitics (not roots), and where it first occurs.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlossForm {
+    pub gloss: String,
+    pub count: usize,
+    pub affixes: usize,
+    pub text_id: String,
+    pub text_title: String,
+    pub tier_id: String,
+    pub segment_id: String,
+}
+
+/// The most glossed forms listed by `gloss_forms`.
+pub const MAX_FORMS: usize = 20_000;
+
+/// Every gloss in the primary language as written (trimmed), the most used
+/// first: what the Leipzig check reads (`src/checks/leipzig.ts`).
+pub fn gloss_forms(session: &mut Session) -> Result<Vec<GlossForm>, String> {
+    let p = session::project(session)?;
+    let mut forms: BTreeMap<String, GlossForm> = BTreeMap::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            for m in p.proj.members(tok)? {
+                let gloss = p.proj.field_str(&m, "gloss")?.unwrap_or_default().trim().to_string();
+                if gloss.is_empty() {
+                    continue;
+                }
+                let affix = p.proj.field_str(&m, "type")?.is_some_and(|t| t != "root" && !t.is_empty());
+                let f = forms.entry(gloss.clone()).or_insert_with(|| GlossForm { gloss, count: 0, affixes: 0, text_id: seg.text.clone(), text_title: seg.title.clone(), tier_id: seg.tier.clone(), segment_id: seg.id.clone() });
+                f.count += 1;
+                f.affixes += usize::from(affix);
+            }
+        }
+        Ok(())
+    })?;
+    let mut out: Vec<GlossForm> = forms.into_values().collect();
+    out.sort_by(|a, b| b.count.cmp(&a.count).then(a.gloss.cmp(&b.gloss)));
+    out.truncate(MAX_FORMS);
+    Ok(out)
+}
+
+/// Gloss every morph whose gloss reads `from` (trimmed) as `to`, whatever the morph.
+pub fn regloss(session: &mut Session, from: &str, to: &str) -> Result<usize, String> {
+    let to = to.trim();
+    if to.is_empty() {
+        return Err("Say which gloss to use.".into());
+    }
+    let p = session::project(session)?;
+    let mut targets: Vec<(String, String)> = Vec::new();
+    each_segment(p, Read::Analyses, &Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            for m in p.proj.members(tok)? {
+                if p.proj.field_str(&m, "gloss")?.unwrap_or_default().trim() == from {
+                    targets.push((seg.text.clone(), m));
+                }
+            }
+        }
+        Ok(())
+    })?;
+    for (text, m) in &targets {
+        p.set_gloss(text, m, to, None)?;
+    }
+    Ok(targets.len())
+}
+
 /// Gloss every morph of this surface and type that reads `from` as `to`
 /// instead (a person's choice, so each write settles a conflict on it).
 /// Returns how many changed.
@@ -520,6 +587,30 @@ pub fn settle_drift(session: &mut Session, sense: &str, text_gloss: &str, use_le
 mod tests {
     use super::*;
     use crate::gloss;
+
+    #[test]
+    fn gloss_forms_are_counted_and_reglossed_everywhere() {
+        let dir = std::env::temp_dir().join(format!("wugs-forms-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        let text = session::list_texts(&mut s).unwrap()[0].id.clone();
+        let spec = |surface: &str, kind: &str, g: &str| gloss::MorphSpecView { surface: surface.into(), morph_type: kind.into(), gloss: Some(g.into()), glosses_by_lang: Default::default(), sense: None };
+        for (i, word) in ["kani", "mani"].iter().enumerate() {
+            let at = 50_000.0 + i as f64 * 2000.0;
+            let seg = session::add_segment(&mut s, &text, None, Some(at), Some(at + 1000.0), word).unwrap().id;
+            let view = gloss::gloss_tokenize(&mut s, &text, &seg, &[word.to_string()]).unwrap().view;
+            gloss::gloss_apply(&mut s, &text, &seg, &view.words[0].id, vec![spec(&word[..2], "root", "go out"), spec("ni", "suffix", "pl")]).unwrap();
+        }
+        let forms = gloss_forms(&mut s).unwrap();
+        let pl = forms.iter().find(|f| f.gloss == "pl").unwrap();
+        assert_eq!((pl.count, pl.affixes), (2, 2));
+        let go = forms.iter().find(|f| f.gloss == "go out").unwrap();
+        assert_eq!((go.count, go.affixes), (2, 0));
+        assert_eq!(regloss(&mut s, "go out", "go.out").unwrap(), 2);
+        assert!(gloss_forms(&mut s).unwrap().iter().any(|f| f.gloss == "go.out" && f.count == 2));
+        drop(s);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn a_word_broken_up_two_ways_is_found_and_made_one() {

@@ -4,7 +4,8 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSegmentations, glossUseBreakdown, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { glossForms, glossRegloss, archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSegmentations, glossUseBreakdown, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { leipzigIssues, leipzigLine, type LeipzigIssue } from "../checks/leipzig";
 import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
 import { sequenceWords, unusualLine, unusualWords, type Unusual } from "../checks/sequences";
@@ -41,6 +42,7 @@ export const checksPanel: PanelDef = {
     let timing: Timing | null = null;
     let twice: Duplicates | null = null;
     let breakdowns: Segmented[] | null = null;
+    let leipzig: { issues: LeipzigIssue[]; forms: number } | null = null;
     let gaps: { without: number; fillable: number } | null = null;
     let trees: { sentences: TreeProblem[]; total: number; annotated: number } | null = null;
     let showAllChars = false;
@@ -54,9 +56,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null), glossSegmentations().catch(() => null)]).then(
-        ([r, m, c, w, g, t, d, k, l, tm, ar, du, bd]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null), glossSegmentations().catch(() => null), glossForms().catch(() => null)]).then(
+        ([r, m, c, w, g, t, d, k, l, tm, ar, du, bd, gf]) => {
           if (mine !== seq) return;
+          leipzig = gf === null ? null : { issues: leipzigIssues(gf), forms: gf.length };
           breakdowns = bd;
           twice = du;
           ready = ar;
@@ -108,6 +111,46 @@ export const checksPanel: PanelDef = {
       armed = null;
       await refreshAll();
       load();
+    };
+
+    const regloss = async (i: LeipzigIssue) => {
+      busy = true;
+      paint();
+      try {
+        const changed = await glossRegloss({ from: i.form.gloss, to: i.to });
+        showToast({ tone: "info", lines: [`Glossed ${changed} ${changed === 1 ? "morph" : "morphs"} «${i.to}» instead of «${i.form.gloss}».`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      busy = false;
+      armed = null;
+      await refreshAll();
+      load();
+    };
+
+    const leipzigSection = (): HTMLElement[] => {
+      if (leipzig === null) return [];
+      const card = (i: LeipzigIssue): HTMLElement => {
+        const id = `leipzig\u0001${i.form.gloss}`;
+        const use = h("button", { type: "button", className: armed === id ? "danger" : "", disabled: busy, textContent: armed === id ? `Change ${i.form.count}: sure?` : `Use «${i.to}» for all ${i.form.count}`, title: `Gloss every morph now glossed «${i.form.gloss}» as «${i.to}»` });
+        use.onclick = () => {
+          if (armed !== id) {
+            armed = id;
+            paint();
+            return;
+          }
+          void regloss(i);
+        };
+        const show = h("button", { type: "button", className: "ck-show", textContent: `in «${i.form.textTitle || "(untitled)"}»`, title: "Open a sentence glossed this way" });
+        show.onclick = () => selectSegment({ textId: i.form.textId, tierId: i.form.tierId, segmentId: i.form.segmentId });
+        return h(
+          "li",
+          { className: "ck-card" },
+          h("div", { className: "ck-head" }, h("span", { className: "ck-morph ck-from", textContent: i.form.gloss }), " → ", glossNode(i.to), h("span", { className: "ck-count", textContent: `× ${i.form.count}` }), show, use),
+          ...i.reasons.map((r) => h("p", { className: "note", textContent: r })),
+        );
+      };
+      return [h("h3", { className: "ck-title", textContent: "Glosses against the Leipzig rules" }), h("p", { className: "note", textContent: leipzigLine(leipzig.issues, leipzig.forms) }), h("ul", { className: "ck-list" }, ...leipzig.issues.slice(0, 100).map(card))];
     };
 
     const breakdownsSection = (): HTMLElement[] => {
@@ -555,6 +598,7 @@ export const checksPanel: PanelDef = {
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: summary(rows) }), again),
         h("ul", { className: "ck-list" }, ...rows.map(card)),
         ...breakdownsSection(),
+        ...leipzigSection(),
         h("h3", { className: "ck-title", textContent: "Not in the lexicon" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
         h("ul", { className: "ck-list" }, ...missing.map(missingCard)),
