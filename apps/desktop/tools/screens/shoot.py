@@ -589,6 +589,15 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+            # Near: only the lines with ŋai right next to the match.
+            run.page.fill(".panel-concordance .cc-near-word", "ŋai")
+            run.page.select_option(".panel-concordance .cc-near select >> nth=0", "1")
+            run.page.wait_for_timeout(200)
+            run.shot("state-concordance-near", run.page.locator(".panel-concordance"))
+            near_rows = run.page.locator(".panel-concordance .cc-row").count()
+            if near_rows != 1 or "1 line of 3 has «ŋai» right before or after it" not in run.page.locator(".panel-concordance .cc-count").inner_text():
+                failures.append(f"Concordance Near did not keep the one line with ŋai next to the match: {near_rows} rows")
+            run.page.fill(".panel-concordance .cc-near-word", "")
             # Translations under the lines, read from each text.
             run.page.locator(".panel-concordance .cc-under-toggle").click()
             run.page.wait_for_timeout(500)
