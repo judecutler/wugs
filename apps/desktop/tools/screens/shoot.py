@@ -821,6 +821,11 @@ def main():
             run.shot("state-checks-examples", run.page.locator(".panel-checks"))
             if "Add 4 from the texts" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not offer examples from the texts")
+            leip = run.page.locator(".panel-checks .ck-title", has_text="Glosses against the Leipzig rules")
+            leip.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
+            run.shot("state-checks-leipzig", run.page.locator(".panel-checks"))
+            if "Use «PL» for all 7" not in run.page.locator(".panel-checks").inner_text() or "Use «go.out» for all 3" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not offer the Leipzig fixes")
             broken = run.page.locator(".panel-checks .ck-title", has_text="Words broken up more than one way")
             broken.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
             run.shot("state-checks-breakdowns", run.page.locator(".panel-checks"))

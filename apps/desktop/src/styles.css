@@ -1394,6 +1394,7 @@ body::before {
 .ck-head { display: flex; gap: 8px; align-items: baseline; }
 .ck-head > button:last-child { margin-left: auto; }
 .ck-morph { font-family: var(--font-ipa); font-size: 16px; }
+.ck-from { white-space: nowrap; }
 .ck-kind { font-size: var(--text-xs); color: var(--muted); }
 .ck-card .note { margin: 2px 0 6px; }
 .ck-variant { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }

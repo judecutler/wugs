@@ -952,6 +952,12 @@ const LEXICON = [
     gloss_sense_drift: () => [
       { senseId: "sense-lx-tela1-0", entryId: "lx-tela1", headword: "tela", homograph: 1, senseGloss: "river", textGloss: "stream", count: 3, first: { gloss: "stream", count: 3, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03" } },
     ],
+    gloss_forms: () => [
+      { gloss: "count", count: 12, affixes: 0, textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01" },
+      { gloss: "pl", count: 7, affixes: 7, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03" },
+      { gloss: "go out", count: 3, affixes: 0, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "u01" },
+    ],
+    gloss_regloss: () => 7,
     gloss_settle_drift: (a) => (a.useLexicon ? 3 : 1),
     topics_overview: () => ({
       topics: [

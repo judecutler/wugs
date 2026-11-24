@@ -390,6 +390,14 @@ Two morphs that sound alike but mean different things (a plural `-s` and a third
 
 Under **Words broken up more than one way**, the panel lists each word form that is cut into morphs differently in different sentences. An example is *tokami*, cut as `to-ka-mi` in two sentences and left whole as `tokami` in a third. Each way is shown with its glosses, how many words have it, and a link to a sentence. Click **Use «to-ka-mi» for all**, then click again to confirm. Every analysed word of that form then gets exactly that analysis: the same morphs, types, glosses and lexicon links. Capitals and punctuation do not count as a different form. Words not analysed yet are left alone (the Words to gloss panel is for those). Two different words that happen to be spelled alike will show up here too; leave them as they are.
 
+Under **Glosses against the Leipzig rules**, the panel lists glosses a journal's copy editor would mark before your examples go to print, each with the gloss the Leipzig Glossing Rules ask for and why:
+
+- a gloss of several words joined by full stops (*go out* → *go.out*, rule 4); a longer description is left alone;
+- the gloss of an affix or clitic written as an abbreviation in capitals, which wugs then sets in small capitals (*pl* or *plural* → PL, *3sg* → 3SG, *past.neg* → PST.NEG, rule 3); a root glossed *past* keeps its meaning;
+- a boundary mark typed into the gloss (*-PL* → PL), since the marks go between the morphs.
+
+Click **Use «PL» for all 7**, then click again to confirm, to change every morph glossed that way.
+
 ### Grow the lexicon from your glossed texts
 
 Under **Not in the lexicon**, the Checks panel lists every root you have glossed in your texts that has no lexicon entry yet, most used first. Each shows its glosses with how often each is used, and a link to a sentence that uses it. This happens a lot after importing glossed texts from Toolbox or FLEx without their lexicon.

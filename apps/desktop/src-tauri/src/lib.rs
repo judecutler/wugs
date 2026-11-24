@@ -212,6 +212,18 @@ fn gloss_consistency(s: State<SessionThread>) -> Result<Vec<consistency::Inconsi
     s.run(consistency::glosses)
 }
 
+/// Every gloss as written, with counts, for the Leipzig check.
+#[tauri::command(async)]
+fn gloss_forms(s: State<SessionThread>) -> Result<Vec<consistency::GlossForm>, String> {
+    s.run(consistency::gloss_forms)
+}
+
+/// Gloss every morph that reads `from` as `to` instead.
+#[tauri::command(async)]
+fn gloss_regloss(s: State<SessionThread>, from: String, to: String) -> Result<usize, String> {
+    s.run(move |s| consistency::regloss(s, &from, &to))
+}
+
 /// Gloss every morph of `key` and `kind` that reads `from` as `to` instead.
 #[tauri::command(async)]
 fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String, to: String) -> Result<usize, String> {
@@ -2458,6 +2470,8 @@ pub fn run() {
             abbreviation_meanings,
             gloss_consistency,
             gloss_unify,
+            gloss_forms,
+            gloss_regloss,
             gloss_segmentations,
             like_sentences,
             work_log,
