@@ -738,6 +738,17 @@ def main():
             clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}
             if "Born (year)" not in clip.get("text", "") or "1952" not in clip.get("text", ""):
                 failures.append(f"People did not copy everyone as a table: {clip}")
+            # A consent form printed for the first person, with their name and the project's language.
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/forms'")
+            run.page.locator(".panel-people .pp-person .pp-print").first.click()
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            saved = run.page.evaluate("window.__WUGS_SAVED__") or {}
+            form = saved.get("contents", "")
+            if "Consent to record and share: Kanu" not in form or "Deposit in an archive" not in form or not saved.get("title", "").startswith("Consent form "):
+                failures.append(f"People did not print a consent form: {saved.get('title')}")
+            else:
+                (run.out / "doc-consent-form.html").write_text(form)
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Elicit sentences: answer a prompt; focus moves to the next.
             run.front("sentences", "Elicit sentences")

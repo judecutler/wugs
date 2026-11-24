@@ -1002,6 +1002,11 @@ const LEXICON = [
     morphosyntax_choose_stanza: ({ python, language }) => ({ python, pipeline: language, about: language ? `Stanza 1.10.1, ${language} (tokenize, pos, lemma, depparse)` : null }),
     morphosyntax_choose_spacy: ({ python, pipeline }) => ({ python, pipeline, about: pipeline ? `spaCy 3.8.18, ${pipeline} 3.8.0 (tok2vec, tagger, parser, attribute_ruler, lemmatizer, ner)` : null }),
     project_language: () => ({ name: "Kanu", glottocode: "abcd1234", iso: "" }),
+    // The last document saved, for probes to read back.
+    save_document: ({ folder, title, extension, contents }) => {
+      window.__WUGS_SAVED__ = { title, extension, contents };
+      return { path: `${folder}/${title}.${extension}`, notes: [] };
+    },
     set_project_language: ({ language }) => ({ name: language.name.trim(), glottocode: language.glottocode.trim().toLowerCase(), iso: language.iso.trim().toLowerCase() }),
     glottolog_find: ({ query }) =>
       query.toLowerCase().startsWith("tur")

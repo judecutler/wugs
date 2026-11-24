@@ -611,6 +611,8 @@ To add a person:
 
 Under each person, **Details** opens fields for what an archive's list of participants asks for: the year they were born, sex or gender, the languages they speak, where they are from and where they live, ethnic group, education and notes. Each saves when you press Enter or leave the field, and the line shows how many are filled. Details are kept in the project's people records, the most restricted part of a project. **Copy as a table** above the list copies everyone, with their roles, details and what their consent records say, to paste into an archive's deposit form or a spreadsheet.
 
+**Print a consent form…** above the list saves a form to print as a page you open in a browser: each use the People panel records (an archive, a website, the community only, speech tools) in plain words with Yes and No boxes, what will be recorded, how the person wants to be named, a line saying they can change their mind, signature lines, and room to note consent given aloud (read or translated, the language used, the recording of it, a witness). **Print a form…** under a person fills in their name and role. It is a starting point: your ethics board's approved wording comes first, and the form is best translated into a language the person reads well. Afterwards, type their answers into the record and attach a scan of the signed page.
+
 To record what they agreed to:
 
 1. Click **Record what they agreed to**.
