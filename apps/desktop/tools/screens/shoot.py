@@ -896,6 +896,11 @@ def main():
             run.shot("state-checks-leipzig", run.page.locator(".panel-checks"))
             if "Use «PL» for all 7" not in run.page.locator(".panel-checks").inner_text() or "Use «go.out» for all 3" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not offer the Leipzig fixes")
+            unclear = run.page.locator(".panel-checks .ck-title", has_text="Unclear passages")
+            unclear.scroll_into_view_if_needed()
+            run.shot("state-checks-unclear", run.page.locator(".panel-checks"))
+            if run.page.locator(".panel-checks .ck-print-unclear").count() != 1:
+                failures.append("Checks did not list the unclear passages with a sheet to print")
             bare = run.page.locator(".panel-checks .ck-title", has_text="Morphs without a gloss")
             bare.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
             run.shot("state-checks-unglossed", run.page.locator(".panel-checks"))

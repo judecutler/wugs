@@ -424,6 +424,8 @@ A word linked to a lexicon sense keeps its own gloss in the text, so the two can
 
 ### Check segment times
 
+Under **Unclear passages**, the Checks panel lists every segment where you marked something you could not hear or were not sure of: `(?)`, `[unclear]`, `(inaudible)`, `[...]`, two or more question marks, or CHAT's `xxx` and `yyy`. A question mark at the end of a question, or one inside a word (a glottal stop typed as `?`), is not a mark. Each line shows where it is in the recording; click it to open the segment in Transcribe. **Print a list for the next session…** saves the passages, text by text with their times, as a sheet with a box to tick and room to write the speaker's answer.
+
 Under **Segment timing**, the Checks panel lists timed segments that overlap the one before them on the same track, are under 0.15 seconds long (often a stray click while segmenting), or are over 30 seconds long. Overlaps on one track confuse ELAN and Praat when you export, and speech tools take at most 30 seconds at a time. Click a segment's text to open it on the Timeline and fix it there by dragging its edges, merging or splitting. Segments without times are not checked.
 
 Under **Sentences written twice**, the Checks panel lists sentences of four words or more that appear more than once with the same words in the same order (case, spacing and punctuation aside), most copies first, with where each copy is: a text imported twice, a sentence pasted again, or the same web page saved from two addresses. Every copy counts as a use of its own in Frequencies, Keywords and the other corpus tools, so delete the copies you do not want. Click a text's name to open that copy in the Gloss panel.

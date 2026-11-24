@@ -4,7 +4,10 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { glossFill, glossUnglossedMorphs, type Unglossed, glossForms, glossRegloss, archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSegmentations, glossUseBreakdown, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { unclearLine, unclearSheet, spanOf, type Unclear, type UnclearRow } from "../checks/unclear";
+import { open as pickFolder } from "@tauri-apps/plugin-dialog";
+import { localDay } from "../dates";
+import { unclearPassages, projectLanguage, saveDocument, glossFill, glossUnglossedMorphs, type Unglossed, glossForms, glossRegloss, archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSegmentations, glossUseBreakdown, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { leipzigIssues, leipzigLine, type LeipzigIssue } from "../checks/leipzig";
 import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
@@ -40,6 +43,7 @@ export const checksPanel: PanelDef = {
     let unusual: { words: Unusual[]; running: number } | null = null;
     let doubles: { pairs: LikelyPair[]; entries: number } | null = null;
     let timing: Timing | null = null;
+    let unclear: Unclear | null = null;
     let twice: Duplicates | null = null;
     let breakdowns: Segmented[] | null = null;
     let leipzig: { issues: LeipzigIssue[]; forms: number } | null = null;
@@ -59,9 +63,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null), glossSegmentations().catch(() => null), glossForms().catch(() => null), glossUnglossedMorphs().catch(() => null)]).then(
-        ([r, m, c, w, g, t, d, k, l, tm, ar, du, bd, gf, ug]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null), glossSegmentations().catch(() => null), glossForms().catch(() => null), glossUnglossedMorphs().catch(() => null), unclearPassages().catch(() => null)]).then(
+        ([r, m, c, w, g, t, d, k, l, tm, ar, du, bd, gf, ug, un]) => {
           if (mine !== seq) return;
+          unclear = un;
           bare = ug;
           leipzig = gf === null ? null : { issues: leipzigIssues(gf), forms: gf.length };
           breakdowns = bd;
@@ -571,6 +576,39 @@ export const checksPanel: PanelDef = {
       return h("li", { className: "ck-card" }, h("div", { className: "ck-variant" }, h("strong", { textContent: label }), h("span", { className: "note", textContent: `«${i.textTitle}»` }), open), h("p", { className: "note", textContent: timingNote(i) }));
     };
 
+    const unclearCard = (r: UnclearRow): HTMLElement => {
+      const open = h("button", { type: "button", className: "link-button", textContent: r.content, title: `Open this segment of «${r.textTitle}» in Transcribe` });
+      open.onclick = async () => {
+        await selectText(r.textId);
+        selectSegment({ textId: r.textId, tierId: r.tierId, segmentId: r.segmentId });
+        window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "transcribe" }));
+      };
+      return h("li", { className: "ck-card" }, h("div", { className: "ck-variant" }, h("span", { className: "note", textContent: `«${r.textTitle}» ${spanOf(r)}` }), open));
+    };
+
+    const printUnclear = async () => {
+      if (unclear === null || unclear.rows.length === 0) return;
+      try {
+        const folder = await pickFolder({ directory: true, title: "Where should the list go?" });
+        if (typeof folder !== "string") return;
+        const language = await projectLanguage();
+        const html = unclearSheet(unclear.rows, { language: language.name, date: localDay(new Date()), generator: "wugs" });
+        const r = await saveDocument({ folder, title: `${language.name.trim() || "Project"} unclear passages`, extension: "html", contents: html });
+        showToast({ tone: "info", lines: [`Saved the list in ${r.path}. Open it in a browser and print it for the session.`, ...r.notes] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [`Could not save the list: ${errorText(e)}`] });
+      }
+    };
+
+    const unclearSection = (): HTMLElement[] =>
+      unclear === null
+        ? []
+        : [
+            h("h3", { className: "ck-title", textContent: "Unclear passages" }),
+            h("p", { className: "note", textContent: unclearLine(unclear) }),
+            ...(unclear.rows.length === 0 ? [] : [h("div", { className: "cc-bar" }, h("button", { type: "button", className: "ck-print-unclear", textContent: "Print a list for the next session…", onclick: () => void printUnclear() })), h("ul", { className: "ck-list" }, ...unclear.rows.slice(0, 200).map(unclearCard))]),
+          ];
+
     const timingSection = (): HTMLElement[] =>
       timing === null
         ? []
@@ -661,6 +699,7 @@ export const checksPanel: PanelDef = {
         h("p", { className: "note", textContent: driftSummary(drift) }),
         h("ul", { className: "ck-list" }, ...drift.map(driftCard)),
         ...doublesSection(),
+        ...unclearSection(),
         ...timingSection(),
         ...twiceSection(),
         ...examplesSection(),
