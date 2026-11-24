@@ -18,6 +18,7 @@ import type { Grid } from "../orthography/logic.ts";
 import type { Answer, Ours } from "../typology/logic.ts";
 import { pronounTable, type PronounEntry } from "./pronouns.ts";
 import { asHtml, type Example } from "../gloss/example.ts";
+import { abbreviationsIn, abbreviationsOf, sortAbbreviations, type Abbreviation } from "../gloss/abbreviations.ts";
 
 export type Morpheme = { form: string; kind: "prefix" | "suffix" | "infix" | "proclitic" | "enclitic"; glosses: string[]; category: string };
 export type Feature = { id: string; question: string; answer: string; note: string };
@@ -65,6 +66,8 @@ export type SketchInput = {
   topics?: { name: string; examples: Example[] }[];
   /** The lexicon's entries with their part of speech and first gloss, for the pronoun table (`src/grammar/pronouns.ts`). */
   pronouns?: PronounEntry[];
+  /** The grammatical abbreviations the sketch's glosses use, with their meanings (`sketchAbbreviations`, then `abbreviationList`). */
+  abbreviations?: Abbreviation[];
   /** The person's own date for the title page, `YYYY-MM-DD`. */
   date: string;
   generator: string;
@@ -187,6 +190,15 @@ export function grammarSketch(d: SketchInput): string {
   const parts: string[] = [];
   parts.push(`<h1>A grammar sketch of ${esc(name)}</h1>`);
   parts.push(`<p class="meta">Draft of ${esc(d.date)}, started from the project's data by ${esc(d.generator)}.${ids ? ` ${esc(ids)}.` : ""} Bracketed passages are places to write.</p>`);
+
+  // A grammar's list of abbreviations comes before its first chapter.
+  const abbreviations = d.abbreviations ?? [];
+  if (abbreviations.length > 0) {
+    parts.push(
+      `<h2>Abbreviations</h2>`,
+      `<table class="abbr">${abbreviations.map((a) => `<tr><td class="gl">${esc(a.abbr.toLowerCase())}</td><td>${a.meaning === null ? todo("meaning") : esc(a.meaning)}</td></tr>`).join("")}</table>`,
+    );
+  }
 
   parts.push(`<h2>1. Introduction</h2>`);
   if (d.place) {
@@ -382,8 +394,23 @@ export function grammarSketch(d: SketchInput): string {
   const style = `body{font-family:"Charis SIL","Doulos SIL","Gentium Plus",serif;max-width:46em;margin:2em auto;line-height:1.45}
 table{border-collapse:collapse;margin:.6em 0}th,td{border:1px solid #999;padding:3px 8px;text-align:left;vertical-align:top}
 .chart td{min-width:3em;text-align:center}.ipa{font-family:"Charis SIL","Doulos SIL",serif}.big{font-size:1.3em;letter-spacing:.2em}
-.ex{margin:.5em 0}.ex table,.ex td{border:none}
+.ex{margin:.5em 0}.ex table,.ex td{border:none}.abbr td{border:none;padding:1px 1.2em 1px 0}.abbr .todo{margin:0}
 .todo{color:#8a5a00;font-style:italic}.meta{color:#555}.gl{font-variant:small-caps}
 .map{margin:1em 0}.map svg{width:100%;max-width:34em;border:1px solid #b9ad8f;display:block}.map figcaption{font-size:.9em;color:#444}`;
   return `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>A grammar sketch of ${esc(name)}</title>\n<style>${style}</style>\n</head>\n<body>\n${parts.join("\n")}\n</body>\n</html>\n`;
+}
+
+/** Every grammatical abbreviation the sketch prints in a gloss: the affix
+ * chart's and allomorph sets' glosses, the affixes' glosses in the morphology
+ * chapter and the examples by topic; person numbers first, then A to Z. */
+export function sketchAbbreviations(d: Pick<SketchInput, "slots" | "allomorphs" | "morphemes" | "topics">): string[] {
+  const seen = new Set<string>();
+  const add = (gloss: string) => {
+    for (const a of abbreviationsIn(gloss)) seen.add(a);
+  };
+  for (const slot of d.slots ?? []) for (const affix of slot.affixes) add(affix.slice(affix.indexOf(" ") + 1));
+  for (const set of d.allomorphs ?? []) add(set.gloss);
+  for (const m of d.morphemes) for (const g of m.glosses) add(g);
+  for (const t of d.topics ?? []) for (const a of abbreviationsOf(t.examples)) seen.add(a);
+  return sortAbbreviations([...seen]);
 }
