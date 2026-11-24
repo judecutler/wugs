@@ -732,6 +732,16 @@ def main():
             run.shot("state-checks-examples", run.page.locator(".panel-checks"))
             if "Add 4 from the texts" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not offer examples from the texts")
+            broken = run.page.locator(".panel-checks .ck-title", has_text="Words broken up more than one way")
+            broken.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
+            run.shot("state-checks-breakdowns", run.page.locator(".panel-checks"))
+            use = run.page.locator(".panel-checks button", has_text="Use «ni-kani» for all 5")
+            use.click()
+            run.page.locator(".panel-checks button", has_text="Change 1: sure?").click()
+            run.page.wait_for_timeout(400)
+            if run.page.evaluate("() => window.__WUGS_BREAKDOWN__") != "tok-a":
+                failures.append("Checks did not copy the chosen breakdown")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             unlike = run.page.locator(".panel-checks .ck-title", has_text="Unlike the lexicon")
             unlike.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
             run.shot("state-checks-unlike", run.page.locator(".panel-checks"))
