@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use wugs_desktop::kits::{self, WugDto, BUNDLED_ID, SCROLLS_ID};
+use wugs_desktop::kits::{self, WugDto, BUNDLED_ID, GLYPHS_ID, SCROLLS_ID};
 use wugs_desktop::layout;
 
 fn app_data() -> PathBuf {
@@ -15,12 +15,14 @@ fn a_fresh_install_has_tongues_active() {
     let dir = app_data();
     let view = kits::list(&dir).unwrap();
     assert_eq!(view.active, BUNDLED_ID);
-    // Tongues and Scrolls are built in, Tongues first.
-    assert_eq!(view.kits.len(), 2);
+    // Tongues, Scrolls and Glyphs are built in, Tongues first.
+    assert_eq!(view.kits.len(), 3);
     assert!(view.kits.iter().all(|k| k.bundled));
     assert_eq!(view.kits[0].kit.name, "Tongues");
     assert_eq!(view.kits[1].kit.id, SCROLLS_ID);
     assert_eq!(view.kits[1].kit.name, "Scrolls");
+    assert_eq!(view.kits[2].kit.id, GLYPHS_ID);
+    assert_eq!(view.kits[2].kit.subtitle, "Historical");
     assert!(view.broken.is_empty());
 }
 
@@ -68,7 +70,7 @@ fn duplicate_edit_and_activate() {
             .iter()
             .map(|k| k.kit.id.as_str())
             .collect::<Vec<_>>(),
-        [BUNDLED_ID, SCROLLS_ID, "my-field-kit"]
+        [BUNDLED_ID, SCROLLS_ID, GLYPHS_ID, "my-field-kit"]
     );
 
     // A second copy under the same name gets its own id.
@@ -161,7 +163,7 @@ fn unusable_files_are_listed_as_broken_not_dropped() {
     fs::write(kits_dir.join(format!("{BUNDLED_ID}.toml")), kits::BUNDLED).unwrap();
     fs::write(kits_dir.join("notes.txt"), "not a kit").unwrap();
     let view = kits::list(&dir).unwrap();
-    assert_eq!(view.kits.len(), 2);
+    assert_eq!(view.kits.len(), 3);
     let files: Vec<_> = view.broken.iter().map(|b| b.file.as_str()).collect();
     assert_eq!(
         files,
@@ -287,7 +289,7 @@ fn a_kits_wug_is_carried_saved_and_checked() {
         .unwrap_err()
         .contains("six hex digits"));
     assert_eq!(
-        kits::list(&dir).unwrap().kits[2].kit,
+        kits::list(&dir).unwrap().kits[3].kit,
         mine,
         "a refused save writes nothing"
     );
@@ -305,6 +307,21 @@ fn scrolls_is_built_in_switchable_and_read_only() {
     let mine = kits::duplicate(&dir, SCROLLS_ID, "My corpus kit").unwrap();
     assert!(!mine.bundled);
     assert!(mine.kit.tools.iter().any(|t| t == "concordance"));
+}
+
+#[test]
+fn glyphs_is_built_in_with_the_historical_tools() {
+    let dir = app_data();
+    kits::set_active(&dir, GLYPHS_ID).unwrap();
+    let view = kits::list(&dir).unwrap();
+    assert_eq!(view.active, GLYPHS_ID);
+    let glyphs = view.kits.iter().find(|k| k.kit.id == GLYPHS_ID).unwrap();
+    assert!(glyphs.bundled);
+    for tool in ["soundchanges", "compare", "signs", "lexicon"] {
+        assert!(glyphs.kit.tools.iter().any(|t| t == tool), "{tool}");
+    }
+    assert!(kits::save_code(&dir, GLYPHS_ID, kits::GLYPHS).is_err());
+    assert!(kits::delete(&dir, GLYPHS_ID).is_err());
 }
 
 #[test]

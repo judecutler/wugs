@@ -1,0 +1,57 @@
+# Glyphs: the historical kit (roadmap 42). Same project, same data as
+# Tongues and Scrolls; switching kits changes which tools open and how they
+# sit. A facsimile viewer and a cognate aligner of its own come as their own
+# items; until then it gathers the historical tools already built.
+
+[package]                          # the kit as a shareable package (docs/design/BUNDLES.md)
+type = "kit"
+license = "MPL-2.0"
+source = "https://github.com/judecutler/wugs"
+
+[bundle]
+authors = ["The wugs project"]
+summary = "Sound changes, compared word lists and the signs of a script, beside the texts and lexicon."
+
+[kit]
+id = "org.wugs.glyphs"
+name = "Glyphs"
+subtitle = "Historical"
+version = "0.0.1"
+description = "Historical work: derive words by sound changes, compare word lists and find correspondences, and count the signs of a script."
+offline_core = true
+
+[tools]                            # panels this kit offers; Conflicts, Devices and Kits are always offered.
+enabled = [
+  "texts",                         # the documents: inscriptions, manuscripts, word lists
+  "lexicon",                       # headwords, the input to sound changes
+  "soundchanges",                  # ordered rules in SCA² notation, checked against reflexes
+  "compare",                       # other languages' lists, correspondences, cognates and a tree
+  "signs",                         # a script's signs: positions, entropy, Kober's triplets
+  "sounds",                        # the inventory and its distribution
+  "orthography",                   # transliteration by an orthography profile
+  "concordance",                   # every occurrence of a sign, word or gloss
+  "frequencies",                   # how often each one occurs
+  "search",
+  "transcribe",                    # read and correct the text line by line
+  "interlinear",                   # the whole text, glossed
+  "gloss",                         # morph analysis of one line
+]
+
+[layout]
+panels = [
+  { panel = "lexicon" },
+  { panel = "texts", place = "left", of = "lexicon", width = 260 },
+  { panel = "soundchanges", place = "right", of = "lexicon", width = 460 },
+  { panel = "compare", place = "tab", of = "soundchanges" },
+  { panel = "signs", place = "tab", of = "soundchanges" },
+  { panel = "concordance", place = "below", of = "lexicon", height = 300 },
+  { panel = "frequencies", place = "tab", of = "concordance" },
+  { panel = "interlinear", place = "tab", of = "concordance" },
+  { panel = "gloss", place = "tab", of = "concordance" },
+  { panel = "transcribe", place = "tab", of = "concordance" },
+]
+active = ["texts", "lexicon", "soundchanges", "concordance"]
+
+[wug]
+body = "#7fb3a3"                   # verdigris, like old bronze
+accessories = ["glasses", "tablet"]   # reading glasses and a tablet of signs

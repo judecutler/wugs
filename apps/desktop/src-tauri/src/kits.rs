@@ -1,4 +1,4 @@
-//! Installed kits: the built-in kits (Tongues, Scrolls), compiled in and read-only, and
+//! Installed kits: the built-in kits (Tongues, Scrolls, Glyphs), compiled in and read-only, and
 //! the user's own kits, one `kits/<id>.toml` each in app data. The active
 //! kit is a per-machine choice in `kits/active`. Manifests are read and
 //! rewritten by `wugs-kit`; this module only stores them.
@@ -16,8 +16,11 @@ pub const BUNDLED_ID: &str = "org.wugs.tongues";
 /// The corpus kit (roadmap 41), built in beside Tongues.
 pub const SCROLLS: &str = include_str!("../../../../kits/scrolls/kit.toml");
 pub const SCROLLS_ID: &str = "org.wugs.scrolls";
+/// The historical kit (roadmap 42), built in beside the others.
+pub const GLYPHS: &str = include_str!("../../../../kits/glyphs/kit.toml");
+pub const GLYPHS_ID: &str = "org.wugs.glyphs";
 /// Every built-in kit, Tongues first (the default).
-pub const BUILT_IN: [(&str, &str); 2] = [(BUNDLED_ID, BUNDLED), (SCROLLS_ID, SCROLLS)];
+pub const BUILT_IN: [(&str, &str); 3] = [(BUNDLED_ID, BUNDLED), (SCROLLS_ID, SCROLLS), (GLYPHS_ID, GLYPHS)];
 
 /// A built-in kit's file, or None for a user kit.
 pub fn built_in(id: &str) -> Option<&'static str> {
