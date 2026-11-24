@@ -133,7 +133,8 @@
   // A synthetic spectrogram in the Rust layout (src-tauri/src/spectrogram.rs):
   // 2500 columns of 100 rows, half-dB steps above -120 dB, with formant bands
   // where the fixture's voice is and a noisy hiss elsewhere.
-  function spectrogram({ index }) {
+  function spectrogram({ index, narrow }) {
+    if (narrow) window.__WUGS_NARROW__ = true;
     const rows = 100, cols = 2500, out = new Uint8Array(rows * cols);
     for (let c = 0; c < cols; c++) {
       const t = index * 10000 + (c + 0.5) * 4;

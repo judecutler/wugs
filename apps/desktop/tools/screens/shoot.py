@@ -388,7 +388,16 @@ def main():
                 run.shot("state-spectrogram", run.page.locator(".panel-timeline"))
                 if "active" not in (run.page.locator(".panel-timeline .tl-toolbar button", has_text="Spectrogram").get_attribute("class") or ""):
                     failures.append("the Spectrogram toggle did not turn on")
+                # Narrowband asks for its own chunks.
+                run.page.evaluate("window.__WUGS_NARROW__ = false")
+                run.page.locator(".panel-timeline select.tl-band").select_option("narrow")
+                run.page.wait_for_timeout(600)
+                if not run.page.evaluate("window.__WUGS_NARROW__"):
+                    failures.append("Narrowband did not ask for narrowband chunks")
+                run.page.locator(".panel-timeline select.tl-band").select_option("broad")
                 run.page.locator(".panel-timeline .tl-toolbar button", has_text="Spectrogram").click()
+                if run.page.locator(".panel-timeline select.tl-band").is_visible():
+                    failures.append("the band picker stayed with the spectrogram off")
                 # Pitch on: the voice picker shows beside the overlay toggles.
                 run.page.locator(".panel-timeline .praat-bar button", has_text="Pitch").click()
                 run.page.wait_for_timeout(700)
