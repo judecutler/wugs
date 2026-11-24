@@ -9,6 +9,7 @@
 import { chart, gridOf, inventory, MANNER_NAMES, PLACE_NAMES, type Sound } from "../sounds/ipa.ts";
 import { gapsNote, positions, shapes, share } from "../sounds/shapes.ts";
 import { syllableNote, syllableTypes } from "../sounds/syllables.ts";
+import { toneMelodies, tonesNote } from "../sounds/tones.ts";
 import { possibleAllophones } from "../sounds/allophones.ts";
 import { countsLine, total, verdict, type WordOrder } from "../wordorder/logic.ts";
 import type { Grid } from "../orthography/logic.ts";
@@ -231,6 +232,16 @@ export function grammarSketch(d: SketchInput): string {
     );
   }
   parts.push(todo("Syllable structure (check the cuts above), stress or tone"));
+  const tones = toneMelodies(d.words);
+  if (tones.marked > 0) {
+    parts.push(
+      `<h3>2.5 Tone</h3><p>${esc(tonesNote(tones))}</p><table><tr><th>Syllables</th><th>Melody</th><th>Word forms</th><th>Example</th></tr>${tones.melodies
+        .filter((m) => m.syllables <= 3)
+        .map((m) => `<tr><td>${m.syllables}</td><td class="ipa">${esc(m.melody)}</td><td>${m.words}</td><td class="ipa">${esc(m.example)}</td></tr>`)
+        .join("")}</table>`,
+      todo("The tones and their contrasts, the melodies words allow, and tone rules (spreading, downstep, floating tones)"),
+    );
+  }
 
   parts.push(`<h2>3. Orthography</h2>`);
   if (d.graphemes.length === 0) {

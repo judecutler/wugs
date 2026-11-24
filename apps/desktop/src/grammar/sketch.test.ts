@@ -169,3 +169,11 @@ test("similar sounds that keep apart are listed in the phonology chapter", () =>
   assert.match(html, /may be allophones of one phoneme/);
   assert.match(html, /<td class="ipa">\/d\/ → \[t\] \/ _ a word edge<\/td>/);
 });
+
+test("tone-marked words get a tone section with their melodies; unmarked ones none", () => {
+  assert.doesNotMatch(grammarSketch(base), /2\.5 Tone/);
+  const html = grammarSketch({ ...base, words: [{ word: "bálà", count: 3 }, { word: "kálá", count: 2 }, { word: "bá", count: 1 }] });
+  assert.match(html, /<h3>2\.5 Tone<\/h3>/);
+  assert.match(html, /<td class="ipa">H\.L<\/td><td>1<\/td><td class="ipa">bálà<\/td>/);
+  assert.match(html, /never met: L\.H, L\.L/);
+});
