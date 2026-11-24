@@ -17,14 +17,17 @@ export function marks(positions: readonly number[], words: number, columns: numb
 export const per1000 = (hits: number, words: number): string => (words === 0 ? "0" : ((hits / words) * 1000).toFixed(1));
 
 /** DP in words: what the number means to someone who has not read Gries. */
+/** A normalised DP in words. */
+export const spreadReading = (norm: number): string =>
+  norm < 0.2 ? "spread evenly across the texts" : norm < 0.5 ? "spread unevenly" : norm < 0.8 ? "concentrated in a few texts" : "almost all in one text";
+
 export function spreadWords(d: Dispersion): string {
   const parts = d.texts.filter((t) => t.words > 0).length;
   const found = d.texts.filter((t) => t.hits > 0).length;
   const where = `Found ${d.hits} ${d.hits === 1 ? "time" : "times"} in ${found} of ${parts} ${parts === 1 ? "text" : "texts"} (${d.words} running words).`;
   if (d.dp === null) return d.hits === 0 ? "Not found." : `${where} Spread needs two texts or more.`;
   const norm = d.dpNorm ?? d.dp;
-  const reading = norm < 0.2 ? "spread evenly across the texts" : norm < 0.5 ? "spread unevenly" : norm < 0.8 ? "concentrated in a few texts" : "almost all in one text";
-  return `${where} DP ${d.dp.toFixed(2)} (normalised ${norm.toFixed(2)}): ${reading}. 0 means in step with each text's size, 1 all in one text.`;
+  return `${where} DP ${d.dp.toFixed(2)} (normalised ${norm.toFixed(2)}): ${spreadReading(norm)}. 0 means in step with each text's size, 1 all in one text.`;
 }
 
 export type PlotSort = "text" | "hits" | "rate";

@@ -432,6 +432,12 @@ def main():
             run.shot("state-frequencies-endings", run.page.locator(".panel-frequencies"))
             if run.page.locator(".panel-frequencies .fq-table.fq-endings").count() != 1:
                 failures.append("By ending did not line the words up at their ends")
+            run.page.locator(".panel-frequencies .fq-sort").select_option("spread")
+            run.page.wait_for_timeout(200)
+            run.shot("state-frequencies-spread", run.page.locator(".panel-frequencies"))
+            first = run.page.locator(".panel-frequencies .fq-table tbody tr td.fq-item").first.text_content()
+            if first != "nikani":
+                failures.append(f"frequencies: the most evenly spread word is not first ({first!r})")
             run.page.locator(".panel-frequencies .fq-sort").select_option("count")
             # Only the words the lexicon lacks, each with Add.
             run.page.locator(".panel-frequencies .fq-missing input").check()

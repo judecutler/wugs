@@ -8,7 +8,8 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, frequencies, lexiconAdd } from "../api";
 import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
-import { asTsv, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
+import { spreadReading } from "../concordance/plot";
+import { asTsv, dpCell, hasSpread, spreadNote, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast, touchLexicon } from "../store";
 import { askConcordance } from "./concordance";
@@ -123,10 +124,11 @@ export const frequenciesPanel: PanelDef = {
       const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn; filter to find the others (Copy table has them all).` : "";
       // Richness is a property of a whole word list, not of n-grams, morphs or tags.
       const rich = !ngrams() && (kind === "word" || kind === "translation") ? richness(data) : "";
-      count.textContent = summary(data, noun()) + rich + perWord + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
+      count.textContent = summary(data, noun()) + rich + perWord + spreadNote(rankedRows) + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
       const withLexicon = marked();
       missingBox.hidden = !withLexicon;
-      const columns = ["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts", ...(withLexicon ? ["In lexicon"] : [])];
+      const spread = hasSpread(rankedRows);
+      const columns = ["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts", ...(spread ? ["DP"] : []), ...(withLexicon ? ["In lexicon"] : [])];
       const head = h("tr", {}, ...columns.map((t) => h("th", { textContent: t, scope: "col" })));
       // A reverse list lines its words up at their ends, so shared endings read down the column.
       table.classList.toggle("fq-endings", sortBy === "ending");
@@ -144,6 +146,7 @@ export const frequenciesPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: r.count.toLocaleString("en") }),
               h("td", { className: "fq-num", textContent: perThousand(r.count, tokens) }),
               h("td", { className: "fq-num", textContent: String(r.texts) }),
+              spread ? h("td", { className: "fq-num", textContent: dpCell(r.dp), title: typeof r.dp === "number" ? spreadReading(r.dp) : "" }) : null,
               withLexicon ? lexiconTd(r) : null,
             );
             const sc = scopeOf(scope);

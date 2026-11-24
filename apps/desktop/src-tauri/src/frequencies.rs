@@ -35,6 +35,10 @@ pub struct FrequencyRow {
     /// `none`: the words a dictionary still lacks.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lexicon: Option<&'static str>,
+    /// How evenly it is spread over the texts: Gries's DP normalised
+    /// (`dispersion::dp`), 0 in step with each text's share of the items
+    /// counted, 1 all in one text. None with fewer than two texts.
+    pub dp: Option<f64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -62,7 +66,8 @@ struct Tally {
     first: usize,
     count: usize,
     spellings: Vec<(String, usize)>,
-    texts: Vec<String>,
+    /// (text index, occurrences there), in the order the texts were met.
+    texts: Vec<(usize, usize)>,
 }
 
 pub fn frequencies(session: &mut Session, kind: Kind, scope: &Scope) -> Result<Frequencies, String> {
@@ -94,11 +99,19 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: us
     let mut tokens = 0usize;
     let mut running = 0usize;
     let mut unlabelled = 0usize;
+    // Each text met, with how many items were counted in it (the parts DP compares).
+    let mut text_index: HashMap<String, usize> = HashMap::new();
+    let mut sizes: Vec<usize> = Vec::new();
     let mut count = |key: String, spelling: &str, text: &str, tokens: &mut usize| {
         if key.is_empty() {
             return;
         }
         *tokens += 1;
+        let at = *text_index.entry(text.to_string()).or_insert_with(|| {
+            sizes.push(0);
+            sizes.len() - 1
+        });
+        sizes[at] += 1;
         let next = tallies.len();
         let t = tallies.entry(key).or_insert_with(|| Tally { first: next, ..Tally::default() });
         t.count += 1;
@@ -106,8 +119,9 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: us
             Some((_, n)) => *n += 1,
             None => t.spellings.push((spelling.to_string(), 1)),
         }
-        if t.texts.last().map(String::as_str) != Some(text) && !t.texts.iter().any(|x| x == text) {
-            t.texts.push(text.to_string());
+        match t.texts.iter_mut().rev().find(|(i, _)| *i == at) {
+            Some((_, n)) => *n += 1,
+            None => t.texts.push((at, 1)),
         }
     };
     each_segment(p, Read::of(kind), scope, |seg| {
@@ -179,7 +193,12 @@ pub fn frequencies_of(session: &mut Session, kind: Kind, scope: &Scope, size: us
         .into_iter()
         .map(|t| {
             let item = t.spellings.iter().fold(None::<&(String, usize)>, |best, s| if best.is_none_or(|b| s.1 > b.1) { Some(s) } else { best }).map(|s| s.0.clone()).unwrap_or_default();
-            FrequencyRow { item, count: t.count, texts: t.texts.len(), lexicon: None }
+            let mut hits = vec![0usize; sizes.len()];
+            for (i, n) in &t.texts {
+                hits[*i] = *n;
+            }
+            let dp = crate::dispersion::dp(&sizes, &hits).1;
+            FrequencyRow { item, count: t.count, texts: t.texts.len(), lexicon: None, dp }
         })
         .collect();
     if kind == Kind::Word && size == 1 {
@@ -291,6 +310,45 @@ mod tests {
         }
         assert!(frequencies_of(&mut session, Kind::Morph, &Scope::all(), 2).is_err());
         assert!(frequencies_of(&mut session, Kind::Word, &Scope::all(), 6).is_err());
+        drop(session);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn rows_say_how_evenly_they_spread() {
+        let dir = std::env::temp_dir().join(format!("wugs-freq-dp-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir, "tester").unwrap();
+        let only = |session: &mut Session| frequencies(session, Kind::Word, &Scope::all()).unwrap();
+        assert!(only(&mut session).rows.iter().all(|r| r.dp.is_none()), "one text: nothing to compare");
+        let a = crate::session::create_text(&mut session, "A").unwrap();
+        let b = crate::session::create_text(&mut session, "B").unwrap();
+        crate::session::add_segment(&mut session, &a, None, None, None, "bo ka bo ka").unwrap();
+        crate::session::add_segment(&mut session, &b, None, None, None, "bo zu zu zu").unwrap();
+        let f = only(&mut session);
+        let dp = |word: &str| f.rows.iter().find(|r| r.item == word).unwrap().dp.unwrap();
+        // Against the parts' sizes: every text's words, the sample's included.
+        let by: Vec<(String, usize)> = {
+            let mut by: Vec<(String, usize)> = Vec::new();
+            crate::concordance::each_segment(crate::session::project(&mut session).unwrap(), crate::concordance::Read::Words, &Scope::all(), |seg| {
+                match by.iter_mut().find(|(t, _)| *t == seg.text) {
+                    Some((_, n)) => *n += seg.words.len(),
+                    None => by.push((seg.text.clone(), seg.words.len())),
+                }
+                Ok(())
+            })
+            .unwrap();
+            by
+        };
+        let sizes: Vec<usize> = by.iter().map(|(_, n)| *n).collect();
+        assert_eq!(sizes.iter().sum::<usize>(), f.words);
+        let zu: Vec<usize> = by.iter().map(|(t, _)| if *t == b { 3 } else { 0 }).collect();
+        assert!((dp("zu") - crate::dispersion::dp(&sizes, &zu).1.unwrap()).abs() < 1e-12, "Gries's DP, normalised");
+        assert!(dp("zu") > dp("bo"), "zu sits in one text, bo in two");
+        assert!(dp("bo") < 1.0 && dp("zu") > 0.5);
+        // One text picked: no spread to measure.
+        assert!(frequencies(&mut session, Kind::Word, &Scope::text(&a)).unwrap().rows.iter().all(|r| r.dp.is_none()));
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

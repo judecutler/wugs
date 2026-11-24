@@ -4,7 +4,9 @@
  * of its forms is spelled this way, `analysed` when not but some use is broken
  * into morphs, `none` when the dictionary does not have it yet. */
 export type LexiconStatus = "entry" | "analysed" | "none";
-export type FrequencyRow = { item: string; count: number; texts: number; lexicon?: LexiconStatus };
+/** `dp`: Gries's DP, normalised: 0 spread over the texts in step with their
+ * sizes, 1 all in one text; null with fewer than two texts to compare. */
+export type FrequencyRow = { item: string; count: number; texts: number; lexicon?: LexiconStatus; dp?: number | null };
 /** A row with its frequency rank (1 = most frequent), kept through sorting and filtering. */
 export type RankedRow = FrequencyRow & { rank: number };
 
@@ -31,14 +33,25 @@ export function unlabelledNote(f: Frequencies, kind: "lemma" | "tag"): string {
   return ` ${n.toLocaleString("en")} ${n === 1 ? "word has" : "words have"} no ${what} yet: tag and parse its text in the Sentence panel, or ${how}.`;
 }
 
-export type FreqSort = "count" | "alpha" | "ending" | "texts";
+export type FreqSort = "count" | "alpha" | "ending" | "texts" | "spread";
 
 export const FREQ_SORTS: { id: FreqSort; label: string }[] = [
   { id: "count", label: "Most frequent first" },
   { id: "alpha", label: "Alphabetical" },
   { id: "ending", label: "By ending (reverse list)" },
   { id: "texts", label: "In most texts first" },
+  { id: "spread", label: "Most evenly spread first" },
 ];
+
+/** Whether any row has a spread to show (two texts or more were counted). */
+export const hasSpread = (rows: readonly FrequencyRow[]): boolean => rows.some((r) => typeof r.dp === "number");
+
+/** A row's DP as the table prints it. */
+export const dpCell = (dp: number | null | undefined): string => (typeof dp === "number" ? dp.toFixed(2) : "");
+
+/** The sentence under a list with a DP column, saying how to read it. */
+export const spreadNote = (rows: readonly FrequencyRow[]): string =>
+  hasSpread(rows) ? " DP says how evenly each is spread over the texts: 0 in step with each text's size, 1 all in one text." : "";
 
 const collator = new Intl.Collator(undefined, { sensitivity: "accent", numeric: true });
 const graphemes = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -56,6 +69,8 @@ export function reversed(item: string): string {
 export function sortRows<R extends FrequencyRow>(rows: readonly R[], by: FreqSort): R[] {
   if (by === "count") return [...rows];
   if (by === "texts") return [...rows].sort((a, b) => b.texts - a.texts || b.count - a.count);
+  // The core vocabulary first: evenly spread, then frequent; rows with no DP last.
+  if (by === "spread") return [...rows].sort((a, b) => (a.dp ?? 2) - (b.dp ?? 2) || b.count - a.count);
   if (by === "ending") {
     const keyed = rows.map((r) => ({ r, k: reversed(r.item) }));
     return keyed.sort((a, b) => collator.compare(a.k, b.k) || collator.compare(a.r.item, b.r.item)).map((x) => x.r);
@@ -115,8 +130,9 @@ export function summary(f: Frequencies, noun: { one: string; many: string }): st
 export function asTsv(rows: readonly RankedRow[], tokens: number, item = "item"): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
   const lexicon = rows.some((r) => r.lexicon !== undefined);
-  const head = `rank\t${clean(item)}\tcount\tper 1000 words\ttexts${lexicon ? "\tin lexicon" : ""}`;
-  return [head, ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts), ...(lexicon ? [lexiconCell(r.lexicon)] : [])].join("\t"))].join("\n");
+  const spread = hasSpread(rows);
+  const head = `rank\t${clean(item)}\tcount\tper 1000 words\ttexts${spread ? "\tDP" : ""}${lexicon ? "\tin lexicon" : ""}`;
+  return [head, ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts), ...(spread ? [dpCell(r.dp)] : []), ...(lexicon ? [lexiconCell(r.lexicon)] : [])].join("\t"))].join("\n");
 }
 
 /** Lexical richness of a word list: type/token ratio, Guiraud's index
