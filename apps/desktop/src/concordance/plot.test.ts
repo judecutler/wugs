@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { marks, per1000, plotTsv, sortPlots, spreadWords, type Dispersion } from "./plot.ts";
+import { byPeriod, marks, per1000, periodTsv, plotTsv, sortPlots, spreadWords, timeKeys, yearOf, type Dispersion, type TextPlot } from "./plot.ts";
 
 test("marks fold positions into columns, one each", () => {
   assert.deepEqual(marks([0, 1, 50, 99], 100, 10), [0, 5, 9]);
@@ -47,4 +47,24 @@ test("matches summed by a text detail", async () => {
   const rows = byDetail(texts, "genre");
   assert.deepEqual(rows.map((r) => [r.value, r.texts, r.words, r.hits]), [["narrative", 2, 1500, 15], ["conversation", 1, 1000, 2], [NOT_GIVEN, 1, 200, 9]]);
   assert.equal(detailTsv(rows, "genre").split("\n")[1], "narrative\t2\t1500\t15\t10.0");
+});
+
+test("a detail's year is read from dates and years as people write them", () => {
+  assert.equal(yearOf("1953-04-02"), 1953);
+  assert.equal(yearOf("c. 850"), 850);
+  assert.equal(yearOf("450 BCE"), -450);
+  assert.equal(yearOf("folio 12"), null);
+  assert.equal(yearOf("2.5"), null);
+});
+
+test("matches are summed over time, gaps kept", () => {
+  const t = (id: string, date: string | null, words: number, hits: number): TextPlot => ({ textId: id, title: id, words, hits, positions: [], meta: date === null ? [] : [["date", date]] });
+  const texts = [t("a", "1950-01-01", 1000, 4), t("b", "1953", 500, 1), t("c", "1990", 1000, 0), t("d", null, 100, 9), t("e", "notes", 50, 0)];
+  assert.deepEqual(timeKeys(texts), ["date"]);
+  const p = byPeriod(texts, "date");
+  assert.equal(p.width, 10);
+  assert.deepEqual(p.rows.map((r) => [r.label, r.texts, r.hits]), [["1950s", 2, 5], ["1960s", 0, 0], ["1970s", 0, 0], ["1980s", 0, 0], ["1990s", 1, 0]]);
+  assert.equal(p.undated, 2);
+  assert.equal(periodTsv(p, "date").split("\n")[1], "1950s\t1950\t1959\t2\t1500\t5\t3.3");
+  assert.equal(byPeriod([t("x", "2001", 10, 1), t("y", "2003", 10, 1)], "date").rows.map((r) => r.label).join(" "), "2001 2002 2003");
 });

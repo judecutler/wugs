@@ -715,6 +715,12 @@ def main():
             run.shot("state-concordance-plot-genre", run.page.locator(".panel-concordance"))
             if "procedural" not in run.page.locator(".panel-concordance .cc-rows").inner_text():
                 failures.append("the plot did not sum the texts by genre")
+            run.page.select_option(".panel-concordance .cc-plot-by", "time:date")
+            run.page.wait_for_timeout(200)
+            run.shot("state-concordance-plot-time", run.page.locator(".panel-concordance"))
+            decades = run.page.locator(".panel-concordance .cc-plot-title").all_text_contents()
+            if decades[:2] != ["1960s", "1970s"] or decades[-1] != "2010s":
+                failures.append("the plot over time did not list the decades in order: " + str(decades))
             run.page.select_option(".panel-concordance .cc-plot-by", "")
             if run.page.locator(".panel-concordance .cc-plot-row").count() != 3:
                 failures.append("the concordance plot did not show one row per text with words")
