@@ -85,6 +85,20 @@ impl Project {
         self.set_text_pages(text, &refs)
     }
 
+    /// Give a page its picture: an image source that came without one (a
+    /// TEI facsimile names its images but does not hold them) or whose
+    /// picture is replaced by a better scan. Resolving.
+    pub fn set_page_image(&mut self, source: &str, blob: &str) -> Result<Option<CommitResult>, String> {
+        self.require_image(source)?;
+        crate::check_blob_ref(blob)?;
+        if self.proj.field_str(source, "blob")?.as_deref() == Some(blob) {
+            return Ok(None);
+        }
+        let mut t = self.intent("set-page-image").resolving();
+        t.set("source", source, source, "blob", Value::str(blob))?;
+        t.commit().map(Some)
+    }
+
     /// Where a segment stands on a page, when it has been marked.
     pub fn segment_region(&self, segment: &str) -> Result<Option<Region>, String> {
         Ok(self.proj.field(segment, "region")?.and_then(|(v, _)| region_of(&v)))
@@ -148,6 +162,12 @@ mod tests {
         let elsewhere = p.add_source("another stone", Some(&blob), "image", None).unwrap();
         assert!(p.set_segment_region(&text, &seg, Some(&Region { source: elsewhere, ..r.clone() })).unwrap_err().contains("not one of this text's pages"));
         p.set_segment_region(&text, &seg, None).unwrap();
+        let bare = p.add_source("folio 2", None, "image", None).unwrap();
+        let other = format!("blake3:{}", "1".repeat(64));
+        p.set_page_image(&bare, &other).unwrap();
+        assert_eq!(p.proj.field_str(&bare, "blob").unwrap(), Some(other.clone()));
+        assert!(p.set_page_image(&bare, &other).unwrap().is_none());
+        assert!(p.set_page_image(&sound, &other).is_err());
         assert_eq!(p.segment_region(&seg).unwrap(), None);
         std::fs::remove_dir_all(root).ok();
     }

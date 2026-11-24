@@ -5,7 +5,7 @@
 // src-tauri/src/facsimile.rs; rules in ../facsimile/logic.ts.
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { errorText, facsimileAddPage, facsimileMovePage, facsimileRemovePage, facsimileSetArea, facsimileView } from "../api";
+import { errorText, facsimileAddPage, facsimileMovePage, facsimilePageImage, facsimileRemovePage, facsimileSetArea, facsimileView } from "../api";
 import { emptyState, h } from "../dom";
 import { areasOn, facsimileLine, nextToMark, pageOf, pointIn, rectFrom, zoomBy, type Area, type FacsimileView, type Point } from "../facsimile/logic";
 import { provide } from "../palette/registry";
@@ -97,7 +97,12 @@ export const facsimilePanel: PanelDef = {
       const wrap = h("div", { className: "fx-page" });
       wrap.style.width = `${zoom * 100}%`;
       if (p.path === null) {
-        wrap.append(h("p", { className: "note", textContent: `${p.label} is not on this computer. It comes with the project's files when another device syncs them.` }));
+        const choose = h("button", { type: "button", textContent: "Choose its image…", title: "Choose the picture of this page from this computer", disabled: busy });
+        choose.onclick = async () => {
+          const path = await pickFile({ title: `Choose the image of ${p.label}`, multiple: false, directory: false, filters: [{ name: "Pictures", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }] });
+          if (typeof path === "string") await run(() => facsimilePageImage({ text: t.id, source: p.source, path }));
+        };
+        wrap.append(h("p", { className: "note fx-missing" }, `The image of «${p.label}» is not here: it came from a file that only named it, or another device has not sent it yet. `, choose));
         return wrap;
       }
       const img = h("img", { src: convertFileSrc(p.path), alt: p.label, draggable: false });

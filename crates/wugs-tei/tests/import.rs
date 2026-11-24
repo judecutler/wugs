@@ -98,3 +98,42 @@ fn tei_goes_out_and_comes_back_the_same() {
     std::fs::remove_dir_all(root).ok();
     std::fs::remove_dir_all(root2).ok();
 }
+
+#[test]
+fn page_images_and_zones_go_out_and_come_back() {
+    let (root, mut p, tier) = temp_project();
+    let text = import_tei(&mut p, SESSION, "session", &tier).unwrap().texts[0].clone();
+    let blob = format!("blake3:{}", "0".repeat(64));
+    let page = p.add_source("folio 1r.png", Some(&blob), "image", None).unwrap();
+    p.add_text_page(&text, &page).unwrap();
+    let first = sentences(&p, &text)[0].segment.clone();
+    let area = wugs_core::facsimile::Region { source: page.clone(), x: 0.1, y: 0.25, w: 0.5, h: 0.05 };
+    p.set_segment_region(&text, &first, Some(&area)).unwrap();
+    let out = export_tei(&p, "Sesión", None, &sentences(&p, &text), "wugs test").unwrap();
+    for part in ["<surface xml:id=\"page-1\" n=\"1\" ulx=\"0\" uly=\"0\" lrx=\"10000\" lry=\"10000\">", "<graphic url=\"folio 1r.png\"/>", "<zone xml:id=\"z-u1.s1\" ulx=\"1000\" uly=\"2500\" lrx=\"6000\" lry=\"3000\"/>"] {
+        assert!(out.tei.contains(part), "{part} in {}", out.tei);
+    }
+    assert!(out.tei.contains("facs=\"#z-u1.s1\""), "{}", out.tei);
+    wugs_xml::parse(&out.tei).unwrap();
+
+    let (root2, mut q, tier2) = temp_project();
+    let r = import_tei(&mut q, &out.tei, "x", &tier2).unwrap();
+    assert_eq!((r.pages, r.regions), (1, 1));
+    let back = r.texts[0].clone();
+    let pages = q.text_pages(&back).unwrap();
+    assert_eq!(pages.len(), 1);
+    assert_eq!(q.proj.field_str(&pages[0], "label").unwrap().as_deref(), Some("folio 1r.png"));
+    let seg = sentences(&q, &back)[0].segment.clone();
+    let got = q.segment_region(&seg).unwrap().unwrap();
+    assert_eq!((got.source.as_str(), got.x, got.y, got.w, got.h), (pages[0].as_str(), 0.1, 0.25, 0.5, 0.05));
+
+    // A Transkribus-style surface sized by its graphic in pixels.
+    let pixels = "<TEI><facsimile><surface><graphic url=\"scans/p1.jpg\" width=\"2000px\" height=\"1000px\"/><zone xml:id=\"r1\" ulx=\"200\" uly=\"100\" lrx=\"1200\" lry=\"300\"/></surface></facsimile><text><body><p><s facs=\"#r1\">Una línea.</s></p></body></text></TEI>";
+    let r = import_tei(&mut q, pixels, "scan", &tier2).unwrap();
+    let seg = sentences(&q, &r.texts[0])[0].segment.clone();
+    let got = q.segment_region(&seg).unwrap().unwrap();
+    assert_eq!((got.x, got.y, got.w, got.h), (0.1, 0.1, 0.5, 0.2));
+    assert_eq!(q.proj.field_str(&got.source, "label").unwrap().as_deref(), Some("p1.jpg"));
+    std::fs::remove_dir_all(root).ok();
+    std::fs::remove_dir_all(root2).ok();
+}

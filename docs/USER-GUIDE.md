@@ -1015,6 +1015,8 @@ The **Facsimile** panel (in front in Glyphs; in Tongues, press **Ctrl+K** and ch
 
 To mark where a line stands on the page, select it in Transcribe or Interlinear, then drag a box around it on the page. With **then the next line** ticked, the next line on the same track that has no box yet is selected, so you can mark a page line after line. Click a box to select its line in the other panels; selecting a marked line elsewhere turns to its page. Drag again to move a box, or press **Clear its area**. The boxes are kept as shares of the page's width and height, so they stay right whatever the image's size, and they sync with the project like any edit.
 
+A TEI export carries the pages and boxes as TEI's `<facsimile>`: a `<surface>` per page naming its image, a `<zone>` per box, and each sentence's `facs` pointing at its zone. Importing such a file (wugs's own, or one from another tool whose zones have coordinates, such as Transkribus with each sentence pointing at its zone) brings the pages and boxes back. A TEI file names its images without holding them, so each page then says its image is not here: press **Choose its image…** to add it.
+
 ### Count the signs of a script
 
 The **Signs** panel (open it with **Ctrl+K**, **Show Signs**) asks of a script the first questions a decipherer asks. It reads the words of a track, or of every track, as they are written: an inscription transcribed sign by sign, a manuscript, or a text in a practical orthography.

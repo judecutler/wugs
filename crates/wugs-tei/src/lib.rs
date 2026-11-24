@@ -47,6 +47,11 @@ pub struct ImportReport {
     pub blocks_as_segments: usize,
     /// Elements left out, by name (`note` ×3).
     pub not_carried: BTreeMap<String, usize>,
+    /// `<surface>`s of a `<facsimile>` that became page images of their
+    /// text (each without its picture, which a TEI file does not hold), and
+    /// segments whose `facs` named a zone on one.
+    pub pages: usize,
+    pub regions: usize,
 }
 
 /// One unit of a TEI text before it is written.
@@ -56,6 +61,8 @@ struct Unit {
     tokens: Vec<Tok>,
     id: Option<String>,
     who: Option<String>,
+    /// The `facs` pointer of the element: the zone it stands on.
+    facs: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -75,6 +82,52 @@ struct Doc {
     /// What the header says about the document, as metadata keys.
     meta: Vec<(String, String)>,
     units: Vec<Unit>,
+    surfaces: Vec<Surface>,
+}
+
+/// A page of a `<facsimile>`: its image's address and its zones, each a
+/// rectangle as fractions of the surface.
+#[derive(Debug, Default)]
+struct Surface {
+    url: String,
+    zones: Vec<(String, [f64; 4])>,
+}
+
+/// The pages of a TEI document's `<facsimile>`: each `<surface>` whose
+/// extent is given (`ulx`/`uly`/`lrx`/`lry`, or a `<graphic>`'s `width` and
+/// `height` in pixels) with its rectangular `<zone>`s, nested ones too.
+fn surfaces_of(tei: &XmlNode) -> Vec<Surface> {
+    let num = |n: &XmlNode, k: &str| attr(n, k).and_then(|v| v.trim().trim_end_matches("px").parse::<f64>().ok());
+    let mut out = Vec::new();
+    for f in tei.children.iter().filter(|c| local(&c.name) == "facsimile") {
+        for s in f.children.iter().filter(|c| local(&c.name) == "surface") {
+            let graphic = s.children.iter().find(|c| local(&c.name) == "graphic");
+            let (x0, y0) = (num(s, "ulx").unwrap_or(0.0), num(s, "uly").unwrap_or(0.0));
+            let size = match (num(s, "lrx"), num(s, "lry")) {
+                (Some(x1), Some(y1)) => Some((x1 - x0, y1 - y0)),
+                _ => graphic.and_then(|g| Some((num(g, "width")?, num(g, "height")?))),
+            };
+            let Some((w, h)) = size.filter(|(w, h)| *w > 0.0 && *h > 0.0) else { continue };
+            let mut zones = Vec::new();
+            let mut stack: Vec<&XmlNode> = s.children.iter().collect();
+            while let Some(z) = stack.pop() {
+                if local(&z.name) != "zone" {
+                    continue;
+                }
+                stack.extend(z.children.iter());
+                let (Some(id), Some(a), Some(b), Some(c), Some(d)) = (xml_id(z), num(z, "ulx"), num(z, "uly"), num(z, "lrx"), num(z, "lry")) else { continue };
+                let clamp = |v: f64| v.clamp(0.0, 1.0);
+                let (l, t) = (clamp((a.min(c) - x0) / w), clamp((b.min(d) - y0) / h));
+                let (r, bo) = (clamp((a.max(c) - x0) / w), clamp((b.max(d) - y0) / h));
+                if r > l && bo > t {
+                    zones.push((id, [l, t, r - l, bo - t]));
+                }
+            }
+            let url = graphic.and_then(|g| attr(g, "url")).unwrap_or("").to_string();
+            out.push(Surface { url, zones });
+        }
+    }
+    out
 }
 
 /// Elements whose text is not the text's own words.
@@ -216,7 +269,7 @@ fn unit_of(n: &XmlNode, who: Option<String>, skipped: &mut BTreeMap<String, usiz
     let explicit = toks.iter().any(|t| t.join_right);
     let content = if toks.is_empty() || !explicit { words_text(n, skipped) } else { joined(&toks) };
     let content = if content.is_empty() { joined(&toks) } else { content };
-    Unit { content, tokens: toks, id: xml_id(n), who }
+    Unit { content, tokens: toks, id: xml_id(n), who, facs: attr(n, "facs").map(|f| f.trim().trim_start_matches('#').to_string()) }
 }
 
 /// Every unit of a text body, in order.
@@ -387,7 +440,7 @@ fn docs(root: &XmlNode, report: &mut ImportReport) -> Result<Vec<Doc>, String> {
         for text in tei.children.iter().filter(|c| local(&c.name) == "text") {
             walk(text, None, &mut units, &mut report.blocks_as_segments, &mut report.not_carried);
         }
-        out.push(Doc { title: title_of(tei), meta: header_meta(tei), units });
+        out.push(Doc { title: title_of(tei), meta: header_meta(tei), units, surfaces: surfaces_of(tei) });
     };
     match local(&root.name) {
         "TEI" | "TEI.2" => collect(root, report),
@@ -424,6 +477,19 @@ pub fn import_tei(p: &mut Project, input: &str, fallback_title: &str, tier: &str
             p.import_text_metadata(&rows)?;
             report.matched.push(t);
             continue;
+        }
+        // The facsimile's pages, when units point at their zones: an image
+        // source per surface (made before the text, as sources are scopes of
+        // their own) and each unit's zone as its region.
+        let zone_at: HashMap<&str, (usize, [f64; 4])> = doc.surfaces.iter().enumerate().flat_map(|(si, s)| s.zones.iter().map(move |(id, r)| (id.as_str(), (si, *r)))).collect();
+        let used = doc.units.iter().any(|u| u.facs.as_deref().is_some_and(|f| zone_at.contains_key(f)));
+        let mut page_ids = Vec::new();
+        if used {
+            for (si, s) in doc.surfaces.iter().enumerate() {
+                let name = s.url.rsplit(['/', '\\']).next().filter(|n| !n.is_empty()).map(str::to_string).unwrap_or_else(|| format!("page {}", si + 1));
+                page_ids.push(p.add_source(&name, None, "image", None)?);
+            }
+            report.pages += page_ids.len();
         }
         let mut prepared = Vec::new();
         for (ui, (u, content)) in doc.units.iter().zip(&contents).enumerate() {
@@ -462,11 +528,21 @@ pub fn import_tei(p: &mut Project, input: &str, fallback_title: &str, tier: &str
             if let Some(who) = &u.who {
                 fields.push(("x.tei.who", Value::str(who)));
             }
+            if let Some((si, [x, y, w, h])) = u.facs.as_deref().and_then(|f| zone_at.get(f)).filter(|_| used) {
+                let round = |v: f64| (v * 1e5).round() / 1e5;
+                let (x, y) = (round(*x), round(*y));
+                let (w, h) = (round(*w).min(1.0 - x), round(*h).min(1.0 - y));
+                fields.push(("region", Value::obj(vec![("source", Value::str(&page_ids[*si])), ("x", Value::Num(x)), ("y", Value::Num(y)), ("w", Value::Num(w)), ("h", Value::Num(h))])));
+                report.regions += 1;
+            }
             let words: Vec<(String, String, bool)> = u.tokens.iter().zip(&ids).map(|(t, id)| (id.clone(), p.proj.nfc(&t.form), t.punct)).collect();
             prepared.push((seg, fields, words));
         }
         let mut t = p.intent("import-tei");
         let mut text_fields = vec![("title", Value::str(&title))];
+        if !page_ids.is_empty() {
+            text_fields.push(("pages", Value::Arr(page_ids.iter().map(|s| Value::str(s)).collect())));
+        }
         text_fields.extend(meta.iter().map(|(k, v)| (k.as_str(), v.clone())));
         let text = t.create_scope_root("text", "txt", text_fields);
         for (seg, mut fields, words) in prepared {
@@ -488,6 +564,10 @@ pub fn import_tei(p: &mut Project, input: &str, fallback_title: &str, tier: &str
     Ok(report)
 }
 
+/// The side of a page in a `<facsimile>`'s coordinates: zones are written
+/// as shares of the page in ten-thousandths.
+const FACS_SCALE: f64 = 10_000.0;
+
 /// Export sentences as one TEI P5 document. `language` is the project's
 /// (name, code), written in `profileDesc/langUsage` and as the text's
 /// `xml:lang`.
@@ -496,6 +576,16 @@ pub fn export_tei(p: &Project, title: &str, language: Option<(&str, &str)>, sent
     let mut ranges = 0;
     let mut body = XmlNode::new("p");
     let mut ids: HashMap<String, usize> = HashMap::new();
+    // The text's page images: a sentence marked on one points at its zone.
+    let text_id = match sentences.first() {
+        Some(s) => p.proj.field_str(&s.segment, "text")?,
+        None => None,
+    };
+    let pages = match &text_id {
+        Some(t) => p.text_pages(t)?,
+        None => Vec::new(),
+    };
+    let mut zones: Vec<Vec<XmlNode>> = vec![Vec::new(); pages.len()];
     for (n_out, (si, s)) in parsed.iter().enumerate() {
         let es = &sentences[*si];
         let si = n_out;
@@ -506,6 +596,14 @@ pub fn export_tei(p: &Project, title: &str, language: Option<(&str, &str)>, sent
         let mut node = XmlNode::new("s").with_attr("xml:id", &id);
         if let Some(who) = p.proj.field_str(&es.segment, "x.tei.who")? {
             node = node.with_attr("who", &format!("#{who}"));
+        }
+        if let Some(r) = p.segment_region(&es.segment)? {
+            if let Some(pi) = pages.iter().position(|g| *g == r.source) {
+                let zone = format!("z-{id}");
+                let at = |v: f64| format!("{}", (v * FACS_SCALE).round() as i64);
+                zones[pi].push(XmlNode::new("zone").with_attr("xml:id", &zone).with_attr("ulx", &at(r.x)).with_attr("uly", &at(r.y)).with_attr("lrx", &at(r.x + r.w)).with_attr("lry", &at(r.y + r.h)));
+                node = node.with_attr("facs", &format!("#{zone}"));
+            }
         }
         for line in &s.lines {
             match line {
@@ -545,10 +643,6 @@ pub fn export_tei(p: &Project, title: &str, language: Option<(&str, &str)>, sent
     }
     // The text's own metadata, where TEI keeps each kind (and what TEI has
     // no place for as `notesStmt` notes named by key), so it comes back in.
-    let text_id = match sentences.first() {
-        Some(s) => p.proj.field_str(&s.segment, "text")?,
-        None => None,
-    };
     let meta = match &text_id {
         Some(t) => p.text_metadata(t)?,
         None => Vec::new(),
@@ -633,7 +727,24 @@ pub fn export_tei(p: &Project, title: &str, language: Option<(&str, &str)>, sent
     if has_profile {
         header = header.with_child(profile);
     }
-    let tei = XmlNode::new("TEI").with_attr("xmlns", "http://www.tei-c.org/ns/1.0").with_child(header).with_child(text.with_child(XmlNode::new("body").with_child(XmlNode::new("div").with_child(body))));
+    let mut tei = XmlNode::new("TEI").with_attr("xmlns", "http://www.tei-c.org/ns/1.0").with_child(header);
+    if zones.iter().any(|z| !z.is_empty()) {
+        // Each page as a surface FACS_SCALE units square, so zones are
+        // shares of the page whatever the image's size.
+        let mut facs = XmlNode::new("facsimile");
+        let side = format!("{}", FACS_SCALE as i64);
+        for (i, (page, zs)) in pages.iter().zip(zones).enumerate() {
+            let label = p.proj.field_str(page, "label")?.unwrap_or_default();
+            let mut surface = XmlNode::new("surface").with_attr("xml:id", &format!("page-{}", i + 1)).with_attr("n", &format!("{}", i + 1)).with_attr("ulx", "0").with_attr("uly", "0").with_attr("lrx", &side).with_attr("lry", &side);
+            surface = surface.with_child(XmlNode::new("graphic").with_attr("url", &label));
+            for z in zs {
+                surface = surface.with_child(z);
+            }
+            facs = facs.with_child(surface);
+        }
+        tei = tei.with_child(facs);
+    }
+    let tei = tei.with_child(text.with_child(XmlNode::new("body").with_child(XmlNode::new("div").with_child(body))));
     Ok(TeiExport { tei: tei.to_xml(), notes })
 }
 

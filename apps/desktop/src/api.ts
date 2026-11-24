@@ -516,6 +516,7 @@ export const lexiconSetSenseText = (args: { senseId: string; field: "definition"
 // Facsimiles (src-tauri/src/facsimile.rs): a text's page images and where each segment stands on them.
 export const facsimileView = (args: { text: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_view", args);
 export const facsimileAddPage = (args: { text: string; path: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_add_page", args);
+export const facsimilePageImage = (args: { text: string; source: string; path: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_page_image", args);
 export const facsimileRemovePage = (args: { text: string; source: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_remove_page", args);
 export const facsimileMovePage = (args: { text: string; source: string; by: number }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_move_page", args);
 export const facsimileSetArea = (args: { text: string; segment: string; area: import("./facsimile/logic").Area | null }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_set_area", args);

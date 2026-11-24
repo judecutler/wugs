@@ -1517,6 +1517,11 @@ fn facsimile_add_page(s: State<SessionThread>, text: String, path: String) -> Re
     s.run(move |s| facsimile::add_page(s, &text, &path))
 }
 
+#[tauri::command(async)]
+fn facsimile_page_image(s: State<SessionThread>, text: String, source: String, path: String) -> Result<facsimile::FacsimileView, String> {
+    s.run(move |s| facsimile::set_page_image(s, &text, &source, &path))
+}
+
 #[tauri::command]
 fn facsimile_remove_page(s: State<SessionThread>, text: String, source: String) -> Result<facsimile::FacsimileView, String> {
     s.run(move |s| facsimile::remove_page(s, &text, &source))
@@ -2509,6 +2514,7 @@ pub fn run() {
             export_parallel,
             facsimile_view,
             facsimile_add_page,
+            facsimile_page_image,
             facsimile_remove_page,
             facsimile_move_page,
             facsimile_set_area,
