@@ -583,6 +583,12 @@ An answer heard this way has a ▶ on its chip. In the Lexicon its entry has the
 
 The concept lists come from Concepticon. Each answer stays linked to its Concepticon concept, so the list can later be compared across languages.
 
+#### Answer a list from the lexicon you already have
+
+If you built a lexicon before loading a list, many concepts may already have an entry: an entry glossed *fish* answers the concept "fish". **From the lexicon…** beside the list finds them. It lists every concept still to do (not answered, not marked N/A) that has an entry glossed the same way. The concept's own gloss and its Concepticon gloss both count, and so does any part of a gloss written `fish; food`. Case, brackets and a leading "to" are ignored, so `To eat` matches `eat`.
+
+Nothing is linked until you say so. A gloss can mean two things (*bark* of a tree or of a dog), so untick any entry that does not mean the concept, then press **Link the ticked entries**. The entries become those concepts' answers in one step, exactly as if you had picked each with **Use «…»**. Close the list to link nothing.
+
 #### Take a word list into a session on paper
 
 When a laptop would be in the way, print the list. **Print a sheet…** beside the list saves an HTML file to open in a browser or Word and print. At the top are lines for the speaker, date, place, recording, who elicited and the contact language. Below them is a row per concept, with its number, gloss and Concepticon gloss, a wide space for the word as heard and a space for notes. With **To do** chosen, the sheet holds only the concepts still to ask. With **All** or **Done** chosen, it holds every concept, and the answers already in the project are printed in grey so you can check them with the speaker. After the session, type the answers in as usual.

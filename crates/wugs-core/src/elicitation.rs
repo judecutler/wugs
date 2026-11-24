@@ -126,10 +126,24 @@ impl Project {
     /// Record that a sense answers a concept. Nothing is written when the
     /// link exists.
     pub fn link_concept(&mut self, sense: &str, concept: &str) -> Result<CommitResult, String> {
-        self.require(sense, "sense")?;
-        self.require(concept, "concept")?;
+        self.link_concepts(&[(sense.to_string(), concept.to_string())])
+    }
+
+    /// Several `(sense, concept)` links in one txn (linking a lexicon to a
+    /// list by gloss); a pair already linked, or given twice, writes nothing.
+    pub fn link_concepts(&mut self, pairs: &[(String, String)]) -> Result<CommitResult, String> {
+        for (sense, concept) in pairs {
+            self.require(sense, "sense")?;
+            self.require(concept, "concept")?;
+        }
         let mut t = self.intent("link-concept");
-        if !t.project.concept_senses(concept)?.iter().any(|(_, s)| s == sense) {
+        let mut done: Vec<&(String, String)> = Vec::new();
+        for pair in pairs {
+            let (sense, concept) = pair;
+            if done.contains(&pair) || t.project.concept_senses(concept)?.iter().any(|(_, s)| s == sense) {
+                continue;
+            }
+            done.push(pair);
             t.create("sense-concept", "scn", SCOPE_LEXICON, vec![("sense", Value::str(sense)), ("concept", Value::str(concept))]);
         }
         t.commit()
@@ -274,6 +288,13 @@ mod tests {
         let ((_, sen), _) = p.add_lexeme("kabuk", "bark").unwrap();
         p.link_concept(&sen, &bark).unwrap();
         assert_eq!(p.link_concept(&sen, &bark).unwrap().ops, 0);
+        // Several at once: one txn, a repeat and an existing link written once.
+        let ash = concept_id(SWADESH, "Swadesh-1955-100-2");
+        let ((_, ashes), _) = p.add_lexeme("kül", "ashes").unwrap();
+        let pairs = [(ashes.clone(), ash.clone()), (ashes.clone(), ash.clone()), (sen.clone(), bark.clone())];
+        assert_eq!(p.link_concepts(&pairs).unwrap().ops, 1);
+        assert_eq!(p.concept_answers(&ash).unwrap(), vec![ashes.clone()]);
+        assert!(p.link_concepts(&[(ash.clone(), ashes.clone())]).is_err(), "sense and concept the wrong way round");
         p.unlink_concept(&sen, &bark).unwrap();
         assert!(p.concept_senses(&bark).unwrap().is_empty());
         p.set_concept_skipped(&bark, true, "no word for tree bark").unwrap();

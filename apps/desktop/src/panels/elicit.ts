@@ -5,14 +5,14 @@
 // Keyboard first: Enter saves the answer and moves to the next concept to do.
 import {
   conceptListLoad, conceptLists, conceptListsBundled, conceptListView, domainCollect, domainQuestions, domainsList, domainsLoadSil,
-  conceptListImport, elicitAnswer, elicitLink, elicitSkip, elicitUnlink, errorText, exportWordlist, lexiconEntry, lexiconList, projectLanguage, saveDocument,
-  type Answer, type BundledList, type ConceptView, type DomainItem, type DomainQuestions, type EntryRow, type ListSummary, type ListView,
+  conceptListImport, elicitAnswer, elicitGlossMatches, elicitLinkMatches, elicitLink, elicitSkip, elicitUnlink, errorText, exportWordlist, lexiconEntry, lexiconList, projectLanguage, saveDocument,
+  type Answer, type BundledList, type ConceptView, type DomainItem, type DomainQuestions, type EntryRow, type GlossMatch, type ListSummary, type ListView,
 } from "../api";
 import { emptyState, h } from "../dom";
 import { typeWithShortcuts } from "../typing";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { localDay } from "../dates";
-import { exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, ownListLine, soundLine, soundSegment, wordlistLines, coverageLine, nextEmptyDomain, type Filter } from "../elicit/logic";
+import { matchesLine, matchKey, exactMatches, FILTERS, filterConcepts, isDone, nextOnTrack, nextTodo, progressLabel, progressShare, ownListLine, soundLine, soundSegment, wordlistLines, coverageLine, nextEmptyDomain, type Filter } from "../elicit/logic";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { elicitationSheet } from "../elicit/sheet";
 import { clockTime } from "../search/logic";
@@ -39,6 +39,10 @@ export const elicitPanel: PanelDef = {
     let bundled: BundledList[] = [];
     let listId: string | null = localStorage.getItem(LIST_KEY);
     let view: ListView | null = null;
+    /** Entries the lexicon offers for the list's concepts still to do, while that section is open. */
+    let matches: GlossMatch[] | null = null;
+    /** Offered links the person unticked, by `matchKey`. */
+    const unticked = new Set<string>();
     let filter: Filter = "todo";
     let current: string | null = null;
     let offers: EntryRow[] = [];
@@ -228,6 +232,68 @@ export const elicitPanel: PanelDef = {
         }
       };
       return b;
+    }
+
+    /** Answer concepts from the lexicon: entries already glossed the way a concept is. */
+    function fromLexiconButton(id: string): HTMLElement {
+      const b = h("button", { type: "button", textContent: "From the lexicon…", title: "Find entries already in the lexicon glossed like a concept still to do, and link them as its answers" });
+      b.onclick = () =>
+        void enqueue(async (stale) => {
+          const found = await elicitGlossMatches({ listId: id });
+          if (stale() || listId !== id) return;
+          if (found.length === 0) {
+            showToast({ tone: "info", lines: [matchesLine(found)] });
+            return;
+          }
+          matches = found;
+          unticked.clear();
+          draw();
+        });
+      return b;
+    }
+
+    /** The offered links, each with a box; linking the ticked ones is one edit. */
+    function matchesSection(id: string): HTMLElement[] {
+      if (matches === null) return [];
+      const ticked = matches.filter((m) => !unticked.has(matchKey(m)));
+      const link = h("button", { type: "button", textContent: ticked.length === 1 ? "Link the ticked entry" : `Link the ${ticked.length} ticked entries`, disabled: ticked.length === 0 });
+      link.onclick = () =>
+        void enqueue(async (stale) => {
+          const v = await elicitLinkMatches({ listId: id, pairs: ticked.map((m) => [m.answer.senseId, m.conceptId]) });
+          if (stale() || listId !== id) return;
+          view = v;
+          matches = null;
+          showToast({ tone: "info", lines: [ticked.length === 1 ? "1 entry linked to its concept." : `${ticked.length} entries linked to their concepts.`] });
+          draw();
+        });
+      const close = h("button", { type: "button", textContent: "Close", onclick: () => { matches = null; draw(); } });
+      return [
+        h(
+          "section",
+          { className: "el-matches", ariaLabel: "Entries from the lexicon" },
+          h("p", { className: "note", textContent: matchesLine(matches) }),
+          h(
+            "ul",
+            { className: "el-match-rows" },
+            ...matches.map((m) => {
+              const key = matchKey(m);
+              const box = h("input", { type: "checkbox", checked: !unticked.has(key) });
+              box.onchange = () => {
+                if (box.checked) unticked.delete(key);
+                else unticked.add(key);
+                draw();
+              };
+              const sub = m.answer.homograph === null ? "" : String(m.answer.homograph);
+              return h(
+                "li",
+                {},
+                h("label", {}, box, h("span", { className: "el-num", textContent: `${m.number}.` }), ` ${m.conceptGloss} — `, h("b", { textContent: m.answer.lemma }), h("sub", { textContent: sub }), ` ‘${m.answer.gloss}’`),
+              );
+            }),
+          ),
+          h("div", { className: "el-bar" }, link, close),
+        ),
+      ];
     }
 
     /** This list on paper for a session without a laptop: the concepts the
@@ -444,6 +510,7 @@ export const elicitPanel: PanelDef = {
             listId = picker.value;
             localStorage.setItem(LIST_KEY, listId);
             current = null;
+            matches = null;
             void enqueue(async () => {
               const v = await conceptListView({ listId: listId! });
               view = v;
@@ -540,8 +607,9 @@ export const elicitPanel: PanelDef = {
       };
       showSoundHint();
       return [
-        h("div", { className: "el-bar" }, picker, h("span", { className: "note", textContent: progressLabel(s) }), h("span", { className: "gl-spacer" }), sheetButton(), exportButton(s.id), add),
+        h("div", { className: "el-bar" }, picker, h("span", { className: "note", textContent: progressLabel(s) }), h("span", { className: "gl-spacer" }), fromLexiconButton(s.id), sheetButton(), exportButton(s.id), add),
         bar,
+        ...matchesSection(s.id),
         ...(adder === null ? [] : [adder]),
         h(
           "div",
@@ -739,6 +807,7 @@ export const elicitPanel: PanelDef = {
           pending.clear();
           moveTo(null);
           view = null;
+          matches = null;
           domains = null;
           domain = null;
           current = null;

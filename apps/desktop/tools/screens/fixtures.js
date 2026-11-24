@@ -1282,6 +1282,15 @@ const LEXICON = [
       ].map(([language, concept, form]) => ({ language, concept, form })),
     }),
     concept_list_view: () => ({ summary: listSummary, concepts }),
+    // Entries glossed like concepts still to do; the links asked for kept for the probe.
+    elicit_gloss_matches: () => [
+      { conceptId: "con-3", number: 3, conceptGloss: concepts[2].gloss, answer: { senseId: "sense-lx-kulit", lexemeId: "lx-kulit", lemma: "kulit", homograph: null, gloss: `${concepts[2].gloss}; skin`, sound: null } },
+      { conceptId: "con-3", number: 3, conceptGloss: concepts[2].gloss, answer: { senseId: "sense-lx-kaun", lexemeId: "lx-kaun", lemma: "kaun", homograph: null, gloss: `${concepts[2].gloss} (of a dog)`, sound: null } },
+    ],
+    elicit_link_matches: ({ pairs }) => {
+      window.__WUGS_LINKED__ = pairs;
+      return { summary: listSummary, concepts };
+    },
     domain_questions: ({ domainId }) => {
       const d = DOMAINS.find((x) => x.id === domainId) ?? DOMAINS[2];
       return {

@@ -206,6 +206,82 @@ fn concept_view(p: &Project, id: &str) -> Result<ConceptView, String> {
     })
 }
 
+/// An entry already in the lexicon whose gloss says the same as a concept
+/// no one has answered: offered for linking, never linked unasked.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GlossMatch {
+    pub concept_id: String,
+    pub number: u32,
+    pub concept_gloss: String,
+    pub answer: Answer,
+}
+
+/// A gloss as matching compares it: lower case, a parenthesis left out
+/// ("FLY (MOVE THROUGH AIR)"), spaces collapsed, marks around it ("*breast",
+/// a final full stop) and a leading "to " dropped.
+fn gloss_key(gloss: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0usize;
+    for c in gloss.chars() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => out.extend(c.to_lowercase()),
+            _ => {}
+        }
+    }
+    let out = out.split_whitespace().collect::<Vec<_>>().join(" ");
+    // Marks around it ("*breast" in Swadesh's list, a final full stop) are not the gloss.
+    let out = out.trim_matches(|c: char| !c.is_alphanumeric());
+    out.strip_prefix("to ").unwrap_or(out).to_string()
+}
+
+/// For each concept of the list with no answer and not marked N/A, the
+/// live senses whose gloss (any of its parts at `;` `,` `/`) has the key of
+/// the concept's gloss or Concepticon gloss, in list order.
+pub fn gloss_matches(session: &mut Session, list_id: &str) -> Result<Vec<GlossMatch>, String> {
+    let p = project(session)?;
+    require(p, list_id, "concept-list")?;
+    let mut by_key: HashMap<String, Vec<String>> = HashMap::new();
+    for sense in p.proj.entities_of_kind("sense")? {
+        if p.proj.is_tombstoned(&sense)? {
+            continue;
+        }
+        let lexeme = str_field(p, &sense, "lexeme")?;
+        if p.proj.entity_kind(&lexeme)?.as_deref() != Some("lexeme") || p.proj.is_tombstoned(&lexeme)? {
+            continue;
+        }
+        let gloss = str_field(p, &sense, "gloss")?;
+        let mut keys: Vec<String> = gloss.split([';', ',', '/']).map(gloss_key).filter(|k| !k.is_empty()).collect();
+        keys.dedup();
+        for k in keys {
+            by_key.entry(k).or_default().push(sense.clone());
+        }
+    }
+    let mut out = Vec::new();
+    for c in concepts_of(p, list_id)? {
+        if !c.answers.is_empty() || c.skipped {
+            continue;
+        }
+        let mut senses: Vec<&String> = [gloss_key(&c.gloss), gloss_key(&c.concepticon_gloss)].iter().filter(|k| !k.is_empty()).flat_map(|k| by_key.get(k).into_iter().flatten()).collect();
+        senses.sort();
+        senses.dedup();
+        for s in senses {
+            out.push(GlossMatch { concept_id: c.id.clone(), number: c.number, concept_gloss: c.gloss.clone(), answer: answer(p, s)? });
+        }
+    }
+    Ok(out)
+}
+
+/// Link the chosen `(sense, concept)` pairs in one txn; returns the list again.
+pub fn link_matches(session: &mut Session, list_id: &str, pairs: &[(String, String)]) -> Result<ListView, String> {
+    let p = project(session)?;
+    require(p, list_id, "concept-list")?;
+    p.link_concepts(pairs)?;
+    concept_list_view(session, list_id)
+}
+
 fn summary(p: &Project, id: &str, concepts: &[ConceptView]) -> Result<ListSummary, String> {
     Ok(ListSummary {
         id: id.to_string(),
@@ -473,6 +549,33 @@ mod tests {
         for b in &lists {
             assert!(b.rows.iter().all(|r| !r.gloss.is_empty() && !r.concepticon.is_empty()), "{}", b.source);
         }
+    }
+
+    #[test]
+    fn entries_glossed_like_a_concept_are_offered_then_linked() {
+        assert_eq!(gloss_key(" To Fly (move through air). "), "fly");
+        assert_eq!(gloss_key("ASH"), "ash");
+        assert_eq!(gloss_key("*breast"), "breast");
+        let dir = std::env::temp_dir().join(format!("wugs-gloss-match-{}", wugs_model::ulid()));
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir.join("project"), "tester").unwrap();
+        let list = concept_list_load(&mut session, "concepticon:Swadesh-1955-100").unwrap().id;
+        crate::lexicon::lexicon_add(&mut session, "ikan", "fish; food").unwrap();
+        crate::lexicon::lexicon_add(&mut session, "abu", "ash").unwrap();
+        crate::lexicon::lexicon_add(&mut session, "kain", "fishing").unwrap();
+        let found = gloss_matches(&mut session, &list).unwrap();
+        let named: Vec<(&str, &str)> = found.iter().map(|m| (m.concept_gloss.as_str(), m.answer.lemma.as_str())).collect();
+        assert!(named.contains(&("fish", "ikan")), "a part of the gloss: {named:?}");
+        assert!(named.contains(&("ashes", "abu")), "through the Concepticon gloss ASH");
+        assert!(!named.iter().any(|(_, l)| *l == "kain"), "fishing is not fish");
+        // The sample's numerals (one, two …) are glossed in English too.
+        assert!(named.contains(&("one", "wʌn")), "{named:?}");
+        let pairs: Vec<(String, String)> = found.iter().map(|m| (m.answer.sense_id.clone(), m.concept_id.clone())).collect();
+        let view = link_matches(&mut session, &list, &pairs).unwrap();
+        assert_eq!(view.summary.answered, found.iter().map(|m| &m.concept_id).collect::<std::collections::HashSet<_>>().len());
+        assert!(gloss_matches(&mut session, &list).unwrap().is_empty(), "answered concepts are not offered again");
+        drop(session);
+        std::fs::remove_dir_all(&dir).ok();
     }
 
     #[test]

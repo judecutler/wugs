@@ -1193,6 +1193,17 @@ def main():
             if run.page.locator(".panel-elicit .el-sound-hint").inner_text().strip() == "":
                 failures.append("Sound from the Timeline said nothing about where the sound comes from")
             run.page.locator(".panel-elicit .el-sound input").uncheck()
+            # Entries already in the lexicon offered as answers, each to tick or untick.
+            run.page.locator(".panel-elicit button", has_text="From the lexicon").click()
+            run.page.locator(".panel-elicit .el-matches").wait_for()
+            run.shot("state-elicit-from-lexicon", run.page.locator(".panel-elicit"))
+            run.page.locator(".panel-elicit .el-match-rows input").nth(1).uncheck()
+            run.page.locator(".panel-elicit button", has_text="Link the ticked entry").click()
+            run.page.wait_for_timeout(300)
+            linked = run.page.evaluate("() => window.__WUGS_LINKED__") or []
+            if linked != [["sense-lx-kulit", "con-3"]] or run.page.locator(".panel-elicit .el-matches").count() != 0:
+                failures.append(f"Elicit: From the lexicon did not link only the ticked entry: {linked}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Adding a word list offers a table of one's own beside the bundled lists.
             run.page.locator(".panel-elicit button", has_text="Add a word list").click()
             run.page.locator(".panel-elicit button", has_text="Load a table").wait_for()
