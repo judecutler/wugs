@@ -16,6 +16,7 @@ import { possibleAllophones } from "../sounds/allophones.ts";
 import { countsLine, total, verdict, type WordOrder } from "../wordorder/logic.ts";
 import type { Grid } from "../orthography/logic.ts";
 import type { Answer, Ours } from "../typology/logic.ts";
+import { asHtml, type Example } from "../gloss/example.ts";
 
 export type Morpheme = { form: string; kind: "prefix" | "suffix" | "infix" | "proclitic" | "enclitic"; glosses: string[]; category: string };
 export type Feature = { id: string; question: string; answer: string; note: string };
@@ -59,6 +60,8 @@ export type SketchInput = {
   order?: WordOrder;
   /** Loanwords in the lexicon by source language, commonest first (`loanSources`). */
   loans?: { language: string; count: number }[];
+  /** Sentences filed under grammar topics (src-tauri/src/topics.rs), as glossed examples, each topic's in order. */
+  topics?: { name: string; examples: Example[] }[];
   /** The person's own date for the title page, `YYYY-MM-DD`. */
   date: string;
   generator: string;
@@ -330,6 +333,19 @@ export function grammarSketch(d: SketchInput): string {
   } else {
     parts.push(todo("Word order, the noun phrase, the clause, questions, negation, complex sentences"));
   }
+  // The examples filed under topics, numbered through, ready to move into their chapters.
+  const topics = (d.topics ?? []).filter((t) => t.examples.length > 0);
+  if (topics.length > 0) {
+    parts.push(`<h3>5.${counted.length > 0 && d.order !== undefined ? 2 : 1} Examples by topic</h3>`, `<p>The sentences filed under each topic in the Gloss panel, glossed. Move each into its section and say what it shows.</p>`);
+    let n = 0;
+    for (const t of topics) {
+      parts.push(`<h4>${esc(t.name)}</h4>`);
+      for (const ex of t.examples) {
+        n += 1;
+        parts.push(`<div class="ex">${asHtml({ ...ex, number: n })}</div>`);
+      }
+    }
+  }
   if (d.features.length > 0) {
     parts.push(`<h2>6. Typological profile</h2>`, `<p>The project's own answers to ${esc(d.featureSource)}'s questions.</p>`);
     parts.push(
@@ -346,6 +362,7 @@ export function grammarSketch(d: SketchInput): string {
   const style = `body{font-family:"Charis SIL","Doulos SIL","Gentium Plus",serif;max-width:46em;margin:2em auto;line-height:1.45}
 table{border-collapse:collapse;margin:.6em 0}th,td{border:1px solid #999;padding:3px 8px;text-align:left;vertical-align:top}
 .chart td{min-width:3em;text-align:center}.ipa{font-family:"Charis SIL","Doulos SIL",serif}.big{font-size:1.3em;letter-spacing:.2em}
+.ex{margin:.5em 0}.ex table,.ex td{border:none}
 .todo{color:#8a5a00;font-style:italic}.meta{color:#555}.gl{font-variant:small-caps}
 .map{margin:1em 0}.map svg{width:100%;max-width:34em;border:1px solid #b9ad8f;display:block}.map figcaption{font-size:.9em;color:#444}`;
   return `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<title>A grammar sketch of ${esc(name)}</title>\n<style>${style}</style>\n</head>\n<body>\n${parts.join("\n")}\n</body>\n</html>\n`;

@@ -200,3 +200,13 @@ test("loanwords give the introduction a contact section", () => {
   assert.match(html, /<h3>1\.1 Contact and loanwords<\/h3><p>8 entries are marked as loanwords \(20% of the lexicon\): Malay 6, Dutch 2\.<\/p>/);
   assert.doesNotMatch(grammarSketch(base), /Contact and loanwords/);
 });
+
+test("examples filed under topics come out glossed and numbered through", () => {
+  const ex = (form: string, gloss: string) => ({ number: 0, translation: "a gloss", words: [{ form, morphs: [{ surface: form, type: "root", gloss }] }] });
+  const html = grammarSketch({ ...base, topics: [{ name: "Negation", examples: [ex("ka", "NEG"), ex("te", "go")] }, { name: "Empty", examples: [] }, { name: "Numerals", examples: [ex("ŋai", "one")] }] });
+  assert.match(html, /<h3>5\.\d Examples by topic<\/h3>/u);
+  assert.match(html, /<h4>Negation<\/h4>/u);
+  assert.ok(!html.includes("<h4>Empty</h4>"), "a topic with no examples is left out");
+  assert.ok(html.includes("(1)") && html.includes("(2)") && html.includes("(3)"), "numbered through");
+  assert.ok(html.indexOf("<h4>Numerals</h4>") < html.indexOf("(3)"));
+});
