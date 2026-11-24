@@ -21,7 +21,7 @@ import { emptyState, h } from "../dom";
 import { attempt, getState, refreshAll, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { readGlossingLines, tierGlossingLines, type TierGlossing } from "../elan/glossing";
 import { batchLines, exportedAllLines, saymoreLines, type BatchResult } from "../drop/logic";
-import { importSessions } from "../api";
+import { importSessions, projectTitle, setProjectTitle } from "../api";
 import { alignLine, pairNote, toWrite, writtenLine, type Alignment } from "../align/logic";
 import { alignPreview, alignWrite } from "../api";
 import { loanSources, tableImportLines } from "../lexicon/logic";
@@ -68,6 +68,9 @@ let lexiconFormat: LexiconFormat | "table" = "lift";
 let busy: string | null = null;
 // The project's language, fetched once per project; the CLDF choice resets with it.
 let language: { project: string; value: Language } | null = null;
+/** The project's own title, as read for that project; a draft while typed. */
+let title: { project: string; value: string } | null = null;
+let titleDraft: string | null = null;
 let languageFor: string | null = null;
 let includeRestricted = false;
 /** Whether a CLDF dataset carries a sound clip per timed example (remembered on this computer). */
@@ -316,11 +319,13 @@ async function loadLanguage(project: string) {
   lookup += 1;
   matchesBox.replaceChildren();
   for (const k of Object.keys(drafts) as (keyof Language)[]) delete drafts[k];
+  titleDraft = null;
   try {
     language = { project, value: await projectLanguage() };
   } catch {
     language = { project, value: { name: "", glottocode: "", iso: "" } };
   }
+  title = { project, value: await projectTitle().catch(() => "") };
   redrawAll();
 }
 
@@ -408,9 +413,34 @@ function languageRow(project: string): HTMLElement {
     };
     return input;
   };
+  const titleInput = h("input", {
+    value: titleDraft ?? (title?.project === project ? title.value : ""),
+    placeholder: v.name.trim() === "" ? "Project title" : `${v.name.trim()} documentation`,
+    title: "The project's title, as sealed packages and archive records name it (OLAC, the BagIt package); shared with every device",
+    size: 30,
+    spellcheck: false,
+  });
+  titleInput.setAttribute("aria-label", "Project title");
+  titleInput.oninput = () => (titleDraft = titleInput.value);
+  const commitTitle = () => {
+    titleDraft = null;
+    const next = titleInput.value.trim();
+    if (title?.project === project && title.value === next) return;
+    void setProjectTitle({ title: next }).then(
+      () => {
+        if (languageFor === project) title = { project, value: next };
+      },
+      (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+    );
+  };
+  titleInput.onchange = commitTitle;
+  titleInput.onkeydown = (ev: KeyboardEvent) => {
+    if (ev.key === "Enter" && !ev.isComposing) commitTitle();
+  };
   return h(
     "div",
     { className: "glotto" },
+    h("div", { className: "share-row" }, h("span", { className: "share-label", textContent: "Project" }), titleInput),
     h(
       "div",
       { className: "share-row" },

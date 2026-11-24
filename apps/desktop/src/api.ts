@@ -184,6 +184,9 @@ export type RoughTimed = { tier: string; tierName: string; sentences: number; sp
 export const roughTime = (args: { textId: string; source: string; tierId: string | null }) => invoke<RoughTimed>("rough_time", args);
 export const roughUntime = (args: { textId: string; expect: { id: string; startMs?: number; endMs?: number }[] }) => invoke<null>("rough_untime", args);
 /** Rename a track and set the language its text is in (a code such as en, or a Glottocode; empty clears). */
+/** The project's own title (empty when not set), carried by sealed packages and archive records. */
+export const projectTitle = () => invoke<string>("project_title");
+export const setProjectTitle = (args: { title: string }) => invoke<null>("set_project_title", args);
 export const setTier = (args: { tierId: string; name: string; language: string }) => invoke<null>("set_tier", args);
 export const shiftTrack = (args: { textId: string; tierId: string; deltaMs: number; expect: { id: string; startMs?: number; endMs?: number }[] }) => invoke<RoughTimed>("shift_track", args);
 

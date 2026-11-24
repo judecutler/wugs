@@ -307,12 +307,23 @@ fn strip_loro(line: &str) -> Option<String> {
     Some(op.to_json())
 }
 
+/// The setting holding the project's own title, shared with every device (`PROJECT_TITLE`).
+pub const PROJECT_TITLE: &str = "project-title";
+
+/// The project's title: the `project-title` setting, else `project.json`'s
+/// title, else «<language> documentation» when the project names its
+/// language, else the project's id.
 fn project_title(project: &Project) -> Result<String, String> {
+    if let Some(t) = project.setting(PROJECT_TITLE)?.map(|t| t.trim().to_string()).filter(|t| !t.is_empty()) {
+        return Ok(t);
+    }
     let text = fs::read_to_string(project.root.join("project.json")).map_err(|e| format!("project.json: {e}"))?;
     let v = json::parse(&text).map_err(|e| format!("project.json: {e}"))?;
-    Ok(v.get_str("title")
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("wugs project {}", project.project_id)))
+    if let Some(t) = v.get_str("title").filter(|t| !t.trim().is_empty()) {
+        return Ok(t.to_string());
+    }
+    let lang = project.project_language()?;
+    Ok(if lang.name.trim().is_empty() { format!("wugs project {}", project.project_id) } else { format!("{} documentation", lang.name.trim()) })
 }
 
 pub(crate) fn live_of_kind(project: &Project, kind: &str) -> Result<Vec<String>, String> {

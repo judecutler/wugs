@@ -1302,6 +1302,8 @@ wugs writes a BagIt package named `wugs-sealed-<date>`. It holds ELAN, FLEx, LIF
 
 If any of the project is restricted, the message says so. The package then holds restricted data, so treat the whole package as restricted.
 
+The package's catalogue record (OLAC) gives the project's title. Type it in the **Project** row above the Language row; every device shares it. Without one, the title is «<language> documentation».
+
 Sealing copies every recording. Other actions wait until it finishes.
 
 Archives also ask for a description of each item in their deposit forms. Click **Catalogue sheet…** beside the seal to save a spreadsheet with a row per text: its title, date, place, speakers, genre, description and keywords (from the text's **Details**, else from its recording's details in the Media panel), the language with its ISO 639-3 code and Glottocode, the linked recording and its length in seconds, its sharing level, and how many of its sentences are transcribed and translated and how many words are glossed. Any other details follow in their own columns. Fill the archive's forms from it, or import it where the archive's tool takes a spreadsheet. The message says which texts have no recording linked.
