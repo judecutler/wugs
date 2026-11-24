@@ -1338,6 +1338,10 @@ def main():
             run.page.keyboard.press("Escape")
             # Transcribe: the project's typing shortcuts.
             run.front("transcribe", "Transcribe")
+            # The selected line marked on a page image shows its crop above the field.
+            run.page.evaluate("async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u02' })")
+            run.page.locator(".panel-transcribe .tx-crop").wait_for()
+            run.shot("state-transcribe-crop", run.page.locator(".panel-transcribe"))
             run.page.locator(".panel-transcribe button", has_text="Shortcuts").click()
             run.page.locator(".panel-transcribe .tx-shortcuts textarea").wait_for()
             run.shot("state-transcribe-shortcuts", run.page.locator(".panel-transcribe"))

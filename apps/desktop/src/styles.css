@@ -1650,3 +1650,4 @@ body::before {
 .cmp-align th[scope="row"] { text-align: left; font-family: var(--font-ui); font-weight: normal; }
 .cmp-align .cmp-kept { background: var(--accent-soft); }
 .il-crop { width: 100%; max-width: 40em; background-repeat: no-repeat; border: 1px solid var(--line); border-radius: var(--radius-sm); margin: 2px 0 6px; }
+.tx-crop { flex-basis: 100%; max-width: 48em; background-repeat: no-repeat; border: 1px solid var(--line); border-radius: var(--radius-sm); margin: 4px 0 2px; }
