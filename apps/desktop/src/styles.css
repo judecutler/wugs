@@ -1363,6 +1363,16 @@ body::before {
 .ty-seg { background: var(--muted); opacity: 0.35; }
 .ty-seg.is-own { background: var(--accent); opacity: 1; }
 .ty-credit { font-size: var(--text-xs); }
+.ty-map-toggle { margin-left: auto; }
+.tm-wrap { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.tm-map { width: 100%; max-height: 420px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.tm-sea { fill: var(--accent-soft); }
+.tm-land { fill: var(--surface-raised); stroke: var(--line); }
+.tm-dot { stroke: var(--surface-raised); }
+.tm-me { stroke: var(--ink); }
+.tm-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--text-sm); }
+.tm-legend li.is-mine { font-weight: 600; }
+.tm-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
 .panel-orthography { display: flex; flex-direction: column; gap: 8px; overflow: auto; }
 .panel-orthography > * { flex-shrink: 0; }
 .or-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }

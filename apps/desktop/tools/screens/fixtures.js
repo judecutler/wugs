@@ -726,6 +726,22 @@ const LEXICON = [
         ],
       };
     },
+    // Invented Austronesian answers placed where Austronesian languages are spoken, Madagascar to Rapa Nui.
+    typology_map: ({ glottocode, feature }) => {
+      const places = [[-19, 47], [-6, 106], [-8, 115], [1, 104], [14, 121], [10, 124], [7, 125], [-2, 120], [-4, 122], [2, 128], [-6, 147], [-9, 160], [-17, 168], [-18, 178], [-13, -172], [-17, -150], [21, -157], [-27, -109], [23, 121], [5, 116], [-4, 138], [-10, 124], [0, 110], [13, 144], [7, 134], [-21, 166], [-38, 175], [-44, 171]];
+      const points = places.map(([lat, lon], i) => ({ glottocode: `aust${1000 + i}`, name: `Language ${i + 1}`, lat, lon, value: i % 7 === 3 ? "?" : i % 3 === 0 ? "0" : "1", me: false }));
+      points.push({ glottocode, name: "Invented Austronesian", lat: 9, lon: 123, value: null, me: true });
+      return {
+        feature,
+        question: "Are there definite or specific articles?",
+        codes: [{ value: "0", label: "absent" }, { value: "1", label: "present" }],
+        comparedWith: "Austronesian languages",
+        points,
+        unplaced: 3,
+        land: window.__WUGS_SCREENS__.land,
+        edition: "Grambank 1.0 (CC BY 4.0): Skirgård et al. 2023, Science Advances",
+      };
+    },
     orthography_get: () => ({
       profile: "# Kanu practical spelling\nGrapheme\tIPA\tFrequency\nsh\tʃ\t12\nng\tŋ\t9\nch\tt͡ʃ\t7\nj\tdʒ\t4\ny\tj\t6\n^h\tʔ\t3\ne\tɛ\t20\no\tɔ\t18\nx\tNULL\t1\n",
       check: { columns: ["IPA"], rules: 9, problems: [] },

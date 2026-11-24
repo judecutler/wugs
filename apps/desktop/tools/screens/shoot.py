@@ -139,7 +139,7 @@ THEME = None
 def init_script(auto_open):
     flag = "true" if auto_open else "false"
     return (
-        f"window.__WUGS_SCREENS__ = {{ autoOpen: {flag}, theme: {json.dumps(THEME)}, kit: {json.dumps(bundled_kit())}, scrolls: {json.dumps(bundled_kit('scrolls'))} }};\n"
+        f"window.__WUGS_SCREENS__ = {{ autoOpen: {flag}, theme: {json.dumps(THEME)}, kit: {json.dumps(bundled_kit())}, scrolls: {json.dumps(bundled_kit('scrolls'))}, land: {json.dumps((HERE.parents[3] / "datasets" / "naturalearth" / "land-110m.path").read_text().strip())} }};\n"
         + (HERE / "fixtures.js").read_text()
         + "\n"
         + (HERE / "mock-tauri.js").read_text()
@@ -716,6 +716,15 @@ def main():
                 failures.append("Sessions: New session did not add a card")
             elif run.page.evaluate("() => document.activeElement?.classList.contains('ss-notes')") is not True:
                 failures.append("Sessions: the new session's notes were not focused")
+            # Typology: a feature's map, across the Pacific, the project's answer ringed.
+            run.front("typology", "Typology")
+            run.page.locator(".panel-typology .ty-map-toggle").first.wait_for()
+            run.page.locator(".panel-typology .ty-map-toggle").first.click()
+            run.page.locator(".panel-typology .tm-map").wait_for()
+            run.page.locator(".panel-typology .tm-wrap").scroll_into_view_if_needed()
+            run.shot("state-typology-map", run.page.locator(".panel-typology"))
+            if run.page.locator(".panel-typology .tm-dot").count() != 29 or run.page.locator(".panel-typology .tm-me").count() != 1:
+                failures.append("Typology: the map did not place every language and ring the project's")
             # Affixes: the order of two affixes met in one word.
             run.front("affixes", "Affixes")
             order = run.page.locator(".panel-affixes .af-order")
