@@ -34,6 +34,8 @@ pub struct TextProgress {
     pub meta: Vec<(String, String)>,
     /// How varied its words are (MTLD, `mlu::mtld`), from 100 words up.
     pub mtld: Option<f64>,
+    /// Its sharing level (`text_access`: its own, else its recording's, else open).
+    pub access: String,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -122,6 +124,7 @@ pub fn progress(session: &mut Session) -> Result<Progress, String> {
             row.title = p.proj.field_str(&text, "title")?.unwrap_or_default();
         }
         row.meta = p.text_metadata(&text)?;
+        row.access = p.text_access(&text)?;
         row.mtld = runs.get(&text).filter(|r| r.len() >= crate::mlu::MTLD_MIN).and_then(|r| crate::mlu::mtld(r));
         if let Some((_, blob)) = p.text_recording(&text)? {
             let length = lengths

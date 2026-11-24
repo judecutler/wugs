@@ -1033,6 +1033,8 @@ The **Progress** panel counts what a grant report, an archive deposit or a super
 
 It lists how much is recorded, how many sentences are transcribed and how much speech they cover, how many words are glossed and how many sentences are translated, and the size of the lexicon. A table gives the same figures text by text, with the totals under it. Click a text to open it. **Copy table** copies the table, with lengths in minutes, to paste into a spreadsheet or a report.
 
+**Describe the corpus…** saves a description of the collection, the kind a data paper, an archive deposit or a grant report asks for: the language and its codes, what the collection holds (texts, hours, words, how much is transcribed, glossed and translated, the lexicon), the texts by genre, speaker and place, the speakers' tracks, the annotation, and how the texts may be shared. Places only you can fill in (who recorded, the conventions, how to cite) are marked in yellow. Open the file in Word or a browser and write them in.
+
 Under the figures, **What to do next** lists the work still open, in the order fieldwork usually takes it: segments to transcribe, sentences to translate, words to gloss, lexicon entries missing a gloss, a category, an example or a recording, and texts no consent record covers. Each line has a button that opens the panel that does it; the Lexicon ones open the Lexicon on the matching list, such as **Needs a gloss**.
 
 A sentence is a segment on a transcription track. A word counts as glossed once it is broken into morphs. A recording that is not on this computer is not counted, and the panel says how many there are.

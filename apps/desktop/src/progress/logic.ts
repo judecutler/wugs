@@ -18,6 +18,8 @@ export type TextProgress = {
   meta?: [string, string][];
   /** How varied its words are (MTLD), from 100 words up. */
   mtld?: number | null;
+  /** Its sharing level: open unless it or its recording says otherwise. */
+  access?: string;
 };
 
 export type Progress = {

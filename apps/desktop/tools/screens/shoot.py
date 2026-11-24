@@ -1017,6 +1017,16 @@ def main():
             run.page.locator(".panel-progress .pg-steps li").first.wait_for()
             if run.page.locator(".panel-progress .pg-steps li").count() < 5:
                 failures.append("Progress did not list what to do next")
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/describe'")
+            run.page.locator(".panel-progress button", has_text="Describe the corpus").click()
+            run.page.wait_for_timeout(600)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            described = (run.page.evaluate("window.__WUGS_SAVED__") or {}).get("contents", "")
+            if "description of the collection" not in described:
+                failures.append("Describe the corpus did not save a description")
+            else:
+                (run.out / "doc-description.html").write_text(described)
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             makeup = run.page.locator(".panel-progress .pg-makeup")
             makeup.wait_for()
             makeup.scroll_into_view_if_needed()
