@@ -12,6 +12,8 @@ import {
   lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
   saveDocument,
   projectLanguage,
+  getText,
+  type TextDetail,
   type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
@@ -24,6 +26,7 @@ import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, 
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { checklistSheet } from "../lexicon/checklist";
+import { matchLine, pairUp, spokenInOrder } from "../lexicon/match";
 import { keyword, type Hit } from "../concordance/logic";
 import { EXAMPLE_FORMATS, FORMAT_KEY, glossRuns, parseFormat } from "../gloss/example";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -67,6 +70,8 @@ export const lexiconPanel: PanelDef = {
     const body = h("div", { className: "lx-body" }, list, editor);
 
     let rows: EntryRow[] = [];
+    /** Matching the entries still to record with a recording of them read in order. */
+    let matching: { text: TextDetail | null; tier: string; off: Set<string> } | null = null;
     let selected: string | null = null;
     let entry: EntryView | null = null;
     let domains: DomainItem[] | null = null;
@@ -115,6 +120,7 @@ export const lexiconPanel: PanelDef = {
     }
 
     async function loadEntry(id: string | null, keepUi = false) {
+      if (id !== null && !keepUi) matching = null;
       if (!keepUi || id !== selected) {
         picker = null;
         armed = null;
@@ -425,6 +431,19 @@ export const lexiconPanel: PanelDef = {
       list.replaceChildren(
         // Listing loanwords says how many there are and where they come from.
         ...(show === "loans" ? [h("li", { className: "empty lx-loans", textContent: loansLine(rows) })] : []),
+        ...(show === "sound"
+          ? [
+              h(
+                "li",
+                { className: "empty lx-match-offer" },
+                "Recorded the list read aloud in this order? ",
+                h("button", { type: "button", textContent: "Match to a recording…", title: "Pair each entry listed with a word of a segmented recording, in order, and add those as their pronunciations", onclick: () => {
+                  matching = { text: null, tier: "", off: new Set() };
+                  quietly(drawEditor);
+                } }),
+              ),
+            ]
+          : []),
         ...listed.map((r) =>
           h(
             "li",
@@ -444,7 +463,102 @@ export const lexiconPanel: PanelDef = {
       );
     }
 
+    /** The entries still to record beside a recording's segments, one for one. */
+    function drawMatching() {
+      const m = matching!;
+      const s = getState();
+      const texts = s.kind === "open" ? s.texts.filter((t) => t.recording !== null) : [];
+      const words = rows.filter((r) => shows(r, show)).map((r) => ({ id: r.id, headword: headword(r.lemma, r.homograph) }));
+      const close = h("button", { type: "button", textContent: "Close", onclick: () => {
+        matching = null;
+        quietly(drawEditor);
+      } });
+      const head = h("h3", { textContent: "Pronunciations from a recording" });
+      const intro = h("p", { className: "note", textContent: "Record the list read aloud, one word after another in the order listed here (Print… gives it on paper), segment it by word on the Timeline, then choose its text and track. Each word takes the segment in its place." });
+      if (texts.length === 0) {
+        editor.replaceChildren(head, intro, h("p", { className: "note", textContent: "No text has a recording yet: import the recording in Media and pick it for a text on the Timeline." }), close);
+        return;
+      }
+      const textPick = h("select", { ariaLabel: "Text" }, h("option", { value: "", textContent: "Choose the text…" }), ...texts.map((t) => h("option", { value: t.id, textContent: t.title || "(untitled)", selected: m.text?.id === t.id })));
+      textPick.onchange = async () => {
+        try {
+          m.text = textPick.value === "" ? null : await getText({ textId: textPick.value });
+          const timed = (tier: string) => (m.text?.segments ?? []).filter((x) => x.tier === tier && x.startMs !== null).length;
+          m.tier = [...(m.text?.tiers ?? [])].sort((a, b) => timed(b.id) - timed(a.id))[0]?.id ?? "";
+          m.off = new Set();
+        } catch (e) {
+          showToast({ tone: "error", lines: [errorText(e)] });
+        }
+        quietly(drawEditor);
+      };
+      const parts: (HTMLElement | null)[] = [head, intro, h("div", { className: "lx-match-bar" }, textPick)];
+      const text = m.text;
+      if (text !== null) {
+        const tierPick = h("select", { ariaLabel: "Track" }, ...text.tiers.map((t) => h("option", { value: t.id, textContent: t.name, selected: t.id === m.tier })));
+        tierPick.onchange = () => {
+          m.tier = tierPick.value;
+          m.off = new Set();
+          quietly(drawEditor);
+        };
+        parts[2]!.append(tierPick);
+        const spoken = spokenInOrder(text.segments.filter((x) => x.tier === m.tier).map((x) => ({ id: x.id, startMs: x.startMs, endMs: x.endMs, content: x.content })));
+        const pairs = pairUp(words, spoken);
+        const on = pairs.filter((p) => !m.off.has(p.segment.id));
+        parts.push(h("p", { className: "note", textContent: matchLine(words.length, spoken.length) }));
+        const table = h(
+          "table",
+          { className: "fq-table lx-match" },
+          h("thead", {}, h("tr", {}, ...["", "#", "Entry", "", "Segment"].map((c) => h("th", { scope: "col", textContent: c })))),
+          h(
+            "tbody",
+            {},
+            ...pairs.map((p, i) => {
+              const box = h("input", { type: "checkbox", checked: !m.off.has(p.segment.id), ariaLabel: `Add ${p.word.headword}'s pronunciation` });
+              box.onchange = () => {
+                if (box.checked) m.off.delete(p.segment.id);
+                else m.off.add(p.segment.id);
+                quietly(drawEditor);
+              };
+              const seg = text.segments.find((x) => x.id === p.segment.id)!;
+              return h(
+                "tr",
+                { className: m.off.has(p.segment.id) ? "lx-match-off" : "" },
+                h("td", {}, box),
+                h("td", { className: "num", textContent: String(i + 1) }),
+                h("td", { className: "ipa", textContent: p.word.headword }),
+                h("td", {}, playButton(`Play the segment paired with ${p.word.headword}`, () => void hear({ textId: text.id, tierId: seg.tier, segmentId: seg.id, startMs: seg.startMs, endMs: seg.endMs }))),
+                h("td", { className: "ipa", textContent: `${((p.segment.startMs ?? 0) / 1000).toFixed(2)} s${p.segment.content.trim() === "" ? "" : ` · ${p.segment.content}`}` }),
+              );
+            }),
+          ),
+        );
+        const add = h("button", { type: "button", className: "primary", textContent: `Add ${on.length} ${on.length === 1 ? "pronunciation" : "pronunciations"}`, disabled: on.length === 0 });
+        add.onclick = async () => {
+          add.disabled = true;
+          let done = 0;
+          for (const p of on) {
+            try {
+              await lexiconAddPronunciation({ id: p.word.id, form: "", segmentId: p.segment.id });
+              done += 1;
+            } catch (e) {
+              showToast({ tone: "error", lines: [`${p.word.headword}: ${errorText(e)}`] });
+            }
+          }
+          showToast({ tone: "info", lines: [`Added ${done} ${done === 1 ? "pronunciation" : "pronunciations"} heard in «${text.title}». Their entries leave Needs a recording.`] });
+          matching = null;
+          await loadList();
+          quietly(drawEditor);
+        };
+        parts.push(h("div", { className: "lx-match-rows" }, table), h("div", { className: "lx-match-bar" }, add, close));
+      } else parts.push(close);
+      editor.replaceChildren(...parts.filter((x) => x !== null));
+    }
+
     function drawEditor() {
+      if (matching !== null) {
+        drawMatching();
+        return;
+      }
       if (entry === null) {
         editor.replaceChildren(h("p", { className: "note", textContent: rows.length === 0 ? "" : "Pick an entry to edit it." }));
         return;
