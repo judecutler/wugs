@@ -839,6 +839,8 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
         (Format::Elan, Some(t)) if p.text_recording(t)?.is_none() => elan_media(Path::new(path), input),
         (Format::Chat, Some(t)) if p.text_recording(t)?.is_none() => chat_media(Path::new(path), input),
         (Format::Exmaralda, Some(t)) if p.text_recording(t)?.is_none() => exb_media(Path::new(path), input),
+        // A TextGrid or an Audacity label track names no recording, but Praat and Audacity users keep it under the same name.
+        (Format::TextGrid | Format::Audacity, Some(t)) if p.text_recording(t)?.is_none() => same_name_beside(Path::new(path)),
         _ => None,
     };
     Ok(Imported { format: format.name().into(), text, lexicon, lines, recording })
@@ -974,6 +976,14 @@ pub(crate) fn elan_media(eaf: &Path, input: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// A recording with the file's own name beside it (`story.TextGrid` →
+/// `story.wav`), WAV first.
+pub(crate) fn same_name_beside(file: &Path) -> Option<PathBuf> {
+    let stem = file.file_stem()?.to_string_lossy().into_owned();
+    let dir = file.parent().unwrap_or(Path::new("."));
+    ["wav", "WAV", "wave", "flac", "mp3", "m4a", "ogg", "aif", "aiff", "aifc", "oga", "aac", "mp4"].iter().map(|x| dir.join(format!("{stem}.{x}"))).find(|p| p.is_file())
 }
 
 /// A CHAT file's `@Media:` recording (`name, audio`: the name without its
@@ -1611,6 +1621,9 @@ mod tests {
         assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url="stall.wav"/></meta-information></head></basic-transcription>"#), Some(dir.join("stall.wav")));
         assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url="file:///elsewhere/stall.wav"/></meta-information></head></basic-transcription>"#), Some(dir.join("stall.wav")));
         assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url=""/></meta-information></head></basic-transcription>"#), None);
+        let tg = dir.join("stall.TextGrid");
+        assert_eq!(same_name_beside(&tg), Some(dir.join("stall.wav")));
+        assert_eq!(same_name_beside(&dir.join("nothing.TextGrid")), None);
         fs::remove_dir_all(&dir).ok();
     }
 
