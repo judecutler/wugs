@@ -57,11 +57,11 @@ export function asTsv(rows: readonly KeywordRow[], kind: KeywordKind = "word"): 
   return [`${kind === "translation" ? "word" : kind}\tin text\tin rest\tlog-likelihood (4-term)\tlog ratio\t%DIFF\tsimple maths`, ...rows.map((r) => [clean(r.item), r.focus, r.reference, r.logLikelihood.toFixed(2), r.logRatio.toFixed(2), r.percentDiff.toFixed(1), r.simpleMaths.toFixed(3)].join("\t"))].join("\n");
 }
 
-/** What keywords compare: transcribed words, translation words, lemmas or tags (UPOS). */
-export type KeywordKind = "word" | "translation" | "lemma" | "tag";
+/** What keywords compare: transcribed words, translation words, lemmas, tags (UPOS), or glossed words' morphs or glosses. */
+export type KeywordKind = "word" | "translation" | "lemma" | "tag" | "morph" | "gloss";
 
 /** The words each side's size counts, in the summary. */
-export const unitOf = (kind: KeywordKind): string => (kind === "lemma" ? "lemmatised words" : kind === "tag" ? "tagged words" : "words");
+export const unitOf = (kind: KeywordKind): string => (kind === "lemma" ? "lemmatised words" : kind === "tag" ? "tagged words" : kind === "morph" ? "morphs" : kind === "gloss" ? "glosses" : "words");
 
 /**
  * The CQP query that finds a lemma or tag row in the Concordance: one token

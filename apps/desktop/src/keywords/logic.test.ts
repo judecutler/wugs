@@ -40,3 +40,10 @@ test("the summary counts what was compared", () => {
   assert.match(summary("Story", { ...k, focusTokens: 0 }, false, null, "lemma"), /no lemmatised words yet\. Tag and parse/u);
   assert.match(asTsv([], "tag"), /^tag\tin text/u);
 });
+
+test("morph and gloss keywords count morphs and glosses", async () => {
+  const { unitOf } = await import("./logic.ts");
+  assert.equal(unitOf("morph"), "morphs");
+  assert.equal(unitOf("gloss"), "glosses");
+  assert.equal(unitOf("tag"), "tagged words");
+});

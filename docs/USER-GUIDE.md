@@ -1435,6 +1435,8 @@ The **Keywords** panel (a tab beside Search in Scrolls; in Tongues, open it with
 
 By default the other side is **The rest of the project**. The **against** list beside the first one picks a narrower other side: one other text, the texts with another detail, or one other track. You can then compare two groups head to head, such as texts with **Genre: narrative** against **Genre: conversation**, or the child's track (`CHI`) against the mother's (`MOT`), leaving every other text out of the count. Text that is on both sides counts only on the first side. A row the first side never uses opens its lines from the other side.
 
+In a glossed corpus, **Morphs** and **Glosses** compare the morphs, or the glosses, of the words broken into morphs, each counted once per word. This finds the grammar a genre or a speaker leans on: past tense in narratives, imperatives in instructions, an evidential in one storyteller's texts. A row opens its lines in the Concordance. Morphs and glosses are compared one at a time, not in a row.
+
 Under the list, **Texts most like this one** ranks the other texts by how alike their habits are in the project's 200 most frequent words, the measure stylometry uses to tell authors, speakers, genres and dialects apart (Cosine Delta). Each text gets a number from −1 to 1 with a bar: near 1 it leans on the same common words as the one picked, near 0 it is unrelated, below 0 it does the opposite. It needs three texts or more, and texts of a few hundred words give unsteady numbers, so the note says how many are that short. **Copy table** beside it copies every text against every other, ready for a cluster analysis in R or a spreadsheet.
 
 ## Hear any segment from anywhere
