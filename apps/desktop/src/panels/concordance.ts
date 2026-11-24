@@ -2,14 +2,14 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { concordance, concordanceQuery, dispersion, errorText, getText, glossGet, saveHitClips, textMetadata, type TextDetail } from "../api";
+import { concordance, concordanceQuery, corpusTracks, dispersion, errorText, getText, glossGet, saveHitClips, textMetadata, type TextDetail } from "../api";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
 import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { byDetail, detailTsv, marks, NOT_GIVEN, per1000, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
-import { asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
+import { asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { linesUnder } from "../concordance/under";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
@@ -173,6 +173,8 @@ export const concordancePanel: PanelDef = {
     underToggle.classList.toggle("active", underOn);
     /** Each text read so far: the line under each of its segments. Read again when the data changes. */
     const under = new Map<string, Map<string, string>>();
+    /** Each track's name, for the speaker of a conversation's lines. */
+    let trackNames: { generation: number; names: Map<string, string>; asking: boolean } = { generation: -1, names: new Map(), asking: false };
     let underGeneration = -1;
     let underLoading = false;
     /** Bumped whenever `under` is emptied, so a read begun before is dropped. */
@@ -402,6 +404,21 @@ export const concordancePanel: PanelDef = {
         const missing = [...new Set(lines.map((x) => x.textId))].filter((id) => !under.has(id));
         if (missing.length > 0 && !underLoading) readUnder(missing);
       }
+      // A conversation's lines name their speaker (their track), read once per data generation.
+      if (trackNames.generation !== dataGeneration() && !trackNames.asking) {
+        trackNames.asking = true;
+        const gen = dataGeneration();
+        void corpusTracks().then(
+          (ts) => {
+            trackNames = { generation: gen, names: new Map(ts.map((t) => [t.id, t.name])), asking: false };
+            drawRows();
+          },
+          () => {
+            trackNames = { generation: gen, names: new Map(), asking: false };
+          },
+        );
+      }
+      const who = speakerOf(lines, trackNames.names);
       rows.replaceChildren(
         ...lines.map((hit) => {
           const play = playButton("Open this segment and play it", () => void open(hit, true));
@@ -418,7 +435,7 @@ export const concordancePanel: PanelDef = {
               "span",
               { className: "cc-meta" },
               h("span", { textContent: hit.breakdown === null ? "" : `${hit.breakdown} ‘${hit.glosses ?? ""}’` }),
-              h("span", { textContent: hit.textTitle }),
+              h("span", { textContent: who === null ? hit.textTitle : `${hit.textTitle} · ${who(hit)}` }),
             ),
             ...(underOn ? [h("span", { className: "cc-under", textContent: under.get(hit.textId)?.get(hit.segmentId) ?? "" })] : []),
           );
@@ -605,7 +622,7 @@ export const concordancePanel: PanelDef = {
         .then((pairs) => {
           // With translations on, each line's translation goes along as it shows.
           const shown = underOn ? (h: Hit) => under.get(h.textId)?.get(h.segmentId) ?? null : undefined;
-          return writeHtml(kwicHtml(lines, 40, shown), asTsv(lines, new Map(pairs), shown));
+          return writeHtml(kwicHtml(lines, 40, shown), asTsv(lines, new Map(pairs), shown, speakerOf(lines, trackNames.names)));
         })
         .then(
         () =>

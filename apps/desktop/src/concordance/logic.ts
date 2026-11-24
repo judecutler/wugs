@@ -139,7 +139,14 @@ export function countLine(shown: number, total: number, texts: number): string {
 }
 
 /** The hits as tab-separated rows (left, keyword, right, text), for a spreadsheet. */
-export function asTsv(hits: readonly Hit[], details?: ReadonlyMap<string, ReadonlyMap<string, string>>, under?: (h: Hit) => string | null): string {
+/** Each line's speaker: the name of its track, when the lines come from more
+ * than one track (a CHAT conversation); else null, as there is nothing to tell apart. */
+export function speakerOf(hits: readonly Hit[], names: ReadonlyMap<string, string>): ((h: Hit) => string) | null {
+  if (new Set(hits.map((h) => h.tierId)).size < 2) return null;
+  return (h) => names.get(h.tierId) ?? "";
+}
+
+export function asTsv(hits: readonly Hit[], details?: ReadonlyMap<string, ReadonlyMap<string, string>>, under?: (h: Hit) => string | null, speaker?: ((h: Hit) => string) | null): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
   if (details === undefined) return ["left\tkeyword\tright\ttext", ...hits.map((h) => [left(h), keyword(h), right(h), h.textTitle].map(clean).join("\t"))].join("\n");
   // The fuller table, one line per hit with what a statistical analysis of
@@ -149,10 +156,10 @@ export function asTsv(hits: readonly Hit[], details?: ReadonlyMap<string, Readon
   const secs = (ms: number | null) => (ms === null ? "" : (ms / 1000).toFixed(3));
   // The line under each hit (its translation, or the sentence a translation translates), when shown.
   const translated = under !== undefined && hits.some((h) => (under(h) ?? "") !== "");
-  const head = ["left", "keyword", "right", "text", "start_s", "end_s", ...(analysed ? ["breakdown", "glosses"] : []), ...(translated ? ["translation"] : []), ...keys];
+  const head = ["left", "keyword", "right", "text", ...(speaker ? ["speaker"] : []), "start_s", "end_s", ...(analysed ? ["breakdown", "glosses"] : []), ...(translated ? ["translation"] : []), ...keys];
   const rows = hits.map((h) => {
     const d = details.get(h.textId);
-    return [left(h), keyword(h), right(h), h.textTitle, secs(h.startMs), secs(h.endMs), ...(analysed ? [h.breakdown ?? "", h.glosses ?? ""] : []), ...(translated ? [under?.(h) ?? ""] : []), ...keys.map((k) => d?.get(k) ?? "")].map(clean).join("\t");
+    return [left(h), keyword(h), right(h), h.textTitle, ...(speaker ? [speaker(h)] : []), secs(h.startMs), secs(h.endMs), ...(analysed ? [h.breakdown ?? "", h.glosses ?? ""] : []), ...(translated ? [under?.(h) ?? ""] : []), ...keys.map((k) => d?.get(k) ?? "")].map(clean).join("\t");
   });
   return [head.map(clean).join("\t"), ...rows].join("\n");
 }

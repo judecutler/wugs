@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { asTsv, kwicHtml, clip, countLine, hasTags, isRtl, withTags, keyword, left, right, sortHits, type Hit } from "./logic.ts";
+import { asTsv, kwicHtml, clip, countLine, hasTags, isRtl, withTags, keyword, left, right, sortHits, type Hit, speakerOf } from "./logic.ts";
 
 const hit = (words: string[], at: number, title = "T"): Hit => ({ textId: title, textTitle: title, segmentId: words.join("_"), tierId: "u", startMs: 0, endMs: 1, words, at, breakdown: null, glosses: null });
 
@@ -133,4 +133,15 @@ test("with translations shown, copied lines carry them", () => {
   assert.ok(!asTsv([one], new Map(), () => null).includes("translation"), "no column when none is shown");
   assert.match(kwicHtml([one], 40, under), /<i>|font-style:italic[^>]*>‘the dog sleeps’/);
   assert.doesNotMatch(kwicHtml([one]), /italic/);
+});
+
+test("a conversation's lines name their speaker", () => {
+  const hit = (tierId: string): Hit => ({ textId: "t", textTitle: "Lunch", segmentId: tierId, tierId, startMs: 0, endMs: 1000, words: ["big", "doggie"], at: 1, breakdown: null, glosses: null });
+  const names = new Map([["m", "MOT"], ["c", "CHI"]]);
+  assert.equal(speakerOf([hit("m"), hit("m")], names), null, "one track: nothing to tell apart");
+  const who = speakerOf([hit("m"), hit("c")], names)!;
+  assert.equal(who(hit("c")), "CHI");
+  const tsv = asTsv([hit("m"), hit("c")], new Map(), undefined, who).split("\n");
+  assert.equal(tsv[0], "left\tkeyword\tright\ttext\tspeaker\tstart_s\tend_s");
+  assert.equal(tsv[2], "big\tdoggie\t\tLunch\tCHI\t0.000\t1.000");
 });
