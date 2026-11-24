@@ -188,6 +188,17 @@ pub fn spreadsheet_text(bytes: Vec<u8>, name: &str) -> Result<String, String> {
         let s = match d {
             Data::Empty => String::new(),
             Data::Float(f) if f.fract() == 0.0 && f.abs() < 1e15 => format!("{}", *f as i64),
+            // A date cell as a date (YYYY-MM-DD, with the time when it has one), not Excel's day count.
+            Data::DateTime(t) if t.is_datetime() => {
+                let (y, mo, d, h, mi, sec, _) = t.to_ymd_hms_milli();
+                if (h, mi, sec) == (0, 0, 0) {
+                    format!("{y:04}-{mo:02}-{d:02}")
+                } else {
+                    format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{sec:02}")
+                }
+            }
+            // OpenDocument writes dates as ISO text: the same shape as Excel's above.
+            Data::DateTimeIso(iso) => iso.replacen('T', " ", 1),
             other => other.to_string(),
         };
         s.replace(['\t', '\r', '\n'], " ").trim().to_string()
@@ -410,9 +421,9 @@ mod tests {
             let (text, tabs) = read_table(&dir.join(name), &[]).unwrap();
             assert!(tabs, "{name}");
             let (header, rows, _) = records(&text, tabs).unwrap();
-            assert_eq!(header, ["Headword", "Gloss", "Category", "Number"], "{name}: the empty sheet and row skipped");
-            assert_eq!(rows[0], ["kuri", "dog", "noun", "12"], "{name}: a whole number without .0");
-            assert_eq!(rows[1], ["mopa", "sleep deeply", "verb", "3.5"], "{name}: a tab inside a cell");
+            assert_eq!(header, ["Headword", "Gloss", "Category", "Number", "Recorded"], "{name}: the empty sheet and row skipped");
+            assert_eq!(rows[0], ["kuri", "dog", "noun", "12", "2026-03-12"], "{name}: a whole number without .0, a date as a date");
+            assert_eq!(rows[1], ["mopa", "sleep deeply", "verb", "3.5", "2026-03-13 14:05:00"], "{name}: a tab inside a cell, a date with its time");
             assert_eq!(rows[2][1], "house home", "{name}: a line break inside a cell");
             assert_eq!(rows.len(), 3, "{name}");
         }
