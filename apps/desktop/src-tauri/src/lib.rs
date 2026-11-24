@@ -882,6 +882,14 @@ fn gloss_word_types(s: State<SessionThread>, text_id: Option<String>) -> Result<
 }
 
 #[tauri::command(async)]
+fn likely_meanings(s: State<SessionThread>, forms: Vec<String>) -> Result<Vec<Vec<meanings::Meaning>>, String> {
+    s.run(move |s| {
+        let p = session::project(s)?;
+        meanings::likely_meanings(p, &concordance::Scope::all(), &forms)
+    })
+}
+
+#[tauri::command(async)]
 fn gloss_break_all(s: State<SessionThread>, text_id: Option<String>) -> Result<usize, String> {
     s.run(move |s| gloss_types::break_all(s, text_id.as_deref()))
 }
@@ -2275,6 +2283,7 @@ pub fn run() {
             gloss_apply,
             gloss_apply_all,
             gloss_word_types,
+            likely_meanings,
             gloss_break_all,
             gloss_apply_type,
             gloss_set,

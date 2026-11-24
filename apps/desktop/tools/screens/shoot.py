@@ -604,6 +604,8 @@ def main():
             run.shot("state-gloss-guess", run.page.locator(".panel-gloss"))
             if run.page.locator(".panel-gloss .gl-guessed").count() == 0:
                 failures.append("a word starting ni- did not show its guess")
+            if run.page.locator(".panel-gloss .gl-maybe", has_text="walks").count() != 1:
+                failures.append("an unanalysed word did not show what the translations suggest")
             # A gloss being typed says what its abbreviations mean.
             run.page.evaluate("async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u01' })")
             run.page.wait_for_timeout(600)

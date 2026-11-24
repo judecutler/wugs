@@ -3,7 +3,7 @@
 // translation line up under the transcription. The project's earlier analyses
 // are one keypress away: Enter on an empty word accepts the ghost suggestion.
 import {
-  abbreviationMeanings, addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize,
+  abbreviationMeanings, addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize, likelyMeanings,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
@@ -20,6 +20,7 @@ import { forms } from "../gloss/tokenizer";
 import { isPaired, NEW_TRACK, translationLines } from "../gloss/translation";
 import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { provide } from "../palette/registry";
+import { meaningTitle, type Meaning } from "../wordtypes/logic";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { emptyState, h } from "../dom";
 import { typeWithShortcuts } from "../typing";
@@ -298,6 +299,42 @@ export const glossPanel: PanelDef = {
       hint.textContent = glossHint(input.value, meanings);
     }
 
+    // ---------------------------------------------------------------- likely meanings
+
+    /** Each unanalysed word's likely meanings from the translations, by folded
+     * form, read once per project and data generation. */
+    let likely = new Map<string, Meaning[]>();
+    let likelyFor = "";
+    let likelyAsking = false;
+    const foldForm = (f: string) => f.normalize("NFC").toLowerCase();
+
+    function askLikely(v: GlossView): void {
+      const s = getState();
+      const now = `${s.kind === "open" ? s.info.projectId : ""}|${dataGeneration()}`;
+      if (now !== likelyFor) {
+        likely = new Map();
+        likelyFor = now;
+      }
+      if (likelyAsking) return;
+      const missing = [...new Set(v.words.filter((w) => w.morphs.length === 0).map((w) => foldForm(w.form)))].filter((f) => !likely.has(f));
+      if (missing.length === 0) return;
+      likelyAsking = true;
+      likelyMeanings(missing)
+        .then(
+          (got) => {
+            if (likelyFor !== now) return;
+            missing.forEach((f, i) => likely.set(f, got[i] ?? []));
+            if (got.some((m) => m.length > 0)) draw(true);
+          },
+          () => {
+            if (likelyFor === now) for (const f of missing) likely.set(f, []);
+          },
+        )
+        .finally(() => {
+          likelyAsking = false;
+        });
+    }
+
     // ---------------------------------------------------------------- lexicon autocomplete
 
     function closeMenu(): void {
@@ -500,6 +537,17 @@ export const glossPanel: PanelDef = {
           b.onclick = () => {
             const at = ids();
             if (at !== null) void run(() => glossApply({ ...at, tokenId: w.id, morphs: matchCase(w.form, alt.morphs) }));
+          };
+          chips.push(b);
+        }
+      }
+      // No analysis yet: what the translations suggest it means, as one root.
+      if (w.morphs.length === 0) {
+        for (const m of (likely.get(foldForm(w.form)) ?? []).slice(0, 2)) {
+          const b = h("button", { type: "button", className: "gl-alt gl-maybe", textContent: `‘${m.word}’?`, title: `${meaningTitle(w.form, m).replace(/ Click to gloss the root with it\.$/, "")} Click to gloss the word as one root with it.` });
+          b.onclick = () => {
+            const at = ids();
+            if (at !== null) void run(() => glossApply({ ...at, tokenId: w.id, morphs: [{ surface: w.form, type: "root", gloss: m.word, glossesByLang: {}, sense: null }] }));
           };
           chips.push(b);
         }
@@ -746,6 +794,7 @@ export const glossPanel: PanelDef = {
       }
       if (view === null) return;
       const v = view;
+      askLikely(v);
       const roles = sel.text.tiers.map((t) => `${t.id}:${t.role ?? ""}:${t.name}`).join(",");
       const translations = JSON.stringify(translationLines(sel.segment, sel.text.segments, sel.text.tiers).map((l) => [l.tier.id, l.segment?.id, l.segment?.content]));
       const next = JSON.stringify([key, sel.segment.content, sel.segment.startMs, sel.segment.endMs, v, lang, askingLang, offer, armedOthers, roles, translations]);
