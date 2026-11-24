@@ -1058,6 +1058,8 @@ With two lists or more loaded, **Draw a tree** at the bottom joins every languag
 
 Under the table, **Sound correspondences** aligns your words with one language's, sound by sound, and counts which sounds stand across from which: if your *t* is their *ʔ* in *eye*, *louse* and *skin*, that is a regular correspondence and good evidence the words are related, while a pair met once may be chance. Choose the language and how alike a pair of words must be to be aligned (lower takes in more real cognates, and more chance look-alikes). Each concept gives its closest pair. A sound with nothing across from it shows as **–**. Correspondences of different sounds met twice or more are in bold; **Only where the sounds differ** hides the sounds that stay the same. **Copy table** copies the list with the concepts each was met in.
 
+**Alignment** under it sets one concept's cognates under your word, sound by sound, the way EDICTOR shows a cognate set: a row per language, a column per sound of your word. Choose the concept; the forms you judged cognate are aligned, and with **Close ones not judged yet** ticked, so are forms 60% alike or more that you have not judged. A sound with nothing across from it in your word joins the next cell (so *spatter* under *pater* reads *sp a tt e r*). A column where every form keeps your sound is shaded. **Copy table** copies it.
+
 ### Count word orders in the parsed sentences
 
 The **Word order** panel counts, in every sentence with a dependency parse (from CoNLL-U, TEI, or tagging and parsing in the Sentence panel), the orders the World Atlas of Language Structures describes. Open it with **Ctrl+K**, **Show Word order**. It counts:
