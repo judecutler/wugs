@@ -101,6 +101,96 @@ pub fn fisher_log10(o11: usize, r1: usize, c1: usize, n: usize) -> f64 {
     ln_total / std::f64::consts::LN_10
 }
 
+/// Distinctive collexeme analysis (Gries and Stefanowitsch 2004): which
+/// fillers prefer one construction's slot over another's.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct DistinctiveRow {
+    pub item: String,
+    /// Times it fills the first construction's slot, and the second's.
+    pub first: usize,
+    pub second: usize,
+    /// −log10 of Fisher's exact p, positive when it prefers the first, negative the second.
+    pub strength: f64,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Distinctive {
+    pub rows: Vec<DistinctiveRow>,
+    /// Matches of each construction whose slot holds a word.
+    pub first: usize,
+    pub second: usize,
+}
+
+/// Each filler of `slot` in a query's matches: its key, count and spellings; and how many matches had one.
+type Fillers = (HashMap<String, (usize, Vec<(String, usize)>)>, usize);
+
+fn fillers(p: &wugs_core::Project, query: &str, slot: usize, lemma: bool, only_text: Option<&str>) -> Result<Fillers, String> {
+    let q = parse(query).map_err(|e| e.to_string())?;
+    if slot == 0 {
+        return Err("the slot is counted from 1".into());
+    }
+    let mut out: HashMap<String, (usize, Vec<(String, usize)>)> = HashMap::new();
+    let mut n = 0;
+    search(p, &q, only_text, |s| {
+        for &(at, len) in &s.matches {
+            if slot > len || s.toks[at + slot - 1].upos == "PUNCT" {
+                continue;
+            }
+            let t = &s.toks[at + slot - 1];
+            let spelling = p.proj.nfc(if lemma { &t.lemma } else { &t.word });
+            let k = wugs_model::fold_key(&spelling);
+            if k.is_empty() {
+                continue;
+            }
+            n += 1;
+            let e = out.entry(k).or_default();
+            e.0 += 1;
+            match e.1.iter_mut().find(|(sp, _)| *sp == spelling) {
+                Some((_, c)) => *c += 1,
+                None => e.1.push((spelling, 1)),
+            }
+        }
+        Ok(())
+    })?;
+    Ok((out, n))
+}
+
+/// The fillers of two constructions' slots compared: for each, a 2×2 table
+/// of its uses in each against the other fillers of each.
+#[allow(clippy::too_many_arguments)]
+pub fn distinctive(session: &mut Session, a: &str, slot_a: usize, b: &str, slot_b: usize, lemma: bool, only_text: Option<&str>) -> Result<Distinctive, String> {
+    let p = project(session)?;
+    let (fa, na) = fillers(p, a, slot_a, lemma, only_text)?;
+    let (fb, nb) = fillers(p, b, slot_b, lemma, only_text)?;
+    let mut keys: Vec<&String> = fa.keys().chain(fb.keys()).collect();
+    keys.sort();
+    keys.dedup();
+    let mut rows: Vec<DistinctiveRow> = keys
+        .into_iter()
+        .map(|k| {
+            let (x, sa) = fa.get(k).map_or((0, &[][..]), |(c, s)| (*c, &s[..]));
+            let (y, sb) = fb.get(k).map_or((0, &[][..]), |(c, s)| (*c, &s[..]));
+            // Rows: the first construction, the second; columns: this filler, the others.
+            let log10p = fisher_log10(x, na, x + y, na + nb);
+            let prefers_first = x as f64 >= na as f64 * (x + y) as f64 / (na + nb).max(1) as f64;
+            let strength = if prefers_first { -log10p } else { log10p };
+            let item = sa.iter().chain(sb).max_by(|p, q| p.1.cmp(&q.1).then_with(|| q.0.cmp(&p.0))).map(|s| s.0.clone()).unwrap_or_else(|| k.clone());
+            DistinctiveRow { item, first: x, second: y, strength: strength + 0.0 }
+        })
+        .collect();
+    rows.sort_by(|p, q| q.strength.total_cmp(&p.strength).then(p.item.cmp(&q.item)));
+    if rows.len() > LIMIT {
+        // Keep the strongest each way.
+        let half = LIMIT / 2;
+        let tail = rows.split_off(rows.len() - half);
+        rows.truncate(half);
+        rows.extend(tail);
+    }
+    Ok(Distinctive { rows, first: na, second: nb })
+}
+
 /// The words (or lemmas) filling position `slot` (from 1) of a query's matches.
 pub fn collexemes(session: &mut Session, query: &str, slot: usize, lemma: bool, only_text: Option<&str>) -> Result<Collexemes, String> {
     let q = parse(query).map_err(|e| e.to_string())?;
@@ -208,6 +298,12 @@ mod tests {
         // A slot past the query's length fills nothing.
         assert_eq!(collexemes(&mut session, "[lemma=\"give\"] []", 3, true, None).unwrap().constructions, 0);
         assert!(collexemes(&mut session, "[lemma=", 1, true, None).is_err());
+        // Two constructions compared: the verb before a noun, against the one after a pronoun.
+        let d = distinctive(&mut session, "[upos=\"VERB\"] [upos=\"NOUN\"]", 1, "[upos=\"PRON\"] [upos=\"VERB\"]", 2, true, None).unwrap();
+        assert_eq!((d.first, d.second), (4, 4));
+        let read = d.rows.iter().find(|r| r.item == "read").unwrap();
+        assert_eq!((read.first, read.second), (1, 1));
+        assert!(read.strength.abs() < 0.5, "read is in both alike: {}", read.strength);
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

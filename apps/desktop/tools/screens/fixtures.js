@@ -1187,6 +1187,15 @@ const LEXICON = [
         { item: "liwa", together: 1, freq: 15, expected: 3.23, strength: -1.1, logLikelihood: -2.2 },
       ],
     }),
+    distinctive_collexemes: () => ({
+      first: 14,
+      second: 11,
+      rows: [
+        { item: "ŋai", first: 7, second: 0, strength: 2.9 },
+        { item: "kesi", first: 4, second: 3, strength: 0.2 },
+        { item: "liwa", first: 0, second: 6, strength: -2.6 },
+      ],
+    }),
     gloss_still_to_gloss: () => ["u03", "u10"],
     // Sentences like the one on screen, with a translation for the first.
     like_sentences: ({ segmentId }) =>

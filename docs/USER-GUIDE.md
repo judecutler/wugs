@@ -1515,6 +1515,8 @@ Each row is a word met in that position, with:
 
 A strength of 1.3 or more (p < .05) marks a word the construction attracts, shown in bold. A strength below zero marks a word that keeps away from the slot, even if it turns up there now and then. Click a row to read its lines in the Concordance, with that position narrowed to the word. **Copy table** copies the list with the log-likelihood too.
 
+To compare two constructions that compete for the same words, type the second in **Compare with another construction** and pick its position. Examples are the ditransitive `[lemma="give"] [] [upos="NOUN"]` against `[lemma="give"] [upos="NOUN"] "to"`, or *will* against *going to*. The list then shows each filler's count in each construction and a strength that leans one way or the other: above zero it prefers the first construction, below zero the second, and 1.3 or more either way is p < .05. This is distinctive collexeme analysis (Gries and Stefanowitsch 2004). Fillers that prefer the first are shaded blue, those that prefer the second sand. A row opens its lines in the construction it prefers. Clear the field to go back to one construction.
+
 ## Count words, morphs and glosses
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.
