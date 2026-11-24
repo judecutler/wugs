@@ -1386,6 +1386,15 @@ def main():
             run.shot("state-lexicon-todo", run.page.locator(".panel-lexicon"))
             if run.page.locator(".panel-lexicon .lx-list li").count() != 1:
                 failures.append("Needs a gloss did not list the one entry without a gloss")
+            # Entries still to record, matched one for one with a recording's segments.
+            run.page.locator(".panel-lexicon .lx-show").select_option("sound")
+            run.page.locator(".panel-lexicon button", has_text="Match to a recording").click()
+            run.page.locator(".panel-lexicon .lx-match-bar select").first.select_option("t-count")
+            run.page.locator(".panel-lexicon table.lx-match tbody tr").first.wait_for()
+            run.shot("state-lexicon-match", run.page.locator(".panel-lexicon"))
+            if "words and" not in run.page.locator(".panel-lexicon .lx-entry").inner_text():
+                failures.append("Match to a recording did not say how the words and segments line up")
+            run.page.locator(".panel-lexicon .lx-entry button", has_text="Close").click()
             run.page.locator(".panel-lexicon .lx-show").select_option("pos:num")
             run.page.wait_for_timeout(200)
             # The listed entries as a checklist to print.
