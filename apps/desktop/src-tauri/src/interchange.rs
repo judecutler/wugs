@@ -839,6 +839,8 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
         (Format::Elan, Some(t)) if p.text_recording(t)?.is_none() => elan_media(Path::new(path), input),
         (Format::Chat, Some(t)) if p.text_recording(t)?.is_none() => chat_media(Path::new(path), input),
         (Format::Exmaralda, Some(t)) if p.text_recording(t)?.is_none() => exb_media(Path::new(path), input),
+        // A TextGrid or an Audacity label track names no recording, but Praat and Audacity users keep it under the same name.
+        (Format::TextGrid | Format::Audacity, Some(t)) if p.text_recording(t)?.is_none() => same_name_beside(Path::new(path)),
         _ => None,
     };
     Ok(Imported { format: format.name().into(), text, lexicon, lines, recording })
@@ -974,6 +976,14 @@ pub(crate) fn elan_media(eaf: &Path, input: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// A recording with the file's own name beside it (`story.TextGrid` →
+/// `story.wav`), WAV first.
+pub(crate) fn same_name_beside(file: &Path) -> Option<PathBuf> {
+    let stem = file.file_stem()?.to_string_lossy().into_owned();
+    let dir = file.parent().unwrap_or(Path::new("."));
+    ["wav", "WAV", "wave", "flac", "mp3", "m4a", "ogg", "aif", "aiff", "aifc", "oga", "aac", "mp4"].iter().map(|x| dir.join(format!("{stem}.{x}"))).find(|p| p.is_file())
 }
 
 /// A CHAT file's `@Media:` recording (`name, audio`: the name without its
@@ -1135,6 +1145,11 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
         Format::FlexText => wugs_flex::export_flextext(p, text_id)?,
         Format::TextGrid => {
             let out = wugs_legacy::export_textgrid(p, text_id)?;
+            // Praat opens a TextGrid beside the recording of the same name.
+            if let Some(wav) = recording_beside(p, text_id, folder, &file_stem(&title, "text"))? {
+                let name = wav.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                notes.push(format!("The recording is copied beside it as «{name}»: open both in Praat (select them and View & Edit)."));
+            }
             if out.not_exported.total() > 0 {
                 let parts: Vec<String> = out.not_exported.0.iter().map(|(k, n)| format!("{k} ×{n}")).collect();
                 notes.push(format!("Praat cannot hold some segments, so they are not in the file: {}.", parts.join(", ")));
@@ -1611,6 +1626,9 @@ mod tests {
         assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url="stall.wav"/></meta-information></head></basic-transcription>"#), Some(dir.join("stall.wav")));
         assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url="file:///elsewhere/stall.wav"/></meta-information></head></basic-transcription>"#), Some(dir.join("stall.wav")));
         assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url=""/></meta-information></head></basic-transcription>"#), None);
+        let tg = dir.join("stall.TextGrid");
+        assert_eq!(same_name_beside(&tg), Some(dir.join("stall.wav")));
+        assert_eq!(same_name_beside(&dir.join("nothing.TextGrid")), None);
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -1647,9 +1665,11 @@ mod tests {
         assert!(eaf.contains("RELATIVE_MEDIA_URL=\"./Counting to six (tutorial).wav\""), "{eaf}");
         assert!(eaf.contains("MIME_TYPE=\"audio/x-wav\""));
         assert!(e.notes.iter().any(|n| n.contains("copied beside it")), "{:?}", e.notes);
+        let tg = export_text(&mut s, &text, Format::TextGrid, &out).unwrap();
+        assert!(tg.notes.iter().any(|n| n.contains("open both in Praat")), "{:?}", tg.notes);
         // A second export never replaces the first recording.
         let again = export_text(&mut s, &text, Format::Elan, &out).unwrap();
-        assert!(fs::read_to_string(&again.path).unwrap().contains("./Counting to six (tutorial) (2).wav"));
+        assert!(fs::read_to_string(&again.path).unwrap().contains("./Counting to six (tutorial) (3).wav"));
         drop(s);
         fs::remove_dir_all(&dir).ok();
     }
