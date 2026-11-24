@@ -826,6 +826,11 @@ def main():
             run.shot("state-concordance-sorted", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-sorted").count() == 0:
                 failures.append("Concordance: the word sorted by was not marked")
+            # Best examples first: each line says how good a dictionary example it is.
+            run.page.locator(".panel-concordance select.cc-sort").first.select_option("best")
+            run.page.wait_for_timeout(400)
+            if "As a dictionary example" not in (run.page.locator(".panel-concordance .cc-row").first.get_attribute("title") or ""):
+                failures.append("Best examples first did not score the lines as dictionary examples")
             run.page.locator(".panel-concordance select.cc-sort").first.select_option("text")
             run.page.locator(".panel-concordance button", has_text="Copy rows").click()
             run.page.wait_for_timeout(300)
