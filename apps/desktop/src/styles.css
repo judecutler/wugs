@@ -1464,6 +1464,14 @@ body::before {
 .du-label { font-family: var(--font-ipa); font-size: 15px; fill: var(--ink); }
 .du-label-cell { font-family: var(--font-ipa); font-weight: normal; text-align: left; }
 .du-result { font-size: var(--text-sm); }
+.ag-summary p { margin: 0 0 4px; font-size: var(--text-sm); }
+.ag-scroll { overflow-x: auto; }
+.ag-table { width: 100%; }
+.ag-table .ag-label { font-family: var(--font-ipa); text-align: left; white-space: normal; }
+.ag-table .ag-none { color: var(--muted); text-align: center; }
+.ag-table tr.ag-differs td, .ag-table tr.ag-alone td { background: var(--warn-soft); }
+.ag-table tr.is-selected td { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ag-play { width: 1%; }
 .ct-mean { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; pointer-events: none; }
 .ct-label { font-family: var(--font-ipa); font-size: 13px; font-weight: 600; fill: var(--ink); }
 

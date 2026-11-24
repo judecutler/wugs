@@ -41,14 +41,25 @@
   ];
   const countingText = { id: "t-count", title: "Counting to ten", tiers, segments: [...utterances, ...translations] };
 
-  const otherText = (t) => ({
-    id: t.id,
-    title: t.title,
-    tiers: [tiers[0]],
-    segments: Array.from({ length: t.segments }, (_, i) =>
+  const otherText = (t) => {
+    const segments = Array.from({ length: t.segments }, (_, i) =>
       seg(`${t.id}-s${i}`, "tier-utt", 1000 + i * 2400, 3000 + i * 2400 - ((i * 337 + (i % 4) * 280) % 900), ["mopa tela wiripa", "kanu sele", "ŋai toɾu tela", "wiripa ni-kani"][i % 4], `c${i}`),
-    ),
-  });
+    );
+    if (t.id !== "t-market") return { id: t.id, title: t.title, tiers: [tiers[0]], segments };
+    // The market conversation was transcribed twice, for the Agreement panel:
+    // the second hearing moves some boundaries, hears two words otherwise,
+    // misses one turn and adds a short one.
+    const second = { id: "tier-second", name: "second hearing", kind: "time-aligned", role: "transcription", language: "x-tok" };
+    const heard = { 1: "kanu sela", 4: "ŋai toɾo tela" };
+    const again = segments
+      .filter((_, i) => i !== 5)
+      .map((x, i0) => {
+        const i = i0 >= 5 ? i0 + 1 : i0;
+        return seg(`${t.id}-b${i}`, "tier-second", x.startMs + ((i * 53) % 90) - 30, x.endMs + ((i * 37) % 70) - 20, heard[i] ?? x.content, `d${i}`);
+      });
+    again.push(seg(`${t.id}-b-extra`, "tier-second", 17_600, 17_950, "ee", "d9"));
+    return { id: t.id, title: t.title, tiers: [tiers[0], second], segments: [...segments, ...again] };
+  };
 
   // ------------------------------------------------------------ recordings
 
