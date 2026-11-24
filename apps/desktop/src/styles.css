@@ -1452,6 +1452,9 @@ body::before {
 .tm-dot { stroke: var(--surface-raised); }
 .pg-site { fill: var(--accent); }
 .pg-map { max-height: 320px; }
+.cc-map { max-height: 360px; width: 100%; }
+.cc-site { fill: var(--accent); fill-opacity: 0.8; }
+.cc-site-none { fill: none; stroke: var(--muted); }
 .tm-me { stroke: var(--ink); }
 .tm-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: var(--text-sm); }
 .tm-legend li.is-mine { font-weight: 600; }

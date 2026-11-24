@@ -1309,6 +1309,8 @@ The line above the bars says how evenly it is spread, as Gries's DP: 0 means it 
 - When texts have details (genre, speaker, place…), the menu beside **Plot** can sum them **By genre** or by any other detail: a bar per value with its matches, its rate per 1000 words and how many texts have it, texts without the detail last. It shows how the item varies across the corpus's parts, such as a word common in narratives and rare in conversation. **Copy rows** then copies that table.
 - When texts have a date (or any detail with a year in it, such as `1953-04-02`, `c. 850` or `450 BCE`), the same menu offers **Over time, by date**: the matches per 1000 words in each year, decade or century (whichever suits the span), oldest first, with empty periods shown so gaps stand out. It shows a word coming into use or dropping out, as Sketch Engine's Trends does. Texts with no year are left out and counted. **Copy rows** copies the periods.
 
+- When texts have coordinates as a detail (`coordinates: -8.65, 115.22`, as in the Progress panel's map), the menu offers **On a map, by where recorded**: a dot per recording site, its size the matches per 1000 words there and an empty ring where there are none, as a dialect atlas shows where a word or a form is said. Point at a dot to see its texts and rate; **Copy rows** copies each site's coordinates, words, matches and rate for a spreadsheet or a GIS.
+
 The plot works for words, morphs, glosses and translation words, not CQP queries.
 
 ### Search with CQP queries

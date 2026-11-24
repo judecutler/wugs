@@ -8,6 +8,8 @@ export type Place = { title: string; lat: number; lon: number };
 export const PAIR_KEYS = ["coordinates", "gps", "latlon", "lat_lon", "location", "geo"];
 const LAT_KEYS = ["latitude", "lat"];
 const LON_KEYS = ["longitude", "lon", "long", "lng"];
+/** Every detail that holds a coordinate: summing texts by one of them says nothing. */
+export const COORDINATE_KEYS: readonly string[] = [...PAIR_KEYS, ...LAT_KEYS, ...LON_KEYS];
 
 /** One coordinate: decimal degrees (signed, or with N S E W) or degrees, minutes and seconds (8°30′15″S). */
 const ONE = /([-−+]?\d+(?:\.\d+)?)\s*(?:[°º˚]\s*(?:(\d+(?:\.\d+)?)\s*['′’]\s*)?(?:(\d+(?:\.\d+)?)\s*["″”]\s*)?)?\s*([NSEWnsew])?/gu;
