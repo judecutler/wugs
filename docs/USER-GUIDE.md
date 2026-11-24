@@ -57,7 +57,7 @@ Click **Settings** in the top bar for the rest. A panel slides in from the right
 
 ### Find any action
 
-Press **Ctrl+K** (**⌘K** on a Mac), or click **Find an action** in the top bar. Type a few letters of what you want, such as "split", "night" or "lexicon", then press **Enter**. The list covers opening panels, colours and patterns, timeline actions, copying an example, and the Project menu. Each row shows its key, if it has one. An action that cannot run yet stays in the list, greyed, and says why.
+Press **Ctrl+K** (**⌘K** on a Mac), or click **Find an action** in the top bar. Type a few letters of what you want, such as "split", "night" or "lexicon", then press **Enter**. The list covers opening panels, colours and patterns, timeline actions, copying an example, the Project menu, and the ways to publish and export ("dictionary", "flashcards", "spell checker", "website", "CLDF", "grammar sketch", "CQPweb", "catalogue sheet", "seal"). Each row shows its key, if it has one. An action that cannot run yet stays in the list, greyed, and says why.
 
 Press **?** anywhere outside a text field to see every keyboard shortcut.
 

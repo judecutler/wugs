@@ -1296,6 +1296,14 @@ def main():
             if run.page.locator(".palette-row").count() == 0:
                 failures.append("the palette found nothing for 'split'")
             run.page.keyboard.press("Escape")
+            # The Texts panel's publishing buttons are found by name too.
+            run.page.keyboard.press("Control+k")
+            run.page.wait_for_timeout(200)
+            run.page.keyboard.type("spell checker")
+            run.page.wait_for_timeout(150)
+            if run.page.locator(".palette-row", has_text="Save a spelling dictionary").count() == 0:
+                failures.append("the palette did not find the spelling dictionary")
+            run.page.keyboard.press("Escape")
             run.page.keyboard.press("?")
             run.page.wait_for_timeout(200)
             run.shot("state-shortcuts")

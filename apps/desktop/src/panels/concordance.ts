@@ -625,6 +625,7 @@ export const concordancePanel: PanelDef = {
         words: ["kwic", "keyword in context", "occurrences", "corpus", "where is"],
         run: () => input.focus(),
       },
+      { id: "concordance:clips", title: "Save the concordance lines as sound clips", group: "Concordance", words: ["wav", "tokens", "praat", "phonetics", "extract"], run: () => saveClipsButton.click() },
     ]);
 
     let shown: string | null = null;
