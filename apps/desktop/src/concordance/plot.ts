@@ -1,7 +1,7 @@
 // The Concordance's Plot view (AntConc's Plot): where in each text an item
 // occurs, and how evenly it is spread over the texts. Pure: no DOM.
 
-export type TextPlot = { textId: string; title: string; words: number; hits: number; positions: number[] };
+export type TextPlot = { textId: string; title: string; words: number; hits: number; positions: number[]; meta?: [string, string][] };
 export type Dispersion = { texts: TextPlot[]; words: number; hits: number; dp: number | null; dpNorm: number | null };
 
 /** The plot's columns: each position's place along a bar of `columns`
@@ -49,4 +49,38 @@ export function plotTsv(d: Dispersion): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
   const rows = d.texts.map((t) => [clean(t.title), t.words, t.hits, per1000(t.hits, t.words), t.positions.join(" ")].join("\t"));
   return ["Text\tWords\tMatches\tPer 1000\tWord positions", ...rows].join("\n") + "\n";
+}
+
+/** The details the plotted texts carry, by how many texts have each, most first. */
+export function plotDetails(texts: readonly TextPlot[]): string[] {
+  const n = new Map<string, number>();
+  for (const t of texts) for (const [k] of t.meta ?? []) n.set(k, (n.get(k) ?? 0) + 1);
+  return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+}
+
+/** Texts without the detail, grouped last. */
+export const NOT_GIVEN = "(not given)";
+
+export type DetailRow = { value: string; texts: number; words: number; hits: number };
+
+/** The matches summed per value of one detail (genre, speaker…), the highest
+ * rate first and texts without it last: how an item varies across the
+ * corpus's parts. */
+export function byDetail(texts: readonly TextPlot[], key: string): DetailRow[] {
+  const rows = new Map<string, DetailRow>();
+  for (const t of texts) {
+    const value = (t.meta ?? []).find(([k]) => k === key)?.[1] ?? NOT_GIVEN;
+    const r = rows.get(value) ?? { value, texts: 0, words: 0, hits: 0 };
+    r.texts += 1;
+    r.words += t.words;
+    r.hits += t.hits;
+    rows.set(value, r);
+  }
+  const rate = (r: DetailRow) => (r.words === 0 ? 0 : r.hits / r.words);
+  return [...rows.values()].sort((a, b) => Number(a.value === NOT_GIVEN) - Number(b.value === NOT_GIVEN) || rate(b) - rate(a) || a.value.localeCompare(b.value));
+}
+
+/** The rows as a table for a spreadsheet. */
+export function detailTsv(rows: readonly DetailRow[], key: string): string {
+  return [[key, "texts", "words", "matches", "per 1000 words"].join("\t"), ...rows.map((r) => [r.value, r.texts, r.words, r.hits, per1000(r.hits, r.words)].join("\t"))].join("\n") + "\n";
 }

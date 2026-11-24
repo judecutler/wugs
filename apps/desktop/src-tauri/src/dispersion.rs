@@ -22,6 +22,8 @@ pub struct TextPlot {
     pub hits: usize,
     /// Word offsets of the matches within the text, in order (at most `POSITIONS`).
     pub positions: Vec<usize>,
+    /// The text's details (genre, speaker…), for the plot's "by detail" view.
+    pub meta: Vec<(String, String)>,
 }
 
 #[derive(Debug, Serialize)]
@@ -65,7 +67,7 @@ pub fn dispersion(session: &mut Session, query: &str, kind: Kind, how: Match, sc
     let mut texts: Vec<TextPlot> = Vec::new();
     scan(p, query, kind, how, scope, |seg, found| {
         if texts.last().is_none_or(|t| t.text_id != seg.text) {
-            texts.push(TextPlot { text_id: seg.text.clone(), title: seg.title.clone(), words: 0, hits: 0, positions: Vec::new() });
+            texts.push(TextPlot { text_id: seg.text.clone(), title: seg.title.clone(), words: 0, hits: 0, positions: Vec::new(), meta: p.text_metadata(&seg.text)? });
         }
         let t = texts.last_mut().expect("pushed above");
         for f in &found {

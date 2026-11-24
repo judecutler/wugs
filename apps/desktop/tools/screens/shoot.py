@@ -528,6 +528,12 @@ def main():
             run.page.locator(".panel-concordance .cc-bar button", has_text="Plot").click()
             run.page.wait_for_timeout(500)
             run.shot("state-concordance-plot", run.page.locator(".panel-concordance"))
+            run.page.select_option(".panel-concordance .cc-plot-by", "genre")
+            run.page.wait_for_timeout(200)
+            run.shot("state-concordance-plot-genre", run.page.locator(".panel-concordance"))
+            if "procedural" not in run.page.locator(".panel-concordance .cc-rows").inner_text():
+                failures.append("the plot did not sum the texts by genre")
+            run.page.select_option(".panel-concordance .cc-plot-by", "")
             if run.page.locator(".panel-concordance .cc-plot-row").count() != 3:
                 failures.append("the concordance plot did not show one row per text with words")
             run.page.locator(".panel-concordance .cc-bar button", has_text="Plot").click()
