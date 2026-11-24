@@ -24,6 +24,8 @@ import { distributionNote, envLabel, environments, environmentsTsv, suggestedRul
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
 import { dataGeneration, getState, showToast } from "../store";
+import { likeness, likenessLine, likenessModel, likenessTsv, type Model as LikenessModel } from "../sounds/likeness";
+import { typeWithShortcuts } from "../typing";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -291,6 +293,49 @@ export const soundsPanel: PanelDef = {
         h("h4", { className: "sd-h", textContent: "Syllables" }),
         h("p", { className: "note sd-syllable-note", textContent: `${syllableNote(l.syllables)} Words are cut so the next syllable starts with the longest run of consonants that starts a word somewhere.` }),
         h("div", { className: "sd-list" }, ...chips),
+      ];
+    };
+
+    // Word likeness: a word's neighbours and phonotactic probability, for
+    // choosing stimuli and made-up words. The model is made once per load.
+    let likeModel: { for: Loaded; model: LikenessModel } | null = null;
+    let likeWord = "";
+    const likenessSection = (l: Loaded): HTMLElement[] => {
+      if (l.words.length === 0) return [];
+      const model = () => {
+        if (likeModel?.for !== l) likeModel = { for: l, model: likenessModel(l.words) };
+        return likeModel.model;
+      };
+      const field = typeWithShortcuts(h("input", { className: "sd-like-word ipa", value: likeWord, placeholder: "a word, or a made-up one", spellcheck: false }));
+      field.setAttribute("aria-label", "Word to check");
+      const line = h("p", { className: "note sd-like-line" });
+      const near = h("div", { className: "sd-list sd-like-near" });
+      const show = () => {
+        likeWord = field.value;
+        const r = likeness(model(), likeWord.trim());
+        line.textContent = likenessLine(r);
+        near.replaceChildren(
+          ...r.neighbours.slice(0, 40).map((w) => {
+            const b = h("button", { type: "button", className: "sd-sound ipa", textContent: w, title: "Every line with this word in the Concordance" });
+            b.onclick = () => askConcordance(w, "word", onlyThisText ? shownText() : null, true);
+            return b;
+          }),
+        );
+      };
+      field.oninput = show;
+      show();
+      const copy = h("button", { type: "button", textContent: "Copy every word's measures", title: "Each word type with its uses, sounds, neighbours and phonotactic probabilities, for a stimulus list" });
+      copy.onclick = () =>
+        writeText(likenessTsv(model())).then(
+          () => showToast({ tone: "info", lines: [`${model().words.size.toLocaleString()} words copied with their measures.`] }),
+          (err) => showToast({ tone: "error", lines: [errorText(err)] }),
+        );
+      return [
+        h("h4", { className: "sd-h", textContent: "Word likeness" }),
+        h("p", { className: "note", textContent: "How typical a word's sounds are here: its neighbours (words one sound added, left out or changed away) and how often its sounds stand where they do, alone and in pairs, counted over the word types (Vitevitch and Luce 2004). Use it to choose words for an experiment, or to check that a made-up word sounds possible." }),
+        h("div", { className: "cc-bar" }, field, copy),
+        line,
+        near,
       ];
     };
 
@@ -669,6 +714,7 @@ export const soundsPanel: PanelDef = {
         ...featuresSection(loaded),
         ...allophonesSection(loaded),
         ...pairsSection(loaded),
+        ...likenessSection(loaded),
         ...envSection(loaded),
         ...phoibleSection(loaded),
         ...whereSection(loaded),

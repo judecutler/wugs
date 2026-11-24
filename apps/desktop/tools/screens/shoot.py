@@ -1049,6 +1049,14 @@ def main():
                 failures.append("Sounds did not place the vowels")
             if run.page.locator(".panel-sounds .sd-list").count() < 3:
                 failures.append("Sounds did not list affricates, clicks or unplaced letters")
+            # A made-up word's neighbours: pata, bata, tata, kata are one sound from «gata».
+            like = run.page.locator(".panel-sounds input.sd-like-word")
+            like.fill("gata")
+            like.scroll_into_view_if_needed()
+            run.shot("state-sounds-likeness", run.page.locator(".panel-sounds"))
+            line = run.page.locator(".panel-sounds .sd-like-line").inner_text()
+            if "Not a word of the texts" not in line or run.page.locator(".panel-sounds .sd-like-near button").count() < 4:
+                failures.append(f"Word likeness did not find the made-up word's neighbours: {line}")
             run.page.locator(".panel-sounds .sd-bar button", has_text="Copy chart").click()
             run.page.wait_for_timeout(300)
             clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}
