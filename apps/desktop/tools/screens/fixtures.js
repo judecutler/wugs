@@ -823,10 +823,10 @@ const LEXICON = [
       dp: 0.31,
       dpNorm: 0.36,
       texts: [
-        { textId: "t-count", title: "Counting to ten", words: 64, hits: 5, positions: [0, 9, 18, 40, 61] },
-        { textId: "t-fox", title: "The fox and the well", words: 812, hits: 8, positions: [12, 40, 41, 200, 333, 520, 700, 790] },
-        { textId: "t-greet", title: "Greetings at the market", words: 364, hits: 1, positions: [180] },
-        { textId: "t-empty", title: "Untranscribed session", words: 0, hits: 0, positions: [] },
+        { textId: "t-count", title: "Counting to ten", words: 64, hits: 5, positions: [0, 9, 18, 40, 61], meta: [["genre", "procedural"]] },
+        { textId: "t-fox", title: "The fox and the well", words: 812, hits: 8, positions: [12, 40, 41, 200, 333, 520, 700, 790], meta: [["genre", "narrative"]] },
+        { textId: "t-greet", title: "Greetings at the market", words: 364, hits: 1, positions: [180], meta: [["genre", "conversation"]] },
+        { textId: "t-empty", title: "Untranscribed session", words: 0, hits: 0, positions: [], meta: [] },
       ],
     }),
     keywords: ({ minCount }) => {

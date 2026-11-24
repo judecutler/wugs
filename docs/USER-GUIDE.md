@@ -1041,6 +1041,7 @@ The line above the bars says how evenly it is spread, as Gries's DP: 0 means it 
 - Order the texts as they are, by most matches, or by highest rate.
 - Click a text to see its lines in the Concordance.
 - **Copy rows** copies the plot as a table: each text, its words, its matches, the rate and the word positions.
+- When texts have details (genre, speaker, place…), the menu beside **Plot** can sum them **By genre** or by any other detail: a bar per value with its matches, its rate per 1000 words and how many texts have it, texts without the detail last. It shows how the item varies across the corpus's parts, such as a word common in narratives and rare in conversation. **Copy rows** then copies that table.
 
 The plot works for words, morphs, glosses and translation words, not CQP queries.
 

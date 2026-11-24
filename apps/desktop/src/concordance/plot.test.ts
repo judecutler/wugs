@@ -38,3 +38,13 @@ test("the table has a header and a row per text", () => {
   const d: Dispersion = { texts: [{ textId: "a", title: "A\tB", words: 10, hits: 2, positions: [1, 5] }], words: 10, hits: 2, dp: null, dpNorm: null };
   assert.equal(plotTsv(d), "Text\tWords\tMatches\tPer 1000\tWord positions\nA B\t10\t2\t200.0\t1 5\n");
 });
+
+test("matches summed by a text detail", async () => {
+  const { byDetail, detailTsv, NOT_GIVEN, plotDetails } = await import("./plot.ts");
+  const t = (id: string, words: number, hits: number, meta: [string, string][]) => ({ textId: id, title: id, words, hits, positions: [], meta });
+  const texts = [t("a", 1000, 10, [["genre", "narrative"], ["speaker", "A"]]), t("b", 1000, 2, [["genre", "conversation"]]), t("c", 500, 5, [["genre", "narrative"]]), t("d", 200, 9, [])];
+  assert.deepEqual(plotDetails(texts), ["genre", "speaker"]);
+  const rows = byDetail(texts, "genre");
+  assert.deepEqual(rows.map((r) => [r.value, r.texts, r.words, r.hits]), [["narrative", 2, 1500, 15], ["conversation", 1, 1000, 2], [NOT_GIVEN, 1, 200, 9]]);
+  assert.equal(detailTsv(rows, "genre").split("\n")[1], "narrative\t2\t1500\t15\t10.0");
+});

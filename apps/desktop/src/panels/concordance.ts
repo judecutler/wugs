@@ -6,7 +6,7 @@ import { concordance, concordanceQuery, dispersion, errorText, getText, glossGet
 import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
-import { marks, per1000, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
+import { byDetail, detailTsv, marks, NOT_GIVEN, per1000, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
 import { asTsv, clip, countLine, hasTags, isRtl, keyword, left, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
@@ -134,6 +134,10 @@ export const concordancePanel: PanelDef = {
     plotToggle.setAttribute("aria-pressed", "false");
     const plotSorter = h("select", { className: "cc-sort", title: "Order of the texts" }, ...PLOT_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
     plotSorter.setAttribute("aria-label", "Order of the texts");
+    /** "" plots each text; a detail's key sums the texts by its values. */
+    let plotBy = "";
+    const plotByPicker = h("select", { className: "cc-sort cc-plot-by", title: "Plot each text, or sum the texts by one of their details (genre, speaker…) to see how the item varies" });
+    plotByPicker.setAttribute("aria-label", "Plot by");
     const clusterToggle = h("button", { type: "button", textContent: "Clusters", title: "Count the word sequences that hold it: the item and the words after or before it (AntConc's Clusters)" });
     clusterToggle.setAttribute("aria-pressed", "false");
     const sizePicker = h("select", { className: "cc-sort", title: "Words in a cluster" }, ...CLUSTER_SIZES.map((n) => h("option", { value: String(n), textContent: `${n} words` })));
@@ -192,7 +196,31 @@ export const concordancePanel: PanelDef = {
         return;
       }
       const d = plot;
+      const keys = plotDetails(d.texts);
+      if (!keys.includes(plotBy)) plotBy = "";
+      plotByPicker.replaceChildren(h("option", { value: "", textContent: "Each text", selected: plotBy === "" }), ...keys.map((k) => h("option", { value: k, textContent: `By ${k.replace(/_/g, " ")}`, selected: k === plotBy })));
+      plotByPicker.disabled = keys.length === 0;
+      plotSorter.hidden = plotBy !== "";
       count.textContent = spreadWords(d);
+      if (plotBy !== "") {
+        const groups = byDetail(d.texts, plotBy);
+        const top = Math.max(0, ...groups.map((g) => (g.words === 0 ? 0 : g.hits / g.words)));
+        count.textContent = `${spreadWords(d)} Summed by ${plotBy.replace(/_/g, " ")}: matches per 1000 words in the texts with each value.`;
+        rows.replaceChildren(
+          ...groups.map((g) => {
+            const fill = h("span", { className: "cc-detail-fill" });
+            fill.style.width = `${top === 0 || g.words === 0 ? 0 : Math.round((100 * (g.hits / g.words)) / top)}%`;
+            return h(
+              "div",
+              { className: `cc-plot-row${g.hits === 0 ? " cc-plot-none" : ""}`, role: "listitem" },
+              h("span", { className: `cc-plot-title${g.value === NOT_GIVEN ? " note" : ""}`, textContent: g.value }),
+              h("span", { className: "cc-plot-count", textContent: `${g.hits} · ${per1000(g.hits, g.words)} per 1000 · ${g.texts === 1 ? "1 text" : `${g.texts} texts`}` }),
+              h("div", { className: "cc-plot-bar" }, fill),
+            );
+          }),
+        );
+        return;
+      }
       rows.replaceChildren(
         ...sortPlots(d.texts, plotSort).map((t) => {
           const bar = h("div", { className: "cc-plot-bar", role: "img" });
@@ -289,6 +317,7 @@ export const concordancePanel: PanelDef = {
       thinner.hidden = on;
       copyExamples.hidden = on;
       plotSorter.hidden = !on;
+      plotByPicker.hidden = !on;
     };
 
     const drawRows = () => {
@@ -434,6 +463,10 @@ export const concordancePanel: PanelDef = {
       clusterSide = sidePicker.value as ClusterSide;
       drawRows();
     };
+    plotByPicker.onchange = () => {
+      plotBy = plotByPicker.value;
+      drawPlot();
+    };
     plotSorter.onchange = () => {
       plotSort = plotSorter.value as PlotSort;
       drawRows();
@@ -454,6 +487,13 @@ export const concordancePanel: PanelDef = {
       if (clustersOn && asked !== "") {
         void writeText(clustersTsv(shownClusters)).then(
           () => showToast({ tone: "info", lines: [`Copied ${shownClusters.length} clusters. Paste them into a spreadsheet.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+        return;
+      }
+      if (plotOn && plot !== null && plotBy !== "") {
+        void writeText(detailTsv(byDetail(plot.texts, plotBy), plotBy)).then(
+          () => showToast({ tone: "info", lines: [`Copied the matches by ${plotBy.replace(/_/g, " ")}. Paste them into a spreadsheet.`] }),
           (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
         );
         return;
@@ -508,7 +548,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, copy, copyExamples), chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, copy, copyExamples), chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */
