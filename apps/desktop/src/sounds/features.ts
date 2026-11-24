@@ -7,7 +7,7 @@
 import { placeOf, type Manner, type Place } from "./ipa.ts";
 
 export type Value = "+" | "-" | "";
-export const FEATURES = ["syllabic", "consonantal", "sonorant", "continuant", "delayed release", "nasal", "lateral", "voice", "labial", "coronal", "dorsal", "high", "low", "back", "round"] as const;
+export const FEATURES = ["syllabic", "consonantal", "sonorant", "continuant", "delayed release", "nasal", "lateral", "voice", "labial", "coronal", "anterior", "dorsal", "high", "low", "back", "round"] as const;
 export type Feature = (typeof FEATURES)[number];
 export type Features = Record<Feature, Value>;
 
@@ -32,6 +32,7 @@ function consonantFeatures(place: Place, manner: Manner | "affricate", voiced: b
     voice: pm(voiced),
     labial: pm(LABIAL.has(place)),
     coronal: pm(CORONAL.has(place)),
+    anterior: CORONAL.has(place) ? pm(place === "dental" || place === "alveolar") : "",
     dorsal: pm(dorsal),
     high: dorsal ? pm(place !== "uvular") : "",
     low: dorsal || place === "pharyngeal" ? pm(place === "pharyngeal") : "",
@@ -56,6 +57,7 @@ export function featuresOf(sound: string): Features | null {
       voice: "+",
       labial: pm(rounded),
       coronal: "-",
+      anterior: "",
       dorsal: "+",
       high: pm(height <= 1),
       low: pm(height >= 5),

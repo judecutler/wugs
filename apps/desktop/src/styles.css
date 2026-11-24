@@ -1558,3 +1558,7 @@ body::before {
 /* Word sketch difference: collocates leaning to the first lemma, both, or the second */
 .ws-diff tr.ws-lean-a td { background: color-mix(in srgb, var(--accent-bright) 14%, transparent); }
 .ws-diff tr.ws-lean-b td { background: var(--warn-soft); }
+.sd-allophones { list-style: none; padding: 0; margin: 4px 0 8px; font-size: var(--text-sm); }
+.sd-allophones li { padding: 2px 0; }
+.sd-pair { font-weight: 600; }
+.sd-allo-rule { color: var(--ink); }

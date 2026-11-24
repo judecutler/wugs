@@ -6,6 +6,7 @@
 // and what the IPA does not use (capitals, other letters) listed apart, since
 // those are usually spelling slips. Each sound opens the Concordance on the
 // words that hold it.
+import { allophonesLine, possibleAllophones, type Allophones } from "../sounds/allophones";
 import { bundle, FEATURES, featuresOf, featuresTsv, matching, nextValue, type Feature } from "../sounds/features";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, phoibleCompare, phoibleMap, projectLanguage, soundWords } from "../api";
@@ -102,7 +103,7 @@ export const soundsPanel: PanelDef = {
       return b;
     };
 
-    const SHORT: Record<Feature, string> = { syllabic: "syl", consonantal: "cons", sonorant: "son", continuant: "cont", "delayed release": "d.r.", nasal: "nas", lateral: "lat", voice: "voi", labial: "lab", coronal: "cor", dorsal: "dors", high: "hi", low: "lo", back: "back", round: "rnd" };
+    const SHORT: Record<Feature, string> = { syllabic: "syl", consonantal: "cons", sonorant: "son", continuant: "cont", "delayed release": "d.r.", nasal: "nas", lateral: "lat", voice: "voi", labial: "lab", coronal: "cor", anterior: "ant", dorsal: "dors", high: "hi", low: "lo", back: "back", round: "rnd" };
     const featuresSection = (l: Loaded): HTMLElement[] => {
       const placed = l.sounds.map((s) => s.sound).filter((s) => featuresOf(s) !== null);
       if (placed.length === 0) return [];
@@ -151,6 +152,42 @@ export const soundsPanel: PanelDef = {
         h("p", { className: "note sd-feat-line", textContent: line }),
         h("div", { className: "sd-scroll" }, h("table", { className: "pg-table sd-features" }, h("thead", {}, head), h("tbody", {}, ...rows))),
         h("p", { className: "note", textContent: "Values follow from where each sound sits on the IPA chart (after Hayes's Introductory Phonology, simplified); a blank means the feature does not apply. Check them against your analysis." }),
+      ];
+    };
+
+    /** Worked out once per loaded inventory: every pair is checked. */
+    let allophonesFor: Loaded | null = null;
+    let allophones: Allophones[] = [];
+    const allophonesSection = (l: Loaded): HTMLElement[] => {
+      if (allophonesFor !== l) {
+        allophones = possibleAllophones(l.words);
+        allophonesFor = l;
+      }
+      return [
+        h("h4", { className: "sd-h", textContent: "Possible allophones" }),
+        h("p", { className: "note", textContent: allophonesLine(allophones) }),
+        h(
+          "ul",
+          { className: "sd-allophones" },
+          ...allophones.slice(0, 30).map((x) => {
+            const look = h("button", { type: "button", className: "linkish", textContent: "Environments", title: `Compare where «${x.a}» and «${x.b}» occur, in the Environments section below` });
+            look.onclick = () => {
+              envA = x.a;
+              envB = x.b;
+              paint();
+              el.querySelector(".sd-env-note")?.scrollIntoView({ block: "center" });
+            };
+            return h(
+              "li",
+              {},
+              h("span", { className: "ipa sd-pair", textContent: `${x.a} ~ ${x.b}` }),
+              h("span", { className: "note", textContent: ` ${x.countA} and ${x.countB} times, ${x.apart} ${x.apart === 1 ? "feature" : "features"} apart` }),
+              x.rule === null ? "" : h("span", { className: "ipa sd-allo-rule", textContent: ` · ${x.rule}` }),
+              " ",
+              look,
+            );
+          }),
+        ),
       ];
     };
 
@@ -584,6 +621,7 @@ export const soundsPanel: PanelDef = {
         ...listed("Affricates and double articulations", c.affricates),
         ...[...c.others].flatMap(([group, sounds]) => listed(group, sounds)),
         ...featuresSection(loaded),
+        ...allophonesSection(loaded),
         ...pairsSection(loaded),
         ...envSection(loaded),
         ...phoibleSection(loaded),
