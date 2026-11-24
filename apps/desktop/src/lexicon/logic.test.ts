@@ -81,6 +81,17 @@ test("the entry list can show only the entries with work left", () => {
   assert.equal(showLabel(rows, LIST_SHOWS[1]!), "Needs a gloss (3)");
 });
 
+test("the entry list can show the entries still to record or illustrate", () => {
+  const rows = [
+    { glosses: ["dog"], posOfSpeech: "n", used: true, heard: true, examples: true },
+    { glosses: ["eat"], posOfSpeech: "v", used: true, heard: false, examples: false },
+    { glosses: ["cat"], posOfSpeech: "n", used: true },
+  ];
+  assert.deepEqual(rows.map((r) => shows(r, "sound")), [false, true, true]);
+  assert.deepEqual(rows.map((r) => shows(r, "example")), [false, true, true]);
+  assert.equal(showLabel(rows, LIST_SHOWS.find((s) => s.id === "sound")!), "Needs a recording (2)");
+});
+
 test("a lexicon table import is reported in words", () => {
   const r = { entries: 2, senses: 3, unchanged: 1, ambiguous: ["lari"], noLemma: 1, columns: ["Headword → lemma", "English → gloss"], ignored: ["Colour"], domains: 0, domainsUnmatched: [], examples: 0 };
   assert.deepEqual(tableImportLines(r), [
