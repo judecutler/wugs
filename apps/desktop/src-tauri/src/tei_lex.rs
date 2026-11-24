@@ -107,13 +107,16 @@ pub fn export(p: &wugs_core::Project, generator: &str, date: &str) -> Result<(St
         }
         body.push_str("      </entry>\n");
     }
+    let name = if lang.name.trim().is_empty() { "the language" } else { lang.name.trim() };
     let doc = format!(
-        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<TEI xmlns=\"http://www.tei-c.org/ns/1.0\">\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>{}</title>\n      </titleStmt>\n      <publicationStmt>\n        <p>Exported by {} on {}.</p>\n      </publicationStmt>\n      <sourceDesc>\n        <p>A lexicon of {}{}.</p>\n      </sourceDesc>\n    </fileDesc>\n  </teiHeader>\n  <text>\n    <body>\n{body}    </body>\n  </text>\n</TEI>\n",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<TEI xmlns=\"http://www.tei-c.org/ns/1.0\" type=\"lex-0\">\n  <teiHeader>\n    <fileDesc>\n      <titleStmt>\n        <title>{}</title>\n      </titleStmt>\n      <publicationStmt>\n        <publisher>{}</publisher>\n        <availability>\n          <p>Exported on {}. Say here who may use it and under which licence.</p>\n        </availability>\n      </publicationStmt>\n      <sourceDesc>\n        <listBibl type=\"dictionaries\">\n          <bibl>The lexicon of a documentation project of {}, exported by {}.</bibl>\n        </listBibl>\n      </sourceDesc>\n    </fileDesc>\n    <profileDesc>\n      <langUsage>\n        <language role=\"objectLanguage\" ident=\"{}\">{}</language>\n        <language role=\"workingLanguage\" ident=\"en\">English</language>\n      </langUsage>\n    </profileDesc>\n  </teiHeader>\n  <text>\n    <body>\n{body}    </body>\n  </text>\n</TEI>\n",
         esc(&title),
         esc(generator),
         esc(date),
-        esc(if lang.name.trim().is_empty() { "the language" } else { lang.name.trim() }),
-        esc(&if code == "und" { String::new() } else { format!(" ({code})") }),
+        esc(name),
+        esc(generator),
+        esc(&code),
+        esc(name),
     );
     Ok((doc, entries.len(), senses))
 }
@@ -129,14 +132,40 @@ mod tests {
         crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
         let p = crate::session::project(&mut s).unwrap();
         p.set_project_language("Tutorial English", "", "eng").unwrap();
+        // An entry with every part TEI Lex-0 carries.
+        let ((river, sense), _) = p.add_lexeme("tela", "river").unwrap();
+        let ((wade, _), _) = p.add_lexeme("tela", "wade across").unwrap();
+        p.set_homograph(&river, Some(1)).unwrap();
+        p.set_homograph(&wade, Some(2)).unwrap();
+        p.set_lexeme_field(&river, "pos-of-speech", "n").unwrap();
+        p.set_lexeme_field(&river, "citation", "telá").unwrap();
+        p.set_lexeme_field(&river, "borrowed-from", "Malay").unwrap();
+        p.set_lexeme_text(&river, "etymology", "from Malay telaga 'well'").unwrap();
+        p.add_allomorph(&river, "tel").unwrap();
+        p.add_pronunciation(&river, "ˈtela", None).unwrap();
+        p.set_sense_gloss(&sense, "rivière", Some("fr")).unwrap();
+        p.set_sense_text(&sense, "definition", "a large stream of water").unwrap();
+        p.set_sense_text(&sense, "usage", "also of a canal").unwrap();
+        crate::lexicon::sil_domains_if_none(p).unwrap();
+        let water = p.proj.entities_of_kind("domain").unwrap().into_iter().find(|d| p.proj.field_str(d, "code").unwrap().as_deref() == Some("1.3")).unwrap();
+        p.assign_domain(&sense, &water).unwrap();
+        p.add_example(&sense, "tela pana", "the river is big", None, None).unwrap();
+        p.add_relation(&river, "compare", &wade).unwrap();
         let (xml, entries, senses) = export(p, "wugs test", "2026-11-24").unwrap();
         assert!(entries >= 5 && senses >= entries, "{entries} {senses}");
+        // WUGS_KEEP_TEILEX=<path> keeps the file, to check it against the TEI Lex-0 schema.
+        if let Ok(keep) = std::env::var("WUGS_KEEP_TEILEX") {
+            std::fs::write(keep, &xml).unwrap();
+        }
         let doc = wugs_xml::parse(&xml).unwrap();
         assert_eq!(doc.name, "TEI");
         assert!(xml.contains("<entry xml:id=\"e-") && xml.contains("xml:lang=\"eng\""));
         assert!(xml.contains("<orth>wʌn</orth>"), "{xml}");
         assert!(xml.contains("<cit type=\"translationEquivalent\" xml:lang=\"en\">\n            <quote>one</quote>"), "{xml}");
         assert!(xml.contains("<title>Tutorial English dictionary</title>"));
+        for part in ["n=\"1\"", "<pron>ˈtela</pron>", "<form type=\"variant\">\n          <orth>telá</orth>", "<gram type=\"pos\">n</gram>", "<lang>Malay</lang>", "<def>a large stream of water</def>", "xml:lang=\"fr\">\n            <quote>rivière</quote>", "<usg type=\"domain\">1.3 Water</usg>", "<cit type=\"example\">\n            <quote>tela pana</quote>", "<xr type=\"related\">"] {
+            assert!(xml.contains(part), "{part} in {xml}");
+        }
         drop(s);
         std::fs::remove_dir_all(&dir).ok();
     }
