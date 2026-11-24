@@ -2,7 +2,8 @@
 // report, a deposit form or a supervisor (src-tauri/src/progress.rs). Words
 // and sums in ../progress/logic.ts. Read-only; a row opens its text.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, projectProgress, vocabularyGrowth } from "../api";
+import { errorText, projectProgress, speakerLengths, vocabularyGrowth } from "../api";
+import { SPEAKER_COLUMNS, speakerCells, speakersNote, speakersTsv, type SpeakerRow } from "../progress/speakers";
 import { growthNote, growthPath, ticks, type Box, type Growth } from "../progress/growth";
 import { composition, compositionNote, compositionTsv, detailKeys, keyLabel, wordShare } from "../progress/composition";
 import { emptyState, h } from "../dom";
@@ -25,6 +26,8 @@ export const progressPanel: PanelDef = {
     let detail = "";
     const makeUp = h("div", { className: "pg-makeup" });
     const growthBox = h("div", { className: "pg-growth" });
+    const speakersBox = h("div", { className: "pg-speakers" });
+    let speakers: SpeakerRow[] = [];
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every text's figures and the totals, to paste into a spreadsheet or a report" });
     const recount = h("button", { type: "button", textContent: "Count again" });
 
@@ -137,8 +140,41 @@ export const progressPanel: PanelDef = {
       );
     };
 
+    /** Each speaker's utterance lengths: MLU in words and morphemes. */
+    const drawSpeakers = () => {
+      if (speakers.length === 0) {
+        speakersBox.replaceChildren();
+        return;
+      }
+      const copySpeakers = h("button", { type: "button", textContent: "Copy table", title: "Copy each speaker's figures, to paste into a spreadsheet" });
+      copySpeakers.onclick = () =>
+        void writeText(speakersTsv(speakers)).then(
+          () => showToast({ tone: "info", lines: [`Copied ${speakers.length === 1 ? "one speaker" : `${speakers.length} speakers`}.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      const t = h(
+        "table",
+        { className: "pg-table pg-speaker-table" },
+        h("thead", {}, h("tr", {}, ...SPEAKER_COLUMNS.map((c) => h("th", { textContent: c })))),
+        h("tbody", {}, ...speakers.map((r) => h("tr", {}, ...speakerCells(r).map((c, i) => h("td", { textContent: c, className: i === 0 ? "" : "num" }))))),
+      );
+      speakersBox.replaceChildren(h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Speakers" }), copySpeakers), h("div", { className: "pg-rows" }, t), h("p", { className: "note", textContent: speakersNote(speakers) }));
+    };
+
     async function load() {
       const mine = ++seq;
+      speakerLengths().then(
+        (r) => {
+          if (mine !== seq) return;
+          speakers = r;
+          drawSpeakers();
+        },
+        () => {
+          if (mine !== seq) return;
+          speakers = [];
+          drawSpeakers();
+        },
+      );
       vocabularyGrowth().then(
         (g) => {
           if (mine !== seq) return;
@@ -174,6 +210,7 @@ export const progressPanel: PanelDef = {
 
     const unprovide = provide("progress", () => [
       { id: "progress:copy", title: "Copy the progress table", group: "Progress", words: ["report", "grant", "statistics", "hours", "how much"], run: () => copy.click() },
+      { id: "progress:speakers", title: "Show each speaker's mean length of utterance", group: "Progress", words: ["MLU", "child", "acquisition", "Brown", "utterance length", "CHILDES"], run: () => speakersBox.scrollIntoView({ block: "start" }) },
     ]);
 
     const render = () => {
@@ -187,7 +224,7 @@ export const progressPanel: PanelDef = {
         el.replaceChildren(emptyState("Progress", "Open a project to see how far it has come.", "The wug is keeping score."));
         return;
       }
-      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, makeUp, growthBox);
+      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, makeUp, speakersBox, growthBox);
       void load();
     };
     return { element: el, render, dispose: unprovide };
