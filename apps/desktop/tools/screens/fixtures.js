@@ -173,6 +173,7 @@
     glossesByLang: es === null ? {} : { es },
     sense: senseLabel === null ? null : `sense-${id}`,
     senseLabel,
+    category: senseLabel === null || type !== "root" ? null : surface.startsWith("kan") || surface.startsWith("toru") ? "v" : "num",
   });
   const glossView = (segmentId) => {
     if (segmentId !== "u01") {

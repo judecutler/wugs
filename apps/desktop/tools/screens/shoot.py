@@ -854,6 +854,12 @@ def main():
             # Interlinear: only the sentences still to gloss, and Next to gloss.
             run.front("interlinear", "Interlinear")
             run.page.wait_for_timeout(600)
+            run.page.locator(".panel-interlinear .il-bar button", has_text="Categories").click()
+            run.page.wait_for_timeout(300)
+            run.shot("state-interlinear-categories", run.page.locator(".panel-interlinear"))
+            if run.page.locator(".panel-interlinear .il-cat", has_text="v").count() == 0:
+                failures.append("Categories showed no word's part of speech")
+            run.page.locator(".panel-interlinear .il-bar button", has_text="Categories").click()
             run.page.locator(".panel-interlinear .il-show").select_option("gloss")
             run.page.wait_for_timeout(300)
             run.shot("state-interlinear-todo", run.page.locator(".panel-interlinear"))

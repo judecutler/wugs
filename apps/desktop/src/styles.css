@@ -1354,6 +1354,7 @@ body::before {
 .il-form { font-family: var(--font-ipa); font-weight: 600; color: var(--ink); }
 .il-morphs { font-family: var(--font-ipa); font-style: italic; color: var(--ink); min-height: 1.2em; }
 .il-gloss { color: var(--ink); min-height: 1.2em; }
+.il-cat { font-family: var(--font-ui, inherit); font-size: var(--text-xs); color: var(--muted); font-style: italic; min-height: 1em; }
 .il-gloss .sc, .il-abbr-code { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
 .il-plain { margin: 0; font-family: var(--font-ipa); color: var(--ink); }
 .il-unglossed .il-plain { color: var(--muted); }

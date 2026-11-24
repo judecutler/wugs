@@ -62,6 +62,8 @@ pub struct MorphView {
     pub spec: MorphSpecView,
     /// `lemma – gloss` of the linked sense, when there is one.
     pub sense_label: Option<String>,
+    /// The linked sense's entry's part of speech, when it has one.
+    pub category: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -186,6 +188,15 @@ fn require_segment(p: &Project, text_id: &str, segment_id: &str) -> Result<(), S
     if ok { Ok(()) } else { Err(format!("no segment {segment_id} in text {text_id}")) }
 }
 
+/// A live sense's entry's part of speech, when it has one.
+fn category_of(p: &Project, sense: &str) -> Result<Option<String>, String> {
+    if p.proj.entity_kind(sense)?.as_deref() != Some("sense") || p.proj.is_tombstoned(sense)? {
+        return Ok(None);
+    }
+    let Some(lex) = p.proj.field_str(sense, "lexeme")? else { return Ok(None) };
+    Ok(p.proj.field_str(&lex, "pos-of-speech")?.map(|c| c.trim().to_string()).filter(|c| !c.is_empty()))
+}
+
 fn sense_label(p: &Project, sense: &str) -> Result<Option<String>, String> {
     if p.proj.entity_kind(sense)?.as_deref() != Some("sense") || p.proj.is_tombstoned(sense)? {
         return Ok(None);
@@ -247,11 +258,11 @@ fn view(p: &Project, segment_id: &str) -> Result<GlossView, String> {
         let mut morphs = Vec::new();
         for id in p.proj.members(tok)? {
             let spec: MorphSpecView = p.morph_spec(&id)?.into();
-            let sense_label = match spec.sense.as_deref() {
-                Some(s) => sense_label(p, s)?,
-                None => None,
+            let (sense_label, category) = match spec.sense.as_deref() {
+                Some(s) => (sense_label(p, s)?, category_of(p, s)?),
+                None => (None, None),
             };
-            morphs.push(MorphView { id, spec, sense_label });
+            morphs.push(MorphView { id, spec, sense_label, category });
         }
         let suggestions = if morphs.is_empty() {
             let earlier = p.analysis_suggestions(&form)?;
