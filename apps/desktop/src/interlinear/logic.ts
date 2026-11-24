@@ -22,7 +22,7 @@ export function sentencesOf<S extends Seg>(segments: readonly S[], tiers: readon
 }
 
 /** One sentence as the panel draws it. */
-export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; notes?: string[]; speaker?: string; topics?: string[] };
+export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; endMs?: number | null; notes?: string[]; speaker?: string; topics?: string[] };
 
 export const analysed = (l: Line): boolean => l.words.some((w) => w.morphs.length > 0);
 
@@ -85,3 +85,21 @@ export function nextWhere(lines: readonly Line[], current: string | null, wanted
 
 /** The next sentence still to gloss after `current`. */
 export const nextToGloss = (lines: readonly Line[], current: string | null): Line | null => nextWhere(lines, current, toGloss);
+
+/** The span a read-along plays: the first timed sentence's start to the last one's end, or null. */
+export function readAlongSpan(lines: readonly Line[]): { startMs: number; endMs: number; first: Line } | null {
+  const timed = lines.filter((l) => l.startMs !== null && l.endMs !== null && l.endMs !== undefined && l.endMs > l.startMs);
+  if (timed.length === 0) return null;
+  const first = timed.reduce((a, b) => (b.startMs! < a.startMs! ? b : a));
+  return { startMs: first.startMs!, endMs: Math.max(...timed.map((l) => l.endMs!)), first };
+}
+
+/** The sentence being heard at `ms`: the latest-starting timed one that holds it (two speakers may overlap). */
+export function lineAt(lines: readonly Line[], ms: number): Line | null {
+  let best: Line | null = null;
+  for (const l of lines) {
+    if (l.startMs === null || l.endMs === null || l.endMs === undefined) continue;
+    if (l.startMs <= ms && ms < l.endMs && (best === null || l.startMs > best.startMs!)) best = l;
+  }
+  return best;
+}

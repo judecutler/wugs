@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nextWhere, progress, sentencesOf, sentenceTracks, showOf, toTranslate, topicsIn, type Line } from "./logic.ts";
+import { lineAt, nextWhere, progress, readAlongSpan, sentencesOf, sentenceTracks, showOf, toTranslate, topicsIn, type Line } from "./logic.ts";
 
 test("sentences are the utterance track's, translations left out, in number order", () => {
   const segs = [
@@ -70,4 +70,15 @@ test("sentences filed under a grammar topic can be listed alone", () => {
   assert.equal(neg.label, "On «Negation»");
   assert.deepEqual(lines.filter(neg.keep).map((x) => x.id), ["a", "c"], "capitals aside");
   assert.match(showOf("topic:Tone").done, /No sentence of this text is filed under «Tone»/u);
+});
+
+test("a read-along plays the timed sentences and follows the one heard", () => {
+  const l = (id: string, startMs: number | null, endMs: number | null): Line => ({ id, number: 0, content: "x", words: [], translation: null, startMs, endMs });
+  const lines = [l("a", 1000, 2000), l("b", null, null), l("c", 1800, 3500), l("d", 4000, 5000)];
+  const span = readAlongSpan(lines)!;
+  assert.deepEqual([span.startMs, span.endMs, span.first.id], [1000, 5000, "a"]);
+  assert.equal(lineAt(lines, 1500)?.id, "a");
+  assert.equal(lineAt(lines, 1900)?.id, "c", "an overlapping turn: the one that started later");
+  assert.equal(lineAt(lines, 3700), null, "a pause between sentences");
+  assert.equal(readAlongSpan([l("b", null, null)]), null);
 });

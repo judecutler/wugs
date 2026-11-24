@@ -11,7 +11,8 @@ import { glossRuns, wordLines, type ExampleWord } from "../gloss/example";
 import { numbering } from "../gloss/document";
 import { translationLines } from "../gloss/translation";
 import { hear, playButton } from "../hear/hear";
-import { analysed, nextWhere, progress, sentencesOf, sentenceTracks, SHOWS, showOf, topicsIn, type Line, type Show } from "../interlinear/logic";
+import * as playback from "../playback";
+import { lineAt, readAlongSpan, analysed, nextWhere, progress, sentencesOf, sentenceTracks, SHOWS, showOf, topicsIn, type Line, type Show } from "../interlinear/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getSelection, getState, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
@@ -48,7 +49,7 @@ async function linesOf(text: TextDetail): Promise<Line[]> {
       const full = text.segments.find((s) => s.id === seg.id)!;
       const translation = translationLines(full, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
       const words: ExampleWord[] = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
-      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, notes: (v.segmentNotes ?? []).map((n) => n.body), topics: v.topics ?? [], ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
+      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, endMs: full.endMs ?? null, notes: (v.segmentNotes ?? []).map((n) => n.body), topics: v.topics ?? [], ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
     });
   }
   return lines;
@@ -71,6 +72,61 @@ export const interlinearPanel: PanelDef = {
     let own = new Map<string, string>();
     /** What is typed in a meaning field and not saved yet, by abbreviation. */
     const drafts = new Map<string, string>();
+
+    /** Read along: the whole text plays and the sentence being heard is marked and kept in view. */
+    let reading = false;
+    let readFrame = 0;
+    let marked: string | null = null;
+    const follow = () => {
+      if (!reading) return;
+      if (!playback.isPlaying()) {
+        stopReading();
+        return;
+      }
+      const now = lineAt(lines, playback.currentMs());
+      const id = now?.id ?? null;
+      if (id !== marked) {
+        el.querySelector(".il-row.il-heard")?.classList.remove("il-heard");
+        marked = id;
+        if (id !== null) {
+          const row = el.querySelector<HTMLElement>(`.il-row[data-id="${CSS.escape(id)}"]`);
+          row?.classList.add("il-heard");
+          row?.scrollIntoView({ block: "nearest" });
+        }
+      }
+      readFrame = window.requestAnimationFrame(follow);
+    };
+    const stopReading = () => {
+      reading = false;
+      window.cancelAnimationFrame(readFrame);
+      el.querySelector(".il-row.il-heard")?.classList.remove("il-heard");
+      marked = null;
+      const b = el.querySelector<HTMLButtonElement>(".il-read");
+      if (b !== null) b.textContent = "Read along";
+    };
+    const readAlong = async (text: TextDetail) => {
+      if (reading) {
+        playback.pause();
+        stopReading();
+        return;
+      }
+      const span = readAlongSpan(lines);
+      if (span === null) {
+        showToast({ tone: "info", lines: ["No sentence of this text is timed, so there is nothing to play."] });
+        return;
+      }
+      const seg = text.segments.find((x) => x.id === span.first.id);
+      if (seg === undefined) return;
+      await hear({ textId: text.id, tierId: seg.tier, segmentId: seg.id, startMs: span.startMs, endMs: span.endMs }, false);
+      // Give the audio a moment to start before following it.
+      window.setTimeout(() => {
+        if (!playback.isPlaying()) return;
+        reading = true;
+        const b = el.querySelector<HTMLButtonElement>(".il-read");
+        if (b !== null) b.textContent = "Stop";
+        readFrame = window.requestAnimationFrame(follow);
+      }, 150);
+    };
 
     /** Select the next sentence still to gloss, for the Gloss panel, and bring its row into view. */
     const goNext = () => {
@@ -225,7 +281,9 @@ export const interlinearPanel: PanelDef = {
         showAbbreviations = !showAbbreviations;
         paint(text);
       };
-      const bar = h("div", { className: "il-bar" }, only, next, abbrButton);
+      const read = h("button", { type: "button", className: "il-read", textContent: reading ? "Stop" : "Read along", title: "Play the whole text from its recording, marking each sentence as it is heard" });
+      read.onclick = () => void readAlong(text);
+      const bar = h("div", { className: "il-bar" }, only, next, abbrButton, read);
       if ((facs?.marked.length ?? 0) > 0) {
         const crops = h("button", { type: "button", textContent: "Page lines", title: "Show each sentence's line from its page image above it" });
         crops.setAttribute("aria-pressed", String(showCrops));
@@ -239,6 +297,7 @@ export const interlinearPanel: PanelDef = {
       const abbrSection = showAbbreviations ? abbreviationsSection(text) : null;
       const empty = show !== "all" && shown.length === 0 && lines.length > 0 ? h("p", { className: "note", textContent: showOf(show).done }) : null;
       el.replaceChildren(h("h3", { className: "il-title", textContent: text.title || "(untitled)" }), h("p", { className: "note", textContent: progress(lines) }), bar, ...(abbrSection === null ? [] : [abbrSection]), ...(empty === null ? [] : [empty]), h("ol", { className: "il-list" }, ...rows));
+      if (marked !== null) el.querySelector(`.il-row[data-id="${CSS.escape(marked)}"]`)?.classList.add("il-heard");
       if (focused >= 0) el.querySelectorAll<HTMLElement>(".il-row")[focused]?.focus();
       if (focusedAbbr !== null) el.querySelector<HTMLInputElement>(`input[data-abbr="${CSS.escape(focusedAbbr)}"]`)?.focus();
     };
@@ -285,11 +344,13 @@ export const interlinearPanel: PanelDef = {
     const unsubscribe = subscribeSelection(draw);
     const unprovide = provide("interlinear", () => [
       { id: "interlinear:next", title: "Go to the next sentence to gloss", group: "Interlinear", words: ["unglossed", "next", "skip", "todo"], run: goNext },
+      { id: "interlinear:read", title: "Read the text along with its recording", group: "Interlinear", words: ["play all", "listen", "karaoke", "proofread", "follow"], run: () => el.querySelector<HTMLButtonElement>(".il-read")?.click() },
     ]);
     return {
       element: el,
       render: draw,
       dispose: () => {
+        stopReading();
         unsubscribe();
         unprovide();
       },
