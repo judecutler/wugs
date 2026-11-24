@@ -111,9 +111,43 @@ fn columns(header: &[String]) -> Result<Columns, String> {
 }
 
 /// Read a lexicon table (CSV, tab-separated or Excel's text export).
+type Domains = std::collections::HashMap<String, String>;
+
+/// The project's semantic domains by outline code and by label (lower case),
+/// loading the SIL list first when the project has none, as LIFT does.
+pub(crate) fn domain_maps(session: &mut Session) -> Result<(Domains, Domains), String> {
+    let p = project(session)?;
+    crate::lexicon::sil_domains_if_none(p)?;
+    let (mut by_code, mut by_label) = (Domains::new(), Domains::new());
+    for d in crate::lexicon::domains_list(session)? {
+        by_label.entry(d.label.trim().to_lowercase()).or_insert_with(|| d.id.clone());
+        by_code.insert(d.code.clone(), d.id);
+    }
+    Ok((by_code, by_label))
+}
+
+/// The domains a cell names (`1.1 Sky; 1.2`, by code or label), each not found listed once in `unmatched`.
+pub(crate) fn domains_in(cell: &str, by_code: &Domains, by_label: &Domains, unmatched: &mut Vec<String>) -> Vec<String> {
+    cell.split([';', '|'])
+        .map(str::trim)
+        .filter(|d| !d.is_empty())
+        .filter_map(|d| {
+            let code = d.split_whitespace().next().filter(|w| w.chars().all(|ch| ch.is_ascii_digit() || ch == '.')).map(|w| w.trim_end_matches('.'));
+            let found = code.and_then(|c| by_code.get(c)).or_else(|| by_label.get(&d.to_lowercase())).cloned();
+            if found.is_none() && !unmatched.iter().any(|u| u == d) {
+                unmatched.push(d.to_string());
+            }
+            found
+        })
+        .collect()
+}
+
 pub fn import(session: &mut Session, path: &Path) -> Result<TableImport, String> {
     if std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.len() > MAX_BYTES as u64 {
         return Err("a lexicon table is at most 20 MB".into());
+    }
+    if crate::cldf_import::is_cldf(path) {
+        return crate::cldf_import::import(session, path);
     }
     let (text, tabs) = crate::table_text::read_table(path, &["tsv", "tab", "txt"])?;
     let (header, rows, _) = crate::table_text::records(&text, tabs)?;
@@ -122,16 +156,7 @@ pub fn import(session: &mut Session, path: &Path) -> Result<TableImport, String>
     // Domains by outline code (`1.1`, `1.1 Sky`) or by name; a table naming
     // domains in a project with none loads the SIL list first, as LIFT does.
     let named = c.domains.is_some() && rows.iter().any(|r| !cell(r, c.domains).is_empty());
-    let mut by_code: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    let mut by_label: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    if named {
-        let p = project(session)?;
-        crate::lexicon::sil_domains_if_none(p)?;
-        for d in crate::lexicon::domains_list(session)? {
-            by_label.entry(d.label.trim().to_lowercase()).or_insert_with(|| d.id.clone());
-            by_code.insert(d.code.clone(), d.id);
-        }
-    }
+    let (by_code, by_label) = if named { domain_maps(session)? } else { Default::default() };
     let mut unmatched: Vec<String> = Vec::new();
     let mut no_lemma = 0;
     let mut table = Vec::new();
@@ -150,19 +175,7 @@ pub fn import(session: &mut Session, path: &Path) -> Result<TableImport, String>
             glosses: c.glosses.iter().map(|(i, tag)| (tag.clone(), cell(r, Some(*i)))).collect(),
             definition: cell(r, c.definition),
             usage: cell(r, c.usage),
-            domains: cell(r, c.domains)
-                .split([';', '|'])
-                .map(str::trim)
-                .filter(|d| !d.is_empty())
-                .filter_map(|d| {
-                    let code = d.split_whitespace().next().filter(|w| w.chars().all(|ch| ch.is_ascii_digit() || ch == '.')).map(|w| w.trim_end_matches('.'));
-                    let found = code.and_then(|c| by_code.get(c)).or_else(|| by_label.get(&d.to_lowercase())).cloned();
-                    if found.is_none() && !unmatched.iter().any(|u| u == d) {
-                        unmatched.push(d.to_string());
-                    }
-                    found
-                })
-                .collect(),
+            domains: domains_in(&cell(r, c.domains), &by_code, &by_label, &mut unmatched),
             example: cell(r, c.example),
             example_translation: cell(r, c.example_translation),
         });

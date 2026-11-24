@@ -209,6 +209,7 @@ async function importLexTable() {
     title: "Import a lexicon table: a row per sense, with a word (lemma or headword) column and a gloss column; category, definition and glosses in other languages are read too",
     filters: [
       { name: "Tables", extensions: ["csv", "tsv", "txt", "xlsx", "xls", "ods"] },
+      { name: "CLDF Dictionary", extensions: ["json", "csv"] },
       { name: "All files", extensions: ["*"] },
     ],
   });
