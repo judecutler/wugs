@@ -1418,6 +1418,12 @@ def main():
             if run.page.locator(".panel-sounds .sd-list").count() < 3:
                 failures.append("Sounds did not list affricates, clicks or unplaced letters")
             # A made-up word's neighbours: pata, bata, tata, kata are one sound from «gata».
+            # Against the target: PhonBank's %mod and %pho.
+            acc = run.page.locator(".panel-sounds .sd-accuracy")
+            acc.scroll_into_view_if_needed()
+            run.shot("state-sounds-accuracy", acc.locator("xpath=.."))
+            if "75.0%" not in acc.inner_text() or "ɡ→d 1" not in run.page.locator(".panel-sounds .sd-changes").inner_text():
+                failures.append(f"Sounds did not score the target against the actual forms: {acc.inner_text()[:200]}")
             like = run.page.locator(".panel-sounds input.sd-like-word")
             like.fill("gata")
             like.scroll_into_view_if_needed()

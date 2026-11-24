@@ -1521,6 +1521,8 @@ body::before {
 .sd-bar label { display: inline-flex; gap: 4px; align-items: center; }
 .panel-sounds > .note { margin: 0; }
 .panel-sounds > * { flex-shrink: 0; }
+.sd-accuracy tr.sd-total td { font-weight: 600; }
+.sd-changes { font-family: var(--font-ipa); font-size: 15px; }
 .sd-h { margin: 8px 0 2px; font-family: var(--font-display); font-weight: 400; font-size: 15px; }
 .sd-scroll { overflow-x: auto; }
 .sd-consonants { border-collapse: collapse; font-size: var(--text-sm); }

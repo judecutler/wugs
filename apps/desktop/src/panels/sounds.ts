@@ -9,7 +9,8 @@
 import { allophonesLine, possibleAllophones, type Allophones } from "../sounds/allophones";
 import { bundle, FEATURES, featuresOf, featuresTsv, matching, nextValue, type Feature } from "../sounds/features";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, phoibleCompare, phoibleMap, projectLanguage, soundWords } from "../api";
+import { errorText, phoibleCompare, phoibleMap, phonPairs, projectLanguage, soundWords } from "../api";
+import { ACCURACY_COLUMNS, accuracy, accuracyNote, accuracyTsv, scoreCells, type PhonPairs } from "../sounds/accuracy";
 import type { FeatureMap } from "../typology/map";
 import { drawFeatureMap } from "./featuremap";
 import { emptyState, h } from "../dom";
@@ -69,6 +70,10 @@ export const soundsPanel: PanelDef = {
     /** PHOIBLE, once asked for: its comparison, or why there is none. */
     let phoible: PhoibleCompared | null = null;
     let phoibleNote = "";
+    /** PhonBank's %mod and %pho pairs, read once per data generation; null until read or when there are none. */
+    let phon: PhonPairs | null = null;
+    let phonKey = "";
+    let phonTrack = "";
     let phoibleBusy = false;
     let phoibleInv = 0;
     /** The phoneme whose map is open under the PHOIBLE comparison, and the map once read. */
@@ -450,6 +455,41 @@ export const soundsPanel: PanelDef = {
       paint();
     };
 
+    /** Target against actual forms (PhonBank's %mod and %pho), shown only when some utterance carries both. */
+    const accuracySection = (): HTMLElement[] => {
+      if (phon === null || phon.pairs.length === 0) return [];
+      const r = accuracy(phon);
+      if (!r.totals.some((t) => t.track === phonTrack)) phonTrack = r.totals[0]?.track ?? "";
+      const rows = [...r.rows, ...r.totals].sort((a, b) => a.name.localeCompare(b.name) || (a.text === "" ? 1 : 0) - (b.text === "" ? 1 : 0));
+      const table = h(
+        "table",
+        { className: "fq-table sd-accuracy" },
+        h("thead", {}, h("tr", {}, ...ACCURACY_COLUMNS.map((c) => h("th", { textContent: c, title: c === "PCC" ? "Percent consonants correct" : c === "PVC" ? "Percent vowels correct" : c === "PPC" ? "Percent phonemes correct" : "" })))),
+        h("tbody", {}, ...rows.map((x) => h("tr", { className: x.text === "" ? "sd-total" : "" }, h("td", { textContent: x.name || "(unnamed)" }), h("td", { textContent: x.title }), h("td", { className: "fq-num", textContent: String(x.score.utterances) }), ...scoreCells(x.score).map((c) => h("td", { className: "fq-num", textContent: c }))))),
+      );
+      const copy = h("button", { type: "button", textContent: "Copy table" });
+      copy.onclick = () =>
+        void writeText(accuracyTsv(rows)).then(
+          () => showToast({ tone: "info", lines: ["Copied the accuracy table."] }),
+          (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+        );
+      const pick = h("select", { className: "sd-acc-track", title: "Whose changes to list" }, ...r.totals.map((t) => h("option", { value: t.track, textContent: t.name || "(unnamed)", selected: t.track === phonTrack })));
+      pick.setAttribute("aria-label", "Speaker");
+      pick.onchange = () => {
+        phonTrack = pick.value;
+        paint();
+      };
+      const changes = (r.changes.get(phonTrack) ?? []).slice(0, 24);
+      return [
+        h("h4", { className: "sd-h", textContent: "Against the target (PhonBank %mod and %pho)" }),
+        h("p", { className: "note", textContent: accuracyNote(r.totals) + (phon.omitted > 0 ? ` ${phon.omitted.toLocaleString("en")} more utterances were left out.` : "") }),
+        h("div", { className: "sd-bar" }, copy),
+        h("div", { className: "sd-scroll" }, table),
+        h("div", { className: "sd-bar" }, h("span", { textContent: "Commonest changes of" }), pick),
+        changes.length === 0 ? h("p", { className: "note", textContent: "Every target sound was said as it is." }) : h("p", { className: "sd-changes ipa", textContent: changes.map(([k, n]) => `${k} ${n}`).join(" · ") }),
+      ];
+    };
+
     const phoibleSection = (l: Loaded): HTMLElement[] => {
       const ask = h("button", { type: "button", disabled: phoibleBusy, textContent: phoibleBusy ? "Comparing…" : phoible === null ? "Compare with PHOIBLE" : "Compare again", title: "Set these sounds beside PHOIBLE's inventories of the project's language and its relatives" });
       ask.onclick = () => void askPhoible();
@@ -756,6 +796,7 @@ export const soundsPanel: PanelDef = {
         ...togetherSection(loaded),
         ...envSection(loaded),
         ...phoibleSection(loaded),
+        ...accuracySection(),
         ...whereSection(loaded),
         ...listed("Not on the IPA chart", c.unplaced.map((u) => u.sound), [...new Set(c.unplaced.map((u) => u.why))].join("; ").replace(/^./u, (x) => x.toUpperCase()) + ". Often a spelling slip, or a spelling rather than IPA."),
       );
@@ -776,6 +817,19 @@ export const soundsPanel: PanelDef = {
         loaded = null;
         phoible = null;
         phoibleNote = "";
+      }
+      const generation = `${s.info.projectId}|${dataGeneration()}`;
+      if (generation !== phonKey) {
+        phonKey = generation;
+        phon = null;
+        void phonPairs().then(
+          (r) => {
+            if (phonKey !== generation) return;
+            phon = r;
+            if (r.pairs.length > 0) paint();
+          },
+          () => undefined,
+        );
       }
       const wanted = `${s.info.projectId}|${dataGeneration()}|${onlyThisText ? (s.text?.id ?? "") : ""}`;
       if (wanted === key) return;
