@@ -5,7 +5,10 @@
 import type { Where } from "../metadata/logic";
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { collocates, errorText } from "../api";
+import { collocates, errorText, saveDocument } from "../api";
+import { open as pickFolder } from "@tauri-apps/plugin-dialog";
+import { standalone } from "./vowels";
+import { network } from "../collocates/network";
 import { lemmaQuery, asTsv, COLLOCATE_SORTS, compareCollocates, compareLine, compareTsv, leansTo, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates, type CompareRow } from "../collocates/logic";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
@@ -60,6 +63,10 @@ export const collocatesPanel: PanelDef = {
     sorter.setAttribute("aria-label", "Sort");
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy the list as a table to paste into a spreadsheet" });
     const note = h("p", { className: "note fq-count" });
+    // The network view (LancsBox's GraphColl): the word, its collocates around it, a second word's beside.
+    let netOn = localStorage.getItem("wugs.collocates.network") === "on";
+    const netToggle = h("button", { type: "button", textContent: "Network", title: "Draw the strongest collocates around the word, stronger nearer; click one to set it beside the word and see what they share" });
+    const netBox = h("div", { className: "co-net" });
     const table = h("table", { className: "fq-table co-table" });
 
     const drawChips = () =>
@@ -125,7 +132,66 @@ export const collocatesPanel: PanelDef = {
       );
     };
 
+    const drawNet = () => {
+      netToggle.setAttribute("aria-pressed", String(netOn));
+      if (!netOn || data === null || data.rows.length === 0) {
+        netBox.replaceChildren();
+        return;
+      }
+      const net = network(other === null ? [{ word: asked, rows: data.rows }] : [{ word: asked, rows: data.rows }, { word: other.word, rows: other.data.rows }]);
+      const NS = "http://www.w3.org/2000/svg";
+      const el2 = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>, text?: string) => {
+        const e = document.createElementNS(NS, tag);
+        for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+        if (text !== undefined) e.textContent = text;
+        return e;
+      };
+      const svg = el2("svg", { viewBox: "-1.75 -1.3 3.5 2.6", class: "co-net-svg", role: "img", "aria-label": `Collocation network of ${asked}` });
+      const at = new Map(net.nodes.map((n) => [n.id, n]));
+      for (const e of net.edges) {
+        const a = at.get(e.from)!;
+        const b = at.get(e.to)!;
+        svg.append(el2("line", { x1: a.x, y1: a.y, x2: b.x, y2: b.y, class: "co-net-edge", "stroke-width": e.width * 0.006 }));
+      }
+      for (const n of net.nodes) {
+        const g = el2("g", { class: `co-net-node co-net-${n.kind}`, tabindex: 0 });
+        g.append(el2("circle", { cx: n.x, cy: n.y, r: n.kind === "centre" ? 0.06 : 0.025 + 0.02 * n.strength }));
+        g.append(el2("text", { x: n.x, y: n.y - (n.kind === "centre" ? 0.09 : 0.05), "text-anchor": "middle" }, n.label));
+        const open = () => {
+          if (n.kind === "centre") {
+            // The second word's centre: back to one word.
+            if (n.id === "c1") {
+              versus.value = "";
+              void load();
+            }
+            return;
+          }
+          versus.value = n.label;
+          void load();
+        };
+        g.addEventListener("click", open);
+        g.addEventListener("keydown", (e) => {
+          if ((e as KeyboardEvent).key === "Enter") open();
+        });
+        g.append(el2("title", {}, n.kind === "centre" ? (n.id === "c1" ? `${n.label}: click to go back to «${asked}» alone` : n.label) : `${n.label}: click to set it beside «${asked}» and see what they share`));
+        svg.append(g);
+      }
+      const save = h("button", { type: "button", className: "link-button", textContent: "Save picture…", title: "Save the network as an SVG file for a paper or slides" });
+      save.onclick = async () => {
+        const folder = await pickFolder({ directory: true, title: "Where should the picture go?" });
+        if (typeof folder !== "string") return;
+        try {
+          const out = await saveDocument({ folder, title: `${asked}${other === null ? "" : ` and ${other.word}`} collocates`, extension: "svg", contents: standalone(svg) });
+          showToast({ tone: "info", lines: [`Saved the network as ${out.path}.`] });
+        } catch (e) {
+          showToast({ tone: "error", lines: [errorText(e)] });
+        }
+      };
+      netBox.replaceChildren(svg, save, h("p", { className: "note", textContent: other === null ? "The 14 strongest collocates by logDice, stronger nearer, thicker lines for more times together. Click one to set it beside the word." : `Collocates «${asked}» and «${other.word}» share sit between them, each nearer the word it keeps closer company with.` }));
+    };
+
     const drawRows = () => {
+      drawNet();
       if (data === null) {
         table.replaceChildren();
         return;
@@ -227,6 +293,15 @@ export const collocatesPanel: PanelDef = {
       scope = scopePicker.value;
       void load();
     };
+    netToggle.onclick = () => {
+      netOn = !netOn;
+      try {
+        localStorage.setItem("wugs.collocates.network", netOn ? "on" : "off");
+      } catch {
+        // Not kept: fine.
+      }
+      drawNet();
+    };
     sorter.onchange = () => {
       sortBy = sorter.value as CollocateSort;
       drawRows();
@@ -279,7 +354,8 @@ export const collocatesPanel: PanelDef = {
         h("div", { className: "cc-bar" }, node, go, versus),
         chips,
         h("div", { className: "cc-bar" }, left, right, min, scopePicker),
-        h("div", { className: "cc-bar" }, sorter, copy),
+        h("div", { className: "cc-bar" }, sorter, copy, netToggle),
+        netBox,
         note,
         h("div", { className: "fq-rows" }, table),
       );
