@@ -241,6 +241,7 @@ export const sentencesPanel: PanelDef = {
 
     const unprovide = provide("sentences", () => [
       { id: "sentences:load", title: "Load prompts for sentence elicitation", group: "Elicit sentences", words: ["questionnaire", "stimulus", "translation", "elicitation", "prompt"], run: () => load.click() },
+      { id: "sentences:frames", title: "Make a prompt list from frames", group: "Elicit sentences", words: ["frame", "tone", "noun class", "substitution", "carrier sentence"], run: () => framesButton.click() },
       {
         id: "sentences:next",
         title: "Go to the next prompt without an answer",

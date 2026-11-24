@@ -20,6 +20,7 @@ import { emptyState, h } from "../dom";
 import { attempt, getState, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { tableImportLines } from "../lexicon/logic";
 import { sliced, type PanelDef } from "./panel";
+import { provide } from "../palette/registry";
 
 async function newText(title: string) {
   if (title === "") return;
@@ -756,9 +757,27 @@ export const textsPanel: PanelDef = {
     };
     const view = sliced(el, slice, draw);
     live.add(draw);
+    // The publishing and export buttons, findable by name in the palette.
+    const open = () => getState().kind === "open";
+    const unprovide = provide("texts", () =>
+      open()
+        ? [
+            { id: "texts:dictionary", title: "Print the dictionary", group: "Publish", words: ["lexicon", "html", "print", "word list"], run: () => void exportDict() },
+            { id: "texts:flashcards", title: "Make flashcards for learners", group: "Publish", words: ["anki", "quizlet", "learn", "vocabulary"], run: () => void exportCards() },
+            { id: "texts:spelling", title: "Save a spelling dictionary (spell checker)", group: "Publish", words: ["hunspell", "libreoffice", "firefox", "spellcheck", "orthography"], run: () => void exportSpellingFiles() },
+            { id: "texts:website", title: "Publish as a website", group: "Publish", words: ["community", "web", "app", "site", "share"], run: () => void publishSite() },
+            { id: "texts:cldf", title: "Publish as CLDF", group: "Publish", words: ["dataset", "cldf", "zenodo", "data paper"], run: () => void publishCldf() },
+            { id: "texts:sketch", title: "Start a grammar sketch", group: "Publish", words: ["grammar", "description", "phonology", "morphology"], run: () => void exportSketch() },
+            { id: "texts:cwb", title: "Export the corpus for CQPweb", group: "Publish", words: ["cwb", "sketch engine", "corpus", "vertical"], run: () => void exportCwb() },
+            { id: "texts:sheet", title: "Save an archive catalogue sheet", group: "Publish", words: ["archive", "elar", "paradisec", "metadata", "deposit"], run: () => void exportSheet() },
+            { id: "texts:seal", title: "Seal a version for the archive", group: "Publish", words: ["bagit", "deposit", "archive", "snapshot"], run: () => void seal() },
+          ]
+        : [],
+    );
     return {
       ...view,
       dispose: () => {
+        unprovide();
         live.delete(draw);
         view.dispose?.();
       },
