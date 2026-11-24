@@ -104,7 +104,7 @@ ol.sentences { list-style: none; padding: 0; } ol.sentences li { display: grid; 
 button.play { grid-column: 2; align-self: start; border: 1px solid #00718a; color: #00718a; background: none; border-radius: 50%; width: 1.8em; height: 1.8em; cursor: pointer; font-size: .9em; padding: 0; }
 button.play:hover, button.play:focus-visible { background: #d6f3f9; }
 footer { margin-top: 3em; color: #777; font-size: .85em; }
-ol.sentences li:target { background: #fff3c4; }
+ol.sentences li:target { background: #fff3c4; } ol.sentences li.now { background: #d6f3f9; } button.play-all { border: 1px solid #00718a; color: #00718a; background: none; border-radius: 1em; padding: .3em .9em; cursor: pointer; font: inherit; } button.play-all:hover, button.play-all:focus-visible { background: #d6f3f9; } @media print { p.listen { display: none; } }
 .search input { font: inherit; width: 100%; box-sizing: border-box; padding: .4em .6em; border: 1px solid #b9b19a; border-radius: .4em; background: #fff; }
 .search label { display: block; margin-bottom: .3em; color: #555; }
 ul.hits { list-style: none; padding: 0; } ul.hits li { margin: .45em 0; } .hits .hw { font-weight: bold; } .hits .gl, .hits .ft { color: #333; }
@@ -115,7 +115,33 @@ ul.hits { list-style: none; padding: 0; } ul.hits li { margin: .45em 0; } .hits 
 /// The ▶ beside a headword on the site's dictionary page.
 const DICTIONARY_PLAY: &str = "button.play { border: 1px solid #00718a; color: #00718a; background: none; border-radius: 50%; width: 1.6em; height: 1.6em; cursor: pointer; font-size: .75em; padding: 0; vertical-align: .1em; } button.play:hover, button.play:focus-visible { background: #d6f3f9; } @media print { button.play { display: none; } }";
 
-const SCRIPT: &str = "<script>\nlet playing = null;\nfor (const b of document.querySelectorAll('button.play')) b.addEventListener('click', () => { if (playing) playing.pause(); playing = new Audio(b.dataset.src); playing.play(); });\n</script>\n";
+/// The sound: one ▶ plays its sentence (or headword) and marks it; **Play the
+/// whole text** plays every sentence of the page in turn, following along.
+const SCRIPT: &str = "<script>
+let playing = null, queue = [];
+const all = document.querySelector('button.play-all');
+function unmark() { for (const l of document.querySelectorAll('li.now')) l.classList.remove('now'); }
+function stop() { if (playing) { playing.onended = null; playing.pause(); } playing = null; queue = []; unmark(); if (all) all.textContent = all.dataset.label; }
+function play(b, follow) {
+  unmark();
+  const li = b.closest('ol.sentences li');
+  if (li) { li.classList.add('now'); if (follow) li.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  playing = new Audio(b.dataset.src);
+  playing.onended = () => { if (queue.length) play(queue.shift(), true); else stop(); };
+  playing.play().catch(stop);
+}
+for (const b of document.querySelectorAll('button.play')) b.addEventListener('click', () => { stop(); play(b, false); });
+if (all) all.addEventListener('click', () => {
+  const on = all.textContent !== all.dataset.label;
+  stop();
+  if (on) return;
+  queue = [...document.querySelectorAll('ol.sentences button.play')];
+  if (queue.length === 0) return;
+  all.textContent = '■ Stop';
+  play(queue.shift(), true);
+});
+</script>
+";
 
 /// The site's search, run in the reader's browser over `search-index.js`.
 const SEARCH: &str = include_str!("site-search.js");
@@ -289,6 +315,7 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
             let d: Vec<String> = details.iter().map(|(k, v)| format!("{}: {}", esc(&k.replace('_', " ")), esc(v))).collect();
             body.push_str(&format!("<p class=\"details\">{}</p>\n", d.join(" · ")));
         }
+        let list_at = body.len();
         body.push_str("<ol class=\"sentences\">\n");
         // The text's page images that are here, copied as files, with their sizes for the crops.
         let mut page_files: HashMap<String, (String, u32, u32)> = HashMap::new();
@@ -361,6 +388,10 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
             body.push_str("</div></li>\n");
         }
         body.push_str("</ol>\n");
+        // Two or more sentences to hear: a button that plays them all in turn.
+        if body[list_at..].matches("<button class=\"play\"").count() >= 2 {
+            body.insert_str(list_at, "<p class=\"listen\"><button type=\"button\" class=\"play-all\" data-label=\"▶ Play the whole text\">▶ Play the whole text</button></p>\n");
+        }
         site.sentences += segments.len();
         files.push((file.clone(), page(title, &lang_attr, &body, &footer, "")));
         listed.push((file, title.clone(), segments.len(), details));
@@ -559,6 +590,7 @@ mod tests {
         assert!(text.contains("<div class=\"crop\" role=\"img\" aria-label=\"Sentence 1 on its page\" style=\"background-image:url('pages/1-1.png');background-size:200.000% auto;background-position:20.000% 55.556%;aspect-ratio:1000 / 300\"></div>"), "{text}");
         assert!(root.join("pages/1-1.png").is_file() && site.pages == 1, "{site:?}");
         assert!(text.contains("<button class=\"play\" data-src=\"audio/1-1.wav\""), "{text}");
+        assert!(text.contains("class=\"play-all\"") && text.contains("queue.shift()"), "two sentences to hear give a button that plays them all: {text}");
         assert!(text.contains("class=\"ft\">‘"), "the translation is shown: {text}");
         assert!(root.join("audio/1-1.wav").is_file() && root.join("style.css").is_file() && root.join("dictionary.html").is_file());
         // The search: a box on the front page over an index of what the site shows.
