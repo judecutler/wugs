@@ -177,3 +177,11 @@ test("tone-marked words get a tone section with their melodies; unmarked ones no
   assert.match(html, /<td class="ipa">H\.L<\/td><td>1<\/td><td class="ipa">bálà<\/td>/);
   assert.match(html, /never met: L\.H, L\.L/);
 });
+
+test("endings shared by stems in the words get a section, even with nothing glossed", () => {
+  assert.doesNotMatch(grammarSketch(base), /Endings the words suggest/);
+  const words = ["kanu", "kanula", "kanuli", "tepa", "tepala", "tepali", "siro", "sirola", "siroli"].map((word) => ({ word, count: 2 }));
+  const html = grammarSketch({ ...base, words });
+  assert.match(html, /<h3>4\.\d Endings the words suggest<\/h3>/);
+  assert.match(html, /<td class="ipa">∅ -la -li<\/td><td>3<\/td>/);
+});

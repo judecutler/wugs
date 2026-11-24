@@ -10,6 +10,7 @@ import { chart, gridOf, inventory, MANNER_NAMES, PLACE_NAMES, type Sound } from 
 import { gapsNote, positions, shapes, share } from "../sounds/shapes.ts";
 import { syllableNote, syllableTypes } from "../sounds/syllables.ts";
 import { toneMelodies, tonesNote } from "../sounds/tones.ts";
+import { affixLabel, signatures } from "../affixes/signatures.ts";
 import { possibleAllophones } from "../sounds/allophones.ts";
 import { countsLine, total, verdict, type WordOrder } from "../wordorder/logic.ts";
 import type { Grid } from "../orthography/logic.ts";
@@ -286,6 +287,17 @@ export function grammarSketch(d: SketchInput): string {
       );
     }
     parts.push(todo("The rules that choose each form, and the forms these data do not show"));
+  }
+  // Read from the transcriptions alone, so even an unglossed project has a start here.
+  const guessed = signatures(d.words, "suffix").signatures.slice(0, 8);
+  if (guessed.length > 0) {
+    const n = byKind.length + (slots.some((s) => s.affixes.length > 0) ? 1 : 0) + (sets.length > 0 ? 1 : 0) + 1;
+    parts.push(
+      `<h3>4.${n} Endings the words suggest</h3><p>Stems that take the same set of endings in the transcriptions (∅ for none), as Goldsmith's Linguistica finds them, before or beside any glossing; some sets are chance.</p><table><tr><th>Endings</th><th>Stems</th><th>Examples</th></tr>${guessed
+        .map((g) => `<tr><td class="ipa">${esc(g.affixes.map((a) => affixLabel(a, "suffix")).join(" "))}</td><td>${g.stems.length}</td><td class="ipa">${esc(g.stems.slice(0, 6).map((x) => x.stem).join(", "))}</td></tr>`)
+        .join("")}</table>`,
+      todo("Which of these are inflection, which derivation, and which chance"),
+    );
   }
   parts.push(todo("Word classes, inflection and derivation"));
 
