@@ -18,6 +18,23 @@ export function neighbor<T extends { id: string }>(ordered: readonly T[], id: st
   return i === -1 ? null : (ordered[i + step] ?? null);
 }
 
+/** The next segment with nothing written in it after `id` (from the first when `id` is null or not listed), wrapping
+ * round to the start; never `id` itself, and null when every other segment has text. */
+export function nextEmpty<T extends { id: string; content: string }>(ordered: readonly T[], id: string | null): T | null {
+  const at = id === null ? -1 : ordered.findIndex((s) => s.id === id);
+  for (let k = 1; k <= ordered.length; k++) {
+    const seg = ordered[(at + k + ordered.length) % ordered.length]!;
+    if (seg.id !== id && seg.content.trim() === "") return seg;
+  }
+  return null;
+}
+
+/** The Next empty button's label: how many segments still have nothing written. */
+export const emptyLabel = (ordered: readonly { content: string }[]): string => {
+  const n = ordered.filter((s) => s.content.trim() === "").length;
+  return n === 0 ? "Next empty" : `Next empty (${n})`;
+};
+
 /** The tier to open on: the first with role transcription, else (tiers made before roles existed) one named
  * "transcription" or the implicit "utterance", else the first. */
 export function defaultTier<T extends TierLike>(tiers: readonly T[]): T | null {

@@ -1557,6 +1557,16 @@ def main():
             if not tx.input_value().endswith(" kanula"):
                 failures.append(f"→ did not take the completion: {tx.input_value()}")
             tx.press("Escape")
+            # Next empty: the button counts what is left and goes to it.
+            ne = run.page.locator(".panel-transcribe .tx-next-empty")
+            if not ne.inner_text().startswith("Next empty"):
+                failures.append(f"Transcribe has no Next empty button: {ne.inner_text()}")
+            elif not ne.is_disabled():
+                ne.click()
+                run.page.wait_for_timeout(300)
+                if run.page.locator(".panel-transcribe .tx-field").input_value().strip() != "":
+                    failures.append("Next empty went to a segment with text in it")
+                run.page.evaluate("async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u02' })")
             run.front("elicit", "Elicit")
             # Semantic domains: how many words each holds, and the next one still empty.
             run.page.locator(".panel-elicit button", has_text="Semantic domains").click()

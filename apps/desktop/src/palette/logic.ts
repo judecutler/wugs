@@ -110,6 +110,7 @@ export const SHORTCUTS: { where: string; keys: [string, string][] }[] = [
       ["Tab or Ctrl+Enter", "Play the segment again"],
       ["Escape", "Undo what you typed in this row"],
       ["→ at the end", "Write the word offered beside the field"],
+      ["Ctrl+E", "Save and go to the next segment with nothing written"],
     ],
   },
   {
