@@ -977,6 +977,8 @@ wugs reads these formats:
   - a shortened word is written whole (`(be)cause` → `because`), and a form's marker is dropped (`dada@b` → `dada`).
 
   The main line as written and every dependent tier (`%mor`, `%gra`, `%com` …) are kept with the utterance. The header becomes the text's details: languages, participants, date, place and situation, plus each speaker's `@ID` line, age and sex (`age_chi`). You can therefore pick texts by a child's age in Keywords, Frequencies and the other corpus tools. An utterance with no words (`0 [=! laughs] .`) is left out and counted. Importing the same file again adds nothing.
+
+  A transcript with CLAN's `%mor` tier can have it read as tags and trees; see [Tags and trees from CHAT's %mor and %gra](#tags-and-trees-from-chats-mor-and-gra).
 - EXMARaLDA `.exb`, the Partitur Editor's basic transcription, used by the Hamburg corpora and much conversation analysis. The file becomes one text, with each speaker's transcription tier on a track named by their abbreviation. Events that follow each other on a tier make one utterance until one ends in `.`, `?`, `!` or `…`, so a transcript written a word an event (as HIAT does) comes in a sentence a segment, timed from the timeline. Annotation tiers of the speaker (a translation, a comment) are kept with the utterance they fall in and go back out in an EXMARaLDA export; description tiers (`((laughs))`) are counted and left out. The project name and the transcription's own details become the text's details. Importing the same file again adds nothing.
 - Plain text `.txt`: any other text file becomes a text named after the file, and the message says how it was cut. A file whose lines mostly end in a full stop, with no blank lines, comes in a segment per line. Otherwise blank lines separate paragraphs, a line ending in a full stop ends its sentence, and inside a line a sentence ends after `.`, `!`, `?` or the full stop of another script when the next word starts with a capital, a digit or a quote; "e.g. the" stays together, but "Dr. Smith" is cut. Thai and Lao paragraphs come in whole, and an orthography written all in lower case is cut only at line ends and blank lines. The file must be UTF-8 or UTF-16; a damaged one is refused. Importing the same file again adds nothing. A numbered sentence list comes in a sentence per line with the numbers left out. This covers the Leipzig Corpora Collection's `…-sentences.txt` (a number, a tab, a sentence) and Tatoeba's per-language exports (a number, a language code and a sentence).
 
@@ -988,6 +990,18 @@ An ELAN file names its recording. When that recording is on this computer (where
 ### Glossing kept in ELAN tiers
 
 When the file keeps its glossing in tiers of its own (a tier of words under the sentences, often a tier of morphs under the words and a tier of glosses on the morphs or the words, as Toolbox, FLEx and many ELAN templates lay them out), the message offers **Read as glossing**. wugs then makes those words and morphs the text's glossing, so they show in the Gloss panel, the Interlinear tab and the corpus tools, and takes the tiers away. A part-of-speech tier or a second gloss tier on the words or morphs is kept on each word or morph. An ELAN export writes the glossing back as tiers of its own (`utterance words`, `utterance morphs`, `utterance glosses`), with each kept tier under its words or morphs again by its own name. Words timed in their own tier (Time_Subdivision) keep their order but not their times, so leave the tiers as they are if you need those times on the Timeline. **Find an action** → **Read glossing from the text's ELAN tiers** offers the same for the text on screen. Importing the file again brings nothing back.
+
+### Tags and trees from CHAT's %mor and %gra
+
+When a CHAT transcript carries CLAN's `%mor` tier, the message after it comes in offers **Read %mor**. (For a text imported earlier, use the command palette: "Read the text's CHAT %mor and %gra".) Each `%mor` item gives its word a lemma, a part-of-speech tag and features:
+- the tag follows Universal Dependencies (`n` becomes NOUN, `cop` becomes AUX), and MOR's own tag is kept beside it;
+- suffix codes become features, so `-PL` is Number=Plur and `&3S` is Person=3;
+- a clitic such as `it's` (`pro|it~cop|be&3S`) becomes two words under the written one;
+- a gloss after `=` is kept.
+
+With `%gra`, each word also gets its head and relation, so the sentence shows as a tree in the Sentence panel. The relations are CLAN's GRASP ones (`subj`, `obj`, `jct`), not Universal Dependencies'.
+
+The tags then work in CQP queries (`[lemma="be" & upos="AUX"]`), lemma and tag lists, Collocates by lemma and word sketches. A sentence whose words do not line up one for one with its `%mor` items, such as one with a filler MOR left out, is left alone and counted. A sentence that already has an analysis is kept. The tags are marked as a tagger's output until you check them in the Sentence panel.
 
 ### Add articles from Wikipedia
 

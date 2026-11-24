@@ -6,7 +6,7 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, readTierGlossing, tierGlossing, topicsOverview, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportUnimorph, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { abbreviationMeanings, chatMorSummary, chatReadMor, createText, readTierGlossing, tierGlossing, topicsOverview, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportUnimorph, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { CARD_ORDERS, corpusLines, dictionaryLines, flashcardLines, parallelLines, spellingLines, unimorphLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { sentencesOf } from "../interlinear/logic";
@@ -19,6 +19,7 @@ import { localDay } from "../dates";
 import { readerDetails, readerGlossary, readerHtml, type GlossedWord, type ReaderSentence } from "../reader/booklet";
 import { emptyState, h } from "../dom";
 import { attempt, getState, refreshAll, reloadTexts, selectText, showToast, touchLexicon } from "../store";
+import { morOfferLines, morReadLines } from "../chat/mor";
 import { readGlossingLines, tierGlossingLines, type TierGlossing } from "../elan/glossing";
 import { batchLines, exportedAllLines, saymoreLines, type BatchResult } from "../drop/logic";
 import { importSessions, projectTitle, setProjectTitle } from "../api";
@@ -143,6 +144,14 @@ async function importOne() {
         if (g !== undefined) showToast({ tone: "info", lines: [`Imported ${r.format}.`, ...r.lines, ...tierGlossingLines(g)], action: { label: "Read as glossing", run: () => void readGlossingOf(text, g) } });
       });
     }
+    // A CHAT transcript with CLAN's %mor (and %gra): offer to read them as tags and trees.
+    if (r.format === "CHAT transcript" && r.text !== null) {
+      const text = r.text;
+      await attempt(async () => {
+        const offer = morOfferLines(await chatMorSummary(text));
+        if (offer !== null) showToast({ tone: "info", lines: [`Imported ${r.format}.`, ...r.lines, ...offer], action: { label: "Read %mor", run: () => void readMorOf(text) } });
+      });
+    }
   });
 }
 
@@ -179,6 +188,28 @@ async function readGlossingOf(textId: string, g: TierGlossing) {
     const r = await readTierGlossing(textId, g.index);
     showToast({ tone: "info", lines: readGlossingLines(r) });
     await refreshAll();
+  });
+}
+
+async function readMorOf(textId: string) {
+  await attempt(async () => {
+    showToast({ tone: "info", lines: morReadLines(await chatReadMor(textId)) });
+    await refreshAll();
+  });
+}
+
+/** The palette's way in for CHAT: the text on screen's %mor and %gra. */
+async function offerMorOfShown() {
+  const s = getState();
+  if (s.kind !== "open" || s.text === null) {
+    showToast({ tone: "warn", lines: ["Open a text first."] });
+    return;
+  }
+  const textId = s.text.id;
+  await attempt(async () => {
+    const offer = morOfferLines(await chatMorSummary(textId));
+    if (offer === null) showToast({ tone: "info", lines: ["This text has no %mor tiers to read."] });
+    else showToast({ tone: "info", lines: offer, action: { label: "Read %mor", run: () => void readMorOf(textId) } });
   });
 }
 
@@ -1175,6 +1206,7 @@ export const textsPanel: PanelDef = {
                 redrawAll();
               },
             },
+            { id: "texts:chat-mor", title: "Read the text's CHAT %mor and %gra as tags and trees", group: "Import", words: ["chat", "clan", "childes", "mor", "gra", "lemma", "pos", "tags", "dependency", "grasp"], run: () => void offerMorOfShown() },
             { id: "texts:tier-glossing", title: "Read glossing from the text's ELAN tiers", group: "Import", words: ["elan", "words", "morphs", "glosses", "tiers", "interlinear", "toolbox"], run: () => void offerGlossingOfShown() },
             { id: "texts:dictionary", title: "Print the dictionary", group: "Publish", words: ["lexicon", "html", "print", "word list"], run: () => void exportDict() },
             { id: "texts:flashcards", title: "Make flashcards for learners", group: "Publish", words: ["anki", "quizlet", "learn", "vocabulary"], run: () => void exportCards() },
