@@ -2,7 +2,7 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, worldLand, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, trackSpeakers, type TextDetail } from "../api";
+import { frequencies, deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, worldLand, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, trackSpeakers, type TextDetail } from "../api";
 import { categoriesLine, crossTab, crossTabTsv, independence, independenceLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
@@ -16,6 +16,7 @@ import { mapView } from "../typology/map";
 import { nearHits, nearLine, NEAR_SIDES, NEAR_WINDOWS, type NearSide } from "../concordance/near";
 import { savedLine, type SavedSearch, asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { linesUnder } from "../concordance/under";
+import { bestFirst, freqKey, gdex, gdexTitle } from "../concordance/gdex";
 import { around } from "../concordance/around";
 import { positions, positionsTsv } from "../concordance/positions";
 import { emptyState, h } from "../dom";
@@ -309,8 +310,37 @@ export const concordancePanel: PanelDef = {
       })().finally(() => {
         underLoading = false;
         // A read dropped by a newer epoch leaves its texts unread: drawing again reads them.
-        if (underOn) drawRows();
+        if (underOn || sortBy === "best") drawRows();
       });
+    };
+    /** Each word's count in the project, for Best examples first; read once per data generation. */
+    let wordUses: { generation: number; counts: Map<string, number> | null; asking: boolean } = { generation: -1, counts: null, asking: false };
+    const usesOf = (): Map<string, number> | null => {
+      if (wordUses.generation !== dataGeneration() && !wordUses.asking) {
+        const generation = dataGeneration();
+        wordUses = { generation: wordUses.generation, counts: wordUses.counts, asking: true };
+        frequencies({ kind: "word", textId: null }).then(
+          (f) => {
+            wordUses = { generation, counts: new Map(f.rows.map((r) => [freqKey(r.item), r.count])), asking: false };
+            if (sortBy === "best") drawRows();
+          },
+          () => {
+            wordUses = { generation, counts: new Map(), asking: false };
+          },
+        );
+      }
+      return wordUses.counts;
+    };
+    /** Whether a line is translated, once its text is read (null until then). */
+    const translatedOf = (hit: Hit): boolean | null => {
+      const t = under.get(hit.textId);
+      return t === undefined ? null : (t.get(hit.segmentId) ?? "") !== "";
+    };
+    /** The lines in the chosen order: Best examples first by GDEX once the counts are in, else text order meanwhile. */
+    const ordered = (list: readonly Hit[]): Hit[] => {
+      if (sortBy !== "best") return sortHits(list, sortBy);
+      const counts = usesOf();
+      return counts === null ? [...list] : bestFirst(list, (k) => counts.get(k), translatedOf);
     };
     /** Lines opened to their wider context (`textId|segmentId`), and the texts read for them in this data generation. */
     const opened = new Set<string>();
@@ -887,8 +917,8 @@ export const concordancePanel: PanelDef = {
         span.append(before, ...(word === "" ? [] : [h("mark", { className: "cc-sorted", textContent: word })]), after);
         return span;
       };
-      const lines = sortHits(shownHits(), sortBy);
-      if (underOn) {
+      const lines = ordered(shownHits());
+      if (underOn || sortBy === "best") {
         if (dataGeneration() !== underGeneration) {
           under.clear();
           underEpoch += 1;
@@ -929,7 +959,7 @@ export const concordancePanel: PanelDef = {
           };
           const row = h(
             "div",
-            { className: sortOn && sorted !== null ? "cc-row cc-row-cat" : "cc-row", role: "listitem", tabIndex: 0, title: `${hit.textTitle}: open this segment`, dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },
+            { className: sortOn && sorted !== null ? "cc-row cc-row-cat" : "cc-row", role: "listitem", tabIndex: 0, title: sortBy === "best" && wordUses.counts !== null ? `${hit.textTitle}: open this segment. ${gdexTitle(gdex(hit, (k) => wordUses.counts?.get(k), translatedOf(hit)))}` : `${hit.textTitle}: open this segment`, dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },
             ...(sortOn && sorted !== null && sorted.categories.length > 0 ? [categoryPicker(hit)] : []),
             play,
             context(clip(left(hit), CONTEXT, "left"), "left"),
@@ -1029,7 +1059,7 @@ export const concordancePanel: PanelDef = {
     copyExamples.onclick = () => {
       if (hits.length === 0) return;
       copyExamples.disabled = true;
-      void copyAsExamples(sortHits(sampled(), sortBy))
+      void copyAsExamples(ordered(sampled()))
         .catch((e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }))
         .finally(() => {
           copyExamples.disabled = false;
@@ -1071,7 +1101,7 @@ export const concordancePanel: PanelDef = {
       if (hits.length === 0) return;
       const folder = await pickFile({ directory: true, title: "Where should the clips go?" });
       if (typeof folder !== "string") return;
-      const lines = sortHits(sampled(), sortBy);
+      const lines = ordered(sampled());
       saveClipsButton.disabled = true;
       try {
         const r = await saveHitClips({ query: asked, hits: lines.map((h) => ({ textId: h.textId, segmentId: h.segmentId, keyword: keyword(h) })), folder });
@@ -1168,7 +1198,7 @@ export const concordancePanel: PanelDef = {
       }
       if (hits.length === 0) return;
       // As a KWIC table for a word processor, and tab-separated text beside it for anything else.
-      const lines = sortHits(shownHits(), sortBy);
+      const lines = ordered(shownHits());
       // The tab-separated copy carries each line's times, analysis and its
       // text's details, so it goes straight into R or a spreadsheet; a text
       // whose details cannot be read just has none.
