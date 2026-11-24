@@ -169,6 +169,10 @@ These settings belong to one text on this computer. They are not shared with oth
 
 To segment a recording while you listen, as ELAN's segmentation mode does: click the timeline, press **Space** to play, and press **Enter** where a stretch of speech starts. Then press **Enter** at the end of each stretch as it plays: every press makes a segment from the last press to that moment, so pressing in rhythm cuts the recording into consecutive segments. Edges snap to where speech starts and stops within a quarter of a second, which makes up for the delay of a key press. Segments go on the selected segment's track, else the utterance track. **Escape** forgets the last press, so the next press starts afresh; each segment can be undone like one you drew.
 
+### Find speech you have not segmented yet
+
+The **Next gap** button in the Timeline toolbar shows how many stretches of speech in the recording have no segment on the track yet, and how many seconds they add up to. The track is the selected segment's track, or the utterance track when nothing is selected. Press it to jump to the next one and hear it. Draw a segment over it, or press **Enter** while it plays. Press it again for the next gap. It reads **No gaps** once every stretch of speech of at least 0.4 seconds is covered. This catches the answer a speaker added after a pause, or the sentence you skipped while transcribing.
+
 ### Time a transcription you typed first
 
 Perhaps you typed or imported the sentences before timing them: from a notebook, a plain-text file, or the speaker's own written version. Load the recording in the Timeline, select a segment on that track (or none, for the utterance track), and press **Time typed sentences**. wugs finds the stretches of speech in the recording and places the sentences over them in order. Each sentence takes as much speech as its length suggests. A long sentence may cover several stretches, two short ones may share one, and a cough may be left out.

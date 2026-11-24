@@ -35,6 +35,7 @@ import { laneBounds, snapDragged, snapRange, type Span } from "./snap";
 import { editRules, roughLines, type EditRules, type Granularity } from "./edit-rules";
 import { checkOf, edgeEntry, UndoHistory, type SegmentCheck, type UndoEntry, type UndoStack } from "./undo";
 import { StripCache } from "./strips";
+import { nextGap, uncovered } from "./gaps";
 import { editBlocker, NO_TRACKS, parseTracks, shuttle, toggleHidden, toggleLocked, toggleMuted, tracksKey, pxPerSecToSlider, sliderToPxPerSec, type Tracks } from "./tracks";
 import { THEME_EVENT } from "../theme/theme";
 import {
@@ -353,7 +354,11 @@ export class TimelineView {
       // finds the nearest word edge.
       speechSpans({ source: sourceId, granularity: "word" })
         .then((spans) => {
-          if (this.spansFor === sourceId) this.spans = spans;
+          if (this.spansFor === sourceId) {
+            this.spans = spans;
+            // The "next speech with no segment" button counts from these.
+            this.onEditStateChange();
+          }
         })
         .catch(() => {});
     }
@@ -1515,6 +1520,23 @@ export class TimelineView {
     } catch (e) {
       showToast({ tone: "error", lines: [errorText(e)] });
     }
+  }
+
+  /** Stretches of speech the edit track has no segment over (none until the spans arrive). */
+  speechGaps(): readonly (readonly [number, number])[] {
+    const target = this.editTrack();
+    if (target === null || this.spans.length === 0) return [];
+    const lane = this.lanes.find((l) => l.tierId === target.id);
+    return uncovered(this.spans, lane?.segments ?? []);
+  }
+
+  /** Show and play the next stretch of speech the edit track has no segment over. */
+  goToNextGap(): void {
+    const gap = nextGap(this.speechGaps(), playback.currentMs());
+    if (gap === null) return;
+    this.select(null);
+    this.seekTo(gap[0]);
+    playback.playRange(gap[0], gap[1]);
   }
 
   /** The track a whole-track edit works on: the selected segment's, else the utterance track. */
