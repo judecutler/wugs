@@ -156,3 +156,16 @@ test("a locator map and the neighbours open the introduction", async () => {
   assert.match(html, /Figure 1\. Where Glottolog places/u);
   assert.match(grammarSketch(base), /Where .* is spoken, by whom, its family and neighbours/u);
 });
+
+test("similar sounds that keep apart are listed in the phonology chapter", () => {
+  const words = [
+    { word: "pada", count: 4 },
+    { word: "kodu", count: 3 },
+    { word: "pat", count: 4 },
+    { word: "kut", count: 2 },
+    { word: "pipi", count: 5 },
+  ];
+  const html = grammarSketch({ ...base, words });
+  assert.match(html, /may be allophones of one phoneme/);
+  assert.match(html, /<td class="ipa">\/d\/ → \[t\] \/ _ a word edge<\/td>/);
+});
