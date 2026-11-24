@@ -4,7 +4,8 @@
 // prints to PDF or opens in Word; no glosses, nothing the reader needs to
 // know about linguistics. Pure, npm-tested.
 
-export type ReaderSentence = { number: number; text: string; translation: string | null };
+/** One sentence; `speaker` names who said it in a transcript with a track per speaker. */
+export type ReaderSentence = { number: number; text: string; translation: string | null; speaker?: string };
 
 export type ReaderInput = {
   title: string;
@@ -30,10 +31,11 @@ export function readerHtml(r: ReaderInput): string {
   const translated = r.sentences.some((s) => s.translation !== null && s.translation.trim() !== "");
   const rows = r.sentences.map((s) => {
     const t = s.translation?.trim() ?? "";
+    const who = s.speaker === undefined || s.speaker === "" ? "" : `<b class="who">${esc(s.speaker)}:</b> `;
     if (r.layout === "beside" && translated) {
-      return `<tr><td class="n">${s.number}</td><td class="tx">${esc(s.text)}</td><td class="tr">${esc(t)}</td></tr>`;
+      return `<tr><td class="n">${s.number}</td><td class="tx">${who}${esc(s.text)}</td><td class="tr">${esc(t)}</td></tr>`;
     }
-    return `<div class="s"><span class="n">${s.number}</span><div><p class="tx">${esc(s.text)}</p>${t === "" ? "" : `<p class="tr">${esc(t)}</p>`}</div></div>`;
+    return `<div class="s"><span class="n">${s.number}</span><div><p class="tx">${who}${esc(s.text)}</p>${t === "" ? "" : `<p class="tr">${esc(t)}</p>`}</div></div>`;
   });
   const body = r.layout === "beside" && translated ? `<table>${rows.join("\n")}</table>` : rows.join("\n");
   const details = r.details.length === 0 ? "" : `<p class="details">${r.details.map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(" · ")}</p>`;
@@ -57,6 +59,7 @@ td.tr { width: 50%; color: #333; font-style: italic; }
 .s { display: flex; gap: 0.6em; margin: 0 0 0.9em; break-inside: avoid; }
 .s p { margin: 0; }
 .s .tx { font-weight: 600; }
+.who { font-weight: 700; color: #555; margin-right: 0.3em; }
 .s .tr { color: #333; font-style: italic; }
 footer { margin-top: 2.5em; font-size: 9pt; color: #888; }
 </style>

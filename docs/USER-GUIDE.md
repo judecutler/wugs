@@ -449,7 +449,7 @@ wugs remembers the choice on this computer. The number is the segment's place in
 
 ### Read a whole text glossed
 
-The **Interlinear** tab, beside Gloss, shows the selected text the way you would print it: each sentence with its number, its words, the morph breakdown, the glosses with grammatical glosses in small capitals, and the free translation in quotes. Sentences not glossed yet show their transcription in grey.
+The **Interlinear** tab, beside Gloss, shows the selected text the way you would print it: each sentence with its number, its words, the morph breakdown, the glosses with grammatical glosses in small capitals, and the free translation in quotes. Sentences not glossed yet show their transcription in grey. A transcript with a track per speaker, such as a CHAT file, is read as a conversation: every speaker's utterances in time order, numbered together, each with the speaker's code beside it.
 
 - The line at the top says how many sentences and words are glossed so far. A sentence counts as glossed once every word in it is.
 - Choose **Sentences still to gloss** in the menu above the list to hide the finished ones, or **Sentences without a translation** to list the transcribed sentences no one has translated yet; the button beside it then reads **Next to translate** and opens the next one in the Gloss panel, where its translation line is.
@@ -909,7 +909,7 @@ To export every glossed sentence of a text as numbered examples for a grammar, a
 
 Sentences not glossed yet are left out, and the message says how many. After the examples comes the list of abbreviations their glosses use, with the meanings from the Interlinear panel's **Abbreviations**. An abbreviation with no meaning yet shows "?".
 
-To give a text back to the people who told it, or to use it in a literacy class, select the text and click **Save…** beside **Reader to print**. wugs writes one `.html` file with the text's title, the language's name, who told it, where and when (from the text's **Details**), then each sentence in large type with its translation. Choose **translation beside** for two columns, or **translation under** for a narrow page or a phone. There are no glosses and no linguistic terms. Open the file in a browser or Word to print it or save it as a PDF. A sentence with no translation yet prints alone, and the message says how many.
+To give a text back to the people who told it, or to use it in a literacy class, select the text and click **Save…** beside **Reader to print**. wugs writes one `.html` file with the text's title, the language's name, who told it, where and when (from the text's **Details**), then each sentence in large type with its translation. Choose **translation beside** for two columns, or **translation under** for a narrow page or a phone. There are no glosses and no linguistic terms. Open the file in a browser or Word to print it or save it as a PDF. A sentence with no translation yet prints alone, and the message says how many. A conversation with a track per speaker (a CHAT file) prints every speaker's turns in order, each led by the speaker's code.
 
 To export the lexicon, choose LIFT, Toolbox or **Spreadsheet** beside **Lexicon as** and click **Export…**. FLEx and WeSay read LIFT. A spreadsheet is a `.csv` file with a row per sense: lemma, homograph, category, citation, sense number, gloss, a column for each other gloss language, definition, usage and semantic domains. Excel, LibreOffice and Google Sheets open it.
 

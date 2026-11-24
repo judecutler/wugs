@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nextWhere, progress, sentencesOf, showOf, toTranslate, type Line } from "./logic.ts";
+import { nextWhere, progress, sentencesOf, sentenceTracks, showOf, toTranslate, type Line } from "./logic.ts";
 
 test("sentences are the utterance track's, translations left out, in number order", () => {
   const segs = [
@@ -12,6 +12,19 @@ test("sentences are the utterance track's, translations left out, in number orde
   const numbers = new Map([["a", 1], ["b", 2]]);
   assert.deepEqual(sentencesOf(segs, [{ id: "utt", utterance: true }, { id: "tr", utterance: false }], numbers).map((s) => s.id), ["a", "b"]);
   assert.deepEqual(sentencesOf(segs.slice(2), [], new Map()).map((s) => s.id), ["x"], "no utterance track: the first track with sentences");
+});
+
+test("a transcript with a track per speaker reads every speaker in time order", () => {
+  const segs = [
+    { id: "m1", tier: "MOT", parent: null, startMs: 0, content: "look" },
+    { id: "c1", tier: "CHI", parent: null, startMs: 900, content: "ball" },
+    { id: "m2", tier: "MOT", parent: null, startMs: 1500, content: "yes" },
+    { id: "t", tier: "free", parent: null, startMs: 0, content: "mira" },
+  ];
+  const tiers = [{ id: "utt", utterance: true }, { id: "MOT", utterance: false }, { id: "CHI", utterance: false }, { id: "free", utterance: false, role: "translation" }];
+  assert.deepEqual(sentenceTracks(segs, tiers), ["MOT", "CHI"], "an utterance track this text does not use is passed over, a translation track left out");
+  const numbers = new Map([["m1", 1], ["c1", 2], ["m2", 3]]);
+  assert.deepEqual(sentencesOf(segs, tiers, numbers).map((s) => s.id), ["m1", "c1", "m2"]);
 });
 
 test("progress counts sentences and words", () => {
