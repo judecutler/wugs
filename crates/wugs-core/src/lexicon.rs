@@ -15,7 +15,9 @@ use crate::{gloss_field, CommitResult, Project, SCOPE_CONFIG, SCOPE_LEXICON};
 
 /// A lexeme field the panel may write. Others (`ws`, `language`, `x.*`) are
 /// set by importers or later tools.
-const LEXEME_FIELDS: &[&str] = &["lemma", "citation", "pos-of-speech"];
+const LEXEME_FIELDS: &[&str] = &["lemma", "citation", "pos-of-speech", "borrowed-from"];
+/// An entry's collaborative text fields: notes, and where the word comes from.
+const LEXEME_TEXTS: &[&str] = &["notes", "etymology"];
 
 /// One semantic domain to load: SIL Semantic Domains or any list with the
 /// same shape. `code` is the outline number (`1.1.1`); its parent is the code
@@ -118,9 +120,18 @@ impl Project {
     /// An entry's `notes` (DATA-MODEL §3 Lexeme): the linguist's own remarks
     /// on the whole entry, collaborative text like a sense's definition.
     pub fn set_lexeme_notes(&mut self, lexeme: &str, text: &str) -> Result<CommitResult, String> {
+        self.set_lexeme_text(lexeme, "notes", text)
+    }
+
+    /// An entry's collaborative text: its `notes`, or its `etymology` (where
+    /// the word comes from: a proto-form, the source word of a loan, cognates).
+    pub fn set_lexeme_text(&mut self, lexeme: &str, field: &str, text: &str) -> Result<CommitResult, String> {
         self.require(lexeme, "lexeme")?;
+        if !LEXEME_TEXTS.contains(&field) {
+            return Err(format!("an entry's {field} is not text the lexicon edits"));
+        }
         let mut t = self.intent("edit-lexeme").resolving();
-        t.text_edit("lexeme", lexeme, SCOPE_LEXICON, "notes", text)?;
+        t.text_edit("lexeme", lexeme, SCOPE_LEXICON, field, text)?;
         t.commit()
     }
 
@@ -482,6 +493,19 @@ mod tests {
         let rel = p.relations(&keep).unwrap();
         assert_eq!(rel.len(), 1, "the synonym between the two is gone; the compare now names the kept entry: {rel:?}");
         assert!(p.merge_lexemes(&keep, &keep).is_err());
+        drop(p);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn an_entry_says_where_it_comes_from() {
+        let (root, mut p) = project();
+        let ((lex, _), _) = p.add_lexeme("kabayo", "horse").unwrap();
+        p.set_lexeme_field(&lex, "borrowed-from", " Spanish ").unwrap();
+        p.set_lexeme_text(&lex, "etymology", "< Sp. caballo").unwrap();
+        assert_eq!(p.proj.field_str(&lex, "borrowed-from").unwrap().as_deref(), Some("Spanish"));
+        assert_eq!(p.proj.field_str(&lex, "etymology").unwrap().as_deref(), Some("< Sp. caballo"));
+        assert!(p.set_lexeme_text(&lex, "lemma", "x").is_err(), "the lemma is not collaborative text");
         drop(p);
         let _ = std::fs::remove_dir_all(root);
     }

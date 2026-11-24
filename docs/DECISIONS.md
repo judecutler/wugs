@@ -25,6 +25,7 @@
 - **Consent records inform, never enforce** (2026-11-11). wugs shows what records and access levels say and uses them for defaults; review boards make the ethical call. Software lacks the facts, and hard rules hurt people in unusual situations.
 - **Undo is an inverse write** (2026-11-11). The log is never rewritten, so undo writes the opposite edit, and it is refused when what it would overwrite changed since, anywhere. The first version overwrote later edits and could lose a session of typing.
 - **A text remembers its recording** (2026-11-12). Only a person's pick links them, because the wrong audio is worse than none. Linking can change a text's inherited sharing level, so the app says when it does.
+- **An entry's origin is two fields, not an entity** (2026-11-24). A Lexeme gains `borrowed-from` (the source language of a loan, a plain string a list can filter and count) and `etymology` (collaborative text for proto-forms, source words and cognates). A structured Etymology entity (LIFT's `<etymology>` with forms and glosses per language) waits until an import or a comparative tool needs its parts; LIFT and Toolbox etymologies stay kept as they came meanwhile.
 - **Track toggles are view state** (2026-11-12). Lock, hide and mute stay on one computer and never become ops; another person's lock must not stop someone who never chose it. No solo: a text has one recording.
 
 ## Models and analysis

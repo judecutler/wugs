@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { categoriesOf, domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName, LIST_SHOWS, showLabel, shows, tableImportLines } from "./logic.ts";
+import { categoriesOf, domainMatches, filterDomains, glossLine, headword, nextHomograph, parseHomograph, sameLemmaNote, usageLabel, relationLabel, relatedName, LIST_SHOWS, showLabel, shows, tableImportLines, loanSources, loansLine } from "./logic.ts";
 
 test("a numbered homograph shows a subscript", () => {
   assert.equal(headword("yüz", null), "yüz");
@@ -109,4 +109,13 @@ test("entries by category", () => {
   assert.deepEqual(categoriesOf(rows.slice(0, 1), "pos:v"), [{ category: "n", count: 1 }, { category: "v", count: 0 }]);
   assert.deepEqual(rows.filter((r) => shows(r, "pos:n")).map((r) => r.glosses[0]), ["dog", "cat"]);
   assert.equal(shows(rows[1]!, "pos:v"), true);
+});
+
+test("loanwords and where they come from", () => {
+  const r = (borrowedFrom: string) => ({ glosses: ["x"], posOfSpeech: "n", used: true, borrowedFrom });
+  const rows = [r("Spanish"), r(" Spanish "), r("English"), r(""), r("")];
+  assert.ok(shows(rows[0]!, "loans") && !shows(rows[3]!, "loans"));
+  assert.deepEqual(loanSources(rows), [{ language: "Spanish", count: 2 }, { language: "English", count: 1 }]);
+  assert.equal(loansLine(rows), "3 loanwords (60% of 5 entries): Spanish 2, English 1.");
+  assert.match(loansLine([r("")]), /^No entry is marked/u);
 });

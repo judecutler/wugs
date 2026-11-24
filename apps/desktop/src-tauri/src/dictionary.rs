@@ -161,7 +161,7 @@ h1 { font-size: 22pt; margin: 0 0 .2em; } .front { margin-bottom: 2em; color: #4
 h2.letter { column-span: all; font-size: 16pt; border-bottom: 1px solid #999; margin: 1.2em 0 .5em; break-after: avoid; }
 .entry { margin: 0 0 .6em; break-inside: avoid; text-indent: -1.2em; padding-left: 1.2em; }
 .hw { font-weight: bold; } .hn { font-size: 70%; vertical-align: sub; font-weight: normal; }
-.ps { font-style: italic; } .rel { font-variant: small-caps; } .pr { font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
+.ps { font-style: italic; } .bw, .et { color: #555; } .rel { font-variant: small-caps; } .pr { font-family: 'Charis SIL', 'Doulos SIL', 'Gentium Plus', serif; } .sn { font-weight: bold; } .def, .usage { } .dom { color: #555; font-size: 90%; }
 .gl2 { color: #333; } .ex { font-style: italic; } .tr { }
 .pic { display: block; max-width: 12em; max-height: 9em; margin: .3em 0 .2em 1.2em; border-radius: 3px; }
 .reversal p { margin: 0 0 .25em; }
@@ -187,6 +187,9 @@ fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Op
     }
     if !e.pos_of_speech.is_empty() {
         out.push_str(&format!(" <span class=\"ps\">{}</span>", esc(&e.pos_of_speech)));
+    }
+    if !e.borrowed_from.trim().is_empty() {
+        out.push_str(&format!(" <span class=\"bw\">‹ {}</span>", esc(e.borrowed_from.trim())));
     }
     let numbered = e.senses.len() > 1;
     for (i, s) in e.senses.iter().enumerate() {
@@ -235,6 +238,9 @@ fn entry_html(e: &EntryView, examples: &BTreeMap<String, Vec<Example>>, clip: Op
     }
     for (relation, links) in groups {
         out.push_str(&format!(" <span class=\"rel\">{}:</span> {}.", esc(&relation_label(&relation)), links.join(", ")));
+    }
+    if !e.etymology.trim().is_empty() {
+        out.push_str(&format!(" <span class=\"et\">[{}]</span>", esc(e.etymology.trim())));
     }
     out.push_str("</p>\n");
     out
@@ -469,6 +475,11 @@ mod tests {
         let entries = crate::lexicon::lexicon_list(&mut s, "").unwrap();
         let two = entries.iter().find(|r| r.lemma == "tuː").unwrap().id.clone();
         crate::lexicon::lexicon_add_relation(&mut s, &two, "compare", "θɹiː").unwrap();
+        // Where a word comes from: a loan's source language and its etymology.
+        crate::lexicon::lexicon_set_field(&mut s, &two, "borrowed-from", "Old English").unwrap();
+        let e = crate::lexicon::lexicon_set_field(&mut s, &two, "etymology", "< OE twā").unwrap().entry.unwrap();
+        assert_eq!((e.borrowed_from.as_str(), e.etymology.as_str()), ("Old English", "< OE twā"));
+        assert_eq!(crate::lexicon::lexicon_list(&mut s, "tuː").unwrap()[0].borrowed_from, "Old English");
         let d = export_dictionary(&mut s, &out, "2026-11-23", false).unwrap();
         assert!(d.path.ends_with("Tutorial English dictionary.html"), "{}", d.path);
         assert!(d.entries >= 5 && d.examples >= 5, "{d:?}");
@@ -478,6 +489,7 @@ mod tests {
         }
         assert!(html.contains("<span class=\"hw\">wʌn</span>") && html.contains("<span class=\"ex\">wʌn tuː θɹiː</span> ‘<span class=\"tr\">"), "{html}");
         assert!(html.contains("Index of glosses") && html.contains("one — <a href=\"#"), "{html}");
+        assert!(html.contains("<span class=\"bw\">‹ Old English</span>") && html.contains("<span class=\"et\">[&lt; OE twā]</span>"), "{html}");
         assert_eq!(html.matches("<span class=\"rel\">See also:</span> <a href=\"#").count(), 2, "under both entries: {html}");
         assert!(!html.contains("Words by topic") && d.topics == 0, "no domains, no topic index");
         // Two senses in SIL's Number domains: a topic index in outline order.

@@ -32,6 +32,8 @@ pub struct EntryRow {
     /// Some sense is linked from a morph of a live text (the list's "Not in
     /// any text" picks the entries where it is false).
     pub used: bool,
+    /// The language a loanword came from ("" for none).
+    pub borrowed_from: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -156,6 +158,9 @@ pub struct EntryView {
     pub homograph: Option<u32>,
     /// The linguist's notes on the whole entry.
     pub notes: String,
+    /// Where the word comes from (collaborative text), and a loanword's source language.
+    pub etymology: String,
+    pub borrowed_from: String,
     pub senses: Vec<SenseView>,
     /// Other live entries with exactly this lemma: (id, homograph).
     pub same_lemma: Vec<(String, Option<u32>)>,
@@ -313,7 +318,7 @@ pub fn lexicon_list(session: &mut Session, query: &str) -> Result<Vec<EntryRow>,
             || fold_key(&p.proj.nfc(&lemma)).contains(&q)
             || glosses.iter().any(|g| fold_key(&p.proj.nfc(g)).contains(&q));
         if hit {
-            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, id, lemma, glosses, used });
+            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, borrowed_from: str_field(p, &id, "borrowed-from")?, id, lemma, glosses, used });
         }
     }
     rows.sort_by_cached_key(|r| (fold_key(&r.lemma), r.homograph, r.id.clone()));
@@ -370,6 +375,8 @@ pub(crate) fn entry_view(p: &Project, id: &str) -> Result<EntryView, String> {
         pos_of_speech: str_field(p, id, "pos-of-speech")?,
         homograph: homograph(p, id)?,
         notes: str_field(p, id, "notes")?,
+        etymology: str_field(p, id, "etymology")?,
+        borrowed_from: str_field(p, id, "borrowed-from")?,
         senses: sense_views,
         same_lemma,
         allomorphs: p.allomorphs(id)?,
@@ -441,8 +448,8 @@ pub fn lexicon_add(session: &mut Session, lemma: &str, gloss: &str) -> Result<En
 
 pub fn lexicon_set_field(session: &mut Session, id: &str, field: &str, value: &str) -> Result<EntryEdit, String> {
     let p = project(session)?;
-    // An entry's notes are collaborative text, like a sense's definition.
-    let res = if field == "notes" { p.set_lexeme_notes(id, value)? } else { p.set_lexeme_field(id, field, value)? };
+    // An entry's notes and etymology are collaborative text, like a sense's definition.
+    let res = if field == "notes" || field == "etymology" { p.set_lexeme_text(id, field, value)? } else { p.set_lexeme_field(id, field, value)? };
     edit(p, id, &res)
 }
 
