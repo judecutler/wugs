@@ -1145,6 +1145,11 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
         Format::FlexText => wugs_flex::export_flextext(p, text_id)?,
         Format::TextGrid => {
             let out = wugs_legacy::export_textgrid(p, text_id)?;
+            // Praat opens a TextGrid beside the recording of the same name.
+            if let Some(wav) = recording_beside(p, text_id, folder, &file_stem(&title, "text"))? {
+                let name = wav.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                notes.push(format!("The recording is copied beside it as «{name}»: open both in Praat (select them and View & Edit)."));
+            }
             if out.not_exported.total() > 0 {
                 let parts: Vec<String> = out.not_exported.0.iter().map(|(k, n)| format!("{k} ×{n}")).collect();
                 notes.push(format!("Praat cannot hold some segments, so they are not in the file: {}.", parts.join(", ")));
@@ -1660,9 +1665,11 @@ mod tests {
         assert!(eaf.contains("RELATIVE_MEDIA_URL=\"./Counting to six (tutorial).wav\""), "{eaf}");
         assert!(eaf.contains("MIME_TYPE=\"audio/x-wav\""));
         assert!(e.notes.iter().any(|n| n.contains("copied beside it")), "{:?}", e.notes);
+        let tg = export_text(&mut s, &text, Format::TextGrid, &out).unwrap();
+        assert!(tg.notes.iter().any(|n| n.contains("open both in Praat")), "{:?}", tg.notes);
         // A second export never replaces the first recording.
         let again = export_text(&mut s, &text, Format::Elan, &out).unwrap();
-        assert!(fs::read_to_string(&again.path).unwrap().contains("./Counting to six (tutorial) (2).wav"));
+        assert!(fs::read_to_string(&again.path).unwrap().contains("./Counting to six (tutorial) (3).wav"));
         drop(s);
         fs::remove_dir_all(&dir).ok();
     }
