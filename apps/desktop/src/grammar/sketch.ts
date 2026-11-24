@@ -57,6 +57,8 @@ export type SketchInput = {
   allomorphs?: { gloss: string; forms: { form: string; uses: number; next: string; vowel: string }[]; note: string }[];
   /** Word orders counted in the parsed sentences (src-tauri/src/word_order.rs). */
   order?: WordOrder;
+  /** Loanwords in the lexicon by source language, commonest first (`loanSources`). */
+  loans?: { language: string; count: number }[];
   /** The person's own date for the title page, `YYYY-MM-DD`. */
   date: string;
   generator: string;
@@ -191,6 +193,16 @@ export function grammarSketch(d: SketchInput): string {
   parts.push(
     `<p>The sketch draws on ${d.texts.length} ${d.texts.length === 1 ? "text" : "texts"} (${words.toLocaleString("en")} words, ${glossed.toLocaleString("en")} of them glossed) and a lexicon of ${d.entries.toLocaleString("en")} ${d.entries === 1 ? "entry" : "entries"}.</p>`,
   );
+  // Contact shows in the lexicon: its loanwords by source language.
+  const loans = (d.loans ?? []).filter((l) => l.count > 0);
+  if (loans.length > 0) {
+    const total = loans.reduce((n, l) => n + l.count, 0);
+    const pct = d.entries === 0 ? 0 : Math.round((total * 100) / d.entries);
+    parts.push(
+      `<h3>1.1 Contact and loanwords</h3><p>${total.toLocaleString("en")} ${total === 1 ? "entry is marked as a loanword" : "entries are marked as loanwords"} (${pct}% of the lexicon): ${loans.map((l) => `${esc(l.language)} ${l.count}`).join(", ")}.</p>`,
+      todo("When and how these languages came into contact, which semantic fields the loans cluster in, and how loans are adapted to the sound system"),
+    );
+  }
 
   parts.push(`<h2>2. Phonology</h2>`);
   const sounds = inventory(d.words);

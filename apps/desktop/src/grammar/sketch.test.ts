@@ -194,3 +194,9 @@ test("vowel harmony shows in the vowels section", () => {
   assert.match(html, /pairs of a vowel and the next vowel in a word.*avoided.*may point to vowel harmony/su);
   assert.doesNotMatch(grammarSketch(base), /may point to vowel harmony/u, "no standout, no paragraph");
 });
+
+test("loanwords give the introduction a contact section", () => {
+  const html = grammarSketch({ ...base, entries: 40, loans: [{ language: "Malay", count: 6 }, { language: "Dutch", count: 2 }] });
+  assert.match(html, /<h3>1\.1 Contact and loanwords<\/h3><p>8 entries are marked as loanwords \(20% of the lexicon\): Malay 6, Dutch 2\.<\/p>/);
+  assert.doesNotMatch(grammarSketch(base), /Contact and loanwords/);
+});
