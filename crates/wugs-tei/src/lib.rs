@@ -115,7 +115,17 @@ fn surfaces_of(tei: &XmlNode) -> Vec<Surface> {
                     continue;
                 }
                 stack.extend(z.children.iter());
-                let (Some(id), Some(a), Some(b), Some(c), Some(d)) = (xml_id(z), num(z, "ulx"), num(z, "uly"), num(z, "lrx"), num(z, "lry")) else { continue };
+                // A rectangle, or the box around a polygon's `points` (Transkribus's lines).
+                let corners = match (num(z, "ulx"), num(z, "uly"), num(z, "lrx"), num(z, "lry")) {
+                    (Some(a), Some(b), Some(c), Some(d)) => Some((a, b, c, d)),
+                    _ => attr(z, "points").and_then(|pts| {
+                        let xy: Vec<(f64, f64)> = pts.split_whitespace().filter_map(|p| p.split_once(',')).filter_map(|(x, y)| Some((x.parse().ok()?, y.parse().ok()?))).collect();
+                        let min = |f: fn(&(f64, f64)) -> f64| xy.iter().map(f).fold(f64::INFINITY, f64::min);
+                        let max = |f: fn(&(f64, f64)) -> f64| xy.iter().map(f).fold(f64::NEG_INFINITY, f64::max);
+                        (xy.len() >= 2).then(|| (min(|p| p.0), min(|p| p.1), max(|p| p.0), max(|p| p.1)))
+                    }),
+                };
+                let (Some(id), Some((a, b, c, d))) = (xml_id(z), corners) else { continue };
                 let clamp = |v: f64| v.clamp(0.0, 1.0);
                 let (l, t) = (clamp((a.min(c) - x0) / w), clamp((b.min(d) - y0) / h));
                 let (r, bo) = (clamp((a.max(c) - x0) / w), clamp((b.max(d) - y0) / h));
@@ -272,6 +282,45 @@ fn unit_of(n: &XmlNode, who: Option<String>, skipped: &mut BTreeMap<String, usiz
     Unit { content, tokens: toks, id: xml_id(n), who, facs: attr(n, "facs").map(|f| f.trim().trim_start_matches('#').to_string()) }
 }
 
+/// A block's lines when its line breaks point at facsimile zones
+/// (`<lb facs="#…"/>`, as Transkribus writes a page): a unit per line with
+/// that zone, and the text before the first such break a unit of its own.
+/// None when the block has no such breaks or holds tagged words.
+fn facs_lines(n: &XmlNode, who: Option<&str>, skipped: &mut BTreeMap<String, usize>) -> Option<Vec<Unit>> {
+    let is_lb = |c: &XmlNode| local(&c.name) == "lb" && attr(c, "facs").is_some();
+    if !n.children.iter().any(is_lb) || has_descendant(n, &["w", "pc"]) {
+        return None;
+    }
+    let mut out = Vec::new();
+    let mut current = (None::<String>, n.head.clone());
+    let finish = |line: (Option<String>, String), out: &mut Vec<Unit>| {
+        let content = line.1.split_whitespace().collect::<Vec<_>>().join(" ");
+        if !content.is_empty() {
+            out.push(Unit { content, tokens: Vec::new(), id: None, who: who.map(str::to_string), facs: line.0 });
+        }
+    };
+    for c in &n.children {
+        if is_lb(c) {
+            let next = (attr(c, "facs").map(|f| f.trim().trim_start_matches('#').to_string()), String::new());
+            finish(std::mem::replace(&mut current, next), &mut out);
+        } else {
+            let name = local(&c.name);
+            if BREAKS.contains(&name) {
+                current.1.push(' ');
+            } else if SKIPPED.contains(&name) {
+                *skipped.entry(name.to_string()).or_default() += 1;
+            } else {
+                current.1.push(' ');
+                current.1.push_str(&words_text(c, skipped));
+                current.1.push(' ');
+            }
+        }
+        current.1.push_str(&c.tail);
+    }
+    finish(current, &mut out);
+    Some(out)
+}
+
 /// Every unit of a text body, in order.
 fn walk(n: &XmlNode, who: Option<&str>, units: &mut Vec<Unit>, blocks: &mut usize, skipped: &mut BTreeMap<String, usize>) {
     for c in &n.children {
@@ -287,6 +336,11 @@ fn walk(n: &XmlNode, who: Option<&str>, units: &mut Vec<Unit>, blocks: &mut usiz
                 units.push(u);
             }
         } else if BLOCKS.contains(&name) && !has_descendant(c, &["s"]) {
+            if let Some(lines) = facs_lines(c, who_here.as_deref(), skipped) {
+                *blocks += 1;
+                units.extend(lines);
+                continue;
+            }
             let u = unit_of(c, who_here, skipped);
             if !u.content.is_empty() {
                 *blocks += 1;

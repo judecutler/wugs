@@ -134,6 +134,15 @@ fn page_images_and_zones_go_out_and_come_back() {
     let got = q.segment_region(&seg).unwrap().unwrap();
     assert_eq!((got.x, got.y, got.w, got.h), (0.1, 0.1, 0.5, 0.2));
     assert_eq!(q.proj.field_str(&got.source, "label").unwrap().as_deref(), Some("p1.jpg"));
+
+    // Transkribus: a paragraph whose line breaks point at line polygons comes in a segment per line.
+    let lines = "<TEI><facsimile><surface ulx=\"0\" uly=\"0\" lrx=\"1000\" lry=\"2000\"><graphic url=\"https://example.org/folio2.jpg\" width=\"1000px\" height=\"2000px\"/><zone xml:id=\"r1\" points=\"100,100 900,100 900,500 100,500\" rendition=\"TextRegion\"><zone xml:id=\"l1\" points=\"100,100 900,100 900,200 100,200\" rendition=\"Line\"/><zone xml:id=\"l2\" points=\"100,300 500,320 500,400 100,380\" rendition=\"Line\"/></zone></surface></facsimile><text><body><p facs=\"#r1\"><lb facs=\"#l1\" n=\"N001\"/>Prima linea <hi rend=\"underline\">scripta</hi><lb facs=\"#l2\" n=\"N002\"/>et altera</p></body></text></TEI>";
+    let r = import_tei(&mut q, lines, "folio", &tier2).unwrap();
+    assert_eq!(contents(&q, &r.texts[0]), ["Prima linea scripta", "et altera"]);
+    let segs = sentences(&q, &r.texts[0]);
+    let second = q.segment_region(&segs[1].segment).unwrap().unwrap();
+    assert_eq!((second.x, second.y, second.w, second.h), (0.1, 0.15, 0.4, 0.05));
+    assert_eq!(q.proj.field_str(&second.source, "label").unwrap().as_deref(), Some("folio2.jpg"));
     std::fs::remove_dir_all(root).ok();
     std::fs::remove_dir_all(root2).ok();
 }
