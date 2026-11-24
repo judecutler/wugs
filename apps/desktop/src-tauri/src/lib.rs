@@ -622,6 +622,12 @@ fn orthography_preview(s: State<SessionThread>, profile: String, tier_id: String
     s.run(move |s| orthography::preview(s, &profile, &tier_id, text_id, &column, ignore_case))
 }
 
+/// The lexicon's headwords through a profile as written pronunciations (counted, or written).
+#[tauri::command(async)]
+fn orthography_pronounce(s: State<SessionThread>, profile: String, column: String, ignore_case: bool, write: bool) -> Result<orthography::Pronounced, String> {
+    s.run(move |s| orthography::pronounce(s, &profile, &column, ignore_case, write))
+}
+
 /// Convert a track with a profile onto a transcription track.
 #[tauri::command(async)]
 fn orthography_convert(s: State<SessionThread>, profile: String, tier_id: String, text_id: Option<String>, column: String, ignore_case: bool, target: String) -> Result<orthography::Converted, String> {
@@ -2367,6 +2373,7 @@ pub fn run() {
             orthography_draft,
             orthography_preview,
             orthography_convert,
+            orthography_pronounce,
             export_wordlist,
             set_typology_answer,
             character_inventory,

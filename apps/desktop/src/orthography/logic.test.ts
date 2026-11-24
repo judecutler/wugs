@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkLine, convertedLines, defaultColumn, defaultSource, defaultTarget, fromGrid, previewNote, toGrid, unknownLine } from "./logic.ts";
+import { pronouncedLine, checkLine, convertedLines, defaultColumn, defaultSource, defaultTarget, fromGrid, previewNote, toGrid, unknownLine } from "./logic.ts";
 
 test("the column, source and target are picked sensibly", () => {
   assert.equal(defaultColumn(["Orthography", "ipa"]), "ipa");
@@ -42,4 +42,11 @@ test("a profile goes to a grid and back, comments and columns kept", () => {
   g.rows.push(["", "", ""], ["a\tb", "x", ""]);
   assert.equal(fromGrid(g), "# Kanu practical spelling\nGrapheme\tIPA\tComment\nsh\tʃ\t\nng\tŋ\tvelar\na b\tx\t\n");
   assert.deepEqual(toGrid("").header, ["Grapheme", "IPA"]);
+});
+
+test("pronunciations for the lexicon, in words", () => {
+  const p = { entries: 12, already: 3, unconverted: 1, examples: [], unknown: [], written: false };
+  assert.equal(pronouncedLine(p, "IPA"), "12 entries have no written pronunciation; the «IPA» column would give each one. 3 entries have one already and are left alone; 1 headword has a letter with no row and is left out until the profile has one.");
+  assert.equal(pronouncedLine({ ...p, written: true, already: 0, unconverted: 0 }, "IPA"), "12 entries have a pronunciation from the «IPA» column now.");
+  assert.equal(pronouncedLine({ ...p, entries: 0, already: 0, unconverted: 0 }, "IPA"), "Every entry with a headword the profile can read has a pronunciation already.");
 });

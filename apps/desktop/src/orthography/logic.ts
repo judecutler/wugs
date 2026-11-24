@@ -6,6 +6,8 @@ export type Track = { id: string; name: string; segments: number };
 export type Stored = { profile: string; check: Check; tracks: Track[] };
 export type Unknown = { text: string; count: number; example: string };
 export type Preview = { check: Check; segments: number; changes: { before: string; after: string }[]; unknown: Unknown[] };
+/** The lexicon's headwords through the profile (`orthography::pronounce`). */
+export type Pronounced = { entries: number; already: number; unconverted: number; examples: { before: string; after: string }[]; unknown: Unknown[]; written: boolean };
 export type Converted = { track: string; trackName: string; texts: number; created: number; updated: number; unchanged: number; kept: number; empty: number; unknown: Unknown[] };
 
 /** The column to convert into: IPA when the profile has one, else its first. */
@@ -92,4 +94,20 @@ export function fromGrid(g: Grid): string {
   const clean = (c: string) => c.replace(/[\t\r\n]/g, " ");
   const rows = g.rows.filter((r) => r.some((c) => c.trim() !== "")).map((r) => r.map(clean).join("\t"));
   return [...g.comments, g.header.map(clean).join("\t"), ...rows].join("\n") + "\n";
+}
+
+/** What giving the lexicon pronunciations from the profile does, or did. */
+export function pronouncedLine(p: Pronounced, column: string): string {
+  const what = p.written
+    ? p.entries === 0
+      ? "No entry needed a pronunciation."
+      : `${n(p.entries, "entry has", "entries have")} a pronunciation from the «${column}» column now.`
+    : p.entries === 0
+      ? "Every entry with a headword the profile can read has a pronunciation already."
+      : `${n(p.entries, "entry has", "entries have")} no written pronunciation; the «${column}» column would give ${p.entries === 1 ? "it one" : "each one"}.`;
+  const rest = [
+    p.already > 0 ? `${n(p.already, "entry has", "entries have")} one already and ${p.already === 1 ? "is" : "are"} left alone` : "",
+    p.unconverted > 0 ? `${n(p.unconverted, "headword has", "headwords have")} a letter with no row and ${p.unconverted === 1 ? "is" : "are"} left out until the profile has one` : "",
+  ].filter((x) => x !== "");
+  return rest.length === 0 ? what : `${what} ${rest.join("; ")}.`.replace(/^./u, (c) => c.toUpperCase());
 }

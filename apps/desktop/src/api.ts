@@ -717,6 +717,8 @@ export const orthographyDraft = (args: { tierId: string; textId: string | null; 
 /** What converting a track with a profile would write. */
 export const orthographyPreview = (args: { profile: string; tierId: string; textId: string | null; column: string; ignoreCase: boolean }) => invoke<import("./orthography/logic").Preview>("orthography_preview", args);
 /** Convert a track with a profile onto a transcription track. */
+/** The lexicon's headwords through a profile as written pronunciations: counted, or written when `write`. */
+export const orthographyPronounce = (args: { profile: string; column: string; ignoreCase: boolean; write: boolean }) => invoke<import("./orthography/logic").Pronounced>("orthography_pronounce", args);
 export const orthographyConvert = (args: { profile: string; tierId: string; textId: string | null; column: string; ignoreCase: boolean; target: string }) => invoke<import("./orthography/logic").Converted>("orthography_convert", args);
 /** The project's own answers to Grambank or WALS features. */
 export const typologyAnswers = (args: { source: import("./typology/logic").Source }) => invoke<import("./typology/logic").Ours[]>("typology_answers", args);
