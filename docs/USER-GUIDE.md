@@ -705,6 +705,20 @@ Segment the recording one sound, syllable or word to a segment and type a label 
 
 **Show** leaves labels with few segments out of the plot. **Copy table** copies the summary, and **Copy every segment** copies one row per segment (label, start, end, duration) for R or a spreadsheet. **Save picture…** saves the plot as an SVG file.
 
+### Compare two transcriptions of one recording
+
+The **Agreement** panel compares two transcription tracks of the text on screen segment by segment: two people's transcriptions of the same recording (inter-annotator agreement), a machine track against the one a person corrected, or a converted IPA track against a hand transcription. Open it from Settings (Closed panels) or with **Find an action**. To compare two annotators, give each a track on the Timeline (**Add track**), or import an ELAN file that holds both annotators' tiers.
+
+Choose the **Reference** track and the **Compared** track (**Swap** turns them round). Two segments are a pair when they overlap by 60% or more of their combined extent, as in ELAN's reliability calculation; each segment is in at most one pair, the closest first. The panel says:
+
+- how many pairs there are, and how many segments on each track have no partner;
+- in how many pairs the labels are identical;
+- the sound error rate: the sounds inserted, left out or changed, against the reference track's sounds (a letter with its marks counts as one sound, a word boundary as one);
+- Cohen's kappa with Landis and Koch's words for it (slight, fair, moderate, substantial, almost perfect), counting a segment with no partner against an empty label; kappa is given only when there are 40 different labels or fewer, since transcriptions of whole sentences are not categories;
+- how far apart the boundaries are at the start and the end, on average and as the median.
+
+The table lists every pair in time order, with the sounds apart and how much later (+) or earlier (−) the compared track's start and end are, in milliseconds; rows with different labels and segments with no partner are shaded, and ▶ plays each. **Only differences** lists just those. **Copy table** copies every row, with times in seconds, for a spreadsheet or R.
+
 ### Write a track in IPA from a practical spelling
 
 Many projects transcribe in a practical orthography. The **Orthography** panel writes such a track in another spelling, usually IPA, with an *orthography profile*: a table that lists the letters and letter groups of the spelling in a **Grapheme** column and what each is in IPA in an **IPA** column. These are the profiles of *The Unicode Cookbook for Linguists* (Moran & Cysouw 2018), which the `segments` package and CLDF datasets also read, so a profile made here works there too. Open the panel from Settings (Closed panels) or with **Find an action**.

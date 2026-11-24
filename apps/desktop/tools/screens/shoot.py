@@ -43,6 +43,7 @@ PANELS = [
     ("vowels", "Vowel space"),
     ("contours", "Pitch contours"),
     ("durations", "Durations"),
+    ("agreement", "Agreement"),
     ("sessions", "Sessions"),
     ("sounds", "Sounds"),
     ("typology", "Typology"),
@@ -717,6 +718,19 @@ def main():
             result = run.page.locator(".panel-durations .du-result")
             if result.count() != 1 or "Welch" not in (result.text_content() or ""):
                 failures.append("Durations: two labels with several segments each were not compared")
+            run.page.evaluate("async () => { const st = await import('/src/store.ts'); await st.selectText('t-count'); st.selectSegment(window.__keptSelection); }")
+            run.page.wait_for_timeout(300)
+            # Agreement: the market conversation's two hearings compared.
+            run.page.evaluate("async () => { const st = await import('/src/store.ts'); window.__keptSelection = st.getSelection(); await st.selectText('t-market'); }")
+            run.front("agreement", "Agreement")
+            run.page.locator(".panel-agreement .ag-table").wait_for()
+            run.page.wait_for_timeout(300)
+            run.shot("state-agreement", run.page.locator(".panel-agreement"))
+            summary = run.page.locator(".panel-agreement .ag-summary").inner_text()
+            if "6 pairs" not in summary or "identical in 4 of 6" not in summary or "Sound error rate" not in summary:
+                failures.append(f"Agreement: the two hearings were not paired as expected: {summary!r}")
+            if run.page.locator(".panel-agreement tr.ag-alone").count() != 2:
+                failures.append("Agreement: the missed turn and the added one were not listed alone")
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); await st.selectText('t-count'); st.selectSegment(window.__keptSelection); }")
             run.page.wait_for_timeout(300)
             # Sessions: a new session dated today goes on top, its notes ready to type in.
