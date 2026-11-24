@@ -231,7 +231,7 @@ export const collocatesPanel: PanelDef = {
           ...rows.slice(0, DRAWN).map((r) => {
             const tr = h(
               "tr",
-              { tabIndex: 0, title: `${r.left} before, ${r.right} after; t-score ${score(r.tScore)}. Read «${asked}» in context in the Concordance (sort by the word before or after to bring «${r.item}» together)` },
+              { tabIndex: 0, title: `${r.left} before, ${r.right} after; t-score ${score(r.tScore)}; ΔP ${r.deltaPNode.toFixed(3)} from «${asked}» to it, ${r.deltaPCollocate.toFixed(3)} back. Read «${asked}» in context in the Concordance (sort by the word before or after to bring «${r.item}» together)` },
               h("td", { className: "fq-item", textContent: r.item }),
               h("td", { className: "fq-num", textContent: r.together.toLocaleString("en") }),
               h("td", { className: "fq-num", textContent: r.freq.toLocaleString("en") }),

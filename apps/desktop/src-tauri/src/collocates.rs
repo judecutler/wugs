@@ -47,6 +47,11 @@ pub struct CollocateRow {
     pub mutual_information: f64,
     pub log_dice: f64,
     pub t_score: f64,
+    /// ΔP (Gries 2013): how much being near the node raises the chance of
+    /// the collocate, and how much the collocate raises the chance of being
+    /// near the node. Directional, so the two can differ.
+    pub delta_p_node: f64,
+    pub delta_p_collocate: f64,
 }
 
 #[derive(Debug, Serialize)]
@@ -186,12 +191,25 @@ pub fn collocates_tagged(session: &mut Session, node: &str, kind: Kind, left: us
             let expected = slots as f64 * f as f64 / tokens.max(1) as f64;
             let t_score = (t.together as f64 - expected) / (t.together as f64).sqrt();
             let item = t.spellings.iter().fold(None::<&(String, usize)>, |best, s| if best.is_none_or(|b| s.1 > b.1) { Some(s) } else { best }).map(|s| s.0.clone()).unwrap_or(key);
-            CollocateRow { item, together: t.together, left: t.left, right: t.right, freq: f, log_likelihood: ll, mutual_information: mi, log_dice, t_score }
+            let (delta_p_node, delta_p_collocate) = delta_p(t.together, slots, f, tokens);
+            CollocateRow { item, together: t.together, left: t.left, right: t.right, freq: f, log_likelihood: ll, mutual_information: mi, log_dice, t_score, delta_p_node, delta_p_collocate }
         })
         .collect();
     rows.sort_by(|a, b| b.log_likelihood.total_cmp(&a.log_likelihood).then(b.together.cmp(&a.together)).then(a.item.cmp(&b.item)));
     rows.truncate(LIMIT);
     Ok(Collocates { rows, node: nodes, tokens, types })
+}
+
+/// ΔP both ways from the same 2×2 table as `scores`: P(collocate | in a
+/// node's window) − P(collocate | elsewhere), and P(in a window | collocate)
+/// − P(in a window | another word).
+pub fn delta_p(o11: usize, window: usize, f: usize, n: usize) -> (f64, f64) {
+    let (o11, r1, c1, n) = (o11 as f64, window as f64, f as f64, n as f64);
+    let (o12, o21) = (r1 - o11, c1 - o11);
+    let r2 = n - r1;
+    let c2 = n - c1;
+    let ratio = |a: f64, b: f64| if b > 0.0 { a / b } else { 0.0 };
+    (ratio(o11, r1) - ratio(o21, r2), ratio(o11, c1) - ratio(o12, c2))
 }
 
 /// Log-likelihood (signed: negative when the pair is rarer than chance) and
@@ -271,6 +289,15 @@ mod tests {
         assert!(v.rows.iter().all(|r| r.log_dice <= 14.0 && r.t_score.is_finite()));
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn delta_p_runs_both_ways() {
+        // 10 window slots, the collocate 8 times in all, 6 of them in a window, 100 words.
+        let (node, coll) = delta_p(6, 10, 8, 100);
+        assert!((node - (6.0 / 10.0 - 2.0 / 90.0)).abs() < 1e-12);
+        assert!((coll - (6.0 / 8.0 - 4.0 / 92.0)).abs() < 1e-12);
+        assert_eq!(delta_p(0, 0, 0, 0), (0.0, 0.0));
     }
 
     #[test]
