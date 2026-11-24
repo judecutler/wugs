@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ellipsePath, groups, place, plotNote, plotted, ranges, table, ticks, type Point } from "./logic.ts";
+import { ellipsePath, groups, movement, place, plotNote, plotted, ranges, table, ticks, trajectories, type Point } from "./logic.ts";
 
 const pt = (label: string, f1: number | null, f2: number | null, segment = label): Point => ({ segment, label, startMs: 1000, endMs: 1200, f0: 120, f1, f2, f3: 2500 });
 
@@ -42,7 +42,7 @@ test("ticks are round numbers inside the range", () => {
 });
 
 test("the table and the note", () => {
-  assert.equal(table([pt("a\tb", 700, null)]), "label\tstart_s\tend_s\tf0_hz\tf1_hz\tf2_hz\tf3_hz\na b\t1.000\t1.200\t120.0\t700\t\t2500");
+  assert.equal(table([pt("a\tb", 700, null)]), "label\tstart_s\tend_s\tf0_hz\tf1_hz\tf2_hz\tf3_hz\tf1_20pct_hz\tf2_20pct_hz\tf1_80pct_hz\tf2_80pct_hz\na b\t1.000\t1.200\t120.0\t700\t\t2500\t\t\t\t");
   assert.equal(plotNote([pt("i", 1, 2), pt("a", null, 2)], 1, 2, "Praat"), "1 of 2 segments plotted, analysed by Praat. 1 had no F1 or F2 (silence or noise). 2 without times left out.");
 });
 
@@ -53,4 +53,16 @@ test("an ellipse is traced around its mean", () => {
   assert.ok(Math.abs(path[0].x - 1000) < 1e-9 && Math.abs(path[0].y - 600) < 1e-9);
   assert.ok(Math.abs(path[1].x - 950) < 1e-9 && Math.abs(path[1].y - 500) < 1e-9);
   assert.deepEqual(ellipsePath({ ...g, ellipse: null }), []);
+});
+
+test("a label's trajectory runs from its mean 20% point to its mean 80% point", () => {
+  const ai = (f1a: number, f2a: number, f1b: number, f2b: number): Point => ({ ...pt("ai", 650, 1500), onset: [f1a, f2a], offset: [f1b, f2b] });
+  const ts = trajectories([ai(700, 1300, 400, 2000), ai(720, 1340, 420, 2100), pt("a", 700, 1300), { ...pt("e", 450, 2000), onset: [null, 1900], offset: [440, 2050] }], false);
+  assert.deepEqual(ts, [{ label: "ai", count: 2, from: { x: 1320, y: 710 }, to: { x: 2050, y: 410 } }]);
+  assert.ok(Math.abs(movement(ts[0]!) - Math.hypot(730, 300)) < 1e-9);
+  // Normalized ends use the midpoints' scale, so they line up with the dots.
+  const z = trajectories([ai(700, 1300, 400, 2000), pt("i", 300, 2400), pt("a", 700, 1400)], true);
+  const mids = plotted([ai(700, 1300, 400, 2000), pt("i", 300, 2400), pt("a", 700, 1400)], true);
+  const a = mids.find((m) => m.group === "a")!;
+  assert.ok(Math.abs(z[0]!.from.y - a.y) < 1e-9, "F1 700 at the onset sits level with the a dot");
 });

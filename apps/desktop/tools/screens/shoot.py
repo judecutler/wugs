@@ -730,6 +730,17 @@ def main():
                 failures.append("Durations: two labels with several segments each were not compared")
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); await st.selectText('t-count'); st.selectSegment(window.__keptSelection); }")
             run.page.wait_for_timeout(300)
+            # Vowel space trajectories: each label's arrow from 20% to 80%, the diphthong's long.
+            run.front("vowels", "Vowel space")
+            if run.page.locator(".panel-vowels .vw-plot").count() == 0:
+                run.page.locator(".panel-vowels button", has_text="Plot").click()
+                run.page.locator(".panel-vowels .vw-plot").wait_for()
+            run.page.locator(".panel-vowels label", has_text="Trajectories").locator("input").check()
+            run.page.locator(".panel-vowels .vw-path").first.wait_for()
+            run.shot("state-vowels-trajectories", run.page.locator(".panel-vowels"))
+            if run.page.locator(".panel-vowels .vw-path").count() != 6:
+                failures.append("Vowel space did not draw a trajectory per label")
+            run.page.locator(".panel-vowels label", has_text="Trajectories").locator("input").uncheck()
             # Agreement: the market conversation's two hearings compared.
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); window.__keptSelection = st.getSelection(); await st.selectText('t-market'); }")
             run.front("agreement", "Agreement")

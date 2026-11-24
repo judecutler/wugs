@@ -12,12 +12,13 @@ import { hear, recordingForShown } from "../hear/hear";
 import { trackToMeasure } from "../measure/logic";
 import { provide } from "../palette/registry";
 import { getSelection, getState, showToast } from "../store";
-import { ellipsePath, groups, place, plotNote, plotted, ranges, table, ticks, type Point } from "../vowels/logic";
+import { ellipsePath, groups, place, plotNote, plotted, ranges, table, ticks, trajectories, type Point } from "../vowels/logic";
 import type { PanelDef, PanelView } from "./panel";
 
 const SVG = "http://www.w3.org/2000/svg";
 const NORMALIZE_KEY = "wugs.vowels.normalize";
 const TOKENS_KEY = "wugs.vowels.tokens";
+const PATHS_KEY = "wugs.vowels.trajectories";
 
 function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>, text?: string): SVGElementTagNameMap[K] {
   const el = document.createElementNS(SVG, tag);
@@ -66,6 +67,7 @@ export const vowelsPanel: PanelDef = {
     const el = h("div", { className: "panel panel-vowels" });
     let normalize = localStorage.getItem(NORMALIZE_KEY) === "on";
     let showTokens = localStorage.getItem(TOKENS_KEY) !== "off";
+    let showPaths = localStorage.getItem(PATHS_KEY) === "on";
     let tier: string | null = null;
     let result: { key: string; textId: string; tierId: string; track: string; points: Point[]; untimed: number; analysedBy: string } | null = null;
     let busy = false;
@@ -148,6 +150,19 @@ export const vowelsPanel: PanelDef = {
           layer.append(dot);
         }
       }
+      if (showPaths) {
+        // An arrowhead for each label's movement from 20% to 80% of its segments.
+        const marker = svg("marker", { id: "vw-head", viewBox: "0 0 10 10", refX: 9, refY: 5, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+        marker.append(svg("path", { d: "M0,0 L10,5 L0,10 z", class: "vw-head" }));
+        root.querySelector("defs")!.append(marker);
+        for (const t of trajectories(r.points, normalize)) {
+          const a = place(t.from.x, t.from.y, rg, BOX);
+          const b = place(t.to.x, t.to.y, rg, BOX);
+          const line = svg("line", { x1: a.px, y1: a.py, x2: b.px, y2: b.py, class: "vw-path", "marker-end": "url(#vw-head)" });
+          line.append(svg("title", {}, `${t.label}: from 20% to 80% of ${t.count} ${t.count === 1 ? "segment" : "segments"}`));
+          layer.append(line, svg("circle", { cx: a.px, cy: a.py, r: 2.4, class: "vw-path-start" }));
+        }
+      }
       for (const g of gs) {
         const { px, py } = place(g.x, g.y, rg, BOX);
         layer.append(svg("text", { x: px, y: py + 5, class: "vw-label", "text-anchor": "middle" }, g.label.length > 12 ? `${g.label.slice(0, 11)}…` : g.label));
@@ -191,6 +206,12 @@ export const vowelsPanel: PanelDef = {
         localStorage.setItem(TOKENS_KEY, showTokens ? "on" : "off");
         paint();
       };
+      const paths = h("input", { type: "checkbox", checked: showPaths });
+      paths.onchange = () => {
+        showPaths = paths.checked;
+        localStorage.setItem(PATHS_KEY, showPaths ? "on" : "off");
+        paint();
+      };
       const current = result !== null && result.key === `${s.text.id}|${tier}` ? result : null;
       const copy = h("button", { textContent: "Copy table", disabled: current === null, title: "Copy every segment's label, times, F0 and F1–F3 as a table for a spreadsheet or R" });
       copy.onclick = () => {
@@ -223,6 +244,7 @@ export const vowelsPanel: PanelDef = {
         go,
         h("label", { title: "Lobanov normalization: each formant as standard deviations from this speaker's mean, so speakers can be compared" }, norm, " Normalize"),
         h("label", { title: "Show a dot for every segment, not only each label's mean" }, tok, " Every token"),
+        h("label", { title: "An arrow for each label from F1/F2 at 20% of its segments to F1/F2 at 80%: how a diphthong, or any vowel, moves" }, paths, " Trajectories"),
         copy,
         save,
       );
