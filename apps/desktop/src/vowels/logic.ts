@@ -40,31 +40,87 @@ const sdOf = (v: number[]) => {
   return Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (v.length - 1));
 };
 
-/** The points that plot, in Hz or Lobanov-normalized (z-scores of F1 and F2
- * across this speaker's points: Lobanov 1971). */
-export function plotted(points: readonly Point[], normalize: boolean): Plotted[] {
+/** How F1 and F2 are shown. Hz as measured; Bark (Traunmüller 1990) for
+ * the ear's scale; and three ways to compare speakers: Lobanov (1971),
+ * z-scores against the speaker's own mean and spread; Nearey (1978, the
+ * formant-intrinsic log-mean), each formant's log against the speaker's
+ * mean log; Watt and Fabricius (2002, as modified by Fabricius et al.
+ * 2009), each formant over the centroid of the speaker's triangle of /i/,
+ * /a/ and an /u/ placed at /i/'s F1. */
+export type Method = "hz" | "bark" | "lobanov" | "nearey" | "watt-fabricius";
+
+export const METHODS: { id: Method; label: string; unit: string; about: string }[] = [
+  { id: "hz", label: "Hz", unit: "Hz", about: "As measured" },
+  { id: "bark", label: "Bark", unit: "Bark", about: "On the ear's scale (Traunmüller 1990), still one speaker's" },
+  { id: "lobanov", label: "Lobanov", unit: "z", about: "Each formant as standard deviations from this speaker's mean (Lobanov 1971), so speakers can be compared" },
+  { id: "nearey", label: "Nearey", unit: "log", about: "Each formant's log against this speaker's mean log (Nearey 1978), keeping the vowels' proportions" },
+  { id: "watt-fabricius", label: "Watt–Fabricius", unit: "F/S", about: "Each formant over the centre of this speaker's vowel triangle (Watt and Fabricius 2002; Fabricius et al. 2009); needs vowels labelled i and a, else the frontmost-highest and the lowest" },
+];
+
+/** A stored choice, read back; the old on/off setting meant Lobanov. */
+export function parseMethod(stored: string | null): Method {
+  if (stored === "on") return "lobanov";
+  return METHODS.some((m) => m.id === stored) ? (stored as Method) : "hz";
+}
+
+/** Hz to Bark (Traunmüller 1990). */
+export const bark = (hz: number): number => (26.81 * hz) / (1960 + hz) - 0.53;
+
+/** The points that plot, in the units of `method`. */
+export function plotted(points: readonly Point[], method: Method): Plotted[] {
   const usable = points.filter((p): p is Point & { f1: number; f2: number } => p.f1 !== null && p.f2 !== null);
-  const to = scale(points, normalize);
+  const to = scale(points, method);
   return usable.map((p) => ({ point: p, ...to(p.f1, p.f2), group: groupOf(p) }));
 }
 
-/** F1 and F2 in the units shown: Hz, or z-scores against the speaker's
- * midpoints (so a trajectory's ends share the points' scale). */
-function scale(points: readonly Point[], normalize: boolean): (f1: number, f2: number) => { x: number; y: number } {
-  if (!normalize) return (f1, f2) => ({ x: f2, y: f1 });
-  const usable = points.filter((p): p is Point & { f1: number; f2: number } => p.f1 !== null && p.f2 !== null);
+/** F1 and F2 in the units shown, measured against the speaker's midpoints
+ * (so a trajectory's ends share the points' scale). */
+function scale(points: readonly Point[], method: Method): (f1: number, f2: number) => { x: number; y: number } {
+  if (method === "hz") return (f1, f2) => ({ x: f2, y: f1 });
+  if (method === "bark") return (f1, f2) => ({ x: bark(f2), y: bark(f1) });
+  const usable = points.filter((p): p is Point & { f1: number; f2: number } => p.f1 !== null && p.f2 !== null && p.f1 > 0 && p.f2 > 0);
   const f1s = usable.map((p) => p.f1);
   const f2s = usable.map((p) => p.f2);
+  if (method === "nearey") {
+    const [l1, l2] = [meanOf(f1s.map(Math.log)), meanOf(f2s.map(Math.log))];
+    return (f1, f2) => ({ x: f2 > 0 ? Math.log(f2) - l2 : 0, y: f1 > 0 ? Math.log(f1) - l1 : 0 });
+  }
+  if (method === "watt-fabricius") {
+    const s = wattCentroid(usable);
+    return (f1, f2) => (s === null ? { x: 0, y: 0 } : { x: f2 / s.f2, y: f1 / s.f1 });
+  }
   const [m1, s1, m2, s2] = [meanOf(f1s), sdOf(f1s), meanOf(f2s), sdOf(f2s)];
   return (f1, f2) => ({ x: s2 === 0 ? 0 : (f2 - m2) / s2, y: s1 === 0 ? 0 : (f1 - m1) / s1 });
+}
+
+/** The centre of the speaker's vowel triangle (Fabricius et al. 2009): /i/
+ * and /a/ by their labels (`i`, `iː`, `a`, `aː`, `ɑ`), else the group most
+ * front and high (largest F2 − F1) and the group lowest (largest F1); /u'/
+ * has /i/'s F1 for both formants. Null with fewer than two groups. */
+export function wattCentroid(points: readonly (Point & { f1: number; f2: number })[]): { f1: number; f2: number; i: string; a: string } | null {
+  const by = new Map<string, { f1: number[]; f2: number[] }>();
+  for (const p of points) {
+    const g = groupOf(p);
+    const v = by.get(g) ?? { f1: [], f2: [] };
+    v.f1.push(p.f1);
+    v.f2.push(p.f2);
+    by.set(g, v);
+  }
+  const means = [...by.entries()].map(([g, v]) => ({ g, f1: meanOf(v.f1), f2: meanOf(v.f2) }));
+  if (means.length < 2) return null;
+  const named = (names: string[]) => means.find((m) => names.includes(m.g.normalize("NFC")));
+  const i = named(["i", "iː", "i:"]) ?? means.reduce((b, m) => (m.f2 - m.f1 > b.f2 - b.f1 ? m : b));
+  const a = named(["a", "aː", "a:", "ɑ", "ɑː", "æ"]) ?? means.reduce((b, m) => (m.f1 > b.f1 ? m : b));
+  if (i === a) return null;
+  return { f1: (i.f1 + a.f1 + i.f1) / 3, f2: (i.f2 + a.f2 + i.f1) / 3, i: i.g, a: a.g };
 }
 
 export type Trajectory = { label: string; count: number; from: { x: number; y: number }; to: { x: number; y: number } };
 
 /** Each label's mean trajectory, from F1/F2 at 20% of its segments to F1/F2
  * at 80%, over the segments where both ends were measured; most segments first. */
-export function trajectories(points: readonly Point[], normalize: boolean): Trajectory[] {
-  const to = scale(points, normalize);
+export function trajectories(points: readonly Point[], method: Method): Trajectory[] {
+  const to = scale(points, method);
   const by = new Map<string, { from: { x: number; y: number }; to: { x: number; y: number } }[]>();
   for (const p of points) {
     const [a1, a2] = p.onset ?? [null, null];
@@ -128,10 +184,19 @@ export function ellipsePath(g: Group, steps = 48): { x: number; y: number }[] {
 
 export type Range = { lo: number; hi: number };
 
-/** The axis ranges: the usual vowel space (F1 200–1000 Hz, F2 500–3000 Hz,
- * or ±2.5 SD normalized) widened to hold every point, with a margin. */
-export function ranges(points: readonly Plotted[], normalize: boolean): { x: Range; y: Range } {
-  const base = normalize ? { x: { lo: -2.5, hi: 2.5 }, y: { lo: -2.5, hi: 2.5 } } : { x: { lo: 500, hi: 3000 }, y: { lo: 200, hi: 1000 } };
+/** The usual vowel space in each method's units: F1 200–1000 Hz and F2
+ * 500–3000 Hz, ±2.5 SD, and their like. */
+const BASE: Record<Method, { x: Range; y: Range }> = {
+  hz: { x: { lo: 500, hi: 3000 }, y: { lo: 200, hi: 1000 } },
+  bark: { x: { lo: bark(500), hi: bark(3000) }, y: { lo: bark(200), hi: bark(1000) } },
+  lobanov: { x: { lo: -2.5, hi: 2.5 }, y: { lo: -2.5, hi: 2.5 } },
+  nearey: { x: { lo: -0.8, hi: 0.8 }, y: { lo: -0.8, hi: 0.8 } },
+  "watt-fabricius": { x: { lo: 0.4, hi: 1.6 }, y: { lo: 0.5, hi: 1.8 } },
+};
+
+/** The axis ranges: the usual vowel space widened to hold every point, with a margin. */
+export function ranges(points: readonly Plotted[], method: Method): { x: Range; y: Range } {
+  const base = BASE[method];
   const widen = (r: Range, v: number[]): Range => {
     if (v.length === 0) return r;
     const lo = Math.min(r.lo, ...v);

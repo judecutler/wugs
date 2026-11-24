@@ -867,6 +867,13 @@ def main():
             if run.page.locator(".panel-vowels .vw-path").count() != 6:
                 failures.append("Vowel space did not draw a trajectory per label")
             run.page.locator(".panel-vowels label", has_text="Trajectories").locator("input").uncheck()
+            # Normalized by Watt and Fabricius: the triangle's corners named under the plot.
+            run.page.locator(".panel-vowels select.vw-method").select_option("watt-fabricius")
+            run.page.wait_for_timeout(200)
+            run.shot("state-vowels-watt", run.page.locator(".panel-vowels"))
+            if "The triangle's corners" not in run.page.locator(".panel-vowels").inner_text() or "F1 (F/S)" not in run.page.locator(".panel-vowels .vw-plot").text_content():
+                failures.append("Vowel space did not normalize by Watt and Fabricius")
+            run.page.locator(".panel-vowels select.vw-method").select_option("hz")
             # Agreement: the market conversation's two hearings compared.
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); window.__keptSelection = st.getSelection(); await st.selectText('t-market'); }")
             run.front("agreement", "Agreement")
