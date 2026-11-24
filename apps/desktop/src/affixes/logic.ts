@@ -12,6 +12,8 @@ export type Affix = {
   slot: number;
   categories: [string, number][];
   example: { word: string; textId: string; tierId: string; segmentId: string };
+  /** What it attaches to as written (the morphs on the root's side), with uses. */
+  stems?: [string, number][];
 };
 /** Two affixes met in one word, `first` (an index into `affixes`) before `second`, in `count` words. */
 export type Order = { first: number; second: number; count: number };

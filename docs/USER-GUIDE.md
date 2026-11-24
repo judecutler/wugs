@@ -889,6 +889,8 @@ At the top is a position-class chart: a column for each slot, counted from the r
 
 **Order** lists every two affixes found together in one word and how often each comes first: the evidence a slot chart rests on. Two affixes in one slot should never occur in the same word, and two in different slots should always come in the slots' order, so rows that break either rule are marked, with a note saying which. A pair met in both orders may be a glossing slip or a real freedom of order; open the words to see. **Copy pairs** copies the table.
 
+**Forms of one gloss** lists every gloss written more than one way on the same side of the root, such as `-si` and `-su` both glossed PL: candidates for allomorphs. For each form it shows the sounds right next to it in the words it is in, and the stem's nearest vowel (the last vowel before a suffix, the first after a prefix), each named as a natural class where one fits. When the forms never share a neighbouring sound, or never share a nearest vowel, the panel says that this may be what conditions them (assimilation, a vowel- or consonant-final stem, vowel harmony), and marks that column; when neither keeps them apart, they may be free variants or glossing slips. Click a form to see its words in the Concordance. **Copy forms** copies the sets as a table.
+
 An affix is told apart by its spelling, type and gloss, so `-ler` PL and `-ler` 3PL are two rows. A word with no morph marked as a root is left out, and the panel says how many there are. **Copy chart** and **Copy table** copy them to paste into a document or a spreadsheet, and **Grammar sketch…** prints the chart in its morphology chapter.
 
 ### Test sound changes and phonological rules

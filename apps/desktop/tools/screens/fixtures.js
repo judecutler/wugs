@@ -1046,7 +1046,7 @@ const LEXICON = [
     gloss_apply_type: () => ({ applied: 4, texts: 2 }),
     project_affixes: () => {
       const ex = { word: "ni-kani-ra", textId: "t-count", tierId: "tier-utt", segmentId: "seg-1" };
-      const a = (surface, kind, gloss, slot, uses, roots, positions, categories) => ({ surface, kind, gloss, uses, roots, positions, slot, categories, example: ex });
+      const a = (surface, kind, gloss, slot, uses, roots, positions, categories, stems = []) => ({ surface, kind, gloss, uses, roots, positions, slot, categories, example: ex, stems });
       return {
         words: 52,
         withoutRoot: 1,
@@ -1054,8 +1054,10 @@ const LEXICON = [
           a("ni", "prefix", "1SG", -1, 14, 6, [[-1, 14]], [["verb", 14]]),
           a("ka", "prefix", "2SG", -1, 6, 4, [[-1, 6]], [["verb", 6]]),
           a("ra", "suffix", "PST", 1, 11, 5, [[1, 11]], [["verb", 11]]),
-          a("si", "suffix", "PL", 1, 9, 7, [[1, 9]], [["noun", 9]]),
+          a("si", "suffix", "PL", 1, 9, 7, [[1, 9]], [["noun", 9]], [["kesi", 4], ["sele", 3], ["liwe", 2]]),
           a("ma", "clitic", "FOC", 2, 7, 6, [[2, 5], [1, 2]], [["verb", 4], ["noun", 3]]),
+          // The plural is -su after back vowels: the Forms of one gloss section finds the harmony.
+          a("su", "suffix", "PL", 1, 6, 4, [[1, 6]], [["noun", 6]], [["toɾu", 3], ["kanu", 2], ["wuno", 1]]),
         ],
         orders: [
           { first: 2, second: 4, count: 5 },
