@@ -390,6 +390,8 @@ Click a headword to open its entry. If the two are one word, **Merge «…» int
 
 Under **Spellings to check**, the Checks panel lists rare words that look like slips for a common word: a word used once or twice beside one used at least four times as often that has the same letters with other accents (`kési` beside `kesi`), or one letter added, left out or changed (`tekma` beside `tekama`, for words of four letters or more). Capitals do not count as a difference. Click either word to see its lines in the Concordance. Some pairs are real words, such as a rare minimal pair, so check each one, and fix the slips with **Replace…** in the Search panel.
 
+Under **Unusual sound sequences**, it lists rare words (used once or twice) with two sounds side by side, or a sound at the start or end of a word, that no other word in the project has, though both sounds are common: `tʰakka` is listed when it is the only word with `kk`. Such a word may be a slip of the ear or keyboard, a loanword, or a real rarity, so open it in the Concordance and decide. Sounds are cut as the Sounds panel cuts them, and the check waits until the transcriptions hold at least 500 words.
+
 ### Check the characters you type
 
 Many typing slips are invisible: a Cyrillic «а» from the wrong keyboard among Latin letters, an ASCII apostrophe `'` beside the glottal stop's `ʼ`, `g` beside IPA `ɡ`, or a no-break space pasted from a document. Words with them look right but never match in a search or the lexicon.

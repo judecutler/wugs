@@ -7,6 +7,7 @@
 import { archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
+import { sequenceWords, unusualLine, unusualWords, type Unusual } from "../checks/sequences";
 import { readinessLine, readinessNote, timingLine, timingNote, type Readiness, type Timing, type TimingIssue } from "../checks/logic";
 import { addedLine, addLabel, consentLine, consentNote, type ConsentGaps, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
@@ -35,6 +36,7 @@ export const checksPanel: PanelDef = {
     let ready: Readiness | null = null;
     let chars: Inventory | null = null;
     let near: { pairs: NearPair[]; read: number } | null = null;
+    let unusual: { words: Unusual[]; running: number } | null = null;
     let doubles: { pairs: LikelyPair[]; entries: number } | null = null;
     let timing: Timing | null = null;
     let gaps: { without: number; fillable: number } | null = null;
@@ -64,6 +66,7 @@ export const checksPanel: PanelDef = {
           missing = m;
           chars = c;
           near = { pairs: nearSpellings(w.words), read: w.words.length };
+          unusual = unusualWords(w.words);
           paint();
         },
         (e) => {
@@ -452,6 +455,22 @@ export const checksPanel: PanelDef = {
             h("ul", { className: "ck-list" }, ...near.pairs.map(pairCard)),
           ];
 
+    const unusualCard = (u: Unusual): HTMLElement => {
+      const b = h("button", { type: "button", className: "ck-show ck-word", textContent: u.word, title: `Every «${u.word}» in the Concordance` });
+      b.onclick = () => askConcordance(u.word, "word", null, true);
+      return h(
+        "li",
+        { className: "ck-card" },
+        h("div", { className: "ck-variant" }, b, h("span", { className: "ck-count", textContent: `× ${u.count}` })),
+        h("p", { className: "note", textContent: `Only word with ${u.sequences.map(sequenceWords).join("; ")}.` }),
+      );
+    };
+
+    const unusualSection = (): HTMLElement[] =>
+      unusual === null
+        ? []
+        : [h("h3", { className: "ck-title", textContent: "Unusual sound sequences" }), h("p", { className: "note", textContent: unusualLine(unusual) }), h("ul", { className: "ck-list" }, ...unusual.words.map(unusualCard))];
+
     const paint = () => {
       if (rows === null) {
         el.replaceChildren(emptyState("Checks", "Looking through every gloss…"));
@@ -485,6 +504,7 @@ export const checksPanel: PanelDef = {
         ...consentSection(),
         ...readinessSection(),
         ...spellingSection(),
+        ...unusualSection(),
         ...charSection(),
       );
     };
