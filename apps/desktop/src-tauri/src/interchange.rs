@@ -114,6 +114,16 @@ impl Format {
     }
 }
 
+/// The first part of a file without its last line when the file goes on
+/// past it, so a line cut in two does not spoil a check of every line.
+fn whole_lines(head: &str, cut: bool) -> &str {
+    if cut {
+        head.rfind('\n').map_or(head, |i| &head[..i])
+    } else {
+        head
+    }
+}
+
 /// Which format a file is, from its extension, else from its first line
 /// (a Toolbox database starts with `\_sh`).
 pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
@@ -156,6 +166,9 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         Some(Format::TextGrid)
     } else if ext == "xml" && (head.contains("<TEI") || head.contains("<teiCorpus")) {
         Some(Format::Tei)
+    } else if ext == "txt" && crate::plaintext::sentence_list(whole_lines(&sniff(&bytes[..bytes.len().min(1 << 16)]), bytes.len() > 1 << 16)).is_some() {
+        // A numbered sentence list (Leipzig Corpora Collection, Tatoeba): plain text, numbers dropped.
+        Some(Format::PlainText)
     } else if ext == "txt" && crate::audacity::is_labels(&sniff(&bytes[..bytes.len().min(1 << 20)])) {
         // Audacity's File > Export > Labels: start, end and label a line.
         Some(Format::Audacity)
@@ -490,6 +503,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 lines.push(match cut {
                     crate::plaintext::Cut::ByLine => format!("A new text with {}, one per line of the file.", plural(units.len(), "segment", "segments")),
                     crate::plaintext::Cut::BySentence => format!("A new text with {}, the file's paragraphs cut into sentences.", plural(units.len(), "segment", "segments")),
+                    crate::plaintext::Cut::Numbered => format!("A new text with {}, one per numbered line (a Leipzig or Tatoeba sentence list), the numbers left out.", plural(units.len(), "sentence", "sentences")),
                 });
                 (Some(text), false)
             }
@@ -1591,6 +1605,23 @@ mod tests {
         let untimed = import_file(&mut t, plain.to_str().unwrap()).unwrap().text.unwrap();
         assert!(export_text(&mut t, &untimed, Format::Subtitles { vtt: false }, &out).is_err());
         drop(t);
+        fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn numbered_sentence_lists_come_in_without_their_numbers() {
+        let dir = std::env::temp_dir().join(format!("wugs-leipzig-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.join("p").to_str().unwrap(), "prs_Ana").unwrap();
+        for (name, body) in [("sah_news_2020_10K-sentences.txt", "1\tКини кэлбит.\n2\tМин билэбин.\n3\tОлох үчүгэй.\n"), ("swh_sentences.txt", "77\tswh\tHabari yako?\n78\tswh\tNzuri sana.\n")] {
+            let file = dir.join(name);
+            fs::write(&file, body).unwrap();
+            let r = import_file(&mut s, file.to_str().unwrap()).unwrap();
+            assert!(r.lines.iter().any(|l| l.contains("numbered line")), "{name}: {:?}", r.lines);
+            let shown = session::get_text(&mut s, &r.text.unwrap()).unwrap();
+            assert!(shown.segments.iter().all(|x| !x.content.contains('\t') && !x.content.starts_with(|c: char| c.is_ascii_digit())), "{:?}", shown.segments);
+        }
+        drop(s);
         fs::remove_dir_all(dir).ok();
     }
 
