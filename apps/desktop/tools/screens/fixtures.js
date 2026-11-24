@@ -661,6 +661,7 @@ const LEXICON = [
       window.__WUGS_HITCLIPS__ = { query, hits };
       return { path: `${folder}/${query} clips`, clips: hits.length - 1, untimed: 0, missing: 1 };
     },
+    export_spelling: ({ folder, date }) => ({ path: `${folder}/wugs-spelling-${date}`, words: 212, fromLexicon: 48, once: 31, code: "und" }),
     list_texts: () => texts,
     link_recording: () => null,
     concordance_query: () => ({

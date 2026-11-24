@@ -79,6 +79,16 @@ export function flashcardLines(r: Flashcards): string[] {
   return lines;
 }
 
+export type Spelling = { path: string; words: number; fromLexicon: number; once: number; code: string };
+
+/** The toast after a spelling dictionary was saved. */
+export function spellingLines(r: Spelling): string[] {
+  const lines = [`Saved a spelling dictionary of ${plural(r.words, "word", "words")} in ${r.path}: ${r.code}.dic and ${r.code}.aff for LibreOffice, Firefox and other Hunspell spell checkers, and words.tsv as a plain list. The README there says how to install it.`];
+  if (r.code === "und") lines.push("Set the language's ISO 639-3 code in the Language row to name the files after it.");
+  if (r.once > 0) lines.push(`${plural(r.once, "word met only once and not in the lexicon was", "words met only once and not in the lexicon were")} left out, since many are slips.`);
+  return lines;
+}
+
 export function publishedLines(r: Published): string[] {
   return [
     `Saved a CLDF dataset in ${r.path}.`,

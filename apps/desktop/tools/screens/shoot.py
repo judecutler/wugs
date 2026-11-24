@@ -396,6 +396,14 @@ def main():
             run.page.wait_for_timeout(300)
             if run.page.locator(".panel-texts .glotto-match").count() != 0:
                 failures.append("picking a Glottolog match left the list open")
+            # A spelling dictionary of the language, for LibreOffice and Firefox.
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/spell'")
+            run.page.locator(".panel-texts button", has_text="Spelling dictionary").click()
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            if not any("spelling dictionary of 212 words" in t for t in run.toasts()):
+                failures.append(f"Texts did not save a spelling dictionary: {run.toasts()}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
 
             # Find and replace in the Search panel: a live preview with the change marked.
             run.front("search", "Search")
