@@ -314,6 +314,8 @@ When you meet a word you analysed before, its breakdown field shows the earlier 
 
 A word you have never analysed can still get a suggestion, marked **guess**: wugs reads it from the morphs you glossed in other words and from your lexicon. Once you have glossed `ni-kani` '1SG-count' and `teka=ma` 'ten=FOC', a new word `nitekama` is offered as `ni-teka=ma` '1SG-ten=FOC'. A guess is made of prefixes and clitics, one or two roots, then suffixes and clitics; shorter breakdowns and morphs you use often come first. An affix in the lexicon counts when its headword carries its marker, such as `-ler` or `ni-`. Check a guess before you accept it, as you would a suggestion from a colleague.
 
+When sentences have translations, a word with no analysis yet also shows up to two meanings the translations suggest, such as ‘walks’?: the translation words that stand most often in the translations of the sentences the word is in (the same counts as **Maybe** in Words to gloss). Click one to gloss the word as one root with that meaning, then break it into morphs if it has more.
+
 To give the same analysis to every other unanalysed copy of a word, click **Apply to N other unanalysed «form»**. When more than 20 words would change, click a second time to confirm. Words that already have an analysis are left alone.
 
 ### Clear an analysis

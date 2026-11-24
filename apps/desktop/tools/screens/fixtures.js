@@ -1034,6 +1034,8 @@ const LEXICON = [
     }),
     update_check: () => ({ currentVersion: "0.0.1", available: null }),
     gloss_get: ({ segmentId }) => glossView(segmentId),
+    // What the translations suggest an unanalysed word means.
+    likely_meanings: ({ forms }) => forms.map((f) => (f === "tekal" ? [{ word: "walks", together: 3, of: 4, dice: 0.71 }, { word: "away", together: 2, of: 4, dice: 0.4 }] : [])),
     gloss_add_note: glossEdit,
     gloss_set_note: glossEdit,
     sentence_check_status: () => checkStatus(),

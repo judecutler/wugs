@@ -223,6 +223,8 @@ export const glossApplyAll = (args: SegmentArgs & { form: string; morphs: MorphS
 export type WordTypeRow = { form: string; unanalysed: number; uses: number; suggestion: Suggestion | null; /** Translation words that stand with it, best first. */ meanings: import("./wordtypes/logic").Meaning[] };
 export type WordTypes = { rows: WordTypeRow[]; unbrokenWords: number; unbrokenSentences: number; types: number };
 export const glossWordTypes = (args: { textId: string | null }) => invoke<WordTypes>("gloss_word_types", args);
+/** For each form, the translation words that stand with it most often, best first. */
+export const likelyMeanings = (forms: string[]) => invoke<import("./wordtypes/logic").Meaning[][]>("likely_meanings", { forms });
 export const glossBreakAll = (args: { textId: string | null }) => invoke<number>("gloss_break_all", args);
 export const glossApplyType = (args: { form: string; morphs: MorphSpec[] }) => invoke<{ applied: number; texts: number; linked: number }>("gloss_apply_type", args);
 /** `lang` null sets the primary gloss, a tag sets `gloss:<tag>`. */
