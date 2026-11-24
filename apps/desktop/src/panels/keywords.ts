@@ -29,6 +29,12 @@ export const keywordsPanel: PanelDef = {
     let seq = 0;
     const textPicker = h("select", { title: "The text, or the texts with one detail (add details in the Texts panel), to compare with the project's other texts" });
     textPicker.setAttribute("aria-label", "Text");
+    const sizer = h(
+      "select",
+      { className: "kw-size", title: "Compare single words, or runs of words in a row inside a segment (key clusters)" },
+      ...[1, 2, 3, 4, 5].map((n) => h("option", { value: String(n), textContent: n === 1 ? "Single words" : `${n} words in a row` })),
+    );
+    sizer.setAttribute("aria-label", "Words in a row");
     const min = h("select", { title: "Leave out rare words: one used more here needs this many uses here, one used less needs this many in the other texts" }, ...MINIMUMS.map((n) => h("option", { value: String(n), textContent: n === 1 ? "Every word" : `Seen ${n}+ times` })));
     min.setAttribute("aria-label", "Minimum");
     min.value = "2";
@@ -144,7 +150,7 @@ export const keywordsPanel: PanelDef = {
       note.textContent = "Counting…";
       try {
         const sc = scopeOf(textId);
-        const r = await keywords({ kind, textId: sc.textId, within: sc.within, minCount: Number(min.value) });
+        const r = await keywords({ kind, textId: sc.textId, within: sc.within, minCount: Number(min.value), size: Number(sizer.value) });
         if (mine !== seq) return;
         data = r;
         drawRows();
@@ -159,6 +165,7 @@ export const keywordsPanel: PanelDef = {
       void load();
     };
     min.onchange = () => void load();
+    sizer.onchange = () => void load();
     sorter.onchange = () => {
       sortBy = sorter.value as KeywordSort;
       drawRows();
@@ -190,7 +197,7 @@ export const keywordsPanel: PanelDef = {
       }
       drawChips();
       drawTexts();
-      el.replaceChildren(h("div", { className: "cc-bar" }, textPicker), kinds, sides, h("div", { className: "cc-bar" }, min, sorter, copy), note, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, textPicker), kinds, sides, h("div", { className: "cc-bar" }, sizer, min, sorter, copy), note, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };

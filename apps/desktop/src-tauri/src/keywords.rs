@@ -70,7 +70,17 @@ struct Tally {
     spellings: Vec<(String, usize)>,
 }
 
+/// The longest word sequence keywords compare (key clusters, as AntConc's Keyword List with n-grams).
+pub const MAX_SIZE: usize = 5;
+
 pub fn keywords(session: &mut Session, kind: Kind, target: &Scope, min_count: usize) -> Result<Keywords, String> {
+    keywords_of(session, kind, target, min_count, 1)
+}
+
+/// Keywords over sequences of `size` words in a row inside a segment (1 = single words):
+/// each side's size is then its number of sequences.
+pub fn keywords_of(session: &mut Session, kind: Kind, target: &Scope, min_count: usize, size: usize) -> Result<Keywords, String> {
+    let size = size.clamp(1, MAX_SIZE);
     if !matches!(kind, Kind::Word | Kind::Translation) {
         return Err("keywords are counted between words or translation words".into());
     }
@@ -84,12 +94,19 @@ pub fn keywords(session: &mut Session, kind: Kind, target: &Scope, min_count: us
     let (mut c, mut d) = (0usize, 0usize);
     each_segment(p, Read::of(kind), &Scope::all(), |seg| {
         let here = here_of(&seg.text);
-        for w in &seg.words {
-            let spelling = p.proj.nfc(w);
-            let key = wugs_model::fold_key(&spelling);
-            if key.is_empty() {
-                continue;
-            }
+        let words: Vec<(String, String)> = seg
+            .words
+            .iter()
+            .map(|w| {
+                let spelling = p.proj.nfc(w);
+                (wugs_model::fold_key(&spelling), spelling)
+            })
+            .filter(|(k, _)| !k.is_empty())
+            .collect();
+        for run in words.windows(size) {
+            // Keys joined by U+001F, so a word holding a space never merges two sequences.
+            let key = run.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>().join("\u{1f}");
+            let spelling = run.iter().map(|(_, s)| s.as_str()).collect::<Vec<_>>().join(" ");
             let t = tallies.entry(key).or_default();
             if here {
                 c += 1;
@@ -233,6 +250,10 @@ mod tests {
         let two = keywords(&mut session, Kind::Word, &Scope::text(&fox), 2).unwrap();
         assert!(two.rows.iter().all(|r| if r.log_likelihood >= 0.0 { r.focus >= 2 } else { r.reference >= 2 }));
         assert!(two.critical > 3.84);
+        // Two words in a row: «the fox» twice here, never in the rest; each side's size is its sequences.
+        let pairs = keywords_of(&mut session, Kind::Word, &Scope::text(&fox), 1, 2).unwrap();
+        assert_eq!(pairs.focus_tokens, 5);
+        assert_eq!((pairs.rows[0].item.as_str(), pairs.rows[0].focus, pairs.rows[0].reference), ("the fox", 2, 0));
         assert!(keywords(&mut session, Kind::Gloss, &Scope::text(&sample), 1).is_err());
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);

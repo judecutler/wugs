@@ -290,8 +290,8 @@ fn frequencies(s: State<SessionThread>, kind: concordance::Kind, text_id: Option
 
 /// Which words one text, or the texts a detail picks, use more or less than the rest (Scrolls' keywords).
 #[tauri::command(async)]
-fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, within: Option<concordance::Where>, min_count: usize) -> Result<keywords::Keywords, String> {
-    s.run(move |s| keywords::keywords(s, kind, &concordance::Scope::of(text_id, within), min_count))
+fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<String>, within: Option<concordance::Where>, min_count: usize, size: Option<usize>) -> Result<keywords::Keywords, String> {
+    s.run(move |s| keywords::keywords_of(s, kind, &concordance::Scope::of(text_id, within), min_count, size.unwrap_or(1)))
 }
 
 /// Which words keep company with a word (Scrolls' collocates).
