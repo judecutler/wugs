@@ -8,6 +8,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { cognates, compareRead, conceptLists, setCognates, conceptListView, errorText, projectLanguage, type ListSummary } from "../api";
 import { correspondenceLine, correspondences, correspondenceTsv } from "../compare/correspondences";
+import { distanceLine, distances, type Distance } from "../compare/distance";
 import { cognacy, cognacyLine, edictorWithCognates, judgeKey, judgementOf, judgementsText, nextJudgement, parseJudgements, type Judgement } from "../compare/cognates";
 import { CLOSE, compareLine, compareRows, languagesOf, type OtherForm, type OurConcept, type Row } from "../compare/logic";
 import { emptyState, h } from "../dom";
@@ -39,6 +40,9 @@ export const comparePanel: PanelDef = {
     let judged = new Map<string, Judgement>();
     let saving: Promise<unknown> = Promise.resolve();
     const cognacyBox = h("div", { className: "note cmp-cognacy" });
+    const distanceBox = h("div", { className: "note cmp-distance", title: "ASJP's measures (Wichmann et al. 2010): LDN is the mean share of sounds two words for the same concept differ in; LDND divides it by the same between words for different concepts, so likeness any two words have by chance is taken out" });
+    /** Distances worked out once per set of rows and languages (judging a form does not change them). */
+    let distanceMemo: { key: string; value: Distance[] } | null = null;
     const judge = (r: Row, language: string, form: string) => {
       const key = judgeKey(language, r.concept.gloss, form);
       const next = nextJudgement(judged.get(key));
@@ -100,6 +104,9 @@ export const comparePanel: PanelDef = {
             return b;
           }),
         );
+      const memoKey = `${langs.join("\u001f")}|${rows.map((r) => `${r.ours.join(",")}:${langs.map((l) => (r.others.get(l) ?? []).map((c) => c.form).join(",")).join(";")}`).join("|")}`;
+      if (distanceMemo?.key !== memoKey) distanceMemo = { key: memoKey, value: distances(rows, langs) };
+      distanceBox.replaceChildren(...distanceMemo.value.map((d) => h("div", { textContent: distanceLine(d) })));
       const shares = cognacy(rows, langs, judged);
       cognacyBox.replaceChildren(...(shares.some((c) => c.judged > 0) ? shares.map((c) => h("div", { textContent: cognacyLine(c) })) : []));
       table.replaceChildren(
@@ -226,7 +233,7 @@ export const comparePanel: PanelDef = {
       if (!sameProject) {
         forms = [];
         listId = "";
-        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, cognacyBox, h("div", { className: "cmp-rows" }, table, corrBlock));
+        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, distanceBox, cognacyBox, h("div", { className: "cmp-rows" }, table, corrBlock));
         judged = new Map();
         void cognates().then(
           (t) => {

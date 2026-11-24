@@ -937,6 +937,8 @@ def main():
                 failures.append("Compare word lists did not add a column for the loaded language")
             if "look alike" not in run.page.locator(".panel-compare .cmp-line").inner_text():
                 failures.append("Compare word lists did not say how alike the lists are")
+            if "Kelani:" not in run.page.locator(".panel-compare .cmp-distance").inner_text():
+                failures.append("Compare word lists did not give each language's distance")
             run.page.locator(".panel-compare .cmp-corr-block").scroll_into_view_if_needed()
             run.shot("state-compare-correspondences", run.page.locator(".panel-compare"))
             if "pairs of words at least 50% alike" not in run.page.locator(".panel-compare .cmp-corr-line").inner_text():
