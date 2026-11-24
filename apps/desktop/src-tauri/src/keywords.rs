@@ -87,8 +87,8 @@ pub fn keywords_of(session: &mut Session, kind: Kind, target: &Scope, min_count:
 /// groups of texts or two speakers' tracks can be compared directly.
 pub fn keywords_against(session: &mut Session, kind: Kind, target: &Scope, against: &Scope, min_count: usize, size: usize) -> Result<Keywords, String> {
     let size = size.clamp(1, MAX_SIZE);
-    if !matches!(kind, Kind::Word | Kind::Translation) {
-        return Err("keywords are counted between words or translation words".into());
+    if !matches!(kind, Kind::Word | Kind::Translation | Kind::Lemma | Kind::Tag) {
+        return Err("keywords are counted between words, translation words, lemmas or tags".into());
     }
     if target.is_all() {
         return Err("keywords compare a text, or the texts a detail picks, with the rest".into());
@@ -103,16 +103,31 @@ pub fn keywords_against(session: &mut Session, kind: Kind, target: &Scope, again
         if !here && !there.has(&seg.text, &seg.tier) {
             return Ok(());
         }
-        let words: Vec<(String, String)> = seg
-            .words
-            .iter()
-            .map(|w| {
-                let spelling = p.proj.nfc(w);
-                (wugs_model::fold_key(&spelling), spelling)
-            })
-            .filter(|(k, _)| !k.is_empty())
-            .collect();
+        // Each word's key and spelling; None for a word with no lemma or tag,
+        // which no sequence crosses and neither side counts.
+        let words: Vec<Option<(String, String)>> = match kind {
+            Kind::Lemma | Kind::Tag => crate::cqp::tokens_of(p, &seg.id)?
+                .into_iter()
+                .filter(|t| t.upos != "PUNCT")
+                .map(|t| {
+                    // Written exactly, as a CQP query and the Frequencies list read them.
+                    let value = p.proj.nfc(if kind == Kind::Lemma { &t.lemma } else { &t.upos });
+                    (!value.is_empty()).then(|| (value.clone(), value))
+                })
+                .collect(),
+            _ => seg
+                .words
+                .iter()
+                .map(|w| {
+                    let spelling = p.proj.nfc(w);
+                    (wugs_model::fold_key(&spelling), spelling)
+                })
+                .filter(|(k, _)| !k.is_empty())
+                .map(Some)
+                .collect(),
+        };
         for run in words.windows(size) {
+            let Some(run) = run.iter().map(Option::as_ref).collect::<Option<Vec<_>>>() else { continue };
             // Keys joined by U+001F, so a word holding a space never merges two sequences.
             let key = run.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>().join("\u{1f}");
             let spelling = run.iter().map(|(_, s)| s.as_str()).collect::<Vec<_>>().join(" ");
@@ -274,6 +289,36 @@ mod tests {
         assert!(ab.rows.iter().all(|r| r.focus + r.reference > 0 && !["wʌn", "faɪv"].contains(&r.item.as_str())), "nothing from the sample");
         // A reference that is the target itself leaves nothing to compare with.
         assert_eq!(keywords_against(&mut session, Kind::Word, &Scope::text(&fox), &Scope::text(&fox), 1, 1).unwrap().reference_tokens, 0);
+        drop(session);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn compares_lemmas_and_tags() {
+        let dir = std::env::temp_dir().join(format!("wugs-kw-tags-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut session: Session = None;
+        crate::session::create_project(&mut session, dir.to_str().unwrap(), "prs_Ana").unwrap();
+        let p = crate::session::project(&mut session).unwrap();
+        let tier = crate::session::utterance_tier(p).unwrap();
+        let row = |i: usize, form: &str, lemma: &str, upos: &str| format!("{i}\t{form}\t{lemma}\t{upos}\t_\t_\t_\t_\t_\t_\n");
+        let narrative = [row(1, "She", "she", "PRON"), row(2, "ran", "run", "VERB"), row(3, "home", "home", "NOUN"), row(4, ".", ".", "PUNCT"), "\n".into(), row(1, "She", "she", "PRON"), row(2, "runs", "run", "VERB"), row(3, "fast", "_", "ADV"), "\n".into()].concat();
+        let list = [row(1, "big", "big", "ADJ"), row(2, "dogs", "dog", "NOUN"), "\n".into(), row(1, "red", "red", "ADJ"), row(2, "hens", "hen", "NOUN"), "\n".into()].concat();
+        let story = wugs_conllu::import_conllu(p, &narrative, "story", &tier).unwrap().texts[0].clone();
+        wugs_conllu::import_conllu(p, &list, "list", &tier).unwrap();
+        let tags = keywords(&mut session, Kind::Tag, &Scope::text(&story), 1).unwrap();
+        assert_eq!((tags.focus_tokens, tags.reference_tokens), (6, 4), "punctuation is not a word");
+        let verb = tags.rows.iter().find(|r| r.item == "VERB").unwrap();
+        assert_eq!((verb.focus, verb.reference), (2, 0));
+        assert!(tags.rows.iter().find(|r| r.item == "ADJ").unwrap().log_likelihood < 0.0);
+        let lemmas = keywords(&mut session, Kind::Lemma, &Scope::text(&story), 1).unwrap();
+        assert_eq!(lemmas.focus_tokens, 5, "a word with no lemma is left out of both counts");
+        let run = lemmas.rows.iter().find(|r| r.item == "run").unwrap();
+        assert_eq!((run.focus, run.reference), (2, 0), "ran and runs under one lemma");
+        // Tag sequences: no sequence crosses punctuation or a word without a label.
+        let pairs = keywords_of(&mut session, Kind::Tag, &Scope::text(&story), 1, 2).unwrap();
+        assert_eq!(pairs.focus_tokens, 4);
+        assert_eq!(pairs.rows.iter().find(|r| r.item == "PRON VERB").unwrap().focus, 2);
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }
