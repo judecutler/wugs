@@ -885,6 +885,8 @@ A sound is a letter with every diacritic and modifier written after it, so `tʰ`
 
 **Minimal pairs** lists every pair of sounds that two words tell apart, such as `p ~ b` for `pata` and `bata`, best attested first. Click a pair of sounds to see its words, and click a word to open its lines in the Concordance. Choose a sound to see only the pairs it is in. **Copy pairs** copies the words as a table. In a large corpus the 20,000 commonest word types are read.
 
+Each pair of sounds also has a **functional load**: how much the language relies on telling the two apart. It is the share of the information in which word is said that would be lost if the two sounds fell together, with each word weighted by how often it is used (Hockett 1967; Surendran and Niyogi 2006). A contrast between common words carries a lot. One heard in a single rare pair carries almost none, even when it is a real phoneme contrast. Open a pair to read its load and how many word types would sound alike. Choose **Heaviest load first** to rank the pairs by load: the line above them names the contrasts the words lean on most, and each pair shows its percentage. Use it to decide which contrasts a learner's orthography must mark, or to judge how much a merger in progress would cost. **Copy loads** copies every pair with its minimal pairs, merged word types and load as a table.
+
 **Word likeness** tells you how typical a word's sounds are in the language. Psycholinguists use these measures to choose words for an experiment, and fieldworkers use them to check that a made-up word sounds possible. Type a word, real or made up (typing shortcuts work), and wugs gives:
 
 - whether it is a word of the texts, and how often it is used;

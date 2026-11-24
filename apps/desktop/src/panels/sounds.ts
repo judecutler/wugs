@@ -23,6 +23,7 @@ import { syllableNote, syllableTypes, type SyllableType } from "../sounds/syllab
 import { toneMelodies, tonesNote, tonesTsv, withoutTone, type Tones } from "../sounds/tones";
 import { distributionNote, envLabel, environments, environmentsTsv, suggestedRule, type NeighbourRow } from "../sounds/environments";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
+import { heaviestLine, loadLabel, loadLine, loadModel, loads, loadsTsv, type Loaded as Load } from "../sounds/load";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
 import { dataGeneration, getState, showToast } from "../store";
 import { likeness, likenessLine, likenessModel, likenessTsv, type Model as LikenessModel } from "../sounds/likeness";
@@ -32,6 +33,7 @@ import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
 const WHOLE_KEY = "wugs.sounds.whole";
+const PAIR_ORDER_KEY = "wugs.sounds.pairOrder";
 const SVG = "http://www.w3.org/2000/svg";
 const VW = 340;
 const VH = 220;
@@ -62,6 +64,18 @@ export const soundsPanel: PanelDef = {
     /** The sound whose contrasts are listed (null: every sound), and the contrast opened. */
     let pairSound: string | null = null;
     let openContrast: string | null = null;
+    /** Minimal-pair chips by pairs found, or by how much the words lean on the contrast. */
+    let pairOrder: "pairs" | "load" = localStorage.getItem(PAIR_ORDER_KEY) === "load" ? "load" : "pairs";
+    /** Each loaded corpus's functional loads, worked out the first time the pairs are drawn. */
+    const loadsOf = new WeakMap<Loaded, Map<string, Load>>();
+    const loadsFor = (l: Loaded): Map<string, Load> => {
+      let m = loadsOf.get(l);
+      if (m === undefined) {
+        m = new Map(loads(loadModel(l.words), l.pairs).map((x) => [`${x.a}\u001F${x.b}`, x]));
+        loadsOf.set(l, m);
+      }
+      return m;
+    };
     /** The two sounds whose environments are compared (null: the two commonest). */
     let envA: string | null = null;
     /** Feature values picked in the Features table: the natural class they name. */
@@ -640,7 +654,27 @@ export const soundsPanel: PanelDef = {
 
     const pairsSection = (l: Loaded): HTMLElement[] => {
       const keyOf = (c: Contrast) => `${c.a}\u001F${c.b}`;
+      const fl = loadsFor(l);
+      const loadOf = (c: Contrast) => fl.get(keyOf(c))?.load ?? 0;
       const shown = contrastsOf(l.pairs, pairSound);
+      if (pairOrder === "load") shown.sort((x, y) => loadOf(y) - loadOf(x) || y.total - x.total);
+      const orderPick = h("select", { className: "sd-pair-order" });
+      orderPick.setAttribute("aria-label", "Order of the contrasts");
+      orderPick.append(new Option("Most pairs first", "pairs", false, pairOrder === "pairs"), new Option("Heaviest load first", "load", false, pairOrder === "load"));
+      orderPick.title = "Functional load: how much of the information in which word is said would be lost if the two sounds fell together, each word weighted by how often it is used";
+      orderPick.onchange = () => {
+        pairOrder = orderPick.value === "load" ? "load" : "pairs";
+        localStorage.setItem(PAIR_ORDER_KEY, pairOrder);
+        paint();
+      };
+      const copyLoads = h("button", { type: "button", textContent: "Copy loads", title: "Every contrast with its minimal pairs, the word types it keeps apart and its functional load, for a spreadsheet" });
+      copyLoads.onclick = () => {
+        const all = [...fl.values()];
+        writeText(loadsTsv(all)).then(
+          () => showToast({ tone: "info", lines: [`${all.length} contrasts with their functional load copied.`] }),
+          (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+        );
+      };
       const which = h("select");
       which.setAttribute("aria-label", "Contrasts of");
       which.append(new Option("Every sound", "", false, pairSound === null));
@@ -653,7 +687,7 @@ export const soundsPanel: PanelDef = {
       };
       const chips = shown.slice(0, 60).map((c) => {
         const open = openContrast === keyOf(c);
-        const chip = h("button", { type: "button", className: `sd-contrast${open ? " is-open" : ""}`, textContent: contrastLabel(c) });
+        const chip = h("button", { type: "button", className: `sd-contrast${open ? " is-open" : ""}`, textContent: pairOrder === "load" ? `${contrastLabel(c)} · ${loadLabel(loadOf(c))}` : contrastLabel(c), title: `Functional load ${loadLabel(loadOf(c))}` });
         chip.setAttribute("aria-pressed", String(open));
         chip.onclick = () => {
           openContrast = open ? null : keyOf(c);
@@ -680,13 +714,15 @@ export const soundsPanel: PanelDef = {
         };
         detail.push(
           h("div", { className: "sd-bar" }, h("strong", { className: "sd-glyph", textContent: `${picked.a} ~ ${picked.b}` }), copy, env),
+          h("p", { className: "note sd-load", textContent: loadLine(fl.get(keyOf(picked)) ?? { a: picked.a, b: picked.b, load: 0, merged: 0 }) }),
           ...more,
           h("ul", { className: "sd-pairs" }, ...picked.pairs.map((p) => h("li", {}, wordButton(p.wordA, p.countA), h("span", { className: "sd-tilde", textContent: "~" }), wordButton(p.wordB, p.countB)))),
         );
       }
       return [
         h("h4", { className: "sd-h", textContent: "Minimal pairs" }),
-        h("div", { className: "sd-bar" }, h("p", { className: "note", textContent: pairsNote(l.pairs, Math.min(l.types, WORDS_READ), l.types) }), l.pairs.length > 0 ? which : null),
+        h("div", { className: "sd-bar" }, h("p", { className: "note", textContent: pairsNote(l.pairs, Math.min(l.types, WORDS_READ), l.types) }), l.pairs.length > 0 ? which : null, l.pairs.length > 0 ? orderPick : null, l.pairs.length > 0 ? copyLoads : null),
+        ...(l.pairs.length > 0 && heaviestLine([...fl.values()]) !== "" ? [h("p", { className: "note sd-heaviest", textContent: heaviestLine([...fl.values()]) })] : []),
         h("div", { className: "sd-list" }, ...chips),
         ...detail,
       ];
