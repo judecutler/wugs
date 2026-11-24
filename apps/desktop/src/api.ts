@@ -224,6 +224,8 @@ export type WordTypeRow = { form: string; unanalysed: number; uses: number; sugg
 export type WordTypes = { rows: WordTypeRow[]; unbrokenWords: number; unbrokenSentences: number; types: number };
 export const glossWordTypes = (args: { textId: string | null }) => invoke<WordTypes>("gloss_word_types", args);
 /** For each form, the translation words that stand with it most often, best first. */
+/** How alike the texts are in their most frequent words (Cosine Delta). */
+export const textsAlike = (kind: "word" | "translation") => invoke<import("./keywords/alike").Alike>("texts_alike", { kind });
 export const likelyMeanings = (forms: string[]) => invoke<import("./wordtypes/logic").Meaning[][]>("likely_meanings", { forms });
 export const glossBreakAll = (args: { textId: string | null }) => invoke<number>("gloss_break_all", args);
 export const glossApplyType = (args: { form: string; morphs: MorphSpec[] }) => invoke<{ applied: number; texts: number; linked: number }>("gloss_apply_type", args);

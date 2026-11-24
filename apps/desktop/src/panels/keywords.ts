@@ -5,7 +5,8 @@
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { whereWords } from "../metadata/logic";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, keywords } from "../api";
+import { errorText, keywords, textsAlike } from "../api";
+import { alikeLine, alikeTsv, barShare, nearest, SHORT, type Alike } from "../keywords/alike";
 import { emptyState, h } from "../dom";
 import { asTsv, KEYWORD_SORTS, keywordRows, perThousand, significant, summary, type KeywordSide, type KeywordSort, type Keywords } from "../keywords/logic";
 import { provide } from "../palette/registry";
@@ -45,6 +46,35 @@ export const keywordsPanel: PanelDef = {
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy these rows as a table to paste into a spreadsheet" });
     const note = h("p", { className: "note fq-count" });
     const table = h("table", { className: "fq-table kw-table" });
+    let alike: Alike | null = null;
+    const alikeNote = h("p", { className: "note" });
+    const alikeList = h("div", { className: "kw-alike", role: "list" });
+    const copyAlike = h("button", { type: "button", textContent: "Copy table", title: "Every text against every other, to paste into a spreadsheet or R" });
+    const alikeHead = h("h3", { textContent: "Texts most like this one" });
+
+    const drawAlike = () => {
+      const sc = scopeOf(textId);
+      // Only for one text; a detail's texts have no single row.
+      const hidden = alike === null || sc.textId === null;
+      alikeHead.hidden = alikeNote.hidden = alikeList.hidden = copyAlike.hidden = hidden;
+      if (hidden || alike === null || sc.textId === null) return;
+      alikeNote.textContent = alikeLine(alike, sc.textId);
+      copyAlike.disabled = alike.similarity.length === 0;
+      alikeList.replaceChildren(
+        ...nearest(alike, sc.textId).map((n) => {
+          const bar = h("span", { className: `kw-bar ${n.similarity < 0 ? "kw-bar-neg" : ""}` });
+          bar.style.width = `${(barShare(n.similarity) * 50).toFixed(1)}%`;
+          const row = h(
+            "div",
+            { className: "kw-alike-row", role: "listitem", title: `${n.words.toLocaleString("en")} words${n.words < SHORT ? " (short: the number is unsteady)" : ""}. Compare with it: pick it above` },
+            h("span", { className: "kw-alike-title", textContent: n.title || "(untitled)" }),
+            h("span", { className: "kw-alike-track" }, bar),
+            h("span", { className: "fq-num", textContent: n.similarity.toFixed(2) }),
+          );
+          return row;
+        }),
+      );
+    };
 
     const chips = <T extends string>(box: HTMLElement, options: { id: T; label: string; title: string }[], current: () => T, pick: (v: T) => void) =>
       box.replaceChildren(
@@ -139,8 +169,27 @@ export const keywordsPanel: PanelDef = {
       );
     };
 
+    async function loadAlike(): Promise<void> {
+      const mine = seq;
+      try {
+        const r = await textsAlike(kind);
+        if (mine !== seq) return;
+        alike = r;
+      } catch (e) {
+        if (mine !== seq) return;
+        alike = null;
+        alikeNote.hidden = false;
+        alikeNote.textContent = `Could not compare the texts: ${errorText(e)}`;
+        return;
+      }
+      drawAlike();
+    }
+
     async function load(): Promise<void> {
       const mine = ++seq;
+      alike = null;
+      drawAlike();
+      void loadAlike();
       data = null;
       table.replaceChildren();
       if (textId === "") {
@@ -170,6 +219,13 @@ export const keywordsPanel: PanelDef = {
       sortBy = sorter.value as KeywordSort;
       drawRows();
     };
+    copyAlike.onclick = () => {
+      if (alike === null) return;
+      void writeText(alikeTsv(alike)).then(
+        () => showToast({ tone: "info", lines: [`Copied ${alike?.texts.length ?? 0} texts against each other.`] }),
+        (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+      );
+    };
     copy.onclick = () => {
       const rows = shown();
       if (rows.length === 0) return;
@@ -197,7 +253,7 @@ export const keywordsPanel: PanelDef = {
       }
       drawChips();
       drawTexts();
-      el.replaceChildren(h("div", { className: "cc-bar" }, textPicker), kinds, sides, h("div", { className: "cc-bar" }, sizer, min, sorter, copy), note, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, textPicker), kinds, sides, h("div", { className: "cc-bar" }, sizer, min, sorter, copy), note, h("div", { className: "fq-rows" }, table), alikeHead, h("div", { className: "cc-bar" }, copyAlike), alikeNote, alikeList);
       void load();
     };
     return { element: el, render, dispose: unprovide };
