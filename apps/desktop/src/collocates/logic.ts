@@ -11,16 +11,21 @@ export type CollocateRow = {
   mutualInformation: number;
   logDice: number;
   tScore: number;
+  /** ΔP (Gries 2013) from the node to the collocate, and back. */
+  deltaPNode: number;
+  deltaPCollocate: number;
 };
 export type Collocates = { rows: CollocateRow[]; node: number; tokens: number; types: number };
 
-export type CollocateSort = "ll" | "dice" | "mi" | "t" | "together" | "alpha";
+export type CollocateSort = "ll" | "dice" | "mi" | "t" | "dpn" | "dpc" | "together" | "alpha";
 
 export const COLLOCATE_SORTS: { id: CollocateSort; label: string }[] = [
   { id: "ll", label: "By log-likelihood" },
   { id: "dice", label: "By logDice (Sketch Engine)" },
   { id: "mi", label: "By mutual information" },
   { id: "t", label: "By t-score" },
+  { id: "dpn", label: "By ΔP, the word predicting it" },
+  { id: "dpc", label: "By ΔP, it predicting the word" },
   { id: "together", label: "Most often together" },
   { id: "alpha", label: "Alphabetical" },
 ];
@@ -36,6 +41,8 @@ export function sortCollocates(rows: readonly CollocateRow[], by: CollocateSort)
   if (by === "mi") return out.sort((a, b) => b.mutualInformation - a.mutualInformation || b.together - a.together);
   if (by === "dice") return out.sort((a, b) => b.logDice - a.logDice || b.together - a.together);
   if (by === "t") return out.sort((a, b) => b.tScore - a.tScore || b.together - a.together);
+  if (by === "dpn") return out.sort((a, b) => b.deltaPNode - a.deltaPNode || b.together - a.together);
+  if (by === "dpc") return out.sort((a, b) => b.deltaPCollocate - a.deltaPCollocate || b.together - a.together);
   if (by === "together") return out.sort((a, b) => b.together - a.together || b.logLikelihood - a.logLikelihood);
   if (by === "alpha") return out.sort((a, b) => collator.compare(a.item, b.item));
   return out;
@@ -58,8 +65,8 @@ export function summary(node: string, c: Collocates, left: number, right: number
 export function asTsv(rows: readonly CollocateRow[]): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
   return [
-    "collocate\ttogether\tleft\tright\tfrequency\tlog-likelihood\tmutual information\tlogDice\tt-score",
-    ...rows.map((r) => [clean(r.item), r.together, r.left, r.right, r.freq, score(r.logLikelihood), score(r.mutualInformation), score(r.logDice), score(r.tScore)].join("\t")),
+    "collocate\ttogether\tleft\tright\tfrequency\tlog-likelihood\tmutual information\tlogDice\tt-score\tdelta P (word to collocate)\tdelta P (collocate to word)",
+    ...rows.map((r) => [clean(r.item), r.together, r.left, r.right, r.freq, score(r.logLikelihood), score(r.mutualInformation), score(r.logDice), score(r.tScore), r.deltaPNode.toFixed(3), r.deltaPCollocate.toFixed(3)].join("\t")),
   ].join("\n");
 }
 

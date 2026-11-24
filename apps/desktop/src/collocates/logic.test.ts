@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { asTsv, COLLOCATE_TAGS, lemmaQuery, tagNote, compareCollocates, compareLine, compareTsv, leansTo, sortCollocates, summary, type CollocateRow } from "./logic.ts";
 
-const row = (item: string, together: number, ll: number, mi: number): CollocateRow => ({ item, together, left: together, right: 0, freq: together * 2, logLikelihood: ll, mutualInformation: mi, logDice: mi + 8, tScore: together / 2 });
+const row = (item: string, together: number, ll: number, mi: number): CollocateRow => ({ item, together, left: together, right: 0, freq: together * 2, logLikelihood: ll, mutualInformation: mi, logDice: mi + 8, tScore: together / 2, deltaPNode: mi / 10, deltaPCollocate: together / 100 });
 const rows = [row("old", 3, 12.5, 3.1), row("a", 1, 0.4, 6.0), row("the", 3, 5.0, 1.0)];
 
 test("sorts by each measure, alphabet ignoring case", () => {
@@ -22,11 +22,11 @@ test("summary says what was counted, in words", () => {
 });
 
 test("copies as a table", () => {
-  assert.equal(asTsv([row("o\tld", 3, 12.5, 3.14159)]).split("\n")[1], "o ld\t3\t3\t0\t6\t12.50\t3.14\t11.14\t1.50");
+  assert.equal(asTsv([row("o\tld", 3, 12.5, 3.14159)]).split("\n")[1], "o ld\t3\t3\t0\t6\t12.50\t3.14\t11.14\t1.50\t0.314\t0.030");
 });
 
 test("two words' collocates compared", () => {
-  const r = (item: string, logDice: number, together = 3): CollocateRow => ({ item, together, left: 1, right: 2, freq: 9, logLikelihood: 4, mutualInformation: 3, logDice, tScore: 1.5 });
+  const r = (item: string, logDice: number, together = 3): CollocateRow => ({ item, together, left: 1, right: 2, freq: 9, logLikelihood: 4, mutualInformation: 3, logDice, tScore: 1.5, deltaPNode: 0.1, deltaPCollocate: 0.2 });
   const strong = [r("tea", 10), r("wind", 9.5), r("Coffee", 8)];
   const powerful = [r("engine", 11), r("wind", 9), r("coffee", 6)];
   const rows = compareCollocates(strong, powerful);
@@ -52,4 +52,12 @@ test("a limit to one part of speech is named in the note", () => {
   assert.equal(tagNote(""), "");
   assert.match(tagNote("ADJ"), /^ Only adjectives \(ADJ\) are counted as collocates/u);
   assert.ok(!COLLOCATE_TAGS.some((t) => t.tag === "PUNCT"));
+});
+
+test("delta P sorts both ways and is copied", () => {
+  const a = { item: "a", together: 2, left: 1, right: 1, freq: 4, logLikelihood: 3, mutualInformation: 1, logDice: 9, tScore: 1, deltaPNode: 0.3, deltaPCollocate: 0.01 };
+  const b = { ...a, item: "b", deltaPNode: 0.05, deltaPCollocate: 0.4 };
+  assert.deepEqual(sortCollocates([b, a], "dpn").map((r) => r.item), ["a", "b"]);
+  assert.deepEqual(sortCollocates([a, b], "dpc").map((r) => r.item), ["b", "a"]);
+  assert.match(asTsv([a]), /delta P \(word to collocate\)\tdelta P \(collocate to word\)\n.*\t0\.300\t0\.010$/u);
 });
