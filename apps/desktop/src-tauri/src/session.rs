@@ -63,12 +63,22 @@ fn lock_folder(path: &str) -> Result<File, String> {
         .write(true)
         .open(&lock_path)
         .map_err(|e| format!("open {}: {e}", lock_path.display()))?;
-    match file.try_lock() {
-        Ok(()) => Ok(file),
-        Err(TryLockError::WouldBlock) => Err(format!(
-            "{path} is open in another wugs window or process; close it there first (two open copies would fork this device's history)"
-        )),
-        Err(TryLockError::Error(e)) => Err(format!("lock {}: {e}", lock_path.display())),
+    // A lock just released can still be held for a moment by a child process
+    // forked before it was released and not yet exec'd (its copy of the
+    // descriptor keeps a flock alive on macOS), so a busy lock is tried again
+    // for up to a second before it counts as another window's.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Ok(file),
+            Err(TryLockError::WouldBlock) if std::time::Instant::now() < deadline => std::thread::sleep(std::time::Duration::from_millis(50)),
+            Err(TryLockError::WouldBlock) => {
+                return Err(format!(
+                    "{path} is open in another wugs window or process; close it there first (two open copies would fork this device's history)"
+                ))
+            }
+            Err(TryLockError::Error(e)) => return Err(format!("lock {}: {e}", lock_path.display())),
+        }
     }
 }
 
