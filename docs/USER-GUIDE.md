@@ -719,6 +719,12 @@ Choose the **Reference** track and the **Compared** track (**Swap** turns them r
 
 The table lists every match in time order, with the sounds apart and how much later (+) or earlier (−) the compared track's start and end are, in milliseconds; rows with different labels and segments with no partner are shaded, and ▶ plays each. **Only differences** lists just those. **Copy table** copies every row, with times in seconds, for a spreadsheet or R.
 
+### See how speakers take turns
+
+The **Turn-taking** panel reads a conversation transcribed with one track per speaker (the usual ELAN layout) and measures how quickly each speaker takes the floor from the last: the *floor transfer offset*, the new turn's start minus the previous turn's end. A positive offset is a gap, a negative one an overlap; across many languages most fall within a few hundred milliseconds of zero. Open it from Settings (Closed panels) or with **Find an action**.
+
+Untick a track to leave it out (a translation or a notes track is left out already). The panel says how many changes of speaker there are, the median and mean offset, and what share start after a gap, overlap the previous turn, or come within 200 ms of its end. A segment that starts and ends inside another speaker's turn (a backchannel such as *mm*) is not a change of speaker and is counted apart, as is a speaker going on with another segment. A histogram shows the offsets from two seconds of overlap to two seconds of gap, and a table gives each direction (one speaker to another) its count, median and mean. **Copy every change** copies each one with its times for R or a spreadsheet; **Save picture…** saves the histogram as SVG.
+
 ### Write a track in IPA from a practical spelling
 
 Many projects transcribe in a practical orthography. The **Orthography** panel writes such a track in another spelling, usually IPA, with an *orthography profile*: a table that lists the letters and letter groups of the spelling in a **Grapheme** column and what each is in IPA in an **IPA** column. These are the profiles of *The Unicode Cookbook for Linguists* (Moran & Cysouw 2018), which the `segments` package and CLDF datasets also read, so a profile made here works there too. Open the panel from Settings (Closed panels) or with **Find an action**.

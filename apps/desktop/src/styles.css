@@ -1524,3 +1524,10 @@ body::before {
 .sm-track { display: inline-block; width: 48px; height: 6px; margin-right: 6px; background: var(--line); border-radius: 3px; vertical-align: middle; overflow: hidden; }
 .sm-bar { display: block; height: 100%; background: var(--accent-bright); }
 .sm-shared { color: var(--muted); font-family: var(--font-ipa); }
+
+/* Turn-taking */
+.tt-bar { fill: var(--accent-bright); fill-opacity: 0.7; stroke: var(--accent); stroke-width: 0.6; }
+.tt-overlap { fill: var(--attention); fill-opacity: 0.7; stroke: var(--warn); }
+.tt-near { fill: var(--line); fill-opacity: 0.45; }
+.tt-zero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.tt-median { stroke: var(--ink); stroke-width: 2; }
