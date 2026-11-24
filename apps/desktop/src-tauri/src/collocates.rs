@@ -77,8 +77,21 @@ struct Tally {
 
 #[allow(clippy::too_many_arguments)]
 pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, right: usize, min_together: usize, scope: &Scope) -> Result<Collocates, String> {
+    collocates_tagged(session, node, kind, left, right, min_together, scope, None)
+}
+
+/// Collocates, with `tag` (a UPOS tag) keeping only collocates written with
+/// that tag: the window still spans every word, but a collocate counts
+/// together and in the scope only where it is tagged so (a word as an ADJ),
+/// so the 2×2 table stays whole.
+#[allow(clippy::too_many_arguments)]
+pub fn collocates_tagged(session: &mut Session, node: &str, kind: Kind, left: usize, right: usize, min_together: usize, scope: &Scope, tag: Option<&str>) -> Result<Collocates, String> {
     if !matches!(kind, Kind::Word | Kind::Translation | Kind::Lemma) {
         return Err("collocates are counted between words, translation words or lemmas".into());
+    }
+    let tag = tag.map(str::trim).filter(|t| !t.is_empty()).map(str::to_uppercase);
+    if tag.is_some() && kind == Kind::Translation {
+        return Err("tags are on the transcriptions' words, so translation words cannot be picked by tag".into());
     }
     if left == 0 && right == 0 {
         return Err("the window needs at least one word on one side".into());
@@ -96,14 +109,15 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
     each_segment(p, Read::of(kind), scope, |seg| {
         // Lemmas as CQP reads them (punctuation left out); a word with no
         // lemma keeps its place in the window but is counted on no side.
-        let words: Vec<Option<(String, String)>> = if kind == Kind::Lemma {
+        // Each word with its tag (empty when untagged or not asked for).
+        let words: Vec<Option<(String, String, String)>> = if kind == Kind::Lemma || tag.is_some() {
             crate::cqp::tokens_of(p, &seg.id)?
                 .into_iter()
                 .filter(|t| t.upos != "PUNCT")
                 .map(|t| {
-                    let spelling = p.proj.nfc(&t.lemma);
+                    let spelling = p.proj.nfc(if kind == Kind::Lemma { &t.lemma } else { &t.word });
                     let k = wugs_model::fold_key(&spelling);
-                    (!k.is_empty()).then_some((k, spelling))
+                    (!k.is_empty()).then_some((k, spelling, t.upos))
                 })
                 .collect()
         } else {
@@ -111,20 +125,23 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
                 .iter()
                 .map(|w| {
                     let spelling = p.proj.nfc(w);
-                    (wugs_model::fold_key(&spelling), spelling)
+                    (wugs_model::fold_key(&spelling), spelling, String::new())
                 })
-                .filter(|(k, _)| !k.is_empty())
+                .filter(|(k, _, _)| !k.is_empty())
                 .map(Some)
                 .collect()
         };
-        for (k, _) in words.iter().flatten() {
+        let counts = |upos: &str| tag.as_deref().is_none_or(|t| t == upos);
+        for (k, _, upos) in words.iter().flatten() {
             tokens += 1;
-            *freq.entry(k.clone()).or_default() += 1;
+            if counts(upos) {
+                *freq.entry(k.clone()).or_default() += 1;
+            }
         }
         // Each slot once, owned by the nearest node: (node index, distance).
         let mut owner: Vec<Option<(usize, usize)>> = vec![None; words.len()];
         for (i, w) in words.iter().enumerate() {
-            let Some((k, _)) = w else { continue };
+            let Some((k, _, _)) = w else { continue };
             if !glob(&pattern, &k.chars().collect::<Vec<_>>()) {
                 continue;
             }
@@ -139,8 +156,11 @@ pub fn collocates(session: &mut Session, node: &str, kind: Kind, left: usize, ri
         }
         for (j, slot) in owner.iter().enumerate() {
             let Some((i, _)) = slot else { continue };
-            let Some((ck, spelling)) = &words[j] else { continue };
+            let Some((ck, spelling, upos)) = &words[j] else { continue };
             slots += 1;
+            if !counts(upos) {
+                continue;
+            }
             let t = near.entry(ck.clone()).or_default();
             t.together += 1;
             if j < *i {
@@ -274,6 +294,15 @@ mod tests {
         let bark = c.rows.iter().find(|r| r.item == "bark").expect("bark");
         assert_eq!((bark.together, bark.right, bark.freq), (2, 2, 2), "bark and barked under one lemma");
         assert!(c.rows.iter().all(|r| r.item != "."));
+        // Only verbs keep company: the window still counts every word.
+        let v = collocates_tagged(&mut session, "dog*", Kind::Word, 1, 1, 1, &Scope::all(), Some("verb")).unwrap();
+        let mut items: Vec<&str> = v.rows.iter().map(|r| r.item.as_str()).collect();
+        items.sort();
+        assert_eq!(items, vec!["bark", "barked", "sleeps"]);
+        assert_eq!((v.node, v.tokens), (3, 8), "every word counts in the scope, «a» too");
+        let d = collocates_tagged(&mut session, "dog*", Kind::Word, 1, 1, 1, &Scope::all(), Some("DET")).unwrap();
+        assert_eq!(d.rows.iter().map(|r| r.item.as_str()).collect::<Vec<_>>().len(), 2, "The and a");
+        assert!(collocates_tagged(&mut session, "dog", Kind::Translation, 1, 1, 1, &Scope::all(), Some("NOUN")).is_err());
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

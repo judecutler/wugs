@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { asTsv, lemmaQuery, compareCollocates, compareLine, compareTsv, leansTo, sortCollocates, summary, type CollocateRow } from "./logic.ts";
+import { asTsv, COLLOCATE_TAGS, lemmaQuery, tagNote, compareCollocates, compareLine, compareTsv, leansTo, sortCollocates, summary, type CollocateRow } from "./logic.ts";
 
 const row = (item: string, together: number, ll: number, mi: number): CollocateRow => ({ item, together, left: together, right: 0, freq: together * 2, logLikelihood: ll, mutualInformation: mi, logDice: mi + 8, tScore: together / 2 });
 const rows = [row("old", 3, 12.5, 3.1), row("a", 1, 0.4, 6.0), row("the", 3, 5.0, 1.0)];
@@ -46,4 +46,10 @@ test("a lemma pattern opens as a CQP query", () => {
   assert.equal(lemmaQuery("dog", null), '[lemma="dog" %c]');
   assert.equal(lemmaQuery("walk*", null), '[lemma="walk.*" %c]');
   assert.equal(lemmaQuery("a.b?", { key: "genre", value: "news" }), '[lemma="a\\.b." %c] :: match.text_genre="news"');
+});
+
+test("a limit to one part of speech is named in the note", () => {
+  assert.equal(tagNote(""), "");
+  assert.match(tagNote("ADJ"), /^ Only adjectives \(ADJ\) are counted as collocates/u);
+  assert.ok(!COLLOCATE_TAGS.some((t) => t.tag === "PUNCT"));
 });
