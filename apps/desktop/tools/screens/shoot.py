@@ -873,6 +873,15 @@ def main():
             run.shot("state-vowels-watt", run.page.locator(".panel-vowels"))
             if "The triangle's corners" not in run.page.locator(".panel-vowels").inner_text() or "F1 (F/S)" not in run.page.locator(".panel-vowels .vw-plot").text_content():
                 failures.append("Vowel space did not normalize by Watt and Fabricius")
+            # A second speaker's track over the first, each normalized on their own.
+            run.page.locator(".panel-vowels select.vw-method").select_option("lobanov")
+            other = run.page.locator(".panel-vowels select.vw-other option").nth(1).get_attribute("value")
+            run.page.locator(".panel-vowels select.vw-other").select_option(other)
+            run.page.locator(".panel-vowels .vw-label.vw-two").first.wait_for()
+            run.shot("state-vowels-two", run.page.locator(".panel-vowels"))
+            if run.page.locator(".panel-vowels .vw-key").count() != 1 or "Each speaker is normalized" not in run.page.locator(".panel-vowels").inner_text():
+                failures.append("Vowel space did not draw a second speaker over the first")
+            run.page.locator(".panel-vowels select.vw-other").select_option("")
             run.page.locator(".panel-vowels select.vw-method").select_option("hz")
             # Agreement: the market conversation's two hearings compared.
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); window.__keptSelection = st.getSelection(); await st.selectText('t-market'); }")
