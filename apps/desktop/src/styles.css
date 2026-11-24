@@ -1365,6 +1365,8 @@ body::before {
 .ty-seg.is-own { background: var(--accent); opacity: 1; }
 .ty-credit { font-size: var(--text-xs); }
 .ty-map-toggle { margin-left: auto; }
+.sd-map-chip { cursor: pointer; }
+.sd-map-chip.is-open { border-color: var(--accent); background: var(--accent-soft); }
 .tm-wrap { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
 .tm-map { width: 100%; max-height: 420px; border: 1px solid var(--line); border-radius: var(--radius-sm); }
 .tm-sea { fill: var(--accent-soft); }

@@ -72,8 +72,9 @@ pub struct Compared {
     pub edition: &'static str,
 }
 
-pub fn compare(glottocode: &str) -> Result<Compared, String> {
-    let me = glottolog::by_glottocode(glottocode).ok_or_else(|| format!("Glottolog has no languoid «{}».", glottocode.trim()))?;
+/// The language's own inventories' Glottocode, and the languages it is
+/// compared with (each by its first inventory) with what they are in words.
+fn group(me: &glottolog::Languoid) -> (&'static str, Vec<(glottolog::Languoid, &'static Inventory)>, String) {
     let all = inventories();
     let mut by_code: BTreeMap<&str, Vec<&Inventory>> = BTreeMap::new();
     for inv in all {
@@ -86,17 +87,13 @@ pub fn compare(glottocode: &str) -> Result<Compared, String> {
     } else {
         me.glottocode
     };
-    let own = by_code
-        .get(own_code)
-        .map(|list| list.iter().map(|i| InventoryView { id: i.id.into(), source: i.source.into(), name: i.name.into(), phonemes: i.phonemes.iter().map(|p| p.to_string()).collect() }).collect())
-        .unwrap_or_default();
     // Each other language once, by its first inventory.
     let firsts: Vec<(glottolog::Languoid, &Inventory)> = by_code
         .iter()
         .filter(|(code, _)| **code != own_code && **code != me.glottocode)
         .filter_map(|(code, list)| Some((glottolog::by_glottocode(code)?, list[0])))
         .collect();
-    let pick = |keep: &dyn Fn(&glottolog::Languoid) -> bool| -> Vec<&Inventory> { firsts.iter().filter(|(l, _)| keep(l)).map(|(_, i)| *i).collect() };
+    let pick = |keep: &dyn Fn(&glottolog::Languoid) -> bool| -> Vec<(glottolog::Languoid, &'static Inventory)> { firsts.iter().filter(|(l, _)| keep(l)).cloned().collect() };
     let mut others = Vec::new();
     let mut compared_with = String::new();
     if !me.family.is_empty() && me.family != "isolate" {
@@ -110,6 +107,19 @@ pub fn compare(glottocode: &str) -> Result<Compared, String> {
     if others.is_empty() {
         compared_with.clear();
     }
+    let own_code: &'static str = by_code.get_key_value(own_code).map(|(k, _)| *k).unwrap_or(me.glottocode);
+    (own_code, others, compared_with)
+}
+
+pub fn compare(glottocode: &str) -> Result<Compared, String> {
+    let me = glottolog::by_glottocode(glottocode).ok_or_else(|| format!("Glottolog has no languoid «{}».", glottocode.trim()))?;
+    let (own_code, others, compared_with) = group(&me);
+    let own = inventories()
+        .iter()
+        .filter(|i| i.glottocode == own_code)
+        .map(|i| InventoryView { id: i.id.into(), source: i.source.into(), name: i.name.into(), phonemes: i.phonemes.iter().map(|p| p.to_string()).collect() })
+        .collect();
+    let others: Vec<&Inventory> = others.into_iter().map(|(_, i)| i).collect();
     let mut counts: HashMap<&str, usize> = HashMap::new();
     for inv in &others {
         for p in inv.phonemes.iter().collect::<HashSet<_>>() {
@@ -119,6 +129,39 @@ pub fn compare(glottocode: &str) -> Result<Compared, String> {
     let mut shares: Vec<Share> = counts.into_iter().map(|(p, n)| Share { phoneme: p.to_string(), languages: n }).collect();
     shares.sort_by(|a, b| b.languages.cmp(&a.languages).then_with(|| a.phoneme.cmp(&b.phoneme)));
     Ok(Compared { name: me.name.to_string(), own, compared_with, relatives: others.len(), shares, edition: EDITION })
+}
+
+/// Which of the compared languages have one phoneme, on a map (the
+/// Typology panel's map shape: code `1` has it, `0` lacks it); the language
+/// itself by its first inventory, `?` when PHOIBLE has none for it.
+pub fn map(glottocode: &str, phoneme: &str) -> Result<crate::typology::FeatureMap, String> {
+    let me = glottolog::by_glottocode(glottocode).ok_or_else(|| format!("Glottolog has no languoid «{}».", glottocode.trim()))?;
+    let (own_code, others, compared_with) = group(&me);
+    let mut points = Vec::new();
+    let mut unplaced = 0;
+    for (l, inv) in &others {
+        let value = if inv.phonemes.contains(&phoneme) { "1" } else { "0" };
+        match (l.lat, l.lon) {
+            (Some(lat), Some(lon)) => points.push(crate::typology::MapPoint { glottocode: l.glottocode.to_string(), name: l.name.to_string(), lat, lon, value: Some(value.into()), me: false }),
+            _ => unplaced += 1,
+        }
+    }
+    let own = inventories().iter().find(|i| i.glottocode == own_code);
+    let at = [Some(me.clone()), glottolog::by_glottocode(own_code)].into_iter().flatten().find(|l| l.lat.is_some() && l.lon.is_some());
+    if let Some(at) = at {
+        let value = own.map(|i| if i.phonemes.contains(&phoneme) { "1" } else { "0" }).unwrap_or("?");
+        points.push(crate::typology::MapPoint { glottocode: me.glottocode.to_string(), name: me.name.to_string(), lat: at.lat.unwrap_or(0.0), lon: at.lon.unwrap_or(0.0), value: Some(value.into()), me: true });
+    }
+    Ok(crate::typology::FeatureMap {
+        feature: phoneme.to_string(),
+        question: format!("Is /{phoneme}/ in the inventory?"),
+        codes: vec![crate::typology::Code { value: "0".into(), label: format!("no /{phoneme}/") }, crate::typology::Code { value: "1".into(), label: format!("/{phoneme}/") }],
+        compared_with,
+        points,
+        unplaced,
+        land: crate::typology::LAND,
+        edition: EDITION,
+    })
 }
 
 #[cfg(test)]
@@ -139,6 +182,13 @@ mod tests {
         let s = compare("stan1288").unwrap();
         assert_eq!(s.compared_with, "Indo-European languages");
         assert!(s.shares.iter().any(|x| x.phoneme == "m" && x.languages * 10 > s.relatives * 9), "nearly every Indo-European inventory has m");
+        // On a map: as many compared languages with /m/ placed as the share counts, less the unplaced.
+        let m = map("stan1288", "m").unwrap();
+        let with: usize = m.points.iter().filter(|p| !p.me && p.value.as_deref() == Some("1")).count();
+        let share = s.shares.iter().find(|x| x.phoneme == "m").unwrap().languages;
+        assert!(with <= share && with + m.unplaced >= share);
+        assert_eq!(m.points.iter().filter(|p| !p.me).count() + m.unplaced, s.relatives);
+        assert!(m.points.last().is_some_and(|p| p.me && p.value.as_deref() == Some("1")), "Spanish has /m/");
         assert!(compare("nope1234").is_err());
     }
 }

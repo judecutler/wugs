@@ -833,6 +833,14 @@ def main():
             run.shot("state-sounds-phoible", run.page.locator(".panel-sounds"))
             if "PHOIBLE has 1 inventory of Kelani" not in run.page.locator(".panel-sounds .sd-phoible-note").inner_text():
                 failures.append("Sounds did not compare with PHOIBLE")
+            # A phoneme chip opens a map of which relatives have it.
+            run.page.locator(".panel-sounds .sd-map-chip").first.click()
+            run.page.locator(".panel-sounds .tm-map").wait_for()
+            run.page.locator(".panel-sounds .tm-wrap").scroll_into_view_if_needed()
+            run.shot("state-sounds-phoible-map", run.page.locator(".panel-sounds"))
+            if run.page.locator(".panel-sounds .tm-dot").count() != 15:
+                failures.append("Sounds: the phoneme map did not place every language")
+            run.page.locator(".panel-sounds .sd-map-chip.is-open").click()
             run.page.locator(".panel-sounds .sd-syllable-note").scroll_into_view_if_needed()
             run.shot("state-sounds-syllables", run.page.locator(".panel-sounds"))
             if "consonants before the vowel" not in run.page.locator(".panel-sounds .sd-syllable-note").inner_text():
