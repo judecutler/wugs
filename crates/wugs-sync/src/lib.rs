@@ -2,13 +2,23 @@
 //!
 //! Divergence detection is a per-scope bucket map. Every applied op falls in a
 //! time window (`hlc.millis >> 16`, about 65.5 s). A window's hash is the XOR of
-//! `fnv1a64(op_id)` over its ops, so it is order-independent and a pure function
+//! `op_hash(op_id)` over its ops, so it is order-independent and a pure function
 //! of the op-id set. Two devices compare one root, then only the windows whose
 //! hashes differ.
 //!
+//! `op_hash` is FNV-1a passed through MurmurHash3's 64-bit finalizer. Plain
+//! FNV-1a must not be XOR-ed: it is nearly linear in its last byte, and a
+//! txn's op ids are consecutive ULIDs (`X`, `X+1`, …), so two devices'
+//! same-sized txns in one window cancelled to the same window hash about once
+//! in a thousand pairs. The roots then matched, and neither device ever
+//! fetched the other's writes (found as a flaky test in `tests/assist.rs`).
+//! The finalizer spreads every input bit over the output, so such sets
+//! collide only by chance (2⁻⁶⁴). Changing it changed every summary, so the
+//! session version went from `wugs/3` to `wugs/4` (wugs-net's ALPN).
+//!
 //! The hash is non-cryptographic. It detects divergence and accidental
-//! corruption, not an adversary. The upgrade path is BLAKE3 once crates are
-//! reachable; only `fnv1a64` and the two folds below change.
+//! corruption, not an adversary. The upgrade path is BLAKE3; only `op_hash`
+//! and the two folds below change.
 //!
 //! ACL enforcement lives here. A scope the sender's `SyncPolicy` denies is never
 //! summarized for the peer, never collected from the log, and so never reaches
@@ -41,6 +51,22 @@ fn fnv1a64_from(mut h: u64, bytes: &[u8]) -> u64 {
 
 fn fnv1a64(bytes: &[u8]) -> u64 {
     fnv1a64_from(FNV_OFFSET, bytes)
+}
+
+/// MurmurHash3's 64-bit finalizer: every input bit reaches every output bit.
+fn fmix64(mut h: u64) -> u64 {
+    h ^= h >> 33;
+    h = h.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    h ^= h >> 33;
+    h = h.wrapping_mul(0xc4ce_b9fe_1a85_ec53);
+    h ^= h >> 33;
+    h
+}
+
+/// What an op id adds (by XOR) to its window's hash. See the module notes
+/// for why plain FNV-1a is not enough.
+fn op_hash(bytes: &[u8]) -> u64 {
+    fmix64(fnv1a64(bytes))
 }
 
 fn window_of(hlc: &str) -> Option<u64> {
@@ -76,18 +102,18 @@ pub fn summary(proj: &Projection, scope: &str) -> Result<ScopeSummary, String> {
     while s.step()? {
         let hlc = s.col_text(1);
         let w = window_of(&hlc).ok_or_else(|| format!("unparseable hlc in ops_applied: {hlc}"))?;
-        *windows.entry(w).or_insert(0) ^= fnv1a64(s.col_text(0).as_bytes());
+        *windows.entry(w).or_insert(0) ^= op_hash(s.col_text(0).as_bytes());
     }
     for (op_id, hlc) in proj.held_op_ids(scope)? {
         let w = window_of(&hlc).ok_or_else(|| format!("unparseable hlc in quarantine_ops: {hlc}"))?;
-        *windows.entry(w).or_insert(0) ^= fnv1a64(op_id.as_bytes());
+        *windows.entry(w).or_insert(0) ^= op_hash(op_id.as_bytes());
     }
     // Parked ops are in the log and will apply when their dependency
     // arrives; without them the sender re-offers (and the receiver re-logs)
     // a parked op on every sync, forever.
     for (op_id, hlc) in proj.pending_op_ids(scope)? {
         let w = window_of(&hlc).ok_or_else(|| format!("unparseable hlc in pending: {hlc}"))?;
-        *windows.entry(w).or_insert(0) ^= fnv1a64(op_id.as_bytes());
+        *windows.entry(w).or_insert(0) ^= op_hash(op_id.as_bytes());
     }
     Ok(ScopeSummary::from_windows(scope, windows))
 }
@@ -99,7 +125,7 @@ impl ScopeSummary {
         let mut out: BTreeMap<u64, u64> = BTreeMap::new();
         for (w, h) in &self.windows {
             *out.entry(w >> GROUP_SHIFT).or_insert(0) ^=
-                fnv1a64_from(fnv1a64(&w.to_le_bytes()), &h.to_le_bytes());
+                fmix64(fnv1a64_from(fnv1a64(&w.to_le_bytes()), &h.to_le_bytes()));
         }
         out
     }
@@ -309,3 +335,30 @@ fn transfer(r: wire::Requester) -> Transfer {
     }
 }
 
+
+#[cfg(test)]
+mod summary_hash_tests {
+    use super::*;
+
+    /// Two two-op txns from two devices, each op id the next ULID after the
+    /// one before, seen in a sync test that failed about once in a hundred
+    /// runs: plain FNV-1a gave both pairs the same XOR, so both devices'
+    /// windows hashed alike and neither fetched the other's writes.
+    const A: [&str; 2] = ["op_01M87DJT2FTKBNVZASMF7K8RWQ", "op_01M87DJT2FTKBNVZASMF7K8RWR"];
+    const B: [&str; 2] = ["op_01M87DJT2GCP7R2PM7P4PY0TPE", "op_01M87DJT2GCP7R2PM7P4PY0TPF"];
+
+    #[test]
+    fn consecutive_op_ids_of_two_txns_no_longer_cancel() {
+        let xor = |f: fn(&[u8]) -> u64, ids: [&str; 2]| f(ids[0].as_bytes()) ^ f(ids[1].as_bytes());
+        assert_eq!(xor(fnv1a64, A), xor(fnv1a64, B), "the collision plain FNV-1a gave");
+        assert_ne!(xor(op_hash, A), xor(op_hash, B));
+    }
+
+    #[test]
+    fn the_finalizer_spreads_a_one_bit_change() {
+        // A change in the lowest bit moves about half of the output bits.
+        let flipped = (fmix64(0x10) ^ fmix64(0x11)).count_ones();
+        assert!((16..=48).contains(&flipped), "{flipped} bits changed");
+        assert_eq!(fmix64(0), 0);
+    }
+}
