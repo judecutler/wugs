@@ -928,6 +928,11 @@ def main():
             if "[+voice, −sonorant]" not in run.page.locator(".panel-sounds .sd-feat-line").inner_text():
                 failures.append("Features did not pick out [+voice, −sonorant]")
             run.page.locator(".panel-sounds .sd-bar button", has_text="Clear").click()
+            allo = run.page.locator(".panel-sounds .sd-h", has_text="Possible allophones")
+            allo.scroll_into_view_if_needed()
+            run.shot("state-sounds-allophones", run.page.locator(".panel-sounds"))
+            if allo.count() != 1:
+                failures.append("Sounds did not show Possible allophones")
             # Two sounds never in one environment get a rule to try.
             run.page.locator(".panel-sounds select[aria-label='First sound']").select_option("ɾ")
             run.page.wait_for_timeout(150)

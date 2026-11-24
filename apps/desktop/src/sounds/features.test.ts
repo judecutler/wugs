@@ -6,7 +6,8 @@ test("consonants and vowels get their features from the chart", () => {
   const b = featuresOf("b")!;
   assert.deepEqual([b.syllabic, b.consonantal, b.sonorant, b.continuant, b["delayed release"], b.voice, b.labial, b.coronal, b.dorsal, b.high], ["-", "+", "-", "-", "-", "+", "+", "-", "-", ""]);
   const s = featuresOf("s")!;
-  assert.deepEqual([s.continuant, s["delayed release"], s.voice, s.coronal], ["+", "+", "-", "+"]);
+  assert.deepEqual([s.continuant, s["delayed release"], s.voice, s.coronal, s.anterior], ["+", "+", "-", "+", "+"]);
+  assert.equal(featuresOf("ʃ")!.anterior, "-");
   const n = featuresOf("n")!;
   assert.deepEqual([n.sonorant, n.nasal, n.continuant, n["delayed release"]], ["+", "+", "-", ""]);
   const l = featuresOf("l")!;
