@@ -87,8 +87,8 @@ pub fn keywords_of(session: &mut Session, kind: Kind, target: &Scope, min_count:
 /// groups of texts or two speakers' tracks can be compared directly.
 pub fn keywords_against(session: &mut Session, kind: Kind, target: &Scope, against: &Scope, min_count: usize, size: usize) -> Result<Keywords, String> {
     let size = size.clamp(1, MAX_SIZE);
-    if !matches!(kind, Kind::Word | Kind::Translation | Kind::Lemma | Kind::Tag) {
-        return Err("keywords are counted between words, translation words, lemmas or tags".into());
+    if matches!(kind, Kind::Morph | Kind::Gloss) && size > 1 {
+        return Err("morphs and glosses are compared one at a time, not in a row".into());
     }
     if target.is_all() {
         return Err("keywords compare a text, or the texts a detail picks, with the rest".into());
@@ -101,6 +101,36 @@ pub fn keywords_against(session: &mut Session, kind: Kind, target: &Scope, again
     each_segment(p, Read::of(kind), &Scope::all(), |seg| {
         let here = here.has(&seg.text, &seg.tier);
         if !here && !there.has(&seg.text, &seg.tier) {
+            return Ok(());
+        }
+        let mut tally = |key: String, spelling: String| {
+            let t = tallies.entry(key).or_default();
+            if here {
+                c += 1;
+                t.focus += 1;
+            } else {
+                d += 1;
+                t.reference += 1;
+            }
+            match t.spellings.iter_mut().find(|(s, _)| *s == spelling) {
+                Some((_, n)) => *n += 1,
+                None => t.spellings.push((spelling, 1)),
+            }
+        };
+        if matches!(kind, Kind::Morph | Kind::Gloss) {
+            // Once per word, as Frequencies and the Concordance count them, so
+            // each side's size is its morphs (or glosses) counted that way.
+            for token in &seg.tokens {
+                let mut seen = std::collections::HashSet::new();
+                for m in crate::concordance::morphs_of(p, token)? {
+                    let raw = if kind == Kind::Morph { m.surface } else { m.gloss };
+                    let spelling = p.proj.nfc(crate::concordance::bare(&raw));
+                    let key = wugs_model::lexicon_key(&spelling);
+                    if !key.is_empty() && seen.insert(key.clone()) {
+                        tally(key, spelling);
+                    }
+                }
+            }
             return Ok(());
         }
         // Each word's key and spelling; None for a word with no lemma or tag,
@@ -131,18 +161,7 @@ pub fn keywords_against(session: &mut Session, kind: Kind, target: &Scope, again
             // Keys joined by U+001F, so a word holding a space never merges two sequences.
             let key = run.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>().join("\u{1f}");
             let spelling = run.iter().map(|(_, s)| s.as_str()).collect::<Vec<_>>().join(" ");
-            let t = tallies.entry(key).or_default();
-            if here {
-                c += 1;
-                t.focus += 1;
-            } else {
-                d += 1;
-                t.reference += 1;
-            }
-            match t.spellings.iter_mut().find(|(s, _)| *s == spelling) {
-                Some((_, n)) => *n += 1,
-                None => t.spellings.push((spelling, 1)),
-            }
+            tally(key, spelling);
         }
         Ok(())
     })?;
@@ -278,7 +297,10 @@ mod tests {
         let pairs = keywords_of(&mut session, Kind::Word, &Scope::text(&fox), 1, 2).unwrap();
         assert_eq!(pairs.focus_tokens, 5);
         assert_eq!((pairs.rows[0].item.as_str(), pairs.rows[0].focus, pairs.rows[0].reference), ("the fox", 2, 0));
-        assert!(keywords(&mut session, Kind::Gloss, &Scope::text(&sample), 1).is_err());
+        // Glosses: each word's glosses once, the grammatical ones compared like words.
+        let glosses = keywords(&mut session, Kind::Gloss, &Scope::text(&sample), 1).unwrap();
+        assert!(glosses.focus_tokens > 0 && !glosses.rows.is_empty() && glosses.rows.iter().all(|r| !r.item.is_empty() && r.log_likelihood.is_finite()), "{glosses:?}");
+        assert!(keywords_of(&mut session, Kind::Morph, &Scope::text(&sample), 1, 2).is_err());
         // Against one other text only: the sample is left out of the reference.
         let hen = crate::session::create_text(&mut session, "Hen").unwrap();
         crate::session::add_segment(&mut session, &hen, None, Some(0.0), Some(900.0), "the hen ran").unwrap();

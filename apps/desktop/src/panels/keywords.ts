@@ -91,8 +91,11 @@ export const keywordsPanel: PanelDef = {
         }),
       );
     const drawChips = () => {
-      chips(kinds, [{ id: "word" as Kind, label: "Words", title: "Compare transcribed words" }, { id: "translation" as Kind, label: "Translations", title: "Compare the words of free translations" }, { id: "lemma" as Kind, label: "Lemmas", title: "Compare lemmas, so ran and runs count as run: from tagging and parsing, or a glossed word's lexicon entry" }, { id: "tag" as Kind, label: "Tags", title: "Compare parts of speech (UPOS): key tags, or with words in a row, key tag sequences such as ADJ NOUN" }], () => kind, (v) => {
+      chips(kinds, [{ id: "word" as Kind, label: "Words", title: "Compare transcribed words" }, { id: "translation" as Kind, label: "Translations", title: "Compare the words of free translations" }, { id: "lemma" as Kind, label: "Lemmas", title: "Compare lemmas, so ran and runs count as run: from tagging and parsing, or a glossed word's lexicon entry" }, { id: "tag" as Kind, label: "Tags", title: "Compare parts of speech (UPOS): key tags, or with words in a row, key tag sequences such as ADJ NOUN" }, { id: "morph" as Kind, label: "Morphs", title: "Compare the morphs of glossed words, each once per word: affixes a genre or a speaker uses more" }, { id: "gloss" as Kind, label: "Glosses", title: "Compare the glosses of glossed words, each once per word: PST in narratives, IMP in instructions" }], () => kind, (v) => {
         kind = v;
+        // Morphs and glosses are compared one at a time.
+        if (kind === "morph" || kind === "gloss") sizer.value = "1";
+        sizer.disabled = kind === "morph" || kind === "gloss";
         drawChips();
         void load();
       });
@@ -140,7 +143,7 @@ export const keywordsPanel: PanelDef = {
         "tr",
         {},
         ...[
-          [kind === "lemma" ? "Lemma" : kind === "tag" ? "Tag" : "Word", ""],
+          [kind === "lemma" ? "Lemma" : kind === "tag" ? "Tag" : kind === "morph" ? "Morph" : kind === "gloss" ? "Gloss" : "Word", ""],
           ["Here", "Times in this text (per 1000 words on hover)"],
           againstId === "" ? ["Rest", "Times in the project's other texts (per 1000 words on hover)"] : ["There", `Times in ${againstLabel() ?? "the other side"} (per 1000 words on hover)`],
           ["LL", "Log-likelihood (4-term, as AntConc): how sure the difference is; below zero when the text uses the word less"],
