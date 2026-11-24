@@ -23,6 +23,7 @@ pub mod collocates;
 pub mod similar;
 pub mod frequencies;
 pub mod keywords;
+pub mod elan_glossing;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -1554,6 +1555,18 @@ fn facsimile_set_area(s: State<SessionThread>, text: String, segment: String, ar
     s.run(move |s| facsimile::set_area(s, &text, &segment, area))
 }
 
+/// Word, morph and gloss tiers an ELAN file brought, which could become the text's glossing (`elan_glossing.rs`).
+#[tauri::command(async)]
+fn tier_glossing(s: State<SessionThread>, text_id: String) -> Result<Vec<elan_glossing::TierGlossing>, String> {
+    s.run(move |s| elan_glossing::find(s, &text_id))
+}
+
+/// Read one set of those tiers as the text's tokens and morphs, and take the tiers away.
+#[tauri::command(async)]
+fn read_tier_glossing(s: State<SessionThread>, text_id: String, index: usize) -> Result<elan_glossing::ReadGlossing, String> {
+    s.run(move |s| elan_glossing::read(s, &text_id, index))
+}
+
 /// Sentences and translations as a parallel corpus (`parallel.rs`).
 #[tauri::command(async)]
 fn export_parallel(s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<parallel::Parallel, String> {
@@ -2490,6 +2503,8 @@ pub fn run() {
             collocates,
             similar_words,
             keywords,
+            tier_glossing,
+            read_tier_glossing,
             get_text,
             create_text,
             import_file,

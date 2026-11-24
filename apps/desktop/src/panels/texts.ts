@@ -6,7 +6,7 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { abbreviationMeanings, createText, readTierGlossing, tierGlossing, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { CARD_ORDERS, corpusLines, dictionaryLines, flashcardLines, parallelLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { sentencesOf } from "../interlinear/logic";
@@ -18,7 +18,8 @@ import { megabytes } from "../assist/logic";
 import { localDay } from "../dates";
 import { readerDetails, readerGlossary, readerHtml, type GlossedWord, type ReaderSentence } from "../reader/booklet";
 import { emptyState, h } from "../dom";
-import { attempt, getState, reloadTexts, selectText, showToast, touchLexicon } from "../store";
+import { attempt, getState, refreshAll, reloadTexts, selectText, showToast, touchLexicon } from "../store";
+import { readGlossingLines, tierGlossingLines, type TierGlossing } from "../elan/glossing";
 import { loanSources, tableImportLines } from "../lexicon/logic";
 import { sliced, type PanelDef } from "./panel";
 import { provide } from "../palette/registry";
@@ -119,6 +120,41 @@ async function importOne() {
       await reloadTexts();
       if (r.text !== null) await selectText(r.text);
     });
+    // An ELAN file that keeps its glossing in tiers: offer to read them as glossing.
+    if (r.format === "ELAN" && r.text !== null) {
+      const text = r.text;
+      await attempt(async () => {
+        const g = (await tierGlossing(text))[0];
+        if (g !== undefined) showToast({ tone: "info", lines: [`Imported ${r.format}.`, ...r.lines, ...tierGlossingLines(g)], action: { label: "Read as glossing", run: () => void readGlossingOf(text, g) } });
+      });
+    }
+  });
+}
+
+/** Read a text's word, morph and gloss tiers as its glossing. */
+async function readGlossingOf(textId: string, g: TierGlossing) {
+  await attempt(async () => {
+    const r = await readTierGlossing(textId, g.index);
+    showToast({ tone: "info", lines: readGlossingLines(r) });
+    await refreshAll();
+  });
+}
+
+/** The palette's way in: the text on screen's glossing tiers, or why there are none. */
+async function offerGlossingOfShown() {
+  const s = getState();
+  if (s.kind !== "open" || s.text === null) {
+    showToast({ tone: "warn", lines: ["Open a text first."] });
+    return;
+  }
+  const textId = s.text.id;
+  await attempt(async () => {
+    const g = (await tierGlossing(textId))[0];
+    if (g === undefined) {
+      showToast({ tone: "info", lines: ["This text has no tiers of words under its sentences to read as glossing."] });
+      return;
+    }
+    showToast({ tone: "info", lines: tierGlossingLines(g), action: { label: "Read as glossing", run: () => void readGlossingOf(textId, g) } });
   });
 }
 
@@ -904,6 +940,7 @@ export const textsPanel: PanelDef = {
                 redrawAll();
               },
             },
+            { id: "texts:tier-glossing", title: "Read glossing from the text's ELAN tiers", group: "Import", words: ["elan", "words", "morphs", "glosses", "tiers", "interlinear", "toolbox"], run: () => void offerGlossingOfShown() },
             { id: "texts:dictionary", title: "Print the dictionary", group: "Publish", words: ["lexicon", "html", "print", "word list"], run: () => void exportDict() },
             { id: "texts:flashcards", title: "Make flashcards for learners", group: "Publish", words: ["anki", "quizlet", "learn", "vocabulary"], run: () => void exportCards() },
             { id: "texts:parallel", title: "Save a parallel corpus (sentences and translations)", group: "Publish", words: ["machine translation", "mt", "tmx", "moses", "opus", "bitext", "aligned"], run: () => void exportParallelCorpus() },

@@ -7,6 +7,7 @@
 mod mapping;
 
 pub mod export;
+pub mod glossing;
 pub mod import;
 pub use wugs_xml as xml;
 
