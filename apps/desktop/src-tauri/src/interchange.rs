@@ -1525,6 +1525,8 @@ pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricte
         p,
         &wugs_cldf::Options { title: &title, generator, transcription_tiers: &transcription_tiers, translation_tiers: &translation_tiers, include_restricted, audio: if audio { Some(&has) } else { None } },
     )?;
+    let contents = format!("{} entries with {} senses and {} example sentences{}, as a CLDF Dictionary (Cross-Linguistic Data Formats).", ds.entries, ds.senses, ds.examples + ds.lexicon_examples, if ds.clips.is_empty() { String::new() } else { format!(", {} with a sound clip", ds.clips.len()) });
+    let (zenodo, zenodo_notes) = crate::zenodo::record(p, "CLDF Dictionary", &contents, &["CLDF", "dictionary", "interlinear glossed text"])?;
     let date = crate::corrections::date_or_today(date);
     let mut out = folder.join(format!("wugs-cldf-{date}"));
     let mut n = 2;
@@ -1539,6 +1541,7 @@ pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricte
         for (name, contents) in &ds.files {
             fs::write(scratch.join(name), contents).map_err(|e| format!("{name}: {e}"))?;
         }
+        fs::write(scratch.join(".zenodo.json"), &zenodo).map_err(|e| format!(".zenodo.json: {e}"))?;
         if !ds.clips.is_empty() {
             fs::create_dir(scratch.join("audio")).map_err(|e| format!("audio: {e}"))?;
         }
@@ -1552,7 +1555,9 @@ pub fn export_cldf(s: &mut Session, folder: &Path, date: &str, include_restricte
         fs::remove_dir_all(&scratch).ok();
         return Err(e);
     }
-    Ok(Published { path: out.display().to_string(), entries: ds.entries, senses: ds.senses, examples: ds.examples, lexicon_examples: ds.lexicon_examples, clips: ds.clips.len(), restricted_left_out: ds.restricted_left_out, notes: ds.notes })
+    let mut notes = ds.notes;
+    notes.extend(zenodo_notes);
+    Ok(Published { path: out.display().to_string(), entries: ds.entries, senses: ds.senses, examples: ds.examples, lexicon_examples: ds.lexicon_examples, clips: ds.clips.len(), restricted_left_out: ds.restricted_left_out, notes })
 }
 
 /// The longest clip cut for an example; a sentence is far shorter.

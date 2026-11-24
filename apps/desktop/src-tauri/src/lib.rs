@@ -13,6 +13,7 @@ pub mod worklog;
 pub mod hit_categories;
 pub mod mlu;
 pub mod wikipedia;
+pub mod zenodo;
 pub mod characters;
 pub mod concordance;
 pub mod cqp;
