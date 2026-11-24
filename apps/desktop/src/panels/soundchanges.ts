@@ -5,10 +5,11 @@
 // as a project setting (src-tauri/src/soundchanges.rs). Rules and words in
 // ../soundchange/sca.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, lexiconList, setSoundChanges, soundChanges } from "../api";
+import { errorText, lexiconList, orthographyGet, setSoundChanges, soundChanges, trackSources, writeConvertedTrack, type TrackLine } from "../api";
+import { convertedLines } from "../orthography/logic";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
-import { derivationsTsv, derive, EXAMPLE_RULES, expectedLine, pairsOf, parseRules, resultLine, type Derivation } from "../soundchange/sca";
+import { derivationsTsv, derive, EXAMPLE_RULES, expectedLine, lineThrough, pairsOf, parseRules, resultLine, targetName, type Derivation } from "../soundchange/sca";
 import { dataGeneration, getState, lexiconRevision, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -46,6 +47,78 @@ export const soundChangesPanel: PanelDef = {
       textContent:
         "A category is a capital and its sounds (V = a e i o u). A rule is sounds > what they become / where: p t k > b d g / V_V. _ is the sound's place, # a word's edge, ( ) optional, ∅ nothing (deletion or, on the left, insertion), // after the place where the rule does not apply. Rules run in order; ; starts a comment.",
     });
+
+    // Over a track: every line of a transcription through the rules, written as a track of its own.
+    const trackPick = h("select", { className: "sca-track", title: "The transcription track to run the rules over" });
+    trackPick.setAttribute("aria-label", "Track");
+    const targetField = h("input", { type: "text", className: "sca-target", placeholder: "Name of the track to write" });
+    targetField.setAttribute("aria-label", "Track to write");
+    const previewButton = h("button", { type: "button", textContent: "Preview" });
+    const writeButton = h("button", { type: "button", className: "primary", textContent: "Write the track" });
+    const trackNote = h("p", { className: "note" });
+    const trackTable = h("table", { className: "fq-table sca-track-table" });
+    let tracks: { id: string; name: string }[] = [];
+    let lines: TrackLine[] = [];
+    const trackBlock = h(
+      "section",
+      { className: "sca-track-block" },
+      h("h3", { textContent: "Over a track" }),
+      h("p", { className: "note", textContent: "Run the rules over every line of a transcription track and write the result as a track of its own: a normalized spelling of a historical text, or the surface forms the rules derive. A line you later edit on that track is kept when you write it again." }),
+      h("div", { className: "cc-bar" }, trackPick, targetField, previewButton, writeButton),
+      trackNote,
+      trackTable,
+    );
+    const fillTracks = async () => {
+      try {
+        tracks = (await orthographyGet()).tracks.map((t) => ({ id: t.id, name: t.name }));
+      } catch {
+        tracks = [];
+      }
+      trackBlock.hidden = tracks.length === 0;
+      const pick = tracks.some((t) => t.id === trackPick.value) ? trackPick.value : (tracks[0]?.id ?? "");
+      trackPick.replaceChildren(...tracks.map((t) => h("option", { value: t.id, textContent: t.name, selected: t.id === pick })));
+      if (targetField.value.trim() === "") targetField.value = targetName(tracks.find((t) => t.id === pick)?.name ?? "");
+    };
+    trackPick.onchange = () => {
+      targetField.value = targetName(tracks.find((t) => t.id === trackPick.value)?.name ?? "");
+      lines = [];
+      trackTable.replaceChildren();
+      trackNote.textContent = "";
+    };
+    const throughRules = async () => {
+      const r = parseRules(rulesField.value);
+      if (r.rules.length === 0) {
+        trackNote.textContent = "Write some rules first.";
+        return null;
+      }
+      lines = await trackSources({ tierId: trackPick.value, textId: null });
+      return lines.map((l) => ({ segment: l.segment, before: l.content, content: lineThrough(l.content, r.rules) }));
+    };
+    previewButton.onclick = async () => {
+      try {
+        const out = await throughRules();
+        if (out === null) return;
+        const changed = out.filter((o) => o.content !== o.before.trim().split(/\s+/u).join(" "));
+        trackNote.textContent = `${changed.length.toLocaleString()} of ${out.length.toLocaleString()} lines change.${changed.length > 20 ? " The first 20 are listed." : ""}`;
+        trackTable.replaceChildren(
+          h("thead", {}, h("tr", {}, h("th", { scope: "col", textContent: "Line" }), h("th", { scope: "col", textContent: "Becomes" }))),
+          h("tbody", {}, ...changed.slice(0, 20).map((o) => h("tr", {}, h("td", { className: "ipa", textContent: o.before }), h("td", { className: "ipa sca-out", textContent: o.content })))),
+        );
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    };
+    writeButton.onclick = async () => {
+      try {
+        const out = await throughRules();
+        if (out === null) return;
+        const r = await writeConvertedTrack({ tierId: trackPick.value, target: targetField.value, rows: out.map((o) => ({ segment: o.segment, content: o.content })), by: "sound changes" });
+        showToast({ tone: "info", lines: convertedLines(r) });
+        void fillTracks();
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    };
 
     const words = (): { input: string; expected: string | null }[] => (source.value === "typed" ? pairsOf(wordsField.value) : headwords.map((input) => ({ input, expected: null })));
 
@@ -132,8 +205,10 @@ export const soundChangesPanel: PanelDef = {
         el.replaceChildren(
           h("div", { className: "sca-top" }, h("div", { className: "sca-col" }, rulesField, problems, help), h("div", { className: "sca-col" }, h("div", { className: "cc-bar" }, source, changedOnly), wordsField, h("div", { className: "cc-bar" }, example, keep, copy))),
           line,
-          h("div", { className: "sca-rows" }, table),
+          h("div", { className: "sca-rows" }, table, trackBlock),
         );
+        targetField.value = "";
+        void fillTracks();
         void soundChanges().then(
           (r) => {
             kept = r;

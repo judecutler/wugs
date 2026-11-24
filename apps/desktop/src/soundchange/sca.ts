@@ -310,3 +310,17 @@ s > h / #_               ; s becomes h at the start of a word
 V > ∅ / _#               ; final vowels drop
 e > i / _(C)i            ; raising before i, across a consonant or not
 `;
+
+/** A line of a transcription through the rules, word by word (white space
+ * between words kept as one space). */
+export function lineThrough(line: string, rules: readonly Rule[]): string {
+  return line
+    .trim()
+    .split(/\s+/u)
+    .filter((w) => w !== "")
+    .map((w) => derive(w, rules).output)
+    .join(" ");
+}
+
+/** The default name of the track the rules write. */
+export const targetName = (source: string): string => `${source.trim() || "Track"} after the sound changes`;

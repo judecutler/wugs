@@ -840,6 +840,8 @@ const LEXICON = [
         edition: "Grambank 1.0 (CC BY 4.0): Skirgård et al. 2023, Science Advances",
       };
     },
+    track_sources: () => utterances.filter((u) => u.content !== "").map((u) => ({ segment: u.id, content: u.content })),
+    write_converted_track: ({ target, rows }) => ({ track: "tier-after", trackName: target, texts: 1, created: rows.length, updated: 0, unchanged: 0, kept: 0, empty: 0, unknown: [] }),
     orthography_get: () => ({
       profile: "# Kanu practical spelling\nGrapheme\tIPA\tFrequency\nsh\tʃ\t12\nng\tŋ\t9\nch\tt͡ʃ\t7\nj\tdʒ\t4\ny\tj\t6\n^h\tʔ\t3\ne\tɛ\t20\no\tɔ\t18\nx\tNULL\t1\n",
       check: { columns: ["IPA"], rules: 9, problems: [] },

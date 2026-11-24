@@ -1103,6 +1103,16 @@ def main():
             run.shot("state-soundchanges-expected", run.page.locator(".panel-soundchanges"))
             if "out as expected" not in run.page.locator(".panel-soundchanges .sca-line").inner_text() or run.page.locator(".panel-soundchanges tr.sca-miss").count() == 0:
                 failures.append("Sound changes did not check typed words against their expected forms")
+            # Over a track: every line of the utterance track through the rules, then written.
+            block = run.page.locator(".panel-soundchanges .sca-track-block")
+            block.scroll_into_view_if_needed()
+            block.locator("button", has_text="Preview").click()
+            block.locator("tbody tr").first.wait_for()
+            run.shot("state-soundchanges-track", run.page.locator(".panel-soundchanges"))
+            if "lines change" not in block.inner_text():
+                failures.append("Sound changes did not preview the track")
+            block.locator("button", has_text="Write the track").click()
+            run.page.locator(".toast", has_text="after the sound changes").wait_for()
             run.page.locator(".panel-soundchanges select.sca-source").select_option("lexicon")
             # Compare word lists: another language's list beside the answers.
             run.front("compare", "Compare word lists")
