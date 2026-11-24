@@ -70,10 +70,10 @@ export function sheetLines(r: Sheet): string[] {
   return lines;
 }
 
-export type Flashcards = { path: string; cards: number; sounds: number; noGloss: number; used?: number | null; pastLimit?: number };
+export type Flashcards = { path: string; cards: number; sounds: number; noGloss: number; used?: number | null; pastLimit?: number; sentences?: boolean };
 
 /** Which cards, in what order (`flashcards::Order`). */
-export type CardOrder = { order: "alphabet" } | { order: "commonest"; limit: number };
+export type CardOrder = { order: "alphabet" } | { order: "commonest"; limit: number } | { order: "sentences" };
 
 /** The choices beside Flashcards…, as select values. */
 export const CARD_ORDERS: { id: string; label: string; order: CardOrder }[] = [
@@ -82,9 +82,17 @@ export const CARD_ORDERS: { id: string; label: string; order: CardOrder }[] = [
   { id: "top100", label: "the 100 commonest", order: { order: "commonest", limit: 100 } },
   { id: "top250", label: "the 250 commonest", order: { order: "commonest", limit: 250 } },
   { id: "top500", label: "the 500 commonest", order: { order: "commonest", limit: 500 } },
+  { id: "sentences", label: "every translated sentence", order: { order: "sentences" } },
 ];
 
 export function flashcardLines(r: Flashcards): string[] {
+  if (r.sentences === true) {
+    const lines = [`Saved ${plural(r.cards, "sentence card", "sentence cards")} in ${r.path}: anki.txt for Anki (the sentence asked, its meaning the answer) and quizlet.txt for Quizlet. The README there says how to import them.`];
+    if (r.sounds > 0) lines.push(`${plural(r.sounds, "card plays", "cards play")} the sentence from its recording: copy the media folder into Anki's media folder first.`);
+    if (r.noGloss > 0) lines.push(`${plural(r.noGloss, "sentence with no translation was", "sentences with no translation were")} left out.`);
+    if (r.pastLimit !== undefined && r.pastLimit > 0) lines.push(`${plural(r.pastLimit, "sentence was", "sentences were")} past the 5,000 a set holds and left for a later one.`);
+    return lines;
+  }
   const lines = [`Saved ${plural(r.cards, "flashcard", "flashcards")} in ${r.path}: anki.txt for Anki (each word asked both ways) and quizlet.txt for Quizlet. The README there says how to import them.`];
   if (r.sounds > 0) lines.push(`${plural(r.sounds, "card plays", "cards play")} the word as it is said: copy the sounds folder into Anki's media folder first.`);
   else lines.push("No card has a sound yet: give an entry a pronunciation heard in a recording, in the Lexicon.");
