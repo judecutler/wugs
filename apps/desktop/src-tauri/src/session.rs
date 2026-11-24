@@ -854,6 +854,10 @@ fn import_wav(open: &mut OpenProject, file: &Path, label: &str) -> Result<Source
     t.set("source", &source, &source, "duration", Value::Num(duration_ms(&info)))?;
     t.commit()?;
     p.add_media_track(&source, &blob, "audio", &label, 0)?;
+    // What the recorder wrote into the file (date, time, equipment, description) as the recording's details.
+    for (key, value) in crate::wav_info::read(file) {
+        p.set_source_detail(&source, &key, &value)?;
+    }
 
     remember_peaks(open, hex, Rc::new(peaks));
     let p = &open.project;

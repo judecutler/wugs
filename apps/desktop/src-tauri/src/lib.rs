@@ -36,6 +36,7 @@ pub mod saymore;
 pub mod imdi;
 pub mod rough_align;
 pub mod unimorph;
+pub mod wav_info;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
