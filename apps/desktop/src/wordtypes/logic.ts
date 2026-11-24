@@ -58,3 +58,20 @@ export function withMeaning(form: string, breakdown: string, glosses: string, me
 /** A likely meaning's title: how often it stands with the word. */
 export const meaningTitle = (form: string, m: Meaning): string =>
   `In the translations of ${m.together} of the ${m.of} translated sentences with «${form}» (Dice ${m.dice.toFixed(2)}). Click to gloss the root with it.`;
+
+/** The rows whose suggestion is an earlier analysis of the same form (not a guess): safe to take for every use. */
+export function earlierRows<R extends { suggestion: { guessed?: boolean } | null }>(rows: readonly R[]): R[] {
+  return rows.filter((r) => r.suggestion !== null && r.suggestion.guessed !== true);
+}
+
+/** The Apply all button: how many forms and uses, and the second click it asks for. */
+export function applyAllLabel(forms: number, uses: number, armed: boolean): string {
+  const f = forms === 1 ? "1 word form" : `${forms} word forms`;
+  return armed ? `Analyse ${uses === 1 ? "1 use" : `${uses} uses`} of ${f}? Click again` : `Use the earlier analysis for ${f}`;
+}
+
+/** The toast after Apply all. */
+export function appliedAllLine(forms: number, uses: number, failed: number): string {
+  const done = `Analysed ${uses === 1 ? "1 use" : `${uses} uses`} of ${forms === 1 ? "1 word form" : `${forms} word forms`}, each as it was analysed before.`;
+  return failed === 0 ? `${done} Check them in the Interlinear tab.` : `${done} ${failed === 1 ? "1 form" : `${failed} forms`} could not be analysed; try them one at a time.`;
+}

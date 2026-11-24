@@ -995,6 +995,14 @@ def main():
             if "Analysed 4 uses of «wuno»" not in " ".join(run.toasts()):
                 failures.append("Words to gloss did not apply an analysis")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            # Every earlier analysis at once, never the guesses.
+            run.page.locator(".panel-wordtypes .wt-apply-all").click()
+            run.shot("state-wordtypes-apply-all", run.page.locator(".panel-wordtypes"))
+            run.page.locator(".panel-wordtypes .wt-apply-all", has_text="Click again").click()
+            run.page.wait_for_timeout(500)
+            if "Analysed 4 uses of 1 word form" not in " ".join(run.toasts()):
+                failures.append(f"Use the earlier analysis did not apply the one earlier analysis: {run.toasts()}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Progress: the vocabulary growth curve under the table.
             run.front("progress", "Progress")
             run.page.locator(".panel-progress .pg-steps li").first.wait_for()
