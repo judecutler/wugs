@@ -1506,6 +1506,8 @@ The **Frequencies** panel lists the words of the project with how often each occ
 2. Count in the **Whole project** or pick one text.
 3. Sort by count, alphabetically, or by how many texts a word is in, and type in **Filter the list** to find one.
 
+The menu beside the filter, **In any text** at first, can limit the list to what is met in 2, 3, 5 or 10 texts or more. This leaves out what belongs to one text (its people's names, its topic) and keeps the words the texts share. With 3 or 4 words in a row it gives lexical bundles as Biber counts them: recurring sequences such as *at the end of*, spread over many texts rather than repeated in one. The line above the list says how many are left.
+
 **DP** (when more than one text is counted) says how evenly each item is spread over the texts: 0 means it turns up in step with each text's size, 1 that it is all in one text (Gries's deviation of proportions, normalised). Hover over a number to read it in words. **Most evenly spread first** sorts by it, so the words used everywhere, the core vocabulary, come before ones that a single story or speaker uses a lot. Copy table includes the column.
 
 **By ending (reverse list)** sorts words from their last letter backwards, as a reverse dictionary does, and lines them up on the right. Words that share a suffix sit together (every word ending in `-lar`, then `-ler`), so you can spot inflectional endings, rhymes, and spellings of one ending that differ. A letter keeps its accents and other marks.

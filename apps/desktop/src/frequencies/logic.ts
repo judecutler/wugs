@@ -94,6 +94,25 @@ export function filterRows<R extends FrequencyRow>(rows: readonly R[], filter: s
   return rows.filter((r) => r.item.toLocaleLowerCase().includes(lower));
 }
 
+/** How many texts a row must be met in to be listed. */
+export const TEXT_RANGES: readonly { min: number; label: string }[] = [
+  { min: 1, label: "In any text" },
+  { min: 2, label: "In 2+ texts" },
+  { min: 3, label: "In 3+ texts" },
+  { min: 5, label: "In 5+ texts" },
+  { min: 10, label: "In 10+ texts" },
+];
+
+/** Only the rows met in at least `min` texts: words a corpus shares rather than one text's names and topics; with 3- or 4-word sequences, Biber's lexical bundles. */
+export const inTexts = <R extends FrequencyRow>(rows: readonly R[], min: number): R[] => (min <= 1 ? [...rows] : rows.filter((r) => r.texts >= min));
+
+/** The note's words for the range: how many rows it keeps. */
+export function rangeNote(kept: number, min: number, size: number): string {
+  if (min <= 1) return "";
+  const bundles = size >= 3 ? " (lexical bundles, as Biber counts them)" : "";
+  return ` ${kept.toLocaleString("en")} ${kept === 1 ? "is" : "are"} met in ${min} texts or more${bundles}.`;
+}
+
 /** Only the words the lexicon does not have yet (no entry or form spelled so). */
 export const notInLexicon = <R extends FrequencyRow>(rows: readonly R[]): R[] => rows.filter((r) => r.lexicon === "none" || r.lexicon === "analysed");
 
