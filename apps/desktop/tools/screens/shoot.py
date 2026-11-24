@@ -713,6 +713,14 @@ def main():
             run.shot("state-concordance-categories", run.page.locator(".panel-concordance"))
             if "figurative 1 (33%)" not in run.page.locator(".panel-concordance .cc-cats-note").inner_text():
                 failures.append(f"Concordance did not count a line sorted into a category: {run.page.locator('.panel-concordance .cc-cats-note').inner_text()}")
+            # The sorted lines compared across texts.
+            run.page.locator(".panel-concordance select.cc-cat").nth(1).select_option("literal")
+            run.page.wait_for_timeout(300)
+            run.page.select_option(".panel-concordance .cc-cross-by", "text")
+            run.page.locator(".panel-concordance .cc-cross-table").wait_for()
+            run.shot("state-concordance-cross", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance .cc-cross-table tbody tr").count() != 2:
+                failures.append("the categories were not compared text by text")
             run.page.locator(".panel-concordance .cc-sort-toggle").click()
             # Translations under the lines, read from each text.
             run.page.locator(".panel-concordance .cc-under-toggle").click()

@@ -3,7 +3,7 @@
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
 import { deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, worldLand, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
-import { categoriesLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
+import { categoriesLine, crossTab, crossTabTsv, independence, independenceLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
 import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
@@ -354,7 +354,15 @@ export const concordancePanel: PanelDef = {
     const catShow = h("select", { className: "cc-cats-show", title: "Which lines to list" });
     catShow.setAttribute("aria-label", "Lines to list");
     const catNote = h("p", { className: "note cc-cats-note" });
-    const catBar = h("div", { className: "cc-bar cc-cats" }, catInput, catShow);
+    // The sorted lines compared across texts, speakers or a detail (a variationist's cross-table).
+    const crossPick = h("select", { className: "cc-cross-by", title: "Compare the categories across texts, speakers or a detail of the texts, with a chi-square test" });
+    crossPick.setAttribute("aria-label", "Compare by");
+    const crossBox = h("div", { className: "cc-cross" });
+    /** Each hit text's details, read once per data generation for the cross-table. */
+    const crossMeta = new Map<string, Map<string, string>>();
+    let crossGeneration = -1;
+    let crossReading = false;
+    const catBar = h("div", { className: "cc-bar cc-cats" }, catInput, catShow, crossPick);
     const catKey = () => `${kind}|${asked}|${dataGeneration()}`;
     const categoryOf = (hit: Hit): string => (sorted === null ? "" : (new Map(sorted.lines).get(lineKey(hit)) ?? ""));
     /** The lines after the category filter, when sorting is on. */
@@ -367,6 +375,7 @@ export const concordancePanel: PanelDef = {
     const drawCats = () => {
       catBar.hidden = !sortOn || plotOn || clustersOn || asked === "";
       catNote.hidden = catBar.hidden;
+      crossBox.hidden = catBar.hidden;
       if (catBar.hidden) return;
       const want = catKey();
       if (want !== sortedFor) {
@@ -392,7 +401,77 @@ export const concordancePanel: PanelDef = {
       catShow.replaceChildren(h("option", { value: "all", textContent: "Every line" }), h("option", { value: "none", textContent: "Not sorted yet" }), ...sorted.categories.map((c) => h("option", { value: c, textContent: `Only «${c}»` })));
       catShow.value = [...catShow.options].some((o) => o.value === was) ? was : "all";
       catNote.textContent = categoriesLine(kept(), sorted);
+      drawCross();
     };
+    const drawCross = () => {
+      const lines = kept();
+      if (sorted === null || sorted.categories.length < 2) {
+        crossPick.hidden = true;
+        crossBox.replaceChildren();
+        return;
+      }
+      crossPick.hidden = false;
+      if (crossGeneration !== dataGeneration()) {
+        crossMeta.clear();
+        crossGeneration = dataGeneration();
+      }
+      const missing = [...new Set(lines.map((x) => x.textId))].filter((id) => !crossMeta.has(id));
+      if (missing.length > 0 && !crossReading) {
+        crossReading = true;
+        const gen = crossGeneration;
+        void Promise.all(missing.map((id) => textMetadata({ textId: id }).then((m) => [id, new Map(m.fields.map((f) => [f.key, f.value]))] as const, () => [id, new Map<string, string>()] as const))).then((pairs) => {
+          crossReading = false;
+          if (gen !== crossGeneration) return;
+          for (const [id, m] of pairs) crossMeta.set(id, m);
+          drawCross();
+        });
+      }
+      const keys = [...new Set([...crossMeta.values()].flatMap((m) => [...m.keys()]))].sort();
+      const who = speakerOf(lines, trackNames.names);
+      const was = crossPick.value;
+      crossPick.replaceChildren(
+        h("option", { value: "", textContent: "Compare by…" }),
+        h("option", { value: "text", textContent: "By text" }),
+        ...(who === null ? [] : [h("option", { value: "speaker", textContent: "By speaker" })]),
+        ...keys.map((k) => h("option", { value: `meta:${k}`, textContent: `By ${k.replace(/_/g, " ")}` })),
+      );
+      crossPick.value = [...crossPick.options].some((o) => o.value === was) ? was : "";
+      const by = crossPick.value;
+      if (by === "") {
+        crossBox.replaceChildren();
+        return;
+      }
+      const name = by === "text" ? "text" : by === "speaker" ? "speaker" : by.slice(5).replace(/_/g, " ");
+      const groupOf = (x: Hit): string => (by === "text" ? x.textTitle || "(untitled)" : by === "speaker" ? (who?.(x) ?? "") || "(no name)" : crossMeta.get(x.textId)?.get(by.slice(5)) || "(not given)");
+      const t = crossTab(lines, sorted, groupOf);
+      const test = independence(t.cells);
+      const copyCross = h("button", { type: "button", textContent: "Copy table", title: "The counts per group and category, to paste into a spreadsheet or R" });
+      copyCross.onclick = () =>
+        void writeText(crossTabTsv(t, name)).then(
+          () => showToast({ tone: "info", lines: ["Copied the table. Paste it into a spreadsheet or R."] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      const pct = (n: number, of: number) => (of === 0 ? "" : ` (${Math.round((100 * n) / of)}%)`);
+      crossBox.replaceChildren(
+        h(
+          "table",
+          { className: "cc-cross-table" },
+          h("thead", {}, h("tr", {}, h("th", { textContent: name[0]!.toUpperCase() + name.slice(1) }), ...t.categories.map((c) => h("th", { textContent: c })), h("th", { textContent: "Lines" }))),
+          h(
+            "tbody",
+            {},
+            ...t.groups.map((g, i) => {
+              const row = t.cells[i]!;
+              const total = row.reduce((a, b) => a + b, 0);
+              return h("tr", {}, h("th", { scope: "row", textContent: g }), ...row.map((n) => h("td", { textContent: `${n}${pct(n, total)}` })), h("td", { textContent: String(total) }));
+            }),
+          ),
+        ),
+        h("p", { className: "note", textContent: independenceLine(test, name) }),
+        h("div", { className: "cc-bar" }, copyCross),
+      );
+    };
+    crossPick.onchange = () => drawCross();
     const saveCats = () => {
       if (sorted === null) return;
       const next = parseCategories(catInput.value);
@@ -429,6 +508,7 @@ export const concordancePanel: PanelDef = {
             if (sortedFor !== forKey) return;
             sorted = r;
             if (sorted !== null) catNote.textContent = categoriesLine(kept(), sorted);
+            drawCross();
           },
           (e) => showToast({ tone: "error", lines: [errorText(e)] }),
         );
@@ -1059,7 +1139,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, savedPick, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, fileTopic, keepSearch, saveClipsButton), topicBar, keepBar, nearBar, catBar, catNote, chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, savedPick, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, fileTopic, keepSearch, saveClipsButton), topicBar, keepBar, nearBar, catBar, catNote, crossBox, chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */
