@@ -189,14 +189,23 @@ impl Project {
     /// movable, deletable. Returns the new ids (empty when every span was
     /// skipped; nothing is written then).
     pub fn add_segments(&mut self, text: &str, tier: &str, first_index: usize, spans: &[(f64, f64)]) -> Result<(Vec<String>, CommitResult), String> {
+        let rows: Vec<(f64, f64, String)> = spans.iter().map(|&(s, e)| (s, e, String::new())).collect();
+        self.add_labelled_segments(text, tier, first_index, &rows, MACHINE_SEGMENT_INTENT)
+    }
+
+    /// [`Project::add_segments`] with each span's text: one plain txn under
+    /// `intent`, spans overlapping a live segment on the tier (or an earlier
+    /// one of this call) skipped, so bringing the same rows in twice adds
+    /// nothing. A forced aligner's words and phones come in this way.
+    pub fn add_labelled_segments(&mut self, text: &str, tier: &str, first_index: usize, rows: &[(f64, f64, String)], intent: &str) -> Result<(Vec<String>, CommitResult), String> {
         self.require(text, "text")?;
         self.require(tier, "tier")?;
         let mut taken: Vec<(f64, f64)> = self.tier_spans(text, tier)?.into_iter().map(|(_, s, e)| (s, e)).collect();
-        let mut wanted: Vec<(f64, f64)> = spans.iter().copied().filter(|&(s, e)| s.is_finite() && e.is_finite() && s >= 0.0 && e > s).collect();
+        let mut wanted: Vec<(f64, f64, String)> = rows.iter().filter(|(s, e, _)| s.is_finite() && e.is_finite() && *s >= 0.0 && e > s).map(|(s, e, l)| (*s, *e, self.proj.nfc(l.trim()))).collect();
         wanted.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let mut t = self.intent(MACHINE_SEGMENT_INTENT);
+        let mut t = self.intent(intent);
         let mut ids = Vec::new();
-        for (s, e) in wanted {
+        for (s, e, content) in wanted {
             if taken.iter().any(|&(ts, te)| s < te && ts < e) {
                 continue;
             }
@@ -209,7 +218,7 @@ impl Project {
                     ("text", Value::str(text)),
                     ("tier", Value::str(tier)),
                     ("pos", Value::str(&pos_seq(first_index + ids.len()))),
-                    ("content", Value::str("")),
+                    ("content", Value::str(&content)),
                     ("start", Value::Num(s)),
                     ("end", Value::Num(e)),
                 ],

@@ -188,6 +188,14 @@ fn range(c: &mut Cursor, what: &str) -> Result<(Time, Time), ImportError> {
     Ok((a, b))
 }
 
+/// A TextGrid's tiers as (name, items as (start ms, end ms, label)): for
+/// callers that place the items themselves (a forced aligner's words and
+/// phones). Point tiers give items with start = end.
+pub fn tier_items(input: &str) -> Result<Vec<(String, Vec<(f64, f64, String)>)>, String> {
+    let grid = parse(input).map_err(|e| format!("{e:?}"))?;
+    Ok(grid.tiers.into_iter().map(|t| (t.name, t.items.into_iter().map(|i| (i.start.ms(), i.end.ms(), i.label)).collect())).collect())
+}
+
 pub(crate) fn parse(input: &str) -> Result<Grid, ImportError> {
     let toks = tokenize(strip_bom(input))?;
     let mut c = Cursor(toks.iter());

@@ -97,3 +97,17 @@ export function flaggedLine(s: Summary): string | null {
   ].filter((x) => x !== null);
   return parts.length === 0 ? null : `In this project's records, ${parts.join(" and ")}. They are left out unless you include them; the datasheet notes what the records say.`;
 }
+
+/** What bringing a forced aligner's results back did (`alignments.rs`). */
+export type Aligned = { files: number; clips: number; words: number; phones: number; unmatched: string[]; text: string | null };
+
+/** The toast after alignments came back. */
+export function alignedLines(r: Aligned): string[] {
+  const n = (x: number, one: string, many: string) => `${x} ${x === 1 ? one : many}`;
+  const lines =
+    r.words + r.phones === 0
+      ? [`Read ${n(r.files, "TextGrid", "TextGrids")}; nothing new to bring in (already here, or no words and phones tiers).`]
+      : [`Brought in ${n(r.words, "aligned word", "aligned words")} and ${n(r.phones, "aligned sound", "aligned sounds")} from ${n(r.clips, "clip", "clips")}, on the tracks «words (aligned)» and «phones (aligned)». Durations, Measure and the vowel chart can now work sound by sound.`];
+  if (r.unmatched.length > 0) lines.push(`${n(r.unmatched.length, "file names", "files name")} no segment of this project (${r.unmatched.slice(0, 3).join(", ")}${r.unmatched.length > 3 ? ", …" : ""}); they were left out.`);
+  return lines;
+}

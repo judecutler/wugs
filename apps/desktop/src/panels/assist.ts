@@ -5,12 +5,12 @@
 // tinted until someone edits them (src/assist/logic.ts).
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import { localDay } from "../dates";
-import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, correctionsExport, correctionsSummary, errorText, speechDatasetExport, speechDatasetSummary, type DatasetSummary, MODEL_CHANGED, type AssistModel, type CapabilityView, type CorrectionsSummary } from "../api";
-import { batchTargets, datasetLine, correctionsLine, count, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
+import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, correctionsExport, correctionsSummary, errorText, importAlignments, speechDatasetExport, speechDatasetSummary, type DatasetSummary, MODEL_CHANGED, type AssistModel, type CapabilityView, type CorrectionsSummary } from "../api";
+import { alignedLines, batchTargets, datasetLine, correctionsLine, count, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
 import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
 import { emptyState, h } from "../dom";
 import { recordingForShown } from "../hear/hear";
-import { assistModelList, capability, getState, refreshCapabilities, refreshText, setAssistModels, showToast } from "../store";
+import { assistModelList, capability, getState, refreshAll, refreshCapabilities, refreshText, setAssistModels, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 /** A batch run in progress, shared by every instance of the panel. */
@@ -286,9 +286,34 @@ export const assistPanel: PanelDef = {
           textContent: exportingDataset ? "Exporting…" : n === 0 ? "Export a speech dataset" : `Export ${n} clip${n === 1 ? "" : "s"}…`,
           disabled: n === 0 || exportingDataset,
           onclick: () => void exportDataset(),
+        }), h("button", {
+          type: "button",
+          className: "as-aligned",
+          textContent: importingAligned ? "Reading…" : "Bring back alignments…",
+          title: "After running the Montreal Forced Aligner on an exported dataset: choose the folder it wrote, and every clip's aligned words and sounds come back as timed segments on their own tracks",
+          disabled: importingAligned,
+          onclick: () => void bringBackAlignments(),
         })),
       );
     }
+
+    async function bringBackAlignments() {
+      const folder = await pickDirectory({ directory: true, title: "Choose the folder the aligner wrote its TextGrids into" });
+      if (typeof folder !== "string") return;
+      importingAligned = true;
+      draw();
+      try {
+        const r = await importAlignments({ folder });
+        showToast({ tone: r.unmatched.length > 0 ? "warn" : "info", lines: alignedLines(r) });
+        await refreshAll();
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      importingAligned = false;
+      draw();
+    }
+
+    let importingAligned = false;
 
     async function exportDataset() {
       const folder = await pickDirectory({ directory: true, title: "Choose where the speech dataset goes" });

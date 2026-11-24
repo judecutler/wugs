@@ -38,6 +38,7 @@ pub mod rough_align;
 pub mod unimorph;
 pub mod wav_info;
 pub mod domain_suggest;
+pub mod alignments;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -1967,6 +1968,12 @@ fn domain_suggestions(s: State<SessionThread>, gloss: String) -> Result<Vec<doma
     s.run(move |s| domain_suggest::suggested(s, &gloss))
 }
 
+/// Bring a forced aligner's TextGrids (one per clip of the speech dataset) back as aligned words and phones.
+#[tauri::command(async)]
+fn import_alignments(s: State<SessionThread>, folder: String) -> Result<alignments::Aligned, String> {
+    s.run(move |s| alignments::import(s, std::path::Path::new(&folder)))
+}
+
 #[tauri::command(async)]
 fn export_unimorph(s: State<SessionThread>, folder: String, date: String) -> Result<unimorph::UniMorph, String> {
     s.run(move |s| unimorph::export(s, std::path::Path::new(&folder), &date))
@@ -2775,6 +2782,7 @@ pub fn run() {
             rough_untime,
             export_unimorph,
             domain_suggestions,
+            import_alignments,
             add_tier,
             gloss_get,
             gloss_tokenize,
