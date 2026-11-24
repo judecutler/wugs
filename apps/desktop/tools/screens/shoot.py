@@ -447,6 +447,15 @@ def main():
             if "Write 3 translations" not in run.page.locator(".panel-texts .align-form").inner_text():
                 failures.append("Pair with a translation did not offer to write the three pairs")
             run.page.locator(".panel-texts button", has_text="Pair with a translation").click()
+            # Every text at once, in the chosen format.
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/out'")
+            run.page.locator(".panel-texts button", has_text="Every text").click()
+            run.page.wait_for_timeout(600)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            exported = run.page.evaluate("window.__WUGS_EXPORTED__") or []
+            if len(exported) != 3 or "Saved 3 texts of 3" not in " ".join(run.toasts()):
+                failures.append(f"Every text did not export the three texts: {exported} {run.toasts()}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # A reader to print ends with the words the text uses.
             run.page.evaluate("window.__WUGS_PICK__ = '/tmp/reader'")
             run.page.locator(".panel-texts .share-row", has_text="Reader to print").locator("button", has_text="Save").click()

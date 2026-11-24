@@ -64,3 +64,9 @@ test("several files imported at once are reported in one toast", () => {
   assert.equal(many[0], "Imported 0 of 8 files.");
   assert.equal(many.at(-1), "3 more files were not imported.");
 });
+
+test("exporting every text reports the files and the failures", async () => {
+  const { exportedAllLines } = await import("./logic.ts");
+  assert.deepEqual(exportedAllLines(3, 3, "/out", [], 0), ["Saved 3 texts of 3 in /out."]);
+  assert.deepEqual(exportedAllLines(1, 2, "/out", [{ title: "", error: "no timed sentences" }], 1), ["Saved 1 text of 2 in /out.", "1 export has notes; export a text alone to read them.", "«untitled»: no timed sentences"]);
+});
