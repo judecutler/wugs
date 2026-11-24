@@ -2,7 +2,7 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, worldLand, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
+import { deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, worldLand, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, trackSpeakers, type TextDetail } from "../api";
 import { categoriesLine, crossTab, crossTabTsv, independence, independenceLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
@@ -424,6 +424,9 @@ export const concordancePanel: PanelDef = {
     const crossMeta = new Map<string, Map<string, string>>();
     let crossGeneration = -1;
     let crossReading = false;
+    /** Each track's speaker's details (People panel), read once per data generation. */
+    let speakerDetails: Map<string, Map<string, string>> | null = null;
+    let speakersReading = false;
     const catBar = h("div", { className: "cc-bar cc-cats" }, catInput, catShow, crossPick);
     const catKey = () => `${kind}|${asked}|${dataGeneration()}`;
     const categoryOf = (hit: Hit): string => (sorted === null ? "" : (new Map(sorted.lines).get(lineKey(hit)) ?? ""));
@@ -475,7 +478,24 @@ export const concordancePanel: PanelDef = {
       crossPick.hidden = false;
       if (crossGeneration !== dataGeneration()) {
         crossMeta.clear();
+        speakerDetails = null;
         crossGeneration = dataGeneration();
+      }
+      if (speakerDetails === null && !speakersReading) {
+        speakersReading = true;
+        const gen = crossGeneration;
+        void trackSpeakers().then(
+          (rows) => {
+            speakersReading = false;
+            if (gen !== crossGeneration) return;
+            speakerDetails = new Map(rows.map(([tier, d]) => [tier, new Map(d)]));
+            drawCross();
+          },
+          () => {
+            speakersReading = false;
+            speakerDetails = new Map();
+          },
+        );
       }
       const missing = [...new Set(lines.map((x) => x.textId))].filter((id) => !crossMeta.has(id));
       if (missing.length > 0 && !crossReading) {
@@ -489,6 +509,7 @@ export const concordancePanel: PanelDef = {
         });
       }
       const keys = [...new Set([...crossMeta.values()].flatMap((m) => [...m.keys()]))].sort();
+      const speakerKeys = [...new Set([...(speakerDetails?.values() ?? [])].flatMap((m) => [...m.keys()]))].sort();
       const who = speakerOf(lines, trackNames.names);
       const was = crossPick.value;
       crossPick.replaceChildren(
@@ -496,6 +517,7 @@ export const concordancePanel: PanelDef = {
         h("option", { value: "text", textContent: "By text" }),
         ...(who === null ? [] : [h("option", { value: "speaker", textContent: "By speaker" })]),
         ...keys.map((k) => h("option", { value: `meta:${k}`, textContent: `By ${k.replace(/_/g, " ")}` })),
+        ...speakerKeys.map((k) => h("option", { value: `spk:${k}`, textContent: `By the speaker's ${k.replace(/_/g, " ")}` })),
       );
       crossPick.value = [...crossPick.options].some((o) => o.value === was) ? was : "";
       const by = crossPick.value;
@@ -503,8 +525,15 @@ export const concordancePanel: PanelDef = {
         crossBox.replaceChildren();
         return;
       }
-      const name = by === "text" ? "text" : by === "speaker" ? "speaker" : by.slice(5).replace(/_/g, " ");
-      const groupOf = (x: Hit): string => (by === "text" ? x.textTitle || "(untitled)" : by === "speaker" ? (who?.(x) ?? "") || "(no name)" : crossMeta.get(x.textId)?.get(by.slice(5)) || "(not given)");
+      const name = by === "text" ? "text" : by === "speaker" ? "speaker" : by.startsWith("spk:") ? `speaker's ${by.slice(4).replace(/_/g, " ")}` : by.slice(5).replace(/_/g, " ");
+      const groupOf = (x: Hit): string =>
+        by === "text"
+          ? x.textTitle || "(untitled)"
+          : by === "speaker"
+            ? (who?.(x) ?? "") || "(no name)"
+            : by.startsWith("spk:")
+              ? speakerDetails?.get(x.tierId)?.get(by.slice(4)) || "(not given)"
+              : crossMeta.get(x.textId)?.get(by.slice(5)) || "(not given)";
       const t = crossTab(lines, sorted, groupOf);
       const test = independence(t.cells);
       const copyCross = h("button", { type: "button", textContent: "Copy table", title: "The counts per group and category, to paste into a spreadsheet or R" });

@@ -754,6 +754,12 @@ def main():
             run.shot("state-concordance-cross", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-cross-table tbody tr").count() != 2:
                 failures.append("the categories were not compared text by text")
+            # And by a detail of each track's speaker (People panel).
+            run.page.select_option(".panel-concordance .cc-cross-by", "spk:sex")
+            run.page.wait_for_timeout(300)
+            groups = run.page.locator(".panel-concordance .cc-cross-table tbody tr").all_inner_texts()
+            if not any(g.startswith("female") for g in groups):
+                failures.append(f"the categories were not compared by the speaker's sex: {groups}")
             run.page.locator(".panel-concordance .cc-sort-toggle").click()
             # Translations under the lines, read from each text.
             run.page.locator(".panel-concordance .cc-under-toggle").click()

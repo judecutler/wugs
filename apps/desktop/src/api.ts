@@ -732,6 +732,8 @@ export const morphosyntaxRun = (args: { textId: string; model: string }) => invo
 export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
 export const corpusTracks = () => invoke<{ id: string; name: string }[]>("corpus_tracks");
 /** Each detail of the tracks' speakers with its values and how many tracks each picks. */
+/** Each transcription track with a speaker (People panel) and that speaker's details. */
+export const trackSpeakers = () => invoke<[string, [string, string][]][]>("track_speakers");
 export const speakerValues = () => invoke<[string, [string, number][]][]>("speaker_values");
 export const wikipediaImport = (args: { wiki: string; titles: string[]; random: number; date: string }) => invoke<{ text: string | null; lines: string[] }>("wikipedia_import", args);
 /** Bring in a CSV or TSV of document metadata, one row per text. */

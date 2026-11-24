@@ -1160,6 +1160,7 @@ const LEXICON = [
     },
     corpus_tracks: () => [{ id: "tier-utt", name: "utterance" }, { id: "tier-ipa", name: "IPA" }],
     speaker_values: () => [["sex", [["female", 1], ["male", 1]]]],
+    track_speakers: () => [["tier-utt", [["sex", "female"]]]],
     metadata_values: () => [
       { key: "genre", values: [["narrative", 2], ["procedural", 1]] },
       { key: "speaker", values: [["A. Speaker (synthetic)", 3]] },

@@ -372,6 +372,22 @@ pub struct Track {
 
 /// The live transcription tracks, by name: what a corpus tool can be
 /// narrowed to (one speaker's track).
+/// Each transcription track with a speaker, and that speaker's details:
+/// for grouping concordance lines by a speaker's sex, age or village.
+pub fn track_speakers(session: &mut Session) -> Result<Vec<(String, Vec<(String, String)>)>, String> {
+    let p = project(session)?;
+    let (_, transcription) = corpus_tiers(p)?;
+    let mut out = Vec::new();
+    for t in transcription {
+        let Some(person) = p.proj.field_text(&t, "speaker")? else { continue };
+        if p.proj.is_tombstoned(&person)? {
+            continue;
+        }
+        out.push((t, p.person_details(&person)?));
+    }
+    Ok(out)
+}
+
 /// The details of the people who speak on transcription tracks, each value
 /// with how many tracks it picks: for the scope pickers' "Speakers by detail".
 pub fn speaker_values(session: &mut Session) -> Result<Vec<(String, Vec<(String, usize)>)>, String> {
@@ -654,6 +670,8 @@ mod tests {
         assert!(count(&mut s, "female") > 0, "her track's words");
         assert_eq!(count(&mut s, "male"), 0, "no male speaker");
         assert_eq!(speaker_values(&mut s).unwrap(), vec![("sex".to_string(), vec![("female".to_string(), 1)])]);
+        let tracks = track_speakers(&mut s).unwrap();
+        assert_eq!((tracks.len(), tracks[0].1.clone()), (1, vec![("sex".to_string(), "female".to_string())]));
         std::fs::remove_dir_all(&dir).ok();
     }
 }
