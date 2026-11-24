@@ -5,14 +5,15 @@
 // src-tauri/src/facsimile.rs; rules in ../facsimile/logic.ts.
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { errorText, facsimileAddPage, facsimileMovePage, facsimilePageImage, facsimileRemovePage, facsimileSetArea, facsimileView } from "../api";
+import { errorText, facsimileAddLine, facsimileAddPage, facsimileMovePage, facsimilePageImage, facsimileRemovePage, facsimileSetArea, facsimileView } from "../api";
 import { emptyState, h } from "../dom";
 import { areasOn, facsimileLine, nextToMark, pageOf, pointIn, rectFrom, zoomBy, type Area, type FacsimileView, type Point } from "../facsimile/logic";
 import { provide } from "../palette/registry";
-import { dataGeneration, getSelection, getState, selectSegment, showToast, subscribeSelection } from "../store";
+import { dataGeneration, getSelection, getState, refreshText, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 const NEXT_KEY = "wugs.facsimile.next";
+const NEW_KEY = "wugs.facsimile.newLines";
 
 export const facsimilePanel: PanelDef = {
   title: "Facsimile",
@@ -27,6 +28,7 @@ export const facsimilePanel: PanelDef = {
     let busy = false;
     let armedRemove: string | null = null;
     let goNext = localStorage.getItem(NEXT_KEY) !== "off";
+    let newLines = localStorage.getItem(NEW_KEY) === "on";
     const pageFor = new Map<string, number>();
 
     const text = () => {
@@ -78,10 +80,32 @@ export const facsimilePanel: PanelDef = {
       paint();
     };
 
+    /** A box drawn as a new, empty line, selected so Transcribe can type it. */
+    const newLine = async (area: Area) => {
+      const t = text();
+      if (t === null || busy) return;
+      busy = true;
+      try {
+        const r = await facsimileAddLine({ text: t.id, area });
+        view = r.view;
+        await refreshText();
+        selectSegment({ textId: t.id, tierId: r.tier, segmentId: r.segment });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      } finally {
+        busy = false;
+      }
+      paint();
+    };
+
     const mark = (area: Area) => {
       const t = text();
       const sel = getSelection();
-      if (t === null || sel === null || sel.textId !== t.id) return;
+      if (t === null) return;
+      if (newLines || sel === null || sel.textId !== t.id) {
+        void newLine(area);
+        return;
+      }
       void run(() => facsimileSetArea({ text: t.id, segment: sel.segmentId, area })).then(() => {
         if (!goNext || view === null) return;
         const next = nextToMark(t.segments.map((s) => ({ id: s.id, tier: s.tier })), view, sel.segmentId);
@@ -127,8 +151,7 @@ export const facsimilePanel: PanelDef = {
       let from: Point | null = null;
       const at2 = (ev: PointerEvent) => pointIn(ev.clientX, ev.clientY, img.getBoundingClientRect());
       wrap.onpointerdown = (ev) => {
-        const s = getSelection();
-        if (ev.button !== 0 || s === null || s.textId !== t.id) return;
+        if (ev.button !== 0) return;
         from = at2(ev);
         wrap.setPointerCapture(ev.pointerId);
         ev.preventDefault();
@@ -229,6 +252,11 @@ export const facsimilePanel: PanelDef = {
         goNext = (ev.target as HTMLInputElement).checked;
         localStorage.setItem(NEXT_KEY, goNext ? "on" : "off");
       } }), " then the next line");
+      const fresh = h("label", { className: "fx-next", title: "Each box you draw becomes a new, empty line of the text, selected for Transcribe; with this off, a box marks the selected line" }, h("input", { type: "checkbox", checked: newLines, onchange: (ev: Event) => {
+        newLines = (ev.target as HTMLInputElement).checked;
+        localStorage.setItem(NEW_KEY, newLines ? "on" : "off");
+        paint();
+      } }), " each box a new line");
       const clear = marked === undefined ? null : h("button", { type: "button", textContent: "Clear its area", disabled: busy });
       if (clear !== null) clear.onclick = () => void run(() => facsimileSetArea({ text: t.id, segment: selected!.id, area: null }));
       const help =
@@ -237,8 +265,12 @@ export const facsimilePanel: PanelDef = {
           : h(
               "p",
               { className: "note fx-help" },
-              selected === undefined ? "Select a line in Transcribe or Interlinear, then drag on the page to mark where it stands." : `${marked === undefined ? "Drag on the page to mark where" : "Drag again to move"} «${selected.content || "(empty)"}» ${marked === undefined ? "stands" : ""}`.trim() + ". ",
-              ...(selected === undefined ? [] : [next]),
+              newLines || selected === undefined
+                ? "Drag a box around a line on the page to make it a new line of the text, then type it in Transcribe. Or select a line in Transcribe or Interlinear to mark where it stands. "
+                : `${marked === undefined ? "Drag on the page to mark where" : "Drag again to move"} «${selected.content || "(empty)"}» ${marked === undefined ? "stands" : ""}`.trim() + ". ",
+              ...(selected === undefined || newLines ? [] : [next]),
+              " ",
+              fresh,
               ...(clear === null ? [] : [" ", clear]),
             );
       const pages = h("div", { className: "fx-scroll" }, ...(v.pages.length === 0 ? [] : [stage(v, page)]));

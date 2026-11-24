@@ -519,6 +519,7 @@ export const facsimileAddPage = (args: { text: string; path: string }) => invoke
 export const facsimilePageImage = (args: { text: string; source: string; path: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_page_image", args);
 export const facsimileRemovePage = (args: { text: string; source: string }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_remove_page", args);
 export const facsimileMovePage = (args: { text: string; source: string; by: number }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_move_page", args);
+export const facsimileAddLine = (args: { text: string; area: import("./facsimile/logic").Area }) => invoke<{ segment: string; tier: string; view: import("./facsimile/logic").FacsimileView }>("facsimile_add_line", args);
 export const facsimileSetArea = (args: { text: string; segment: string; area: import("./facsimile/logic").Area | null }) => invoke<import("./facsimile/logic").FacsimileView>("facsimile_set_area", args);
 export const lexiconSetPicture = (args: { sense: string; path: string }) => invoke<EntryEdit>("lexicon_set_picture", args);
 export const lexiconClearPicture = (args: { sense: string }) => invoke<EntryEdit>("lexicon_clear_picture", args);

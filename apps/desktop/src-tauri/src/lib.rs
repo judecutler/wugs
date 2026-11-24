@@ -1545,6 +1545,11 @@ fn facsimile_move_page(s: State<SessionThread>, text: String, source: String, by
 }
 
 #[tauri::command]
+fn facsimile_add_line(s: State<SessionThread>, text: String, area: facsimile::Area) -> Result<facsimile::NewLine, String> {
+    s.run(move |s| facsimile::add_line(s, &text, area))
+}
+
+#[tauri::command]
 fn facsimile_set_area(s: State<SessionThread>, text: String, segment: String, area: Option<facsimile::Area>) -> Result<facsimile::FacsimileView, String> {
     s.run(move |s| facsimile::set_area(s, &text, &segment, area))
 }
@@ -2532,6 +2537,7 @@ pub fn run() {
             facsimile_remove_page,
             facsimile_move_page,
             facsimile_set_area,
+            facsimile_add_line,
             save_hit_clips,
             texts_alike,
             gloss_break_all,
