@@ -48,6 +48,7 @@ PANELS = [
     ("turns", "Turn-taking"),
     ("sessions", "Sessions"),
     ("sounds", "Sounds"),
+    ("signs", "Signs"),
     ("typology", "Typology"),
     ("progress", "Progress"),
     ("affixes", "Affixes"),

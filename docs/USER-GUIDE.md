@@ -969,6 +969,17 @@ At the top is a position-class chart: a column for each slot, counted from the r
 
 An affix is told apart by its spelling, type and gloss, so `-ler` PL and `-ler` 3PL are two rows. A word with no morph marked as a root is left out, and the panel says how many there are. **Copy chart** and **Copy table** copy them to paste into a document or a spreadsheet, and **Grammar sketch…** prints the chart in its morphology chapter.
 
+### Count the signs of a script
+
+The **Signs** panel (open it with **Ctrl+K**, **Show Signs**) asks of a script the first questions a decipherer asks. It reads the words of a track, or of every track, as they are written: an inscription transcribed sign by sign, a manuscript, or a text in a practical orthography.
+
+- **Each letter is a sign** reads every letter with its accents as one sign. **Signs split by - or .** reads a transliteration such as `ko-no-so` or `a.ta` as its pieces.
+- The line at the top counts the different signs and the running signs, and says what that many signs usually means. Two to four dozen is an alphabet or abjad, five to nine dozen a syllabary (Linear B has about 90), and hundreds a logo-syllabic script with signs for words beside signs for sounds. It also says how many signs are seen only once, as a hint that more may be unseen.
+- It gives the entropy of a sign, and how much less is left to guess when the sign before is known (Rao et al. 2009). Writing that records a language falls between a fixed sequence and signs in any order.
+- The table gives each sign's count, the words it is in, and how often it stands first, inside, last, or alone in a word. Signs that only end words are often endings or vowels; signs that stand alone may be words or determinatives. Click a sign to see its lines in the Concordance.
+- **Signs in a row** lists the commonest pairs inside words.
+- **Copy table** copies the inventory.
+
 ### Test sound changes and phonological rules
 
 The **Sound changes** panel runs ordered rewrite rules over your words, to test a reconstruction (did *p really become b between vowels?) or the phonological rules of a grammar (underlying forms to surface forms). In Tongues, press **Ctrl+K** and choose **Show Sound changes**.

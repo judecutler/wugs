@@ -54,6 +54,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "turns",                         # how quickly speakers take the floor from each other; not placed either
   "sessions",                      # the fieldwork log: each sitting's date, place, method, people and notes; not placed either
   "sounds",                        # the sound inventory on the IPA chart; not placed either
+  "signs",                         # a script's signs: how many, where in the word, which follow which; not placed either
   "typology",                      # Grambank's grammar features for the language, beside its relatives; not placed either
   "progress",                      # how far the documentation has come, for reports; not placed either
   "affixes",                       # affixes and clitics in their slots, read from the glossed words; not placed either
