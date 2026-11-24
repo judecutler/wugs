@@ -8,6 +8,7 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { errorText, saveDocument } from "../api";
 import { emptyState, h } from "../dom";
 import { atLeast, cannotCompare, compare, compareLine, defaultPair, durationGroups, durationsNote, msTicks, summaryTsv, tokensTsv, type Group } from "../durations/logic";
+import { rateLines, speakingRate } from "../durations/rate";
 import { hear } from "../hear/hear";
 import { trackToMeasure } from "../measure/logic";
 import { provide } from "../palette/registry";
@@ -189,6 +190,7 @@ export const durationsPanel: PanelDef = {
           h("p", { className: c === null ? "note" : "du-result", textContent: c === null ? cannotCompare(a, b) : compareLine(c) }),
         );
       }
+      body.push(h("h3", { textContent: "Speaking rate" }), h("div", { className: "ag-summary du-rate" }, ...rateLines(speakingRate(text.segments, tierId)).map((line) => h("p", { textContent: line }))));
       el.replaceChildren(bar, ...body);
     };
 
