@@ -263,3 +263,49 @@ export function paradigmClipboard<C extends CellLike>(t: Template, cells: C[], h
   const text = [headword, ...rows.map((r) => r.map((c, j) => c + " ".repeat(widths[j]! - width(c))).join("  ").trimEnd())].join("\n") + "\n";
   return { text, html: null };
 }
+
+const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** A paradigm as a printable form for a session without a laptop: a header
+ * with lines for the speaker, date and place, the grid with the forms
+ * already known in grey (or none, for a blind check) and room to write. */
+export function paradigmSheet<C extends CellLike>(t: Template, cells: C[], headword: string, gloss: string, withForms: boolean): string {
+  const grid = layout(t, cells);
+  const cols = t.cols === null ? [null] : t.cols.values;
+  const field = (label: string) => `<div class="field"><span>${escHtml(label)}</span><span class="line"></span></div>`;
+  const head = t.cols === null ? "" : `<tr><th></th>${t.cols.values.map((v) => `<th>${escHtml(v.label)}</th>`).join("")}</tr>`;
+  const rows = t.rows.values
+    .map((r, ri) => {
+      const tds = cols.map((_, ci) => {
+        const c = grid[ri]?.[ci] ?? null;
+        const known = withForms && c !== null && c.forms.length > 0 ? `<span class="had">${c.forms.map((f) => escHtml(f.form)).join(", ")}</span>` : "";
+        return `<td>${known}</td>`;
+      });
+      return `<tr><th>${escHtml(r.label)}</th>${tds.join("")}</tr>`;
+    })
+    .join("\n");
+  const title = `${headword}${gloss.trim() ? ` ‘${gloss.trim()}’` : ""}: ${t.label}`;
+  const style = `@page{margin:15mm}body{font-family:"Charis SIL","Gentium Plus","Doulos SIL",serif;font-size:11pt;margin:0 auto;max-width:180mm}
+h1{font-size:15pt;margin:0 0 8pt}.head{display:grid;grid-template-columns:1fr 1fr;gap:4pt 16pt;margin-bottom:12pt}.field{display:flex;gap:6pt;align-items:flex-end}.field span:first-child{white-space:nowrap}.line{flex:1;border-bottom:1px solid #000;height:14pt}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #777;padding:4pt 6pt;text-align:left;vertical-align:top}th{font-size:9.5pt;background:#f2f2f2}td{height:34pt}.had{color:#888}
+.notes{margin-top:14pt}.notes .line{display:block;height:18pt}.foot{color:#777;font-size:8pt;margin-top:8pt}`;
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>${escHtml(title)}</title>
+<style>${style}</style>
+</head>
+<body>
+<h1>${escHtml(title)}</h1>
+<div class="head">${field("Speaker")}${field("Date")}${field("Place")}${field("Recording")}</div>
+<table>
+${head}
+${rows}
+</table>
+<div class="notes"><div>Notes</div><span class="line"></span><span class="line"></span><span class="line"></span></div>
+<p class="foot">Printed from wugs. ${withForms ? "Forms in grey are already in the lexicon; check them with the speaker." : "Every cell left blank, for a fresh check."}</p>
+</body>
+</html>
+`;
+}

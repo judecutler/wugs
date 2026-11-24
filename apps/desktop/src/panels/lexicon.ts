@@ -10,6 +10,7 @@ import {
   deleteParadigmTemplate, lexiconDeleteForm, lexiconFillCell, lexiconMerge, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
   lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
+  saveDocument,
   type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
@@ -18,7 +19,7 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
 import { categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
-import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
+import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, paradigmSheet, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { keyword, type Hit } from "../concordance/logic";
@@ -684,6 +685,25 @@ export const lexiconPanel: PanelDef = {
                 },
               });
             })(),
+        pd === null
+          ? null
+          : h("button", {
+              type: "button",
+              textContent: "Print a sheet…",
+              title: "Save this paradigm as a form to print for a session: the grid with the forms known so far in grey, and lines for the speaker, date and place",
+              onclick: () =>
+                void (async () => {
+                  const folder = await pickFile({ directory: true, title: "Where should the sheet go?" });
+                  if (typeof folder !== "string") return;
+                  const word = headword(e.lemma, e.homograph);
+                  try {
+                    const r = await saveDocument({ folder, title: `${word} ${t.label}`, extension: "html", contents: paradigmSheet(t, pd.cells, word, e.senses[0]?.gloss ?? "", true) });
+                    showToast({ tone: "info", lines: [`Saved the sheet as ${r.path}. Open it in a browser and print it.`] });
+                  } catch (err) {
+                    showToast({ tone: "error", lines: [errorText(err)] });
+                  }
+                })(),
+            }),
       );
       const form = templateForm === null ? null : templateFormBlock(templateForm);
       if (pd === null) return h("section", { className: "lx-paradigm" }, head, form);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, featureName, isOwn, layout, otherFormLine, parseValues, templateById, templateFromDraft, templateId, TEMPLATES } from "./paradigms.ts";
+import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, featureName, isOwn, layout, otherFormLine, paradigmSheet, parseValues, templateById, templateFromDraft, templateId, TEMPLATES } from "./paradigms.ts";
 
 const pn = templateById("person-number");
 const form = (id: string, surface: string, features: Record<string, string>) => ({ id, form: surface, features });
@@ -128,4 +128,18 @@ test("a paradigm copies as a table for a paper", async () => {
   const text = paradigmClipboard(t, cells, "kani", "text").text.split("\n");
   assert.equal(text[1], "            singular  plural");
   assert.equal(text[2], "1st person  kani      kani-ra, kanira");
+});
+
+test("a paradigm prints as a form to fill in", () => {
+  const t = TEMPLATES[0]!;
+  const cells = [{ features: cellFeatures(t, t.rows.values[0]!.value, t.cols?.values[0]!.value ?? null), forms: [{ id: "f1", form: "gel<im>", features: {} }] }];
+  const html = paradigmSheet(t, cells, "gel", "come", true);
+  assert.match(html, /<title>gel ‘come’: /);
+  assert.match(html, /<span class="had">gel&lt;im&gt;<\/span>/);
+  assert.match(html, /Speaker/);
+  const blind = paradigmSheet(t, cells, "gel", "", false);
+  assert.doesNotMatch(blind, /class="had"/);
+  assert.match(blind, /Every cell left blank/);
+  // A row per value, a column per value plus the row heads.
+  assert.equal((html.match(/<tr>/g) ?? []).length, t.rows.values.length + (t.cols === null ? 0 : 1));
 });
