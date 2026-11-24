@@ -30,6 +30,16 @@ export function describedKeys(p: Progress): string[] {
   return want.filter((k) => have.has(k));
 }
 
+/** The speakers' table: each track with its sex and age from the People panel when any is set (never their names, which the
+ * description may be shared without), and a place to say the rest. */
+function speakerTable(rows: readonly SpeakerRow[]): string {
+  const who = rows.some((s) => s.sex !== "" || s.age !== "");
+  const head = ["Track", ...(who ? ["Sex", "Age"] : []), "Texts", "Utterances", "Words"].map((c) => `<th>${c}</th>`).join("");
+  const body = rows.map((s) => `<tr>${[esc(s.name), ...(who ? [esc(s.sex), esc(s.age)] : []), n(s.texts), n(s.utterances), n(s.words)].map((c) => `<td>${c}</td>`).join("")}</tr>`).join("");
+  const rest = who ? "Who the speakers are: roles and how they were chosen, as their consent allows" : "Who the speakers are: ages, roles, how they were chosen, as their consent allows";
+  return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table><p>${todo(rest)}</p>`;
+}
+
 export function corpusDescription(o: DescriptionInput): string {
   const p = o.progress;
   const t = totals(p);
@@ -58,7 +68,7 @@ export function corpusDescription(o: DescriptionInput): string {
   const speakers =
     o.speakers.length === 0
       ? `<p>${todo("Who speaks in the recordings: number, ages, roles, how they were chosen")}</p>`
-      : `<table><thead><tr><th>Track</th><th>Texts</th><th>Utterances</th><th>Words</th></tr></thead><tbody>${o.speakers.map((s) => `<tr><td>${esc(s.name)}</td><td>${n(s.texts)}</td><td>${n(s.utterances)}</td><td>${n(s.words)}</td></tr>`).join("")}</tbody></table><p>${todo("Who the speakers are: ages, roles, how they were chosen, as their consent allows")}</p>`;
+      : speakerTable(o.speakers);
   const access = [
     o.restricted === 0 ? "Every text is open to share." : `${n(o.restricted)} of ${n(p.texts.length)} texts have a sharing level other than open and are left out of public exports.`,
     o.uncovered === null ? "" : o.uncovered === 0 ? "A consent record covers every text." : `${n(o.uncovered)} ${o.uncovered === 1 ? "text has" : "texts have"} no consent record yet.`,

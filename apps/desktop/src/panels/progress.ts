@@ -12,7 +12,7 @@ import { SHOW_PANEL } from "./panel";
 import { mapView } from "../typology/map";
 import { dayLabel, workColumns, worklogLine, worklogTsv, type Day } from "../progress/worklog";
 import { localDay } from "../dates";
-import { SPEAKER_COLUMNS, speakerCells, speakersNote, speakersTsv, type SpeakerRow } from "../progress/speakers";
+import { hasPeople, speakerCells, speakerColumns, speakersNote, speakersTsv, type SpeakerRow } from "../progress/speakers";
 import { growthNote, growthPath, ticks, type Box, type Growth } from "../progress/growth";
 import { composition, compositionNote, compositionTsv, detailKeys, keyLabel, wordShare } from "../progress/composition";
 import { emptyState, h } from "../dom";
@@ -271,6 +271,8 @@ export const progressPanel: PanelDef = {
         speakersBox.replaceChildren();
         return;
       }
+      const people = hasPeople(speakers);
+      const textCol = people ? 4 : 1;
       const copySpeakers = h("button", { type: "button", textContent: "Copy table", title: "Copy each speaker's figures, to paste into a spreadsheet" });
       copySpeakers.onclick = () =>
         void writeText(speakersTsv(speakers)).then(
@@ -280,8 +282,8 @@ export const progressPanel: PanelDef = {
       const t = h(
         "table",
         { className: "pg-table pg-speaker-table" },
-        h("thead", {}, h("tr", {}, ...SPEAKER_COLUMNS.map((c) => h("th", { textContent: c })))),
-        h("tbody", {}, ...speakers.map((r) => h("tr", {}, ...speakerCells(r).map((c, i) => h("td", { textContent: c, className: i === 0 ? "" : "num" }))))),
+        h("thead", {}, h("tr", {}, ...speakerColumns(speakers).map((c, i) => h("th", { textContent: c, className: i < textCol ? "txt" : "" })))),
+        h("tbody", {}, ...speakers.map((r) => h("tr", {}, ...speakerCells(r, people).map((c, i) => h("td", { textContent: c, className: i < textCol ? "" : "num" }))))),
       );
       speakersBox.replaceChildren(h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Speakers" }), copySpeakers), h("div", { className: "pg-rows" }, t), h("p", { className: "note", textContent: speakersNote(speakers) }));
     };

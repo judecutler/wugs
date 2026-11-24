@@ -40,6 +40,11 @@ pub struct SpeakerRow {
     pub morphemes: usize,
     /// MTLD over the speaker's running words, from `MTLD_MIN` words up.
     pub mtld: Option<f64>,
+    /// The track's speaker in the People panel, with their sex and age
+    /// details as written there (empty when none is set).
+    pub person: String,
+    pub sex: String,
+    pub age: String,
 }
 
 /// Fewer running words than this give no MTLD: too few factors to mean anything.
@@ -93,6 +98,21 @@ fn is_placeholder(w: &str) -> bool {
     matches!(w, "xxx" | "yyy" | "www")
 }
 
+/// A track's speaker (its `speaker` link to a live person): their name, sex
+/// and age as the People panel holds them; all empty when it has none.
+fn person_of(p: &wugs_core::Project, tier: &str) -> Result<(String, String, String), String> {
+    let Some(person) = p.proj.field_text(tier, "speaker")? else {
+        return Ok(Default::default());
+    };
+    if p.proj.is_tombstoned(&person)? {
+        return Ok(Default::default());
+    }
+    let name = p.proj.field(&person, "names")?.and_then(|(v, _)| v.get_str("full").map(str::to_string)).unwrap_or_default();
+    let details = p.person_details(&person)?;
+    let get = |key: &str| details.iter().find(|(k, _)| k == key).map(|(_, v)| v.trim().to_string()).unwrap_or_default();
+    Ok((name, get("sex"), get("age")))
+}
+
 pub fn speakers(session: &mut Session) -> Result<Vec<SpeakerRow>, String> {
     let p = project(session)?;
     let mut rows: Vec<SpeakerRow> = Vec::new();
@@ -109,7 +129,8 @@ pub fn speakers(session: &mut Session) -> Result<Vec<SpeakerRow>, String> {
             Some(i) => i,
             None => {
                 let name = p.proj.field_str(&seg.tier, "name")?.unwrap_or_default();
-                rows.push(SpeakerRow { tier: seg.tier.clone(), name, texts: 0, utterances: 0, words: 0, types: 0, longest: 0, analysed: 0, morphemes: 0, mtld: None });
+                let (person, sex, age) = person_of(p, &seg.tier)?;
+                rows.push(SpeakerRow { tier: seg.tier.clone(), name, texts: 0, utterances: 0, words: 0, types: 0, longest: 0, analysed: 0, morphemes: 0, mtld: None, person, sex, age });
                 rows.len() - 1
             }
         };
@@ -207,6 +228,18 @@ mod tests {
         // The child's words against the mother's.
         let k = crate::keywords::keywords(&mut s, crate::concordance::Kind::Word, &only_chi, 1).unwrap();
         assert_eq!((k.focus_tokens, k.reference_tokens), (4, 7), "the corpus tools count xxx as written");
+        // The child's track spoken by someone in the People panel.
+        assert_eq!((chi.person.as_str(), chi.sex.as_str()), ("", ""));
+        let p = session::project(&mut s).unwrap();
+        let person = p.add_named_person("Lena", &["child".to_string()]).unwrap();
+        p.set_person_detail(&person, "sex", "female").unwrap();
+        p.set_person_detail(&person, "age", " 2;06 ").unwrap();
+        let chi_track = tracks.iter().find(|t| t.name == "CHI").unwrap().id.clone();
+        p.set_tier_speaker(&chi_track, Some(&person)).unwrap();
+        let rows = speakers(&mut s).unwrap();
+        let chi = rows.iter().find(|r| r.name == "CHI").unwrap();
+        assert_eq!((chi.person.as_str(), chi.sex.as_str(), chi.age.as_str()), ("Lena", "female", "2;06"));
+        assert_eq!(rows.iter().find(|r| r.name == "MOT").unwrap().person, "");
         drop(s);
         fs::remove_dir_all(dir).ok();
     }

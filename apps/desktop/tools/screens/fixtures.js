@@ -1282,8 +1282,8 @@ const LEXICON = [
       return [day(iso(0), { analysed: 24, glossed: 61, entries: 5, senses: 6 }), day(iso(2), { segments: 18, transcribed: 18, translated: 11, notes: 2 }), day(iso(12), { importedTexts: 3, devices: 2 })];
     },
     speaker_lengths: () => [
-      { tier: "tier-mot", name: "MOT", texts: 2, utterances: 48, words: 211, types: 96, longest: 11, analysed: 48, morphemes: 262, mtld: 52.4 },
-      { tier: "tier-chi", name: "CHI", texts: 2, utterances: 41, words: 83, types: 37, longest: 4, analysed: 30, morphemes: 71, mtld: null },
+      { tier: "tier-mot", name: "MOT", texts: 2, utterances: 48, words: 211, types: 96, longest: 11, analysed: 48, morphemes: 262, mtld: 52.4, person: "", sex: "", age: "" },
+      { tier: "tier-chi", name: "CHI", texts: 2, utterances: 41, words: 83, types: 37, longest: 4, analysed: 30, morphemes: 71, mtld: null, person: "Mina", sex: "female", age: "2;06" },
     ],
     vocabulary_growth: () => {
       // A synthetic curve that flattens: 317 running words over three texts.
