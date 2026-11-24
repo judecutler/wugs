@@ -89,11 +89,12 @@ pub fn keywords_of(session: &mut Session, kind: Kind, target: &Scope, min_count:
     }
     let p = project(session)?;
     let picked = target.picked(p)?;
-    let here_of = |text: &str| target.text.as_deref().is_none_or(|t| t == text) && picked.as_ref().is_none_or(|set| set.contains(text));
+    let only_tier = target.tier().map(str::to_string);
+    let here_of = |text: &str, tier: &str| target.text.as_deref().is_none_or(|t| t == text) && picked.as_ref().is_none_or(|set| set.contains(text)) && only_tier.as_deref().is_none_or(|t| t == tier);
     let mut tallies: HashMap<String, Tally> = HashMap::new();
     let (mut c, mut d) = (0usize, 0usize);
     each_segment(p, Read::of(kind), &Scope::all(), |seg| {
-        let here = here_of(&seg.text);
+        let here = here_of(&seg.text, &seg.tier);
         let words: Vec<(String, String)> = seg
             .words
             .iter()
@@ -236,7 +237,7 @@ mod tests {
         let k = keywords(&mut session, Kind::Word, &Scope::text(&fox), 1).unwrap();
         // The same texts picked by a detail give the same list.
         crate::metadata::set_text_metadata(&mut session, &fox, "genre", "fable").unwrap();
-        let by = Scope::of(None, Some(crate::concordance::Where { key: "Genre".into(), value: "fable".into() }));
+        let by = Scope::of(None, Some(crate::concordance::Where::detail("Genre", "fable")));
         let k2 = keywords(&mut session, Kind::Word, &by, 1).unwrap();
         assert_eq!((k2.focus_tokens, k2.reference_tokens), (k.focus_tokens, k.reference_tokens));
         assert!(keywords(&mut session, Kind::Word, &Scope::all(), 1).is_err(), "keywords need something to compare");

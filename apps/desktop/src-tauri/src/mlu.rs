@@ -197,6 +197,16 @@ mod tests {
         assert_eq!((mot.utterances, mot.words, mot.longest, mot.analysed, mot.morphemes, mot.texts), (2, 7, 4, 1, 3, 1));
         let chi = get("CHI");
         assert_eq!((chi.utterances, chi.words, chi.types, chi.analysed, chi.morphemes), (2, 3, 3, 1, 2), "xxx is no word; one utterance has no %mor");
+        // The corpus tools narrowed to one speaker's track.
+        let tracks = crate::concordance::tracks(&mut s).unwrap();
+        let chi_track = tracks.iter().find(|t| t.name == "CHI").unwrap().id.clone();
+        let only_chi = crate::concordance::Scope::of(None, Some(crate::concordance::Where { key: String::new(), value: String::new(), tier: Some(chi_track) }));
+        let all = crate::concordance::concordance_in(&mut s, "doggie", crate::concordance::Kind::Word, crate::concordance::Match::Exact, &crate::concordance::Scope::all()).unwrap();
+        let theirs = crate::concordance::concordance_in(&mut s, "doggie", crate::concordance::Kind::Word, crate::concordance::Match::Exact, &only_chi).unwrap();
+        assert_eq!((all.total, theirs.total), (2, 1), "the mother's doggie is not the child's");
+        // The child's words against the mother's.
+        let k = crate::keywords::keywords(&mut s, crate::concordance::Kind::Word, &only_chi, 1).unwrap();
+        assert_eq!((k.focus_tokens, k.reference_tokens), (4, 7), "the corpus tools count xxx as written");
         drop(s);
         fs::remove_dir_all(dir).ok();
     }

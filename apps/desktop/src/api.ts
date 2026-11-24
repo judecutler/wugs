@@ -669,6 +669,7 @@ export const morphosyntaxAllowWeb = (args: { allow: boolean }) => invoke<void>("
 export const morphosyntaxRun = (args: { textId: string; model: string }) => invoke<Tagged>("morphosyntax_run", args);
 /** Every detail's values across the project, for picking texts by one. */
 export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
+export const corpusTracks = () => invoke<{ id: string; name: string }[]>("corpus_tracks");
 /** Bring in a CSV or TSV of document metadata, one row per text. */
 export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
 /** Segments that overlap, or are very short or long (src-tauri/src/timing.rs). */

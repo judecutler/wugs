@@ -47,6 +47,7 @@ test("lemma and tag rows open the CQP query that finds their lines", async () =>
   assert.equal(cqpLiteral("c++ (1|2) ~-"), "c\\+\\+ \\(1\\|2\\) \\~\\-");
   assert.equal(cqpFor("lemma", "go", null), '[lemma="go"]');
   assert.equal(cqpFor("tag", "NOUN", { key: "genre", value: "news" }), '[upos="NOUN"] :: match.text_genre="news"');
+  assert.equal(cqpFor("lemma", "go", { key: "", value: "", tier: "t1" }), '[lemma="go"]', "a track adds no text condition");
   assert.equal(unlabelledNote({ rows: [], tokens: 3, types: 1, unlabelled: 0 }, "lemma"), "");
   assert.match(unlabelledNote({ rows: [], tokens: 3, types: 1, unlabelled: 2 }, "tag"), /^ 2 words have no tag yet: /);
 });

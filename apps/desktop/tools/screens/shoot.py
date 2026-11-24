@@ -451,6 +451,9 @@ def main():
             run.shot("state-frequencies", run.page.locator(".panel-frequencies"))
             if run.page.locator(".panel-frequencies .fq-table tbody tr").count() == 0:
                 failures.append("the frequency list showed no rows")
+            # One speaker's track among the places to count.
+            if run.page.locator(".panel-frequencies select.fq-scope optgroup[label='One track'] option").count() != 2:
+                failures.append("The scope picker did not offer each track")
             # The Zipf plot, opened.
             run.page.locator(".panel-frequencies .fq-zipf summary").click()
             run.page.locator(".panel-frequencies .fq-zipf-plot").wait_for()

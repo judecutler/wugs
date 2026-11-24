@@ -435,6 +435,11 @@ fn vocabulary_growth(s: State<SessionThread>) -> Result<growth::Growth, String> 
 }
 
 #[tauri::command(async)]
+fn corpus_tracks(s: State<SessionThread>) -> Result<Vec<concordance::Track>, String> {
+    s.run(concordance::tracks)
+}
+
+#[tauri::command(async)]
 fn speaker_lengths(s: State<SessionThread>) -> Result<Vec<mlu::SpeakerRow>, String> {
     s.run(mlu::speakers)
 }
@@ -2315,6 +2320,7 @@ pub fn run() {
         all_notes,
         vocabulary_growth,
         speaker_lengths,
+        corpus_tracks,
         word_sketch,
         sound_changes,
         compare_read,
