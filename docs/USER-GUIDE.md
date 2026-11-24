@@ -866,7 +866,7 @@ wugs reads these formats:
 - Subtitles, SubRip `.srt` and WebVTT `.vtt`, as video editors, YouTube and Subtitle Edit write them: the file becomes a text with a timed segment per caption, in order, its lines joined. Styling such as `<i>` is dropped. A WebVTT speaker (`<v Ana>`) is kept with the sentence. Pick the video's audio as the text's recording on the Timeline to hear each caption. Importing the same file again adds nothing.
 - Audacity labels (`.txt`, from Audacity's **File > Export > Labels**): a timed segment per label, in order. A point label (one with no length) comes in untimed. Import the same recording's WAV and pick it on the Timeline to hear them.
 - CHAT `.cha`, the format of CLAN and the TalkBank corpora (CHILDES, AphasiaBank, CABank and others). The file becomes one text, with each speaker's utterances on a track named by their code (`CHI`, `MOT`). Turn-taking, Agreement and the corpus tools therefore see who said what. An utterance's time bullet times it. The words wugs shows and counts are read as CLAN counts them:
-  - codes in brackets (`[//]`, `[: want to]`), pauses, events (`&=laughs`) and omitted words (`0is`) are left out;
+  - codes in brackets (`[: want to]`), words a speaker took back (`<I want> [/]`, `the [//]`, as CLAN and Brown's counting rules leave them out), pauses, events (`&=laughs`) and omitted words (`0is`) are left out;
   - fillers and fragments (`&-uh`, `&+fr`) are kept as words;
   - a shortened word is written whole (`(be)cause` → `because`), and a form's marker is dropped (`dada@b` → `dada`).
 

@@ -1577,7 +1577,7 @@ mod tests {
         let shown = session::get_text(&mut s, &text).unwrap();
         let name_of = |tier: &str| shown.tiers.iter().find(|t| t.id == tier).map(|t| t.name.clone()).unwrap_or_default();
         let said: Vec<(String, String)> = shown.segments.iter().map(|x| (name_of(&x.tier), x.content.clone())).collect();
-        assert_eq!(said, [("MOT".into(), "what is that?".into()), ("CHI".into(), "doggie.".into()), ("MOT".into(), "yes, a big big doggie.".into())], "a retracing was said: {:?}", r.lines);
+        assert_eq!(said, [("MOT".into(), "what is that?".into()), ("CHI".into(), "doggie.".into()), ("MOT".into(), "yes, a big doggie.".into())], "the retraced word left out: {:?}", r.lines);
         assert!(r.lines.iter().any(|l| l.contains("no words")), "{:?}", r.lines);
         let meta = session::project(&mut s).unwrap().text_metadata(&text).unwrap();
         assert!(meta.contains(&("age_chi".into(), "2;03.12".into())) && meta.contains(&("date".into(), "1990-01-12".into())), "{meta:?}");
@@ -1601,7 +1601,7 @@ mod tests {
         session::create_project(&mut t, dir.join("q").to_str().unwrap(), "prs_Ben").unwrap();
         let back = import_file(&mut t, &e.path).unwrap();
         let shown = session::get_text(&mut t, &back.text.unwrap()).unwrap();
-        assert_eq!(shown.segments.iter().map(|x| x.content.as_str()).collect::<Vec<_>>(), ["what is that?", "doggie.", "yes, a big big doggie."]);
+        assert_eq!(shown.segments.iter().map(|x| x.content.as_str()).collect::<Vec<_>>(), ["what is that?", "doggie.", "yes, a big doggie."]);
         assert!(shown.segments.iter().all(|x| x.start_ms.is_some()));
         drop(t);
         fs::remove_dir_all(dir).ok();

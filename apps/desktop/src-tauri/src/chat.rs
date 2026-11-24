@@ -5,9 +5,9 @@
 //!   transcription track named by the speaker's code (`CHI`, `MOT`), so the
 //!   turn-taking, agreement and corpus tools see who said what. An
 //!   utterance's time bullet (`·1234_5678·`) times it. The line wugs shows
-//!   and counts is read as CLAN reads words: codes in brackets, overlap and
-//!   prosody marks, pauses, events (`&=laughs`) and omitted words (`0is`)
-//!   left out; fillers and fragments (`&-uh`, `&+fr`) kept as words; a
+//!   and counts is read as CLAN reads words: codes in brackets, retraced
+//!   words (`<I want> [/]`), overlap and prosody marks, pauses, events
+//!   (`&=laughs`) and omitted words (`0is`) left out; fillers and fragments (`&-uh`, `&+fr`) kept as words; a
 //!   shortened form written whole (`(be)cause` → `because`); a form's
 //!   `@` marker dropped (`dada@b` → `dada`). The main line as written is
 //!   kept (`x.chat.main`), and so is every dependent tier (`%mor`, `%gra`,
@@ -153,14 +153,51 @@ const MARKS: &[char] = &[
 
 /// The words of a main line, as CLAN's word counts read them.
 pub fn clean(main: &str) -> String {
-    // Codes in square brackets go first: `[//]`, `[: want to]`, `[=! laughs]`.
+    // Codes in square brackets go first: `[: want to]`, `[=! laughs]`. A
+    // retracing code (`[/]`, `[//]`, `[///]`, `[/-]`, `[/?]`) takes away what
+    // it marks, the group in `<…>` before it or else the word before it, as
+    // CLAN's commands and Brown's counting rules leave retraced words out.
     let mut s = String::new();
-    let mut depth = 0usize;
-    for c in main.chars() {
+    let mut groups: Vec<usize> = Vec::new();
+    let mut last_group: Option<(usize, usize)> = None;
+    let mut chars = main.chars();
+    while let Some(c) = chars.next() {
         match c {
-            '[' => depth += 1,
-            ']' if depth > 0 => depth -= 1,
-            _ if depth > 0 => {}
+            '[' => {
+                let mut code = String::new();
+                let mut depth = 1;
+                for c in chars.by_ref() {
+                    match c {
+                        '[' => depth += 1,
+                        ']' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    code.push(c);
+                }
+                if matches!(code.trim(), "/" | "//" | "///" | "/-" | "/?") {
+                    let end = s.trim_end().len();
+                    match last_group {
+                        Some((start, close)) if close == end => s.truncate(start),
+                        _ => s.truncate(s[..end].rfind(char::is_whitespace).map_or(0, |i| i + 1)),
+                    }
+                    last_group = None;
+                }
+            }
+            '<' => {
+                groups.push(s.len());
+                s.push(' ');
+            }
+            '>' => {
+                if let Some(start) = groups.pop() {
+                    last_group = Some((start, s.trim_end().len()));
+                }
+                s.push(' ');
+            }
             _ => s.push(c),
         }
     }
@@ -769,8 +806,8 @@ mod tests {
         );
         let u = &c.utterances[1];
         assert_eq!(
-            u.text, "uh because I want I want dada…",
-            "a retracing is still said, a filler is a word, a continuation line joins"
+            u.text, "uh because I want dada…",
+            "a retraced group is left out, a filler is a word, a continuation line joins"
         );
         assert_eq!(u.span, Some((1300.0, 2900.0)));
         assert_eq!(c.utterances[2].text, "", "no words: only an event");
@@ -862,6 +899,14 @@ mod tests {
             clean(&main_of("look at the dog, then!")),
             "look at the dog, then!"
         );
+    }
+
+    #[test]
+    fn retracings_take_away_what_they_mark() {
+        assert_eq!(clean("I [/] I want <the big> [//] a ball ."), "I want a ball.");
+        assert_eq!(clean("<I want> [>] a ball ."), "I want a ball.", "an overlap mark is no retracing");
+        assert_eq!(clean("wanna [: want to] go ."), "wanna go.");
+        assert_eq!(clean("<a <b> [/] c> [//] d ."), "d.", "groups nest");
     }
 
     #[test]
