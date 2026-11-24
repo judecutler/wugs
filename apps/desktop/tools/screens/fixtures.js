@@ -1282,8 +1282,13 @@ const LEXICON = [
       return [day(iso(0), { analysed: 24, glossed: 61, entries: 5, senses: 6 }), day(iso(2), { segments: 18, transcribed: 18, translated: 11, notes: 2 }), day(iso(12), { importedTexts: 3, devices: 2 })];
     },
     speaker_lengths: () => [
-      { tier: "tier-mot", name: "MOT", texts: 2, utterances: 48, words: 211, types: 96, longest: 11, analysed: 48, morphemes: 262, mtld: 52.4, person: "", sex: "", age: "" },
-      { tier: "tier-chi", name: "CHI", texts: 2, utterances: 41, words: 83, types: 37, longest: 4, analysed: 30, morphemes: 71, mtld: null, person: "Mina", sex: "female", age: "2;06" },
+      { tier: "tier-mot", name: "MOT", texts: 2, utterances: 48, words: 211, types: 96, longest: 11, analysed: 48, morphemes: 262, mtld: 52.4, person: "", sex: "", age: "", born: "", byText: [] },
+      { tier: "tier-chi", name: "CHI", texts: 2, utterances: 41, words: 83, types: 37, longest: 4, analysed: 30, morphemes: 71, mtld: null, person: "Mina", sex: "female", age: "2;06", born: "2023-05-01",
+        byText: [
+          { text: "t-c1", title: "Bath time", age: "2;03.12", date: "", utterances: 120, words: 190, analysed: 120, morphemes: 214 },
+          { text: "t-c2", title: "In the park", age: "", date: "2025-11-14", utterances: 102, words: 230, analysed: 102, morphemes: 262 },
+          { text: "t-c3", title: "Lunch", age: "2;10", date: "", utterances: 41, words: 120, analysed: 30, morphemes: 85 },
+        ] },
     ],
     vocabulary_growth: () => {
       // A synthetic curve that flattens: 317 running words over three texts.

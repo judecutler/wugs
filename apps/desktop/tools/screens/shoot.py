@@ -1062,7 +1062,7 @@ def main():
             run.shot("state-progress-places", run.page.locator(".panel-progress"))
             if places.locator(".pg-site").count() != 2 or "2 texts of 3 placed, at 2 sites. 1 text names a place in words only" not in places.inner_text():
                 failures.append(f"Progress did not map where the texts were recorded: {places.inner_text()}")
-            growth = run.page.locator(".panel-progress .pg-chart")
+            growth = run.page.locator(".panel-progress .pg-growth .pg-chart")
             growth.wait_for()
             growth.scroll_into_view_if_needed()
             run.shot("state-growth", run.page.locator(".panel-progress"))
@@ -1075,6 +1075,11 @@ def main():
                 failures.append(f"Progress did not give the child's MLU and stage: {spk.inner_text()}")
             if "Spoken by" not in spk.inner_text() or "2;06" not in spk.inner_text():
                 failures.append(f"Progress did not say who speaks on the child's track: {spk.inner_text()}")
+            age = run.page.locator(".panel-progress .pg-age-chart")
+            age.scroll_into_view_if_needed()
+            run.shot("state-mlu-age", run.page.locator(".panel-progress .pg-speakers"))
+            if run.page.locator(".panel-progress .pg-age-dot").count() != 3 or "rose from" not in run.page.locator(".panel-progress .pg-speakers").inner_text():
+                failures.append("Progress did not chart the child's MLU by age")
             # The work log, day by day.
             work = run.page.locator(".panel-progress .pg-work")
             work.scroll_into_view_if_needed()

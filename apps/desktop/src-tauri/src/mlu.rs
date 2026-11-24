@@ -45,7 +45,31 @@ pub struct SpeakerRow {
     pub person: String,
     pub sex: String,
     pub age: String,
+    /// The person's `born` detail, so an age can be worked out from a text's date.
+    pub born: String,
+    /// The same figures text by text, for lengths over time (a child's MLU by age).
+    pub by_text: Vec<TextLength>,
 }
+
+/// One speaker's utterances in one text, with what the text says of when
+/// it was recorded and how old the speaker was.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextLength {
+    pub text: String,
+    pub title: String,
+    /// The text's `age_<track>` detail (CHAT's `@ID` age, `2;06.15`), else empty.
+    pub age: String,
+    /// The text's date detail, else empty.
+    pub date: String,
+    pub utterances: usize,
+    pub words: usize,
+    pub analysed: usize,
+    pub morphemes: usize,
+}
+
+/// Details a text's recording date may be under.
+const DATE_KEYS: &[&str] = &["date", "recorded", "recording_date"];
 
 /// Fewer running words than this give no MTLD: too few factors to mean anything.
 pub const MTLD_MIN: usize = 100;
@@ -100,7 +124,7 @@ fn is_placeholder(w: &str) -> bool {
 
 /// A track's speaker (its `speaker` link to a live person): their name, sex
 /// and age as the People panel holds them; all empty when it has none.
-fn person_of(p: &wugs_core::Project, tier: &str) -> Result<(String, String, String), String> {
+fn person_of(p: &wugs_core::Project, tier: &str) -> Result<(String, String, String, String), String> {
     let Some(person) = p.proj.field_text(tier, "speaker")? else {
         return Ok(Default::default());
     };
@@ -110,7 +134,7 @@ fn person_of(p: &wugs_core::Project, tier: &str) -> Result<(String, String, Stri
     let name = p.proj.field(&person, "names")?.and_then(|(v, _)| v.get_str("full").map(str::to_string)).unwrap_or_default();
     let details = p.person_details(&person)?;
     let get = |key: &str| details.iter().find(|(k, _)| k == key).map(|(_, v)| v.trim().to_string()).unwrap_or_default();
-    Ok((name, get("sex"), get("age")))
+    Ok((name, get("sex"), get("age"), get("born")))
 }
 
 pub fn speakers(session: &mut Session) -> Result<Vec<SpeakerRow>, String> {
@@ -129,14 +153,23 @@ pub fn speakers(session: &mut Session) -> Result<Vec<SpeakerRow>, String> {
             Some(i) => i,
             None => {
                 let name = p.proj.field_str(&seg.tier, "name")?.unwrap_or_default();
-                let (person, sex, age) = person_of(p, &seg.tier)?;
-                rows.push(SpeakerRow { tier: seg.tier.clone(), name, texts: 0, utterances: 0, words: 0, types: 0, longest: 0, analysed: 0, morphemes: 0, mtld: None, person, sex, age });
+                let (person, sex, age, born) = person_of(p, &seg.tier)?;
+                rows.push(SpeakerRow { tier: seg.tier.clone(), name, texts: 0, utterances: 0, words: 0, types: 0, longest: 0, analysed: 0, morphemes: 0, mtld: None, person, sex, age, born, by_text: Vec::new() });
                 rows.len() - 1
             }
         };
         let row = &mut rows[at];
         row.utterances += 1;
         row.words += words.len();
+        let per = match row.by_text.iter().position(|t| t.text == seg.text) {
+            Some(i) => i,
+            None => {
+                row.by_text.push(TextLength { text: seg.text.clone(), title: String::new(), age: String::new(), date: String::new(), utterances: 0, words: 0, analysed: 0, morphemes: 0 });
+                row.by_text.len() - 1
+            }
+        };
+        row.by_text[per].utterances += 1;
+        row.by_text[per].words += words.len();
         row.longest = row.longest.max(words.len());
         texts.entry(seg.tier.clone()).or_default().insert(seg.text.clone());
         let run = runs.entry(seg.tier.clone()).or_default();
@@ -154,15 +187,18 @@ pub fn speakers(session: &mut Session) -> Result<Vec<SpeakerRow>, String> {
                 morphs += n;
             }
         }
-        if !seg.tokens.is_empty() && glossed == seg.tokens.len() {
-            row.analysed += 1;
-            row.morphemes += morphs;
+        let known = if !seg.tokens.is_empty() && glossed == seg.tokens.len() {
+            morphs
         } else if let Some(mor) = p.proj.field_str(&seg.id, "x.chat.mor")? {
-            let n = mor_morphemes(&mor);
-            if n > 0 {
-                row.analysed += 1;
-                row.morphemes += n;
-            }
+            mor_morphemes(&mor)
+        } else {
+            0
+        };
+        if known > 0 {
+            row.analysed += 1;
+            row.morphemes += known;
+            row.by_text[per].analysed += 1;
+            row.by_text[per].morphemes += known;
         }
         Ok(())
     })?;
@@ -170,6 +206,15 @@ pub fn speakers(session: &mut Session) -> Result<Vec<SpeakerRow>, String> {
         r.texts = texts.get(&r.tier).map_or(0, HashSet::len);
         r.types = types.get(&r.tier).map_or(0, HashSet::len);
         r.mtld = runs.get(&r.tier).filter(|run| run.len() >= MTLD_MIN).and_then(|run| mtld(run));
+        let age_key = wugs_core::metadata::key_of(&format!("age {}", r.name));
+        for t in &mut r.by_text {
+            t.title = p.proj.field_str(&t.text, "title")?.unwrap_or_default();
+            let details = p.text_metadata(&t.text)?;
+            let get = |k: &str| details.iter().find(|(dk, _)| dk == k).map(|(_, v)| v.trim().to_string());
+            t.age = age_key.as_deref().and_then(get).unwrap_or_default();
+            t.date = DATE_KEYS.iter().find_map(|k| get(k)).unwrap_or_default();
+        }
+        r.by_text.sort_by(|a, b| a.title.cmp(&b.title));
     }
     rows.sort_by(|a, b| b.utterances.cmp(&a.utterances).then_with(|| a.name.cmp(&b.name)));
     Ok(rows)
@@ -240,6 +285,22 @@ mod tests {
         let chi = rows.iter().find(|r| r.name == "CHI").unwrap();
         assert_eq!((chi.person.as_str(), chi.sex.as_str(), chi.age.as_str()), ("Lena", "female", "2;06"));
         assert_eq!(rows.iter().find(|r| r.name == "MOT").unwrap().person, "");
+        // The lunch transcript has no ages: one text, nothing to place in time.
+        let chi = rows.iter().find(|r| r.name == "CHI").unwrap();
+        assert_eq!(chi.by_text.len(), 1);
+        assert_eq!((chi.by_text[0].utterances, chi.by_text[0].words, chi.by_text[0].analysed, chi.by_text[0].morphemes, chi.by_text[0].age.as_str()), (2, 3, 1, 2, ""));
+        // Two more sessions, each with the child's age in its @ID line.
+        for (name, age, line) in [("bath.cha", "2;03.12", "*CHI:\tmore bubbles .\n%mor:\tqn|more n|bubble-PL .\n"), ("park.cha", "2;09.01", "*CHI:\tthe doggie is running .\n%mor:\tdet|the n|doggie aux|be&3S part|run-PRESP .\n")] {
+            let file = dir.join(name);
+            fs::write(&file, format!("@Begin\n@Participants:\tCHI Target_Child, MOT Mother\n@ID:\teng|test|CHI|{age}|female|||Target_Child|||\n@ID:\teng|test|MOT|||||Mother|||\n@Date:\t12-JAN-1990\n{line}@End\n")).unwrap();
+            crate::interchange::import_file(&mut s, file.to_str().unwrap()).unwrap();
+        }
+        let rows = speakers(&mut s).unwrap();
+        let chi = rows.iter().find(|r| r.name == "CHI").unwrap();
+        let by: Vec<(&str, &str, usize, usize)> = chi.by_text.iter().map(|t| (t.title.as_str(), t.age.as_str(), t.utterances, t.morphemes)).collect();
+        assert_eq!(by, vec![("bath", "2;03.12", 1, 3), ("lunch", "", 2, 2), ("park", "2;09.01", 1, 5)]);
+        assert_eq!(chi.by_text[0].date, "1990-01-12");
+        assert_eq!((chi.utterances, chi.morphemes), (4, 10), "the totals take in every text");
         drop(s);
         fs::remove_dir_all(dir).ok();
     }

@@ -8,7 +8,7 @@ const progress: Progress = { texts: [text("A", [["genre", "narrative"]]), text("
 
 test("the description sums the corpus and leaves places to write", () => {
   assert.deepEqual(describedKeys(progress), ["genre", "place"]);
-  const html = corpusDescription({ progress, speakers: [{ tier: "t", name: "MAR", texts: 2, utterances: 16, words: 100, types: 40, longest: 9, analysed: 0, morphemes: 0, mtld: null, person: "", sex: "", age: "" }], language: { name: "Kanu", glottocode: "abcd1234", iso: "" }, restricted: 1, uncovered: 0, date: "2026-11-24", generator: "wugs test" });
+  const html = corpusDescription({ progress, speakers: [{ tier: "t", name: "MAR", texts: 2, utterances: 16, words: 100, types: 40, longest: 9, analysed: 0, morphemes: 0, mtld: null, person: "", sex: "", age: "", born: "", byText: [] }], language: { name: "Kanu", glottocode: "abcd1234", iso: "" }, restricted: 1, uncovered: 0, date: "2026-11-24", generator: "wugs test" });
   assert.match(html, /<title>Kanu: description of the collection<\/title>/);
   assert.ok(html.includes("Kanu (Glottocode abcd1234)"));
   assert.ok(html.includes("<tr><th scope=\"row\">Transcribed</th><td>16 of 20 sentences (80%)"));
@@ -19,7 +19,7 @@ test("the description sums the corpus and leaves places to write", () => {
 });
 
 test("the speakers' sex and age go in, never their names", () => {
-  const speaker = { tier: "t", name: "CHI", texts: 1, utterances: 4, words: 10, types: 6, longest: 4, analysed: 0, morphemes: 0, mtld: null, person: "Lena Okafor", sex: "female", age: "2;06" };
+  const speaker = { tier: "t", name: "CHI", texts: 1, utterances: 4, words: 10, types: 6, longest: 4, analysed: 0, morphemes: 0, mtld: null, person: "Lena Okafor", sex: "female", age: "2;06", born: "", byText: [] };
   const html = corpusDescription({ progress, speakers: [speaker], language: { name: "Kanu", glottocode: "", iso: "" }, restricted: 0, uncovered: null, date: "2026-11-24", generator: "wugs test" });
   assert.ok(html.includes("<th>Sex</th><th>Age</th>") && html.includes("<td>CHI</td><td>female</td><td>2;06</td>"));
   assert.ok(!html.includes("Lena"));

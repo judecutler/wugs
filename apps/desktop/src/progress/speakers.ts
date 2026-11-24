@@ -1,7 +1,9 @@
 // Speakers: each transcription track's utterance lengths (src-tauri/src/mlu.rs),
 // the mean length of utterance child language research starts from. Pure.
 
-export type SpeakerRow = { tier: string; name: string; texts: number; utterances: number; words: number; types: number; longest: number; analysed: number; morphemes: number; mtld: number | null; person: string; sex: string; age: string };
+import type { TextLength } from "./mluage.ts";
+
+export type SpeakerRow = { tier: string; name: string; texts: number; utterances: number; words: number; types: number; longest: number; analysed: number; morphemes: number; mtld: number | null; person: string; sex: string; age: string; born: string; byText: readonly TextLength[] };
 
 /** Words per utterance. */
 export const mluWords = (r: SpeakerRow): number => (r.utterances === 0 ? 0 : r.words / r.utterances);
