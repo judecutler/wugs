@@ -254,7 +254,9 @@ const LEXICON = [
     ["lx-toruma", "toruma", null, "", [""]],
     // Typed twice: Checks' "Entries that may be one word" pairs it with liwa.
     ["lx-lima", "lima", null, "n", ["hand"]],
-  ].map(([id, lemma, homograph, posOfSpeech, glosses]) => ({ id, lemma, homograph, posOfSpeech, glosses, used: !["lx-wiripa", "lx-toruma", "lx-tela2", "lx-lima"].includes(id) }));
+    // A loanword.
+    ["lx-buku", "buku", null, "n", ["book"]],
+  ].map(([id, lemma, homograph, posOfSpeech, glosses]) => ({ id, lemma, homograph, posOfSpeech, glosses, used: !["lx-wiripa", "lx-toruma", "lx-tela2", "lx-lima", "lx-buku"].includes(id), borrowedFrom: id === "lx-buku" ? "Malay" : "" }));
 
   const DOMAINS = [
     { id: "dom-8", code: "8", label: "States", description: "Use this domain for general words referring to states and conditions.", depth: 0 },
@@ -280,7 +282,9 @@ const LEXICON = [
         citation: "kani",
         posOfSpeech: "v",
         homograph: null,
-        notes: "Perhaps related to kan 'hand'; ask Mosa about the long vowel.",
+        notes: "Ask Mosa about the long vowel.",
+        etymology: "Perhaps related to kan 'hand'; cf. Moru kaŋi 'count'.",
+        borrowedFrom: "",
         sameLemma,
         allomorphs: [["frm-kan", "kan"], ["frm-hani", "hani"]],
         pronunciations: [
@@ -324,6 +328,8 @@ const LEXICON = [
       posOfSpeech: row.posOfSpeech,
       homograph: row.homograph,
       notes: "",
+      etymology: "",
+      borrowedFrom: row.lemma === "buku" ? "Malay" : "",
       sameLemma,
       allomorphs: [],
       pronunciations: [],

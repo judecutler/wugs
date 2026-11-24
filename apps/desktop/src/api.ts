@@ -435,7 +435,7 @@ export const captureRecoveredDiscard = (args: { id: string }) => invoke<void>("c
 
 // ---------------------------------------------------------------- lexicon (roadmap 22)
 
-export type EntryRow = { id: string; lemma: string; homograph: number | null; posOfSpeech: string; glosses: string[]; used: boolean };
+export type EntryRow = { id: string; lemma: string; homograph: number | null; posOfSpeech: string; glosses: string[]; used: boolean; borrowedFrom: string };
 export type DomainRef = { id: string; code: string; label: string };
 export type SenseView = {
   id: string;
@@ -467,6 +467,9 @@ export type EntryView = {
   homograph: number | null;
   /** The linguist's own notes on the whole entry. */
   notes: string;
+  /** Where the word comes from, and a loanword's source language ("" for none). */
+  etymology: string;
+  borrowedFrom: string;
   senses: SenseView[];
   /** Other entries with exactly this lemma: [id, homograph]. */
   sameLemma: [string, number | null][];
@@ -495,7 +498,7 @@ export type PronunciationView = {
 export type EntryEdit = { entry: EntryView | null; notes: string[] };
 export type DomainItem = { id: string; code: string; label: string; description: string; depth: number; words?: number };
 export type DomainsLoaded = { created: number; already: number; notes: string[] };
-export type LexemeField = "lemma" | "citation" | "pos-of-speech" | "notes";
+export type LexemeField = "lemma" | "citation" | "pos-of-speech" | "notes" | "etymology" | "borrowed-from";
 
 export const lexiconList = (args: { query: string }) => invoke<EntryRow[]>("lexicon_list", args);
 export const lexiconEntry = (args: { id: string }) => invoke<EntryView>("lexicon_entry", args);

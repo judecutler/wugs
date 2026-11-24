@@ -99,14 +99,15 @@ export function relatedName(r: { otherLemma: string; otherHomograph: number | nu
 }
 
 /** Which entries the list shows: every one, or those with work left to do. */
-export type ListShow = "all" | "gloss" | "category" | "unused" | `pos:${string}`;
-export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean };
+export type ListShow = "all" | "gloss" | "category" | "unused" | "loans" | `pos:${string}`;
+export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean; borrowedFrom?: string };
 
 export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; done: string }[] = [
   { id: "all", label: "Every entry", title: "List every entry", done: "No entries match." },
   { id: "gloss", label: "Needs a gloss", title: "Entries with a sense that has no gloss yet, such as words added from the Frequencies list", done: "Every entry found has a gloss." },
   { id: "category", label: "Needs a category", title: "Entries with no category (part of speech) yet", done: "Every entry found has a category." },
   { id: "unused", label: "Not in any text", title: "Entries no glossed word in a text is linked to yet", done: "Every entry found is linked from a text." },
+  { id: "loans", label: "Loanwords", title: "Entries marked as borrowed from another language", done: "No entry found is marked as a loanword." },
 ];
 
 /** Whether an entry belongs in the list shown. */
@@ -115,6 +116,7 @@ export function shows(r: ListRow, show: ListShow): boolean {
   if (show === "gloss") return r.glosses.length === 0 || r.glosses.some((g) => g.trim() === "");
   if (show === "category") return r.posOfSpeech.trim() === "";
   if (show === "unused") return !r.used;
+  if (show === "loans") return (r.borrowedFrom ?? "").trim() !== "";
   return true;
 }
 
@@ -161,4 +163,23 @@ export function tableImportLines(r: TableImport): string[] {
   }
   if (r.noLemma > 0) lines.push(`${n(r.noLemma, "row has", "rows have")} no word and ${r.noLemma === 1 ? "was" : "were"} skipped.`);
   return lines;
+}
+
+/** The languages loanwords come from, commonest first, with how many each. */
+export function loanSources(rows: readonly ListRow[]): { language: string; count: number }[] {
+  const n = new Map<string, number>();
+  for (const r of rows) {
+    const l = (r.borrowedFrom ?? "").trim();
+    if (l !== "") n.set(l, (n.get(l) ?? 0) + 1);
+  }
+  return [...n].map(([language, count]) => ({ language, count })).sort((a, b) => b.count - a.count || a.language.localeCompare(b.language));
+}
+
+/** "41 loanwords (9% of 455 entries): Spanish 30, English 9, Quechua 2." */
+export function loansLine(rows: readonly ListRow[]): string {
+  const src = loanSources(rows);
+  const loans = src.reduce((a, s) => a + s.count, 0);
+  if (loans === 0) return "No entry is marked as a loanword yet: fill in an entry's Borrowed from.";
+  const pct = rows.length === 0 ? 0 : Math.round((loans * 100) / rows.length);
+  return `${loans} ${loans === 1 ? "loanword" : "loanwords"} (${pct}% of ${rows.length} ${rows.length === 1 ? "entry" : "entries"}): ${src.map((s) => `${s.language} ${s.count}`).join(", ")}.`;
 }

@@ -19,7 +19,7 @@ import { typeWithShortcuts } from "../typing";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
-import { categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
+import { loansLine, categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, paradigmSheet, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
@@ -423,6 +423,8 @@ export const lexiconPanel: PanelDef = {
         return;
       }
       list.replaceChildren(
+        // Listing loanwords says how many there are and where they come from.
+        ...(show === "loans" ? [h("li", { className: "empty lx-loans", textContent: loansLine(rows) })] : []),
         ...listed.map((r) =>
           h(
             "li",
@@ -496,7 +498,9 @@ export const lexiconPanel: PanelDef = {
         ),
         row("Related", relationsBlock(e)),
         row("Homograph", homograph),
-        row("Notes", area(`notes:${e.id}`, e.notes, "Notes on this entry: etymology, doubts, what to ask", (v) => run(() => lexiconSetField({ id: e.id, field: "notes", value: v })))),
+        row("Borrowed from", cell(`bw:${e.id}`, e.borrowedFrom, "The language this word was borrowed from, if it is a loanword", setField("borrowed-from"), { placeholder: "Spanish, Arabic… (empty for a native word)" })),
+        row("Etymology", area(`et:${e.id}`, e.etymology, "Where the word comes from: a proto-form, the source word of a loan, cognates", (v) => run(() => lexiconSetField({ id: e.id, field: "etymology", value: v })))),
+        row("Notes", area(`notes:${e.id}`, e.notes, "Notes on this entry: doubts, what to ask", (v) => run(() => lexiconSetField({ id: e.id, field: "notes", value: v })))),
         note === null
           ? null
           : h(
