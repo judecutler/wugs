@@ -3,7 +3,7 @@
 // translation line up under the transcription. The project's earlier analyses
 // are one keypress away: Enter on an empty word accepts the ghost suggestion.
 import {
-  abbreviationMeanings, addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize, likelyMeanings,
+  abbreviationMeanings, addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize, likelyMeanings, likeSentences,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
@@ -20,11 +20,12 @@ import { forms } from "../gloss/tokenizer";
 import { isPaired, NEW_TRACK, translationLines } from "../gloss/translation";
 import { clipboardFor, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { provide } from "../palette/registry";
+import { LIKE_KEY, likeNote, likeTitle, type Like } from "../gloss/like";
 import { meaningTitle, type Meaning } from "../wordtypes/logic";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { emptyState, h } from "../dom";
 import { typeWithShortcuts } from "../typing";
-import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, showToast, subscribeSelection, touchLexicon } from "../store";
+import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, selectSegment, selectText, showToast, subscribeSelection, touchLexicon } from "../store";
 import { createComposition, formatRange, imeBusy } from "../transcribe/logic";
 import { hear, playButton } from "../hear/hear";
 import type { PanelDef, PanelView } from "./panel";
@@ -50,6 +51,11 @@ export const glossPanel: PanelDef = {
     let queue: Promise<unknown> = Promise.resolve();
     /** Typed but not yet saved, by cell id. Survives a redraw. */
     const drafts = new Map<string, string>();
+    // Sentences like this one: a box kept across redraws, filled when its answer comes.
+    let likeOpen = readStored(LIKE_KEY) !== "off";
+    let likeFor = "";
+    let likeSeq = 0;
+    const likeBox = h("div", { className: "gl-like" });
     const errors = new Map<string, string>();
     const lexicon = new Map<string, LexiconMatch[]>();
     let offer: string | null = null;
@@ -739,6 +745,54 @@ export const glossPanel: PanelDef = {
       return box;
     }
 
+    /** The sentences most like the one on screen, asked once per sentence and change. */
+    function likeBlock(sel: NonNullable<ReturnType<typeof selected>>): HTMLElement {
+      const want = `${sel.segment.id}|${dataGeneration()}|${likeOpen}`;
+      if (want === likeFor) return likeBox;
+      likeFor = want;
+      const toggle = h("button", { type: "button", className: "gl-like-toggle", textContent: likeOpen ? "Hide" : "Show", title: "Sentences of the project that share this one's rarer words, with their translations" });
+      toggle.setAttribute("aria-expanded", String(likeOpen));
+      toggle.onclick = () => {
+        likeOpen = !likeOpen;
+        writeStored(LIKE_KEY, likeOpen ? "on" : "off");
+        likeFor = "";
+        likeBlock(sel);
+      };
+      const head = h("div", { className: "gl-like-head" }, h("h3", { textContent: "Sentences like this one" }), toggle);
+      if (!likeOpen) {
+        likeBox.replaceChildren(head);
+        return likeBox;
+      }
+      const note = h("p", { className: "note", textContent: "Looking…" });
+      likeBox.replaceChildren(head, note);
+      const mine = ++likeSeq;
+      const fill = (list: Like[]) => {
+        if (mine !== likeSeq) return;
+        note.textContent = likeNote(list);
+        const rows = list.map((l) => {
+          const row = h(
+            "button",
+            { type: "button", className: "gl-like-row", title: likeTitle(l) },
+            h("span", { className: "gl-like-text", textContent: l.content }),
+            l.translation === null ? null : h("span", { className: "gl-like-tr", textContent: `‘${l.translation}’` }),
+            h("span", { className: "gl-like-where", textContent: l.textTitle }),
+          );
+          row.onclick = () =>
+            void (async () => {
+              const s = getState();
+              if (s.kind === "open" && s.text?.id !== l.textId) await selectText(l.textId);
+              selectSegment({ textId: l.textId, tierId: l.tierId, segmentId: l.segmentId });
+            })();
+          return row;
+        });
+        likeBox.append(...rows);
+      };
+      likeSentences({ segmentId: sel.segment.id }).then(fill, (e) => {
+        if (mine === likeSeq) note.textContent = `Could not look: ${errorText(e)}`;
+      });
+      return likeBox;
+    }
+
     /** Copy the segment as a numbered example for a paper (roadmap 69), in
      * the format the person writes in, remembered on this computer. */
     function copyControl(sel: NonNullable<ReturnType<typeof selected>>, v: GlossView): HTMLElement {
@@ -838,7 +892,7 @@ export const glossPanel: PanelDef = {
         body.push(h("div", { className: "gl-notice gl-hidden-words" }, h("span", { textContent: "Edits from another device on words no longer in this segment:" }), ...hiddenWords.map((x) => restoreButton(x, "word"))));
       }
       if (v.words.length > 0) body.push(h("div", { className: "gl-igt" }, ...v.words.map((w) => wordColumn(w, v))));
-      el.replaceChildren(head, transcription, ...body, translationBlock(sel), notesBlock(v));
+      el.replaceChildren(head, transcription, ...body, translationBlock(sel), notesBlock(v), likeBlock(sel));
 
       if (pending !== null) applyPending(v);
       else if (keep !== null && keep.cell !== "") {

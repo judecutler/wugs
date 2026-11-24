@@ -351,6 +351,10 @@ Under **Notes**, at the bottom of the Gloss panel, type anything you want to rem
 
 Notes belong to the sentence's text, so they have its sharing level, and they sync with the project. Two people can add notes to the same sentence at once, and both notes stay. The **Interlinear** tab shows each note under its sentence, and **Search** finds words in notes too: the hit opens the sentence and says "note". Notes go in and out of FlexText as FLEx's Note line.
 
+### See how you translated a sentence like this before
+
+Under the notes, **Sentences like this one** lists up to five sentences of the project that share most of this sentence's words, with their translations. A phrase or formula you translated before can then be translated the same way again, and you can see a word you are glossing used in other sentences. Rare words count for more than common ones, so a word every sentence has (*the*, a common particle) brings up nothing on its own. A sentence with exactly the same words comes first. Hover over one to see the words both share; click it to open it. **Hide** puts the list away on this computer, and **Show** brings it back.
+
 ### Go through every note before a session
 
 The **Notes** panel lists every note in the project in one place: the notes under sentences, grouped by text, and the notes on lexicon entries and senses. Press **Ctrl+K** and choose **Show Notes** (it is not placed in the workspace at first).

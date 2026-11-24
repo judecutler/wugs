@@ -5,6 +5,7 @@ pub mod clips;
 pub mod capture;
 pub mod chat;
 pub mod exmaralda;
+pub mod like_sentences;
 pub mod mlu;
 pub mod wikipedia;
 pub mod characters;
@@ -209,6 +210,12 @@ fn gloss_consistency(s: State<SessionThread>) -> Result<Vec<consistency::Inconsi
 #[tauri::command(async)]
 fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String, to: String) -> Result<usize, String> {
     s.run(move |s| consistency::unify(s, &key, &kind, &from, &to))
+}
+
+/// The project's sentences most like this one, with their translations.
+#[tauri::command(async)]
+fn like_sentences(s: State<SessionThread>, segment_id: String) -> Result<Vec<like_sentences::Like>, String> {
+    s.run(move |s| like_sentences::like(s, &segment_id))
 }
 
 /// Word forms analysed with more than one breakdown (the Checks panel).
@@ -2322,6 +2329,7 @@ pub fn run() {
             gloss_consistency,
             gloss_unify,
             gloss_segmentations,
+            like_sentences,
             gloss_use_breakdown,
             gloss_missing,
             gloss_sense_drift,

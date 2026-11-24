@@ -1103,6 +1103,14 @@ const LEXICON = [
     }),
     update_check: () => ({ currentVersion: "0.0.1", available: null }),
     gloss_get: ({ segmentId }) => glossView(segmentId),
+    // Sentences like the one on screen, with a translation for the first.
+    like_sentences: ({ segmentId }) =>
+      segmentId === "u01"
+        ? [
+            { textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03", content: "wuno tekal nikani ra ŋai liwa", translation: "Then I counted one by one.", shared: ["nikani", "ŋai"], score: 0.52 },
+            { textId: "t-greet", textTitle: "Greetings at the market", tierId: "tier-utt", segmentId: "g07", content: "senu paki nikani", translation: null, shared: ["nikani"], score: 0.27 },
+          ]
+        : [],
     // What the translations suggest an unanalysed word means.
     likely_meanings: ({ forms }) => forms.map((f) => (f === "tekal" ? [{ word: "walks", together: 3, of: 4, dice: 0.71 }, { word: "away", together: 2, of: 4, dice: 0.4 }] : [])),
     gloss_add_note: glossEdit,
