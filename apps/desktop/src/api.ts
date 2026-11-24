@@ -34,6 +34,8 @@ export type TierRow = {
   /** What the track is for: transcription, translation, note, or a kit's own. */
   role: string | null;
   language: string | null;
+  /** The person (People panel) who speaks on it, when set. */
+  speaker?: string | null;
   /** The tier a symbolic tier depends on (a paired translation track's sentences). */
   parent?: string | null;
   /** Where segments go when no tier is named (Auto-segment with nothing selected). */
@@ -187,6 +189,8 @@ export const roughUntime = (args: { textId: string; expect: { id: string; startM
 /** The project's own title (empty when not set), carried by sealed packages and archive records. */
 export const projectTitle = () => invoke<string>("project_title");
 export const setProjectTitle = (args: { title: string }) => invoke<null>("set_project_title", args);
+/** Who speaks on a track: a person of the People panel, or null to clear. */
+export const setTierSpeaker = (args: { tierId: string; person: string | null }) => invoke<null>("set_tier_speaker", args);
 export const setTier = (args: { tierId: string; name: string; language: string }) => invoke<null>("set_tier", args);
 export const shiftTrack = (args: { textId: string; tierId: string; deltaMs: number; expect: { id: string; startMs?: number; endMs?: number }[] }) => invoke<RoughTimed>("shift_track", args);
 

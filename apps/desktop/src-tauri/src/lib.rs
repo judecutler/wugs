@@ -2007,6 +2007,11 @@ fn set_project_title(s: State<SessionThread>, title: String) -> Result<(), Strin
 }
 
 #[tauri::command(async)]
+fn set_tier_speaker(s: State<SessionThread>, tier_id: String, person: Option<String>) -> Result<(), String> {
+    s.run(move |s| session::set_tier_speaker(s, &tier_id, person.as_deref().filter(|p| !p.is_empty())))
+}
+
+#[tauri::command(async)]
 fn set_tier(s: State<SessionThread>, tier_id: String, name: String, language: String) -> Result<(), String> {
     s.run(move |s| session::set_tier(s, &tier_id, &name, &language))
 }
@@ -2814,6 +2819,7 @@ pub fn run() {
             rough_untime,
             shift_track,
             set_tier,
+            set_tier_speaker,
             project_title,
             set_project_title,
             export_unimorph,

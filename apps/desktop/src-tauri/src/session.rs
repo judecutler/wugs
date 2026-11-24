@@ -141,6 +141,8 @@ pub struct TierRow {
     /// FlexText's free-translation tier reads as `translation`.
     pub role: Option<String>,
     pub language: Option<String>,
+    /// The person (People panel) who speaks on it, when someone said so.
+    pub speaker: Option<String>,
     /// The tier a symbolic tier depends on (a paired translation track's sentences).
     pub parent: Option<String>,
     /// The session's utterance tier: where segments go when no tier is named.
@@ -409,6 +411,7 @@ pub fn get_text(session: &mut Session, text_id: &str) -> Result<TextDetail, Stri
             kind: p.proj.field_str(&id, "kind")?,
             role: tier_role(p, &id)?,
             language: p.proj.field_text(&id, "language")?,
+            speaker: p.proj.field_text(&id, "speaker")?,
             parent: p.proj.field_str(&id, "parent")?.filter(|v| !v.is_empty()),
             utterance: p.proj.field_str(&id, "origin")?.as_deref() == Some(UTTERANCE_ORIGIN),
             id,
@@ -631,7 +634,7 @@ pub fn add_tier(session: &mut Session, template: &str, name: Option<&str>) -> Re
     let name = name.map(str::trim).filter(|n| !n.is_empty()).unwrap_or(template);
     let p = project(session)?;
     let (id, _) = p.add_tier(name, "time-aligned", *role, None)?;
-    Ok(TierRow { id, name: name.to_string(), kind: Some("time-aligned".to_string()), role: role.map(str::to_string), language: None, parent: None, utterance: false })
+    Ok(TierRow { id, name: name.to_string(), kind: Some("time-aligned".to_string()), role: role.map(str::to_string), language: None, speaker: None, parent: None, utterance: false })
 }
 
 /// One past the largest existing pos, so a new segment sorts last even when
@@ -652,6 +655,11 @@ pub(crate) fn next_pos_index(p: &Project, text_id: &str) -> Result<usize, String
 }
 
 /// The project's utterance tier if it exists, writing nothing.
+/// Who speaks on a track (`Project::set_tier_speaker`); None clears it.
+pub fn set_tier_speaker(session: &mut Session, tier: &str, person: Option<&str>) -> Result<(), String> {
+    project(session)?.set_tier_speaker(tier, person).map(|_| ())
+}
+
 /// Rename a track and set its language (`Project::set_tier_details`).
 pub fn set_tier(session: &mut Session, tier: &str, name: &str, language: &str) -> Result<(), String> {
     project(session)?.set_tier_details(tier, name, language).map(|_| ())

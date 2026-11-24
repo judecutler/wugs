@@ -1390,6 +1390,25 @@ impl Project {
         t.commit().map(Some)
     }
 
+    /// Who speaks on a track: a live person of the People panel, or none.
+    /// One resolving `set-tier-speaker` txn; unchanged writes nothing. The
+    /// person's details (sex, born, languages) then reach exports that ask
+    /// about speakers (the speech dataset's `spk2gender`).
+    pub fn set_tier_speaker(&mut self, tier: &str, person: Option<&str>) -> Result<Option<CommitResult>, String> {
+        self.require(tier, "tier")?;
+        if let Some(person) = person {
+            if self.proj.entity_kind(person)?.as_deref() != Some("person") || self.proj.is_tombstoned(person)? {
+                return Err("that person is not in the People panel".into());
+            }
+        }
+        if self.proj.field_text(tier, "speaker")?.as_deref() == person {
+            return Ok(None);
+        }
+        let mut t = self.intent("set-tier-speaker").resolving();
+        t.set("tier", tier, SCOPE_CONFIG, "speaker", person.map_or(Value::Null, Value::str))?;
+        t.commit().map(Some)
+    }
+
     /// A translation track paired with `parent_tier`: a symbolic
     /// association (one translation per segment, linked by the segment's
     /// `parent`, as ELAN and FlexText hold them) with role `translation`.
@@ -2389,6 +2408,13 @@ mod tests {
         p.set_tier_details(&id, "English", "stan1293").unwrap();
         p.set_tier_details(&id, "English", "").unwrap();
         assert_eq!(p.proj.field_text(&id, "language").unwrap(), None, "cleared");
+        let person = p.add_named_person("Ana Sefo", &[]).unwrap();
+        assert!(p.set_tier_speaker(&id, Some(&id)).is_err(), "only a person speaks");
+        assert!(p.set_tier_speaker(&id, Some(&person)).unwrap().is_some());
+        assert_eq!(p.proj.field_text(&id, "speaker").unwrap().as_deref(), Some(person.as_str()));
+        assert!(p.set_tier_speaker(&id, Some(&person)).unwrap().is_none(), "unchanged writes nothing");
+        p.set_tier_speaker(&id, None).unwrap();
+        assert_eq!(p.proj.field_text(&id, "speaker").unwrap(), None);
         let (kit, _) = p.add_tier("Phones", "time-aligned", Some("phonetic"), None).unwrap();
         assert_eq!(p.proj.field_str(&kit, "role").unwrap().as_deref(), Some("phonetic"), "core never interprets the vocabulary");
         assert!(p.add_tier("x", "time-aligned", Some(" "), None).is_err());
