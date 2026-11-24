@@ -171,6 +171,10 @@ Perhaps you typed or imported the sentences before timing them: from a notebook,
 
 The result is a first guess, not a careful alignment. Play each sentence, then drag its edges to where it really starts and ends. **Undo** takes all the times away again, as long as you have not moved them since. The button works only on a track whose segments have no times yet.
 
+### Move a whole track earlier or later
+
+If a recording was trimmed, or exported again with a different start, every segment can be off by the same amount. Select a segment on that track (or none, for the utterance track), press **Shift times…**, type how many milliseconds to move by (negative moves earlier) and press **Move**. Every timed segment of that track in this text moves together; **Undo** moves them back. A move that would start a segment before the recording does is refused.
+
 ### Split, merge, and nudge
 
 Select a segment first. Then use the toolbar buttons or these keys while the timeline has focus:

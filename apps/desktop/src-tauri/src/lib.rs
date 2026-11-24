@@ -1979,6 +1979,12 @@ fn export_unimorph(s: State<SessionThread>, folder: String, date: String) -> Res
     s.run(move |s| unimorph::export(s, std::path::Path::new(&folder), &date))
 }
 
+/// Move every timed segment of a track in a text by `delta_ms`; `expect` (the undo's) checks the times first.
+#[tauri::command(async)]
+fn shift_track(s: State<SessionThread>, text_id: String, tier_id: String, delta_ms: f64, expect: Vec<session::SegmentCheckView>) -> Result<rough_align::Timed, String> {
+    s.run(move |s| rough_align::shift(s, &text_id, &tier_id, delta_ms, &expect))
+}
+
 #[tauri::command(async)]
 fn rough_untime(s: State<SessionThread>, text_id: String, expect: Vec<session::SegmentCheckView>) -> Result<(), String> {
     s.run(move |s| rough_align::untime(s, &text_id, &expect))
@@ -2780,6 +2786,7 @@ pub fn run() {
             auto_segment,
             rough_time,
             rough_untime,
+            shift_track,
             export_unimorph,
             domain_suggestions,
             import_alignments,

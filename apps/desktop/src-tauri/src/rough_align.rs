@@ -215,6 +215,41 @@ pub fn untime(session: &mut Session, text: &str, expect: &[session::SegmentCheck
     p.time_segments(text, &rows).map(|_| ())
 }
 
+/// Every timed segment of a track in one text moved by `delta_ms` (a
+/// recording trimmed or re-encoded with an offset), in one resolving txn.
+/// Refused when a segment would start before 0. The undo is the same with
+/// `-delta_ms` and the new times as checks.
+pub fn shift(session: &mut Session, text: &str, tier: &str, delta_ms: f64, expect: &[session::SegmentCheckView]) -> Result<Timed, String> {
+    if !delta_ms.is_finite() || delta_ms == 0.0 {
+        return Err("Say how many milliseconds to move the segments by.".into());
+    }
+    let p = session::project(session)?;
+    if !expect.is_empty() {
+        let checks: Vec<wugs_core::SegmentCheck> = expect.iter().map(|c| wugs_core::SegmentCheck { id: c.id.clone(), start: c.start_ms, end: c.end_ms, ..Default::default() }).collect();
+        p.require_unchanged(&checks)?;
+    }
+    let tier_name = p.proj.field_str(tier, "name")?.unwrap_or_default();
+    let mut rows: Vec<(String, Option<(f64, f64)>)> = Vec::new();
+    for id in p.proj.ordered_children("text", text, "segment")? {
+        if p.proj.is_tombstoned(&id)? || p.proj.field_str(&id, "tier")?.as_deref() != Some(tier) {
+            continue;
+        }
+        if let (Some(s), Some(e)) = (p.proj.field_num(&id, "start")?, p.proj.field_num(&id, "end")?) {
+            let (s, e) = ((s + delta_ms).round(), (e + delta_ms).round());
+            if s < 0.0 {
+                return Err(format!("Moving «{tier_name}» by {delta_ms} ms would start a segment before the recording does; nothing was moved."));
+            }
+            rows.push((id, Some((s, e))));
+        }
+    }
+    if rows.is_empty() {
+        return Err(format!("«{tier_name}» has no timed segments in this text."));
+    }
+    p.time_segments(text, &rows)?;
+    let ids: Vec<String> = rows.into_iter().map(|(id, _)| id).collect();
+    Ok(Timed { tier: tier.to_string(), tier_name, sentences: ids.len(), spans: 0, states: session::states(p, &ids)? })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,6 +314,13 @@ mod tests {
         assert_eq!((r.states[1].start_ms, r.states[1].end_ms), (Some(3000.0), Some(4100.0)));
         assert!(sentences(&mut s, &text, Some(&tier)).unwrap_err().contains("already has timed"), "a second run is refused");
         let checks: Vec<session::SegmentCheckView> = r.states.iter().map(|st| session::SegmentCheckView { id: st.id.clone(), start_ms: st.start_ms, end_ms: st.end_ms, ..Default::default() }).collect();
+        let moved = shift(&mut s, &text, &tier, 250.0, &[]).unwrap();
+        assert_eq!((moved.states[0].start_ms, moved.states[2].end_ms), (Some(750.0), Some(6450.0)));
+        assert!(shift(&mut s, &text, &tier, -800.0, &[]).unwrap_err().contains("before the recording"), "nothing before 0");
+        let back: Vec<session::SegmentCheckView> = moved.states.iter().map(|st| session::SegmentCheckView { id: st.id.clone(), start_ms: st.start_ms, end_ms: st.end_ms, ..Default::default() }).collect();
+        let undone = shift(&mut s, &text, &tier, -250.0, &back).unwrap();
+        assert_eq!(undone.states[0].start_ms, Some(500.0), "the undo moves them back");
+        assert!(shift(&mut s, &text, &tier, -250.0, &back).is_err(), "an undo checks the times it expects");
         untime(&mut s, &text, &checks).unwrap();
         assert_eq!(sentences(&mut s, &text, Some(&tier)).unwrap().rows.len(), 3, "untimed again");
         std::fs::remove_dir_all(&dir).ok();

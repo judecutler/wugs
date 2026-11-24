@@ -83,13 +83,41 @@ export const timelinePanel: PanelDef = {
     const ROUGH_TITLE =
       "For a transcription typed before it was timed: place the sentences of the selected segment's track (else the utterance track) over the stretches of speech in this recording, by their length. A first guess to correct by ear; Undo takes the times away.";
     const roughButton = h("button", { textContent: "Time typed sentences", title: ROUGH_TITLE });
+    const shiftButton = h("button", { textContent: "Shift times…", title: "Move every timed segment of a track earlier or later by the same amount: for a recording trimmed or re-exported with an offset" });
+    const shiftInput = h("input", { type: "number", step: "10", value: "0", className: "tl-shift-ms", ariaLabel: "Milliseconds to move by (negative is earlier)" });
+    const shiftWhat = h("span", { className: "tl-shift-what" });
+    const shiftGo = h("button", { textContent: "Move" });
+    const shiftClose = h("button", { textContent: "Cancel" });
+    const shiftRow = h("div", { className: "tl-shift" }, shiftWhat, shiftInput, h("span", { textContent: "ms (negative moves earlier)" }), shiftGo, shiftClose);
+    shiftRow.hidden = true;
+    const openShift = () => {
+      const t = view?.editTrack() ?? null;
+      if (t === null) return;
+      shiftWhat.textContent = `Move every segment of «${t.name}» by`;
+      shiftRow.hidden = false;
+      shiftInput.select();
+      shiftInput.focus();
+    };
+    shiftButton.onclick = () => (shiftRow.hidden ? openShift() : (shiftRow.hidden = true));
+    shiftClose.onclick = () => (shiftRow.hidden = true);
+    const runShift = () => {
+      const ms = Number(shiftInput.value);
+      if (!Number.isFinite(ms) || ms === 0 || view === null) return;
+      shiftRow.hidden = true;
+      void view.shiftTimes(Math.round(ms));
+    };
+    shiftGo.onclick = runShift;
+    shiftInput.onkeydown = (ev: KeyboardEvent) => {
+      if (ev.key === "Enter") runShift();
+      else if (ev.key === "Escape") shiftRow.hidden = true;
+    };
     const SPLIT_TITLE = "Cut the selected segment at the playhead (S). Its text stays on the first part.";
     const MERGE_TITLE = "Join the selected segment with the next one on its track (M).";
     const splitButton = h("button", { textContent: "Split", title: SPLIT_TITLE });
     const mergeButton = h("button", { textContent: "Merge with next", title: MERGE_TITLE });
     const undoButton = h("button", { textContent: "Undo", title: "Undo (Ctrl+Z)" });
     const redoButton = h("button", { textContent: "Redo", title: "Redo (Ctrl+Shift+Z or Ctrl+Y)" });
-    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, roughButton, splitButton, mergeButton, undoButton, redoButton);
+    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, roughButton, shiftButton, splitButton, mergeButton, undoButton, redoButton);
     const spectroButton = h("button", { textContent: "Spectrogram", title: "Show the recording's spectrogram under the waveform (0–5000 Hz, darker where louder), made by wugs itself, a minute of view at a time" });
     spectroButton.setAttribute("aria-pressed", "false");
     const bandPicker = h(
@@ -295,6 +323,7 @@ export const timelinePanel: PanelDef = {
       { id: "timeline:start", title: "Go to the start", group: "Timeline", keys: "Home", disabled: needsRecording, run: () => view?.seekTo(0) },
       { id: "timeline:split", title: "Split at the playhead", group: "Timeline", keys: "S", words: ["cut"], disabled: () => needsView() ?? view?.editRules().split ?? null, run: () => void view?.splitAtPlayhead() },
       { id: "timeline:merge", title: "Merge with the next segment", group: "Timeline", keys: "M", words: ["join", "combine"], disabled: () => needsView() ?? view?.editRules().merge ?? null, run: () => void view?.mergeWithNext() },
+      { id: "timeline:shift", title: "Shift a track's times earlier or later", group: "Timeline", words: ["offset", "move all", "sync", "delay"], disabled: () => (view === null || view.editTrack() === null ? "Open a text first." : null), run: () => openShift() },
       { id: "timeline:rough", title: "Time typed sentences against the recording", group: "Timeline", words: ["align", "untimed", "transcript", "rough", "sentences"], disabled: () => needsRecording() ?? asButton(roughButton)(), run: () => roughButton.click() },
       { id: "timeline:auto", title: "Auto-segment the recording", group: "Timeline", words: ["detect", "speech", "segments", "automatic"], disabled: () => needsRecording() ?? asButton(autoButton)(), run: () => autoButton.click() },
       { id: "timeline:undo", title: "Undo a timeline edit", group: "Timeline", keys: "Ctrl+Z", disabled: () => needsView() ?? (undoButton.disabled ? "Nothing to undo" : null), run: () => void view?.undo() },
@@ -550,7 +579,7 @@ export const timelinePanel: PanelDef = {
         view.onEditStateChange = updateEditButtons;
         view.onTracksChange = drawGutter;
         body.replaceChildren(view.element);
-        el.replaceChildren(toolbar, transport, praat.review, main);
+        el.replaceChildren(toolbar, transport, shiftRow, praat.review, main);
         cancelAnimationFrame(tick);
         tick = requestAnimationFrame(follow);
         lastText = "";
