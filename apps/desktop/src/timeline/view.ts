@@ -483,6 +483,56 @@ export class TimelineView {
     this.setVp({ ...this.vp(), durationMs: duration });
   }
 
+  /** Set while `picture` draws: no playhead, selection, machine tints or drafts. */
+  private forPicture = false;
+
+  /** What the view shows as a PNG (data URL) for a paper or a handout: the
+   * ruler, waveform, spectrogram and curves that are on, and every track,
+   * on white, at three times the screen's size so it prints sharp, each
+   * track's name in a margin on its left. Null with no text. */
+  picture(scale = 3): string | null {
+    if (this.text === null) return null;
+    const rect = this.element.getBoundingClientRect();
+    const w = Math.max(1, Math.floor(rect.width));
+    const used = RULER_H + WAVE_H + this.lanes.length * TIER_H + 1;
+    this.forPicture = true;
+    try {
+      this.canvas.width = Math.floor(w * scale);
+      this.canvas.height = Math.floor(used * scale);
+      this.ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      this.draw();
+      const out = document.createElement("canvas");
+      const c = out.getContext("2d");
+      if (c === null) return null;
+      // The margin is as wide as the longest track name.
+      const font = "12px system-ui";
+      c.font = font;
+      const margin = Math.ceil(Math.min(160, Math.max(0, ...this.lanes.map((l) => c.measureText(l.name).width))) + 16);
+      out.width = this.canvas.width + Math.round(margin * scale);
+      out.height = this.canvas.height;
+      c.fillStyle = "#ffffff";
+      c.fillRect(0, 0, out.width, out.height);
+      c.drawImage(this.canvas, Math.round(margin * scale), 0);
+      c.setTransform(scale, 0, 0, scale, 0, 0);
+      c.font = font;
+      c.fillStyle = this.colors.ink;
+      c.textBaseline = "middle";
+      this.lanes.forEach((lane, i) => {
+        if (this.isHidden(lane)) return;
+        c.save();
+        c.beginPath();
+        c.rect(0, 0, margin - 8, used);
+        c.clip();
+        c.fillText(lane.name, 6, RULER_H + WAVE_H + i * TIER_H + TIER_H / 2);
+        c.restore();
+      });
+      return out.toDataURL("image/png");
+    } finally {
+      this.forPicture = false;
+      this.resize();
+    }
+  }
+
   private resize(): void {
     const rect = this.element.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
@@ -514,7 +564,7 @@ export class TimelineView {
       for (let c = 0; c < channels; c++) this.strips.prefetch(v, c);
       this.spectrogram.draw(this.ctx, v, RULER_H, WAVE_H);
       this.drawWave(v, channels);
-      this.drawSpeech(v);
+      if (!this.forPicture) this.drawSpeech(v);
       this.analysis.draw(this.ctx, v, RULER_H, WAVE_H);
     } else {
       ctx.fillStyle = this.colors.muted;
@@ -523,6 +573,7 @@ export class TimelineView {
     }
     this.drawRuler(v);
     this.drawLanes(v);
+    if (this.forPicture) return;
     this.drawCursor(v);
     if (this.showPerf) this.drawPerf();
   }
@@ -615,7 +666,7 @@ export class TimelineView {
         this.drawSegment(v, draft !== null && draft.id === seg.id ? { ...seg, ...draft } : seg, top);
       }
       ctx.globalAlpha = 1;
-      if (this.drag?.kind === "create" && this.drag.lane === i) {
+      if (this.drag?.kind === "create" && this.drag.lane === i && !this.forPicture) {
         const r = this.createRange(i, this.drag.anchorMs, this.drag.currentMs);
         const x0 = timeToX(v, r.startMs);
         const x1 = timeToX(v, r.endMs);
@@ -633,9 +684,9 @@ export class TimelineView {
     if (x1 < 0 || x0 > v.widthPx) return;
     const y = top + 4;
     const hgt = TIER_H - 8;
-    const selected = seg.id === this.selected;
+    const selected = seg.id === this.selected && !this.forPicture;
     // Machine output stays tinted until a person edits it.
-    const machine = seg.machine === null ? null : tint(seg.machine);
+    const machine = seg.machine === null || this.forPicture ? null : tint(seg.machine);
     ctx.fillStyle = machine === "very-unsure" ? this.colors.veryUnsure : machine === "unsure" ? this.colors.unsure : selected ? this.colors.selectedBox : this.colors.box;
     ctx.strokeStyle = selected ? this.colors.accent : this.colors.line;
     ctx.lineWidth = selected ? 2 : 1;

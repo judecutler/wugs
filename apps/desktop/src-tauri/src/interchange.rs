@@ -1048,12 +1048,43 @@ pub(crate) fn translations_of(p: &wugs_core::Project, segment: &str) -> Result<V
 /// HTML or plain text) as `<title>.<ext>` in `folder`, never replacing a
 /// file and never inside the project.
 pub fn save_document(s: &mut Session, folder: &Path, title: &str, extension: &str, contents: &str) -> Result<Exported, String> {
-    if !matches!(extension, "tex" | "html" | "txt" | "svg") {
+    if !matches!(extension, "tex" | "html" | "txt" | "svg" | "png") {
         return Err(format!("wugs does not save .{extension} documents"));
     }
     outside_project(s, folder)?;
-    let path = write_new(folder, &file_stem(title, "examples"), extension, contents.as_bytes())?;
+    // A picture comes as the canvas gives it, a PNG data URL.
+    let bytes = if extension == "png" { png_of_data_url(contents)? } else { contents.as_bytes().to_vec() };
+    let path = write_new(folder, &file_stem(title, "examples"), extension, &bytes)?;
     Ok(Exported { path: path.display().to_string(), notes: Vec::new() })
+}
+
+/// The PNG in a `data:image/png;base64,…` URL; anything else is refused.
+fn png_of_data_url(url: &str) -> Result<Vec<u8>, String> {
+    let b64 = url.strip_prefix("data:image/png;base64,").ok_or("a picture must come as a PNG")?;
+    let mut out = Vec::with_capacity(b64.len() / 4 * 3);
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for c in b64.bytes() {
+        let v = match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            b'=' => break,
+            _ => return Err("the picture is damaged".into()),
+        };
+        acc = (acc << 6) | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    if !out.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("the picture is not a PNG".into());
+    }
+    Ok(out)
 }
 
 /// Export the whole lexicon as LIFT or Toolbox into `folder`.
@@ -1561,6 +1592,17 @@ mod tests {
         assert!(export_text(&mut t, &untimed, Format::Subtitles { vtt: false }, &out).is_err());
         drop(t);
         fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
+    fn a_png_data_url_is_decoded() {
+        // The 8-byte PNG signature and "IHDR", as base64.
+        let png = png_of_data_url("data:image/png;base64,iVBORw0KGgpJSERS").unwrap();
+        assert_eq!(png, b"\x89PNG\r\n\x1a\nIHDR");
+        assert_eq!(png_of_data_url("data:image/png;base64,iVBORw0KGgo=").unwrap(), b"\x89PNG\r\n\x1a\n");
+        assert!(png_of_data_url("data:image/png;base64,aGVsbG8=").is_err(), "not a PNG");
+        assert!(png_of_data_url("data:image/jpeg;base64,iVBORw0KGgo=").is_err());
+        assert!(png_of_data_url("data:image/png;base64,iVBO*w0KGgo=").is_err());
     }
 
     #[test]
