@@ -155,6 +155,10 @@ Each track has a header at the left of the timeline, as in a video editor:
 
 These settings belong to one text on this computer. They are not shared with other devices and they do not change the project.
 
+### Cut segments by ear as the recording plays
+
+To segment a recording while you listen, as ELAN's segmentation mode does: click the timeline, press **Space** to play, and press **Enter** where a stretch of speech starts. Then press **Enter** at the end of each stretch as it plays: every press makes a segment from the last press to that moment, so pressing in rhythm cuts the recording into consecutive segments. Edges snap to where speech starts and stops within a quarter of a second, which makes up for the delay of a key press. Segments go on the selected segment's track, else the utterance track. **Escape** forgets the last press, so the next press starts afresh; each segment can be undone like one you drew.
+
 ### Split, merge, and nudge
 
 Select a segment first. Then use the toolbar buttons or these keys while the timeline has focus:

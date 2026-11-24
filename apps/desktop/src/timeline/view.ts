@@ -186,6 +186,8 @@ export class TimelineView {
 
   private text: TextDetail | null = null;
   private lanes: Lane[] = [];
+  /** Tap to segment: where the last Enter fell while playing (ELAN's segmentation mode). */
+  private tapFromMs: number | null = null;
   /** Lock, hide and mute for this text on this computer (tracks.ts). */
   private tracks: Tracks = NO_TRACKS;
   /** Called when a track toggle or the zoom changed, so the panel redraws its headers. */
@@ -931,6 +933,9 @@ export class TimelineView {
       } else if (ev.key === "m" || ev.key === "M") {
         ev.preventDefault();
         void this.mergeWithNext();
+      } else if (ev.key === "Enter" && !ev.shiftKey && playback.isPlaying()) {
+        ev.preventDefault();
+        this.tap();
       } else if (ev.key === " ") {
         ev.preventDefault();
         this.togglePlay();
@@ -938,6 +943,7 @@ export class TimelineView {
         ev.preventDefault();
         if (!this.refuseSelected()) this.askDelete(this.selected);
       } else if (ev.key === "Escape") {
+        this.tapFromMs = null;
         this.select(null);
         this.closeConfirm();
       }
@@ -982,7 +988,44 @@ export class TimelineView {
 
   // ------------------------------------------------------------- intents
 
-  private async commitCreate(laneIdx: number, aMs: number, bMs: number): Promise<void> {
+  /** The lane taps write on: the selected segment's, else the utterance track's, else the first. */
+  private tapLane(): number {
+    const text = this.text;
+    if (text === null) return -1;
+    const sel = this.selected === null ? null : this.findSegment(this.selected);
+    if (sel !== null) {
+      const i = this.lanes.findIndex((l) => l.tierId === sel.tier);
+      if (i >= 0) return i;
+    }
+    const utt = this.lanes.findIndex((l) => text.tiers.some((t) => t.id === l.tierId && t.utterance === true));
+    return utt >= 0 ? utt : this.lanes.length > 0 ? 0 : -1;
+  }
+
+  /** Enter while playing: the first press marks a start, each later press
+   * makes a segment from the last press to now, so a recording is cut by
+   * ear as it plays. Edges snap to speech within the usual reach, which
+   * makes up for the delay of a key press. Escape forgets the mark. */
+  tap(): void {
+    if (this.info === null) return;
+    const now = playback.currentMs();
+    const laneIdx = this.tapLane();
+    const lane = this.lanes[laneIdx];
+    if (lane === undefined) return;
+    const why = this.laneBlock(lane);
+    if (why !== null) {
+      showToast({ tone: "info", lines: [why] });
+      return;
+    }
+    const from = this.tapFromMs;
+    this.tapFromMs = now;
+    if (from === null || now <= from) {
+      showToast({ tone: "info", lines: [`Marked a start on «${lane.name}». Press Enter at the end of each stretch as it plays; each press makes a segment. Escape stops.`] });
+      return;
+    }
+    void this.track(this.commitCreate(laneIdx, from, now, false));
+  }
+
+  private async commitCreate(laneIdx: number, aMs: number, bMs: number, selectIt = true): Promise<void> {
     const text = this.text;
     const lane = this.lanes[laneIdx];
     if (text === null || lane === undefined) return;
@@ -1007,7 +1050,7 @@ export class TimelineView {
       });
       await reloadTexts();
       await refreshText();
-      this.select(added.id);
+      if (selectIt) this.select(added.id);
       await refreshConflicts();
     } catch (e) {
       showToast({ tone: "error", lines: [errorText(e)] });
