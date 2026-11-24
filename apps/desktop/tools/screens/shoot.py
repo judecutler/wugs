@@ -1470,6 +1470,16 @@ def main():
             run.shot("state-sounds-pairs", run.page.locator(".panel-sounds"))
             if run.page.locator(".panel-sounds .sd-pairs li").count() < 2:
                 failures.append("Minimal pairs did not list the pairs of the first contrast")
+            # How much the words lean on each contrast (functional load).
+            if "functional load" not in run.page.locator(".panel-sounds .sd-load").inner_text():
+                failures.append("Minimal pairs did not give the open contrast's functional load")
+            run.page.locator(".panel-sounds .sd-pair-order").select_option("load")
+            run.page.locator(".panel-sounds .sd-heaviest").scroll_into_view_if_needed()
+            run.shot("state-sounds-load", run.page.locator(".panel-sounds"))
+            if "lean most on" not in run.page.locator(".panel-sounds .sd-heaviest").inner_text() or "%" not in run.page.locator(".panel-sounds .sd-contrast").first.inner_text():
+                failures.append("Heaviest load first did not rank the contrasts by functional load")
+            run.page.locator(".panel-sounds .sd-pair-order").select_option("pairs")
+            run.page.evaluate("localStorage.removeItem('wugs.sounds.pairOrder')")
             run.page.locator(".panel-sounds .sd-bar button", has_text="Environments").click()
             run.page.wait_for_timeout(200)
             run.page.locator(".panel-sounds .sd-env-note").scroll_into_view_if_needed()
