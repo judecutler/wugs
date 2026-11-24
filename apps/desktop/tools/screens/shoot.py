@@ -984,6 +984,24 @@ def main():
                 failures.append("Compare word lists did not align the pairs of words")
             if run.page.locator(".panel-compare .cmp-corr tbody tr").count() == 0:
                 failures.append("Compare word lists listed no sound correspondence")
+            # A tree of the languages, once three more lects are loaded.
+            run.page.evaluate("window.__WUGS_PICK__ = ['/tmp/tree-lects.tsv']")
+            run.page.locator(".panel-compare button", has_text="Load a word list").click()
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.page.locator(".panel-compare .cmp-tree button", has_text="Draw a tree").click()
+            run.page.locator(".panel-compare .cmp-tree-svg").wait_for()
+            run.page.locator(".panel-compare .cmp-tree").scroll_into_view_if_needed()
+            run.shot("state-compare-tree", run.page.locator(".panel-compare .cmp-tree"))
+            leaves = run.page.locator(".panel-compare .cmp-tree-svg .cmp-leaf").all_text_contents()
+            if not {"Rano", "Teva", "Tevu"} <= set(leaves) or "Kelani" in leaves:
+                failures.append(f"Compare word lists drew the wrong tree: {leaves} {run.page.locator('.panel-compare .cmp-tree').inner_text()}")
+            run.page.locator(".panel-compare .cmp-tree button", has_text="Copy Newick").click()
+            run.page.wait_for_timeout(200)
+            clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}
+            if not clip.get("text", "").startswith("((") or "Rano" not in clip.get("text", ""):
+                failures.append(f"Copy Newick did not copy the tree: {clip}")
             # Notes: every note in one list, questions only.
             run.front("notes", "Notes")
             run.page.locator(".panel-notes .nt-item").first.wait_for()

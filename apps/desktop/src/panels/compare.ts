@@ -6,7 +6,9 @@
 // changes. Rules in ../compare/logic.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { cognates, compareRead, conceptLists, setCognates, conceptListView, errorText, projectLanguage, type ListSummary } from "../api";
+import { cognates, compareRead, conceptLists, setCognates, conceptListView, errorText, projectLanguage, saveDocument, type ListSummary } from "../api";
+import { layout, ldndMatrix, midpointRoot, neighbourJoining, newick, phylip, treeLine, type Lect, type Matrix } from "../compare/tree";
+import { standalone } from "./vowels";
 import { correspondenceLine, correspondences, correspondenceTsv } from "../compare/correspondences";
 import { distanceLine, distances, type Distance } from "../compare/distance";
 import { cognacy, cognacyLine, edictorWithCognates, judgeKey, judgementOf, judgementsText, nextJudgement, parseJudgements, type Judgement } from "../compare/cognates";
@@ -43,6 +45,8 @@ export const comparePanel: PanelDef = {
     const distanceBox = h("div", { className: "note cmp-distance", title: "ASJP's measures (Wichmann et al. 2010): LDN is the mean share of sounds two words for the same concept differ in; LDND divides it by the same between words for different concepts, so likeness any two words have by chance is taken out" });
     /** Distances worked out once per set of rows and languages (judging a form does not change them). */
     let distanceMemo: { key: string; value: Distance[] } | null = null;
+    /** The rows and languages the tree was drawn for; a change asks for it again. */
+    let treeFor = "";
     const judge = (r: Row, language: string, form: string) => {
       const key = judgeKey(language, r.concept.gloss, form);
       const next = nextJudgement(judged.get(key));
@@ -127,6 +131,12 @@ export const comparePanel: PanelDef = {
         ),
       );
       drawCorrespondences();
+      const treeKey = `${memoKey}`;
+      if (treeKey !== treeFor) {
+        treeFor = treeKey;
+        tree = null;
+      }
+      drawTree();
     };
 
     const drawCorrespondences = () => {
@@ -216,7 +226,85 @@ export const comparePanel: PanelDef = {
       );
     };
 
+    // A neighbour-joining tree of every language, worked out on request (it reads every pair).
+    const treeButton = h("button", { type: "button", textContent: "Draw a tree", title: "Join the languages into a tree by LDND, as ASJP does: neighbour joining, rooted at the midpoint" });
+    const treeBlock = h("div", { className: "cmp-tree" });
+    let tree: { m: Matrix; newick: string } | null = null;
+    const SVG = "http://www.w3.org/2000/svg";
+    const svgEl = (tag: string, attrs: Record<string, string | number>, text?: string) => {
+      const e = document.createElementNS(SVG, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+      if (text !== undefined) e.textContent = text;
+      return e;
+    };
+    const drawTree = () => {
+      const langs = languagesOf(forms);
+      if (langs.length < 2) {
+        treeBlock.replaceChildren();
+        return;
+      }
+      if (tree === null) {
+        treeBlock.replaceChildren(h("h3", { className: "cmp-head", textContent: "A tree of the languages" }), treeButton);
+        return;
+      }
+      const t = tree;
+      const parts: Node[] = [h("h3", { className: "cmp-head", textContent: "A tree of the languages" })];
+      if (t.m.names.length >= 3) {
+        const drawn = layout(midpointRoot(neighbourJoining(t.m.names, t.m.d)));
+        const ROW = 22;
+        const LEFT = 10;
+        const WIDTH = 420;
+        const labelW = 8 * Math.max(...drawn.leaves.map((l) => l.name.length)) + 20;
+        const scale = (WIDTH - LEFT) / (drawn.depth || 1);
+        const height = drawn.leaves.length * ROW + 40;
+        const svg = svgEl("svg", { class: "cmp-tree-svg", viewBox: `0 0 ${WIDTH + labelW} ${height}`, width: WIDTH + labelW, height, role: "img", "aria-label": "Neighbour-joining tree of the languages" }) as SVGSVGElement;
+        const X = (x: number) => LEFT + x * scale;
+        const Y = (y: number) => 16 + y * ROW;
+        for (const l of drawn.lines) svg.append(svgEl("line", { x1: X(l.x1), y1: Y(l.y1), x2: X(l.x2), y2: Y(l.y2), class: "cmp-branch" }));
+        for (const leaf of drawn.leaves) svg.append(svgEl("text", { x: X(leaf.x) + 6, y: Y(leaf.y) + 4, class: "cmp-leaf" }, leaf.name));
+        // A scale bar: 0.1 of LDND.
+        const bar = 0.1 * scale;
+        svg.append(svgEl("line", { x1: LEFT, y1: height - 14, x2: LEFT + bar, y2: height - 14, class: "cmp-branch" }), svgEl("text", { x: LEFT + bar + 6, y: height - 10, class: "cmp-scale" }, "0.1 LDND"));
+        const copyNewick = h("button", { type: "button", textContent: "Copy Newick", title: "Copy the tree in Newick, for FigTree, iTOL, SplitsTree or R's ape" });
+        copyNewick.onclick = () => void writeText(t.newick).then(() => showToast({ tone: "info", lines: ["Copied the tree in Newick."] }), (e) => showToast({ tone: "error", lines: [errorText(e)] }));
+        const copyMatrix = h("button", { type: "button", textContent: "Copy distances", title: "Copy every pair's LDND as a PHYLIP matrix, which SplitsTree and PHYLIP read" });
+        copyMatrix.onclick = () => void writeText(phylip(t.m)).then(() => showToast({ tone: "info", lines: ["Copied the distances as a PHYLIP matrix."] }), (e) => showToast({ tone: "error", lines: [errorText(e)] }));
+        const save = h("button", { type: "button", textContent: "Save picture…", title: "Save the tree as an SVG picture" });
+        save.onclick = () =>
+          void (async () => {
+            const folder = await pickFile({ directory: true, title: "Where should the picture go?" });
+            if (typeof folder !== "string") return;
+            try {
+              const r = await saveDocument({ folder, title: "language tree", extension: "svg", contents: standalone(svg) });
+              showToast({ tone: "info", lines: [`Saved the tree as ${r.path}.`] });
+            } catch (e) {
+              showToast({ tone: "error", lines: [errorText(e)] });
+            }
+          })();
+        parts.push(h("div", { className: "cc-bar" }, copyNewick, copyMatrix, save, treeButton), h("div", { className: "cmp-tree-box" }, svg));
+        treeButton.textContent = "Draw again";
+      } else {
+        parts.push(treeButton);
+      }
+      parts.push(h("p", { className: "note", textContent: treeLine(t.m) }));
+      treeBlock.replaceChildren(...parts);
+    };
+    treeButton.onclick = async () => {
+      const lang = await projectLanguage().catch(() => null);
+      const lects: Lect[] = [{ name: lang?.name || "This project", forms: (r) => r.ours }, ...languagesOf(forms).map((l) => ({ name: l, forms: (r: Row) => (r.others.get(l) ?? []).map((c) => c.form) }))];
+      treeButton.disabled = true;
+      treeButton.textContent = "Measuring…";
+      // Let the button's new words show before the work starts.
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      const m = ldndMatrix(rows, lects);
+      tree = { m, newick: m.names.length >= 3 ? newick(midpointRoot(neighbourJoining(m.names, m.d))) : "" };
+      treeButton.disabled = false;
+      treeButton.textContent = "Draw a tree";
+      drawTree();
+    };
+
     const unprovide = provide("compare", () => [
+      { id: "compare:tree", title: "Draw a tree of the compared languages", group: "Compare word lists", words: ["phylogeny", "neighbour joining", "neighbor joining", "newick", "ASJP", "classification", "family tree"], run: () => (treeButton.isConnected ? treeButton.click() : showToast({ tone: "info", lines: ["Load two or more word lists first; the tree needs three languages."] })) },
       { id: "compare:load", title: "Load another language's word list to compare", group: "Compare word lists", words: ["cognate", "comparative", "historical", "edictor", "lingpy", "swadesh"], run: () => load.click() },
     ]);
 
@@ -233,7 +321,7 @@ export const comparePanel: PanelDef = {
       if (!sameProject) {
         forms = [];
         listId = "";
-        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, distanceBox, cognacyBox, h("div", { className: "cmp-rows" }, table, corrBlock));
+        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, distanceBox, cognacyBox, h("div", { className: "cmp-rows" }, table, corrBlock, treeBlock));
         judged = new Map();
         void cognates().then(
           (t) => {
