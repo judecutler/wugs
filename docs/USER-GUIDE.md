@@ -722,7 +722,7 @@ Sounds are matched as written, apart from tie bars, so write affricates with a t
 **Environments** compares where two sounds occur, to test whether they are separate phonemes or allophones of one. Choose the two sounds, or press **Environments** beside a pair of sounds under Minimal pairs. The line under them says what the counts suggest:
 
 - If the two share an environment (the same sound before and after, such as `a_a`, with `#` for the edge of a word), they contrast there or vary freely, and minimal pairs tell which.
-- If they never do, they may be in complementary distribution. When one side alone tells them apart, it says so, such as "«s» only before a, o, u, «ʃ» only before i, e".
+- If they never do, they may be in complementary distribution. When one side alone tells them apart, it says so, and names what the sounds on each side have in common, such as "«s» only before a, o, u (back vowels), «ʃ» only before i, e (front vowels)". These natural classes come from where each sound sits on the IPA chart (height, backness and rounding for vowels; voicing, place and manner for consonants), so check them against your own analysis.
 
 The **Before** and **After** tables count each sound by what follows and what precedes it. Under them, every whole environment is listed with an example word of each sound, which opens its lines in the Concordance. Rows where both sounds occur are shaded. Counts are of running words. **Copy table** copies the environments with their counts and examples.
 

@@ -4,6 +4,7 @@
 // complementary distribution), and which side decides it. Read from the
 // word types the Sounds panel reads; pure, npm-tested.
 
+import { naturalClass } from "./classes.ts";
 import { sounds } from "./ipa.ts";
 
 /** A word's edge, as a neighbour. */
@@ -76,7 +77,11 @@ export function distributionNote(e: Environments): string {
     [e.after, "after"],
   ] as const) {
     if (rows.some((r) => r.a > 0 && r.b > 0)) continue;
-    const of = (pick: (r: NeighbourRow) => number) => list(rows.filter((r) => pick(r) > 0).map((r) => r.neighbour));
+    const of = (pick: (r: NeighbourRow) => number) => {
+      const xs = rows.filter((r) => pick(r) > 0).map((r) => r.neighbour);
+      const cls = naturalClass(xs, EDGE);
+      return cls === null ? list(xs) : `${list(xs)} (${cls})`;
+    };
     sides.push(`«${e.a}» only ${word} ${of((r) => r.a)}, «${e.b}» only ${word} ${of((r) => r.b)}`);
   }
   const decided = sides.length === 0 ? " Neither side alone tells them apart: look at both together." : ` ${sides.join("; ")}.`;

@@ -19,7 +19,7 @@ test("environments are counted on each side and whole", () => {
   assert.deepEqual(e.before.map((r) => [r.neighbour, r.a, r.b]), [["a", 6, 0], ["#", 4, 0], ["i", 0, 2], ["e", 0, 1], ["o", 1, 0]]);
   assert.equal(
     distributionNote(e),
-    "«s» and «ʃ» never occur in the same environment in these words, so they may be allophones of one sound in complementary distribution. «s» only before a, #, o, «ʃ» only before i, e.",
+    "«s» and «ʃ» never occur in the same environment in these words, so they may be allophones of one sound in complementary distribution. «s» only before a, #, o (vowels or a word edge), «ʃ» only before i, e (front vowels).",
   );
   assert.equal(environmentsTsv(e).split("\n")[1], "u_#\t4\t0\tkus\t");
 });
