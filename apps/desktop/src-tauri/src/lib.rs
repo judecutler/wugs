@@ -2,6 +2,7 @@ pub mod abbreviations;
 pub mod assist;
 pub mod capability;
 pub mod clips;
+pub mod collexemes;
 pub mod capture;
 pub mod chat;
 pub mod chat_mor;
@@ -409,6 +410,12 @@ fn texts_alike(s: State<SessionThread>, kind: concordance::Kind) -> Result<stylo
 #[allow(clippy::too_many_arguments)]
 fn collocates(s: State<SessionThread>, node: String, kind: concordance::Kind, left: usize, right: usize, min_together: usize, text_id: Option<String>, within: Option<concordance::Where>, tag: Option<String>) -> Result<collocates::Collocates, String> {
     s.run(move |s| collocates::collocates_tagged(s, &node, kind, left, right, min_together, &concordance::Scope::of(text_id, within), tag.as_deref()))
+}
+
+/// Collexeme analysis: the words filling one slot of a CQP query (src/collexemes.rs).
+#[tauri::command(async)]
+fn collexemes(s: State<SessionThread>, query: String, slot: usize, lemma: bool, text_id: Option<String>) -> Result<collexemes::Collexemes, String> {
+    s.run(move |s| collexemes::collexemes(s, &query, slot, lemma, text_id.as_deref().filter(|t| !t.is_empty())))
 }
 
 /// The words used in the same contexts as a word (src/similar.rs).
@@ -2817,6 +2824,7 @@ pub fn run() {
             frequencies,
             collocates,
             similar_words,
+            collexemes,
             keywords,
             tier_glossing,
             read_tier_glossing,

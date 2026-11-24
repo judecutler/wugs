@@ -1175,6 +1175,18 @@ const LEXICON = [
     }),
     update_check: () => ({ currentVersion: "0.0.1", available: null }),
     gloss_get: ({ segmentId }) => glossView(segmentId),
+    collexemes: () => ({
+      constructions: 14,
+      tokens: 65,
+      types: 4,
+      positions: 2,
+      rows: [
+        { item: "ŋai", together: 7, freq: 12, expected: 2.58, strength: 3.41, logLikelihood: 9.2 },
+        { item: "kesi", together: 4, freq: 9, expected: 1.94, strength: 1.52, logLikelihood: 3.1 },
+        { item: "mopa", together: 2, freq: 6, expected: 1.29, strength: 0.48, logLikelihood: 0.6 },
+        { item: "liwa", together: 1, freq: 15, expected: 3.23, strength: -1.1, logLikelihood: -2.2 },
+      ],
+    }),
     gloss_still_to_gloss: () => ["u03", "u10"],
     // Sentences like the one on screen, with a translation for the first.
     like_sentences: ({ segmentId }) =>

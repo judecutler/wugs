@@ -39,6 +39,7 @@ PANELS = [
     ("frequencies", "Frequencies"),
     ("collocates", "Collocates"),
     ("similar", "Similar words"),
+    ("collexemes", "Collexemes"),
     ("keywords", "Keywords"),
     ("checks", "Checks"),
     ("vowels", "Vowel space"),
@@ -700,6 +701,15 @@ def main():
             run.shot("state-similar", run.page.locator(".panel-similar"))
             if run.page.locator(".panel-similar .sm-table tbody tr").count() != 4:
                 failures.append("Similar words did not list the fixture's four words")
+            # Collexemes (Scrolls): the words a construction draws into one slot.
+            run.front("collexemes", "Collexemes")
+            run.page.locator(".panel-collexemes .cx-query").fill('[lemma="kani"] []')
+            run.page.locator(".panel-collexemes .cx-slot").select_option("2")
+            run.page.locator(".panel-collexemes .cx-query").press("Enter")
+            run.page.locator(".panel-collexemes .cx-table tbody tr").first.wait_for()
+            run.shot("state-collexemes", run.page.locator(".panel-collexemes"))
+            if run.page.locator(".panel-collexemes .cx-table tr.cx-drawn").count() != 2 or "drawn to it beyond chance" not in run.page.locator(".panel-collexemes .fq-count").inner_text():
+                failures.append("Collexemes did not list the fixture's slot fillers")
             # Keywords (Scrolls): a text's words against the rest.
             run.front("keywords", "Keywords")
             run.page.wait_for_timeout(400)

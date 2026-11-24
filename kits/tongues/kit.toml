@@ -41,6 +41,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "sentence",                      # one sentence's tags and dependency tree; not placed, opened from Settings or Ctrl+K
   "collocates",                    # which words keep company with a word; not placed either
   "similar",                       # the words used in the same contexts as a word; not placed either
+  "collexemes",                    # the words a construction (a CQP query) attracts into one slot; not placed
   "wordsketch",                    # a lemma's grammatical company from the dependency trees; not placed
   "wordorder",                     # WALS word orders counted in the parsed sentences; not placed
   "sentences",                     # prompts worked through one by one, each answer a sentence with its prompt as translation; not placed

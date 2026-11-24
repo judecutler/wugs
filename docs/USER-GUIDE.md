@@ -1498,6 +1498,23 @@ The **Similar words** panel lists the words used in the same company as a word, 
 
 Type a word and press **Enter**. Each word is described by the words within the **window** either side of it in the same segment (1 or 2 finds words of one grammatical class, 5 words of one topic), weighted by how much more often than chance they occur together (positive pointwise mutual information), and two words are as similar as those descriptions (their cosine, 1 when the company is the same). **Similarity** is that score, **Shared contexts** the words around both that count most. Only words met at least the chosen number of times are compared. Choose **Words**, **Translations** or **Lemmas** (every form of a word counted as one, so *dogs* and *dog* share their company), and where to look as in Collocates. Click a row to read that word in the Concordance; **Copy table** copies the list. On a corpus of a few thousand words the list is only a hint: the method needs many contexts.
 
+### Find the words a construction attracts
+
+The **Collexemes** panel finds the words a grammatical pattern draws into one of its slots, as collostructional analysis does (Stefanowitsch and Gries 2003). Examples: the verbs that take two objects, the nouns after *a lot of*, the adjectives in *as … as*. It is not placed in either kit; open it with **Find an action**. It needs tagged texts: tagging in the Sentence panel, a CoNLL-U or TEI file with tags, or CHAT's `%mor`.
+
+1. Type the construction as a CQP query (see [Search with CQP queries](#search-with-cqp-queries)), such as `[lemma="give"] [] [upos="NOUN"]`.
+2. Pick the **Position** to study, counted from the left (here 3, the noun).
+3. Choose **Lemmas** or **Words**, and the whole project or one text.
+4. Press **Enter**.
+
+Each row is a word met in that position, with:
+- **In the slot**: how often it appears there;
+- **Freq**: how often it appears anywhere in the sentences searched;
+- **Expected**: how often it would appear there by chance;
+- **Strength**: −log10 of Fisher's exact p.
+
+A strength of 1.3 or more (p < .05) marks a word the construction attracts, shown in bold. A strength below zero marks a word that keeps away from the slot, even if it turns up there now and then. Click a row to read its lines in the Concordance, with that position narrowed to the word. **Copy table** copies the list with the log-likelihood too.
+
 ## Count words, morphs and glosses
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.
