@@ -2,7 +2,7 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { concordance, concordanceQuery, dispersion, errorText, getText, glossGet, type TextDetail } from "../api";
+import { concordance, concordanceQuery, dispersion, errorText, getText, glossGet, textMetadata, type TextDetail } from "../api";
 import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
@@ -516,7 +516,13 @@ export const concordancePanel: PanelDef = {
       if (hits.length === 0) return;
       // As a KWIC table for a word processor, and tab-separated text beside it for anything else.
       const lines = sortHits(shownHits(), sortBy);
-      void writeHtml(kwicHtml(lines), asTsv(lines)).then(
+      // The tab-separated copy carries each line's times, analysis and its
+      // text's details, so it goes straight into R or a spreadsheet; a text
+      // whose details cannot be read just has none.
+      const ids = [...new Set(lines.map((l) => l.textId))];
+      void Promise.all(ids.map((id) => textMetadata({ textId: id }).then((m): [string, Map<string, string>] => [id, new Map(m.fields.map((f) => [f.key, f.value]))], (): [string, Map<string, string>] => [id, new Map()])))
+        .then((pairs) => writeHtml(kwicHtml(lines), asTsv(lines, new Map(pairs))))
+        .then(
         () =>
           showToast({
             tone: "info",

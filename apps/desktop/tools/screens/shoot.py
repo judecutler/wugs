@@ -543,6 +543,8 @@ def main():
             copied = run.page.evaluate("() => window.__WUGS_CLIPBOARD__")
             if not copied or "<b>" not in (copied.get("html") or "") or "left\tkeyword" not in (copied.get("text") or ""):
                 failures.append("Concordance: Copy rows did not give a KWIC table and its text")
+            elif "\tgenre\t" not in copied.get("text", "") or "procedural" not in copied.get("text", ""):
+                failures.append("Concordance: Copy rows did not carry the texts' details")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Thinning a short concordance keeps every line.
             before = run.page.locator(".panel-concordance .cc-row").count()
