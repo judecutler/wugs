@@ -8,10 +8,11 @@ import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { byDetail, detailTsv, marks, NOT_GIVEN, per1000, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
 import { asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
+import { linesUnder } from "../concordance/under";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
-import { getState, selectSegment, selectText, showToast } from "../store";
+import { dataGeneration, getState, selectSegment, selectText, showToast } from "../store";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
@@ -156,6 +157,44 @@ export const concordancePanel: PanelDef = {
     tagsToggle.setAttribute("aria-pressed", String(tagsOn));
     tagsToggle.classList.toggle("active", tagsOn);
     tagsToggle.hidden = true;
+    const UNDER_KEY = "wugs.concordance.translations";
+    let underOn = (() => {
+      try {
+        return localStorage.getItem(UNDER_KEY) === "on";
+      } catch {
+        return false;
+      }
+    })();
+    const underToggle = h("button", { type: "button", className: "cc-under-toggle", textContent: "With translations", title: "Show each line's translation under it; under a line found in a translation, the sentence it translates" });
+    underToggle.setAttribute("aria-pressed", String(underOn));
+    underToggle.classList.toggle("active", underOn);
+    /** Each text read so far: the line under each of its segments. Read again when the data changes. */
+    const under = new Map<string, Map<string, string>>();
+    let underGeneration = -1;
+    let underLoading = false;
+    /** Bumped whenever `under` is emptied, so a read begun before is dropped. */
+    let underEpoch = 0;
+    /** Read the texts behind the lines on screen that are not read yet, then draw again. */
+    const readUnder = (ids: string[]) => {
+      underLoading = true;
+      const epoch = underEpoch;
+      void (async () => {
+        for (const id of ids) {
+          try {
+            const t = await getText({ textId: id });
+            if (epoch !== underEpoch) return;
+            under.set(id, linesUnder(t.segments, t.tiers));
+          } catch {
+            // A text that cannot be read shows no lines under it.
+            under.set(id, new Map());
+          }
+        }
+      })().finally(() => {
+        underLoading = false;
+        // A read dropped by a newer epoch leaves its texts unread: drawing again reads them.
+        if (underOn) drawRows();
+      });
+    };
     /** Thinned to a random sample of this many lines (0: every line). */
     let thinTo = 0;
     const thinner = h("select", { className: "cc-sort cc-thin", title: "Show a random sample of the lines, the same each time for the same query (CQPweb's thin)" }, h("option", { value: "0", textContent: "Every line" }), ...THIN_SIZES.map((n) => h("option", { value: String(n), textContent: `${n} at random` })));
@@ -348,8 +387,18 @@ export const concordancePanel: PanelDef = {
         span.append(before, ...(word === "" ? [] : [h("mark", { className: "cc-sorted", textContent: word })]), after);
         return span;
       };
+      const lines = sortHits(shownHits(), sortBy);
+      if (underOn) {
+        if (dataGeneration() !== underGeneration) {
+          under.clear();
+          underEpoch += 1;
+          underGeneration = dataGeneration();
+        }
+        const missing = [...new Set(lines.map((x) => x.textId))].filter((id) => !under.has(id));
+        if (missing.length > 0 && !underLoading) readUnder(missing);
+      }
       rows.replaceChildren(
-        ...sortHits(shownHits(), sortBy).map((hit) => {
+        ...lines.map((hit) => {
           const play = playButton("Open this segment and play it", () => void open(hit, true));
           play.classList.add("cc-play");
           play.disabled = hit.startMs === null;
@@ -366,6 +415,7 @@ export const concordancePanel: PanelDef = {
               h("span", { textContent: hit.breakdown === null ? "" : `${hit.breakdown} ‘${hit.glosses ?? ""}’` }),
               h("span", { textContent: hit.textTitle }),
             ),
+            ...(underOn ? [h("span", { className: "cc-under", textContent: under.get(hit.textId)?.get(hit.segmentId) ?? "" })] : []),
           );
           row.onclick = () => void open(hit, false);
           row.onkeydown = (e) => {
@@ -479,6 +529,17 @@ export const concordancePanel: PanelDef = {
       plotSort = plotSorter.value as PlotSort;
       drawRows();
     };
+    underToggle.onclick = () => {
+      underOn = !underOn;
+      underToggle.setAttribute("aria-pressed", String(underOn));
+      underToggle.classList.toggle("active", underOn);
+      try {
+        localStorage.setItem(UNDER_KEY, underOn ? "on" : "off");
+      } catch {
+        // storage unavailable: the choice lasts this session
+      }
+      drawRows();
+    };
     tagsToggle.onclick = () => {
       tagsOn = !tagsOn;
       tagsToggle.setAttribute("aria-pressed", String(tagsOn));
@@ -555,6 +616,9 @@ export const concordancePanel: PanelDef = {
       plot = null;
       asked = "";
       exactFor = null;
+      under.clear();
+      underEpoch += 1;
+      underGeneration = -1;
       input.value = "";
       if (now === "closed") {
         el.replaceChildren(emptyState("Concordance", "Open a project to see every place a word, morph or gloss is used.", "The wug is counting words."));
@@ -564,7 +628,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, copy, copyExamples), chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, copy, copyExamples), chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */

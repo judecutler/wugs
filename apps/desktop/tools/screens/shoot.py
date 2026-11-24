@@ -538,6 +538,14 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+            # Translations under the lines, read from each text.
+            run.page.locator(".panel-concordance .cc-under-toggle").click()
+            run.page.wait_for_timeout(500)
+            run.shot("state-concordance-translations", run.page.locator(".panel-concordance"))
+            unders = run.page.locator(".panel-concordance .cc-under").all_inner_texts()
+            if "I count: one, two, three." not in unders:
+                failures.append(f"Concordance did not show the translation under a line: {unders}")
+            run.page.locator(".panel-concordance .cc-under-toggle").click()
             # Sorted by the word before: that word is marked in each line.
             run.page.locator(".panel-concordance select.cc-sort").first.select_option("left")
             run.page.wait_for_timeout(200)
