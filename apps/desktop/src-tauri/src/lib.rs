@@ -1305,6 +1305,12 @@ fn set_typing_shortcuts(s: State<SessionThread>, table: String) -> Result<String
     s.run(move |s| typing::set(s, &table))
 }
 
+/// What each text still lacks for an archive deposit (`archive_sheet::readiness`).
+#[tauri::command(async)]
+fn archive_readiness(s: State<SessionThread>) -> Result<archive_sheet::Readiness, String> {
+    s.run(archive_sheet::readiness)
+}
+
 /// One catalogue row per text for an archive's item forms (`archive_sheet.rs`).
 #[tauri::command(async)]
 fn export_archive_sheet(s: State<SessionThread>, folder: String) -> Result<archive_sheet::Sheet, String> {
@@ -2301,6 +2307,7 @@ pub fn run() {
             measure_track,
             export_flashcards,
             export_archive_sheet,
+            archive_readiness,
             typing_shortcuts,
             lexicon_example_gaps,
             lexicon_examples_from_texts,
