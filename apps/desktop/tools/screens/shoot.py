@@ -741,6 +741,12 @@ def main():
                 failures.append("Sounds did not place the vowels")
             if run.page.locator(".panel-sounds .sd-list").count() < 3:
                 failures.append("Sounds did not list affricates, clicks or unplaced letters")
+            run.page.locator(".panel-sounds .sd-bar button", has_text="Copy chart").click()
+            run.page.wait_for_timeout(300)
+            clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}
+            if "<table" not in (clip.get("html") or "") or "Plosive" not in clip.get("text", ""):
+                failures.append(f"Sounds did not copy the chart: {clip}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.locator(".panel-sounds .sd-contrast").first.click()
             run.page.locator(".panel-sounds .sd-pairs li").first.scroll_into_view_if_needed()
             run.shot("state-sounds-pairs", run.page.locator(".panel-sounds"))

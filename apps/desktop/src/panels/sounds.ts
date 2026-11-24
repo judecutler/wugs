@@ -6,12 +6,14 @@
 // and what the IPA does not use (capitals, other letters) listed apart, since
 // those are usually spelling slips. Each sound opens the Concordance on the
 // words that hold it.
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, phoibleCompare, projectLanguage, soundWords } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { clustersNote, consonantClusters, gapsNote, positions, shapes, share, type Cluster, type Shape, type Where } from "../sounds/shapes";
 import { againstRelatives, checkInventory, phoibleLine, shareOf, type PhoibleCompared } from "../sounds/phoible";
+import { chartClipboard } from "../sounds/chartcopy";
+import { EXAMPLE_FORMATS, FORMAT_KEY, parseFormat } from "../gloss/example";
 import { syllableNote, syllableTypes, type SyllableType } from "../sounds/syllables";
 import { distributionNote, envLabel, environments, environmentsTsv, type NeighbourRow } from "../sounds/environments";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
@@ -448,11 +450,26 @@ export const soundsPanel: PanelDef = {
       const copy = h("button", { type: "button", textContent: "Copy table", disabled: loaded.sounds.length === 0 });
       copy.onclick = copyTable;
       const c = loaded.chart;
+      const copyChart = h("button", { type: "button", textContent: "Copy chart", disabled: loaded.sounds.length === 0, title: "Copy the consonant chart and the vowels for a paper, in the format chosen for Copy example in the Gloss panel" });
+      copyChart.onclick = () => {
+        let format = parseFormat(null);
+        try {
+          format = parseFormat(localStorage.getItem(FORMAT_KEY));
+        } catch {
+          /* the default */
+        }
+        const out = chartClipboard(c, format);
+        const label = EXAMPLE_FORMATS.find((f) => f.id === format)?.label ?? "";
+        void (out.html === null ? writeText(out.text) : writeHtml(out.html, out.text)).then(
+          () => showToast({ tone: "info", lines: [`Copied the chart as ${label}.`] }),
+          (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+        );
+      };
       const consonants = consonantTable(c);
       const vowels = vowelChart(c);
       const omitted = loaded.omitted > 0 ? [h("p", { className: "note", textContent: `The ${loaded.omitted.toLocaleString()} rarest word types were left out.` })] : [];
       el.replaceChildren(
-        h("div", { className: "sd-bar" }, pick, scope, h("label", {}, wholeBox, " Whole IPA chart"), copy),
+        h("div", { className: "sd-bar" }, pick, scope, h("label", {}, wholeBox, " Whole IPA chart"), copy, copyChart),
         h("p", { className: "note", textContent: soundsNote(loaded.sounds, c, loaded.running) }),
         ...omitted,
         ...(consonants === null ? [] : [h("h4", { className: "sd-h", textContent: "Consonants (pulmonic)" }), consonants]),

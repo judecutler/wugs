@@ -708,6 +708,7 @@ A sound is a letter with every diacritic and modifier written after it, so `tʰ`
 - **Whole IPA chart** shows every row and column of the chart, not only those in use.
 - Click a sound to open the Concordance on every word that holds it.
 - **Copy table** copies each sound with its count, the number of words it occurs in, an example word and its place on the chart.
+- **Copy chart** copies the consonant chart (places across, manners down, voiceless before voiced in each cell) with the vowels and other sounds under it, for a paper or grammar, in the format chosen for **Copy example** in the Gloss panel: a table for Word and Google Docs, a LaTeX `tabular`, or plain text.
 
 **Minimal pairs** lists every pair of sounds that two words tell apart, such as `p ~ b` for `pata` and `bata`, best attested first. Click a pair of sounds to see its words, and click a word to open its lines in the Concordance. Choose a sound to see only the pairs it is in. **Copy pairs** copies the words as a table. In a large corpus the 20,000 commonest word types are read.
 
