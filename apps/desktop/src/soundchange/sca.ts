@@ -241,6 +241,40 @@ export function wordsOf(source: string): string[] {
   return out;
 }
 
+/** Words typed with the form each should become: a line `kapa > kaba` (or
+ * with `→` or a tab between) pairs a word with its attested reflex; other
+ * lines are words as `wordsOf` reads them, with nothing expected. */
+export function pairsOf(source: string): { input: string; expected: string | null }[] {
+  const out: { input: string; expected: string | null }[] = [];
+  const seen = new Set<string>();
+  for (const raw of source.normalize("NFC").split(/\r?\n/u)) {
+    const m = /^\s*(\S+)\s*(?:>|→|\t)\s*(\S*)\s*$/u.exec(raw);
+    if (m !== null) {
+      const expected = m[2] === "∅" || m[2] === "0" ? "" : m[2]!;
+      if (!seen.has(`${m[1]}\u0001${expected}`)) {
+        seen.add(`${m[1]}\u0001${expected}`);
+        out.push({ input: m[1]!, expected });
+      }
+      continue;
+    }
+    for (const w of wordsOf(raw)) {
+      if (!seen.has(`${w}\u0001`)) {
+        seen.add(`${w}\u0001`);
+        out.push({ input: w, expected: null });
+      }
+    }
+  }
+  return out;
+}
+
+/** How many words came out as their attested reflex, when any is given. */
+export function expectedLine(d: readonly Derivation[], expected: readonly (string | null)[]): string {
+  const checked = d.map((x, i) => [x.output, expected[i]] as const).filter(([, e]) => e !== null && e !== undefined);
+  if (checked.length === 0) return "";
+  const right = checked.filter(([o, e]) => o === e).length;
+  return ` ${right} of ${checked.length} ${checked.length === 1 ? "word comes" : "words come"} out as expected (${Math.round((100 * right) / checked.length)}%).`;
+}
+
 /** The line over the results. */
 export function resultLine(d: readonly Derivation[], r: Rules): string {
   const changed = d.filter((x) => x.output !== x.input).length;
@@ -251,8 +285,18 @@ export function resultLine(d: readonly Derivation[], r: Rules): string {
 }
 
 /** Tab-separated: input, output, and the steps as «line: form». */
-export function derivationsTsv(d: readonly Derivation[]): string {
-  return ["input\toutput\tsteps", ...d.map((x) => [x.input, x.output, x.steps.map((s) => `${s.line}: ${s.form}`).join("; ")].join("\t"))].join("\n");
+export function derivationsTsv(d: readonly Derivation[], expected?: readonly (string | null)[]): string {
+  const withExpected = expected !== undefined && expected.some((e) => e !== null);
+  const head = withExpected ? "input\toutput\texpected\tas expected\tsteps" : "input\toutput\tsteps";
+  return [
+    head,
+    ...d.map((x, i) => {
+      const steps = x.steps.map((s) => `${s.line}: ${s.form}`).join("; ");
+      if (!withExpected) return [x.input, x.output, steps].join("\t");
+      const e = expected![i] ?? null;
+      return [x.input, x.output, e ?? "", e === null ? "" : x.output === e ? "yes" : "no", steps].join("\t");
+    }),
+  ].join("\n");
 }
 
 /** A starting set of rules that shows the notation. */

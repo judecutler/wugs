@@ -1150,6 +1150,7 @@ body::before {
 .panel-soundchanges .sca-out { font-weight: 600; }
 .panel-soundchanges .sca-steps { color: var(--muted); font-size: var(--text-sm); }
 .panel-soundchanges .sca-same td { color: var(--muted); }
+.sca-miss td { background: var(--warn-soft); }
 .ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; overflow: auto; min-height: 0; }
 .ws-group { border: 1px solid var(--line); border-radius: var(--radius, 8px); padding: 6px 8px; background: var(--surface-raised); }
 .ws-head { font-size: var(--text-sm); margin: 0 0 4px; font-weight: 600; }

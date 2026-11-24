@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { derivationsTsv, derive, EXAMPLE_RULES, parseRules, resultLine, wordsOf } from "./sca.ts";
+import { derivationsTsv, derive, EXAMPLE_RULES, expectedLine, pairsOf, parseRules, resultLine, wordsOf } from "./sca.ts";
 
 const run = (rules: string, word: string) => derive(word, parseRules(rules).rules).output;
 
@@ -38,4 +38,23 @@ test("derivations, words and the line", () => {
   assert.equal(resultLine([d, derive("i", rules.rules)], rules), "3 rules over 2 words: 1 changed.");
   assert.match(resultLine([], parseRules("bad")), /1 line does not read/);
   assert.equal(derivationsTsv([d]), "input\toutput\tsteps\nka\tku\t1: ko; 2: ku");
+});
+
+test("typed pairs give each word its attested reflex", () => {
+  assert.deepEqual(pairsOf("kapa > kaba\npatu → padu\nsika\t∅\nlone words here\nkapa > kaba"), [
+    { input: "kapa", expected: "kaba" },
+    { input: "patu", expected: "padu" },
+    { input: "sika", expected: "" },
+    { input: "lone", expected: null },
+    { input: "words", expected: null },
+    { input: "here", expected: null },
+  ]);
+  const rules = parseRules("V = a e i o u\np t k > b d g / V_V").rules;
+  const pairs = pairsOf("kapa > kaba\npatu > patu\nmisi");
+  const d = pairs.map((p) => derive(p.input, rules));
+  const e = pairs.map((p) => p.expected);
+  assert.equal(expectedLine(d, e), " 1 of 2 words come out as expected (50%).");
+  assert.equal(expectedLine(d, [null, null, null]), "");
+  assert.equal(derivationsTsv(d, e).split("\n")[2], "patu\tpadu\tpatu\tno\t2: padu");
+  assert.equal(derivationsTsv(d).split("\n")[0], "input\toutput\tsteps");
 });
