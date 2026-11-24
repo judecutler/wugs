@@ -1218,6 +1218,10 @@ Tick **Only words not in the lexicon** to list just those, most frequent first. 
 
 A lemma list counts every form of a word together (go, goes, went), and a tag list how many nouns, verbs and so on a text has. Lemmas and tags come from CoNLL-U and TEI files and from **Tag and parse this text** in the Sentence panel; for words you glossed, the lemma is the root's lexicon entry and the tag its category. The line above the list says how many words have none yet. Click a lemma or tag to see its lines as a CQP query in the Concordance, such as `[lemma="go"]`.
 
+### Find the words that set a text apart
+
+The **Keywords** panel (a tab beside Search in Scrolls; in Tongues, open it with **Find an action**) compares one text, or the texts with one detail, with every other text in the project: the words used there more often than chance would have it (**Used more**), and those used less. Each row gives the counts on both sides, the log-likelihood (with • when it is significant after allowing for the number of words tested), the log ratio, and per 1000 words; hover over a row for %DIFF and Sketch Engine's simple maths. Choose **Words** or **Translations**, a minimum count, and the order. **2 words in a row** (up to 5) compares sequences of words inside a segment instead, the key clusters of a text, such as a formula a genre repeats. Click a row to read it in the Concordance; **Copy table** copies the list.
+
 ## Hear any segment from anywhere
 
 Every segment has a ▶ beside it: the lines in Transcribe, the top of the Gloss panel, each line of the Concordance, each segment found by Search, and the words a lexicon entry is used in. In the Lexicon, click **used in 3 words** (or however many) under a sense to list those words, then ▶ to hear each one.
