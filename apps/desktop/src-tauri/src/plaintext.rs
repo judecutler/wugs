@@ -48,6 +48,33 @@ const CLOSERS: [char; 9] = ['"', '\'', ')', ']', '}', '»', '”', '’', '」']
 pub enum Cut {
     ByLine,
     BySentence,
+    /// A sentence per numbered line, as the Leipzig Corpora Collection's
+    /// `sentences.txt` (`id<TAB>sentence`) and Tatoeba's per-language
+    /// exports (`id<TAB>lang<TAB>sentence`) have them; the numbers dropped.
+    Numbered,
+}
+
+/// The sentences of a numbered sentence list (Leipzig, Tatoeba), when every
+/// line is one: a number, a tab, and a sentence (after a language code and
+/// a tab, for Tatoeba). At least two lines.
+pub fn sentence_list(text: &str) -> Option<Vec<String>> {
+    let mut out = Vec::new();
+    for line in text.lines().map(|l| l.trim_end_matches('\r')).filter(|l| !l.trim().is_empty()) {
+        let (id, rest) = line.split_once('\t')?;
+        if id.is_empty() || !id.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let sentence = match rest.split_once('\t') {
+            Some((lang, s)) if (2..=8).contains(&lang.len()) && lang.bytes().all(|b| b.is_ascii_lowercase() || b == b'_' || b == b'-') => s,
+            Some(_) => return None,
+            None => rest,
+        };
+        let sentence = sentence.trim();
+        if !sentence.is_empty() {
+            out.push(sentence.to_string());
+        }
+    }
+    (out.len() >= 2).then_some(out)
 }
 
 /// Whether a line ends a sentence: its last mark (past closing quotes and
@@ -92,6 +119,9 @@ fn join_lines(run: &[&str]) -> String {
 /// The segments of a plain-text file, in order, none empty, and how it was cut.
 pub fn segments(text: &str) -> (Vec<String>, Cut) {
     let text = text.trim_start_matches('\u{feff}').replace("\r\n", "\n").replace('\r', "\n");
+    if let Some(units) = sentence_list(&text) {
+        return (units, Cut::Numbered);
+    }
     let lines: Vec<&str> = text.lines().map(str::trim_end).collect();
     let paragraphs: Vec<&[&str]> = lines.split(|l| l.trim().is_empty()).filter(|p| !p.is_empty()).collect();
     // The wrap width: the longest line not far past the median, so one long
@@ -397,6 +427,11 @@ mod tests {
 
     #[test]
     fn unpunctuated_lines_stay_lines() {
+        assert_eq!(segments("1\tKesi mopa tela.\n2\tWiripa nani.\n"), (vec!["Kesi mopa tela.".to_string(), "Wiripa nani.".into()], Cut::Numbered), "a Leipzig sentences file");
+        assert_eq!(segments("77\tswh\tHabari yako?\n78\tswh\tNzuri sana.\n").0, ["Habari yako?", "Nzuri sana."], "a Tatoeba export");
+        assert_eq!(sentence_list("1\tone\nnot numbered\n"), None);
+        assert_eq!(sentence_list("1\tone only\n"), None);
+        assert_eq!(sentence_list("1\tA Big\tsplit\n2\tB\tc\n"), None, "a middle column that is no language code");
         assert_eq!(segments("kesi\nwiripa\ntela\nmanu\nnikani\n"), (vec!["kesi".to_string(), "wiripa".into(), "tela".into(), "manu".into(), "nikani".into()], Cut::ByLine));
         assert_eq!(cut("ah ya kesi mopa\nnikani ŋai toruma\nwiripa tela manu\nkesi kesi\n"), vec!["ah ya kesi mopa", "nikani ŋai toruma", "wiripa tela manu", "kesi kesi"]);
         // A transcript of long lowercase utterances is not mistaken for wrapping.

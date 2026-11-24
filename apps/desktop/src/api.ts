@@ -670,6 +670,7 @@ export const morphosyntaxRun = (args: { textId: string; model: string }) => invo
 /** Every detail's values across the project, for picking texts by one. */
 export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
 export const corpusTracks = () => invoke<{ id: string; name: string }[]>("corpus_tracks");
+export const wikipediaImport = (args: { wiki: string; titles: string[]; random: number; date: string }) => invoke<{ text: string | null; lines: string[] }>("wikipedia_import", args);
 /** Bring in a CSV or TSV of document metadata, one row per text. */
 export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
 /** Segments that overlap, or are very short or long (src-tauri/src/timing.rs). */

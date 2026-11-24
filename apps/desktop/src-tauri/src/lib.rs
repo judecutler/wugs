@@ -5,6 +5,7 @@ pub mod clips;
 pub mod capture;
 pub mod chat;
 pub mod mlu;
+pub mod wikipedia;
 pub mod characters;
 pub mod concordance;
 pub mod cqp;
@@ -432,6 +433,15 @@ fn word_sketch(s: State<SessionThread>, lemma: String) -> Result<wordsketch::Wor
 #[tauri::command(async)]
 fn vocabulary_growth(s: State<SessionThread>) -> Result<growth::Growth, String> {
     s.run(growth::vocabulary_growth)
+}
+
+/// Read Wikipedia articles (named, and some at random) off the session
+/// thread, then bring each in as a text with its source.
+#[tauri::command(async)]
+async fn wikipedia_import(s: State<'_, SessionThread>, wiki: String, titles: Vec<String>, random: usize, date: String) -> Result<wikipedia::Gathered, String> {
+    let base = wikipedia::base_of(&wiki)?;
+    let (articles, missing) = tauri::async_runtime::spawn_blocking(move || wikipedia::fetch(&base, &titles, random)).await.map_err(|e| e.to_string())??;
+    s.run(move |s| wikipedia::import(s, &wiki, &articles, &missing, &date))
 }
 
 #[tauri::command(async)]
@@ -2322,6 +2332,7 @@ pub fn run() {
         vocabulary_growth,
         speaker_lengths,
         corpus_tracks,
+        wikipedia_import,
         word_sketch,
         sound_changes,
         compare_read,

@@ -896,11 +896,19 @@ wugs reads these formats:
   - a shortened word is written whole (`(be)cause` → `because`), and a form's marker is dropped (`dada@b` → `dada`).
 
   The main line as written and every dependent tier (`%mor`, `%gra`, `%com` …) are kept with the utterance. The header becomes the text's details: languages, participants, date, place and situation, plus each speaker's `@ID` line, age and sex (`age_chi`). You can therefore pick texts by a child's age in Keywords, Frequencies and the other corpus tools. An utterance with no words (`0 [=! laughs] .`) is left out and counted. Importing the same file again adds nothing.
-- Plain text `.txt`: any other text file becomes a text named after the file, and the message says how it was cut. A file whose lines mostly end in a full stop, with no blank lines, comes in a segment per line. Otherwise blank lines separate paragraphs, a line ending in a full stop ends its sentence, and inside a line a sentence ends after `.`, `!`, `?` or the full stop of another script when the next word starts with a capital, a digit or a quote; "e.g. the" stays together, but "Dr. Smith" is cut. Thai and Lao paragraphs come in whole, and an orthography written all in lower case is cut only at line ends and blank lines. The file must be UTF-8 or UTF-16; a damaged one is refused. Importing the same file again adds nothing.
+- Plain text `.txt`: any other text file becomes a text named after the file, and the message says how it was cut. A file whose lines mostly end in a full stop, with no blank lines, comes in a segment per line. Otherwise blank lines separate paragraphs, a line ending in a full stop ends its sentence, and inside a line a sentence ends after `.`, `!`, `?` or the full stop of another script when the next word starts with a capital, a digit or a quote; "e.g. the" stays together, but "Dr. Smith" is cut. Thai and Lao paragraphs come in whole, and an orthography written all in lower case is cut only at line ends and blank lines. The file must be UTF-8 or UTF-16; a damaged one is refused. Importing the same file again adds nothing. A numbered sentence list comes in a sentence per line with the numbers left out. This covers the Leipzig Corpora Collection's `…-sentences.txt` (a number, a tab, a sentence) and Tatoeba's per-language exports (a number, a language code and a sentence).
 
 A message reports what wugs imported, and the new text is selected. The import report also counts anything the format holds that wugs does not keep. For FLEx, that includes notes, pronunciations, relations, and etymologies.
 
 An imported ELAN or Praat text is not linked to its recording. Import the audio with **Import audio…** on the Timeline and pick it there.
+
+### Add articles from Wikipedia
+
+For a language with a Wikipedia of its own, its articles are a written corpus to start from. Click **From Wikipedia…** under the import buttons. Type the Wikipedia's code, the start of its address, such as `sw` for sw.wikipedia.org, `yo` for Yoruba or `zh-yue` for Cantonese. Then type article titles, one per line, and choose how many articles to add at random as well (at most 200 in all). Click **Add the articles**.
+
+wugs reads each article as plain text from Wikipedia over the internet and brings it in as a text, cut into sentences like a plain-text file. Each text keeps its address, the licence (CC BY-SA 4.0), "Wikipedia contributors" as the author, the publisher and the day it was read as its details. The corpus therefore records where each text came from, and you can pick the encyclopedia texts by their genre in the corpus tools. Credit the Wikipedia contributors when you publish anything from them. An article already here is not added again, and titles the Wikipedia does not have are named in the message.
+
+For a larger ready-made corpus, the Leipzig Corpora Collection (corpora.uni-leipzig.de) offers news, web and Wikipedia sentences for hundreds of languages, from 10,000 to a million sentences each. Download a corpus, unpack it, and import its `…-sentences.txt` with **Import a file…**. Tatoeba's sentence exports for a language import the same way.
 
 ### Export a text or the lexicon
 
