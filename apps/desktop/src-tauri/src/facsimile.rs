@@ -81,11 +81,8 @@ pub fn view(session: &mut Session, text: &str) -> Result<FacsimileView, String> 
     Ok(FacsimileView { pages, marked })
 }
 
-/// Copy a picture into the blob store as an image source and add it as
-/// the text's last page. The page takes the text's sharing level, as its
-/// recording does, by being reached only through the text.
-pub fn add_page(session: &mut Session, text: &str, path: &str) -> Result<FacsimileView, String> {
-    let file = Path::new(path);
+/// A page picture's file name, once it is a kind and size wugs takes.
+fn checked_picture(file: &Path, path: &str) -> Result<String, String> {
     let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{path} has no usable file name"))?.to_string();
     let ext = name.rsplit_once('.').map(|(_, e)| e.to_ascii_lowercase()).unwrap_or_default();
     if !PICTURE_TYPES.contains(&ext.as_str()) {
@@ -95,6 +92,15 @@ pub fn add_page(session: &mut Session, text: &str, path: &str) -> Result<Facsimi
     if size > PAGE_MAX_BYTES {
         return Err(format!("{name} is {} MB; a page can be at most {} MB. Save a smaller copy and choose that.", size / (1024 * 1024), PAGE_MAX_BYTES / (1024 * 1024)));
     }
+    Ok(name)
+}
+
+/// Copy a picture into the blob store as an image source and add it as
+/// the text's last page. The page takes the text's sharing level, as its
+/// recording does, by being reached only through the text.
+pub fn add_page(session: &mut Session, text: &str, path: &str) -> Result<FacsimileView, String> {
+    let file = Path::new(path);
+    let name = checked_picture(file, path)?;
     let p = project(session)?;
     if p.proj.entity_kind(text)?.as_deref() != Some("text") {
         return Err(format!("no such text: {text}"));
@@ -103,6 +109,20 @@ pub fn add_page(session: &mut Session, text: &str, path: &str) -> Result<Facsimi
     let blob = store.put_file(file).map_err(|e| format!("store {name}: {e}"))?;
     let source = p.add_source(&name, Some(&blob), "image", None)?;
     p.add_text_page(text, &source)?;
+    view(session, text)
+}
+
+/// Give a page that has no picture here (one a TEI file named) its image.
+pub fn set_page_image(session: &mut Session, text: &str, source: &str, path: &str) -> Result<FacsimileView, String> {
+    let file = Path::new(path);
+    let name = checked_picture(file, path)?;
+    let p = project(session)?;
+    if !p.text_pages(text)?.iter().any(|s| s == source) {
+        return Err("That image is not one of this text's pages.".into());
+    }
+    let store = wugs_blob::BlobStore::open(&p.root).map_err(|e| format!("open blob store: {e}"))?;
+    let blob = store.put_file(file).map_err(|e| format!("store {name}: {e}"))?;
+    p.set_page_image(source, &blob)?;
     view(session, text)
 }
 
@@ -175,10 +195,16 @@ mod tests {
         assert_eq!(v.marked[0].area, area);
         assert!(v.marked[0].content.starts_with("wʌn"));
 
+        // A page named without its picture gets one.
+        let bare = crate::session::project(&mut s).unwrap().add_source("folio 3", None, "image", None).unwrap();
+        crate::session::project(&mut s).unwrap().add_text_page(&text, &bare).unwrap();
+        assert!(view(&mut s, &text).unwrap().pages[2].path.is_none());
+        let v = set_page_image(&mut s, &text, &bare, dir.join("page 1.png").to_str().unwrap()).unwrap();
+        assert!(v.pages[2].path.is_some());
         let v = move_page(&mut s, &text, &second, -1).unwrap();
         assert_eq!(v.pages[0].source, second);
         let v = remove_page(&mut s, &text, &second).unwrap();
-        assert_eq!(v.pages.len(), 1);
+        assert_eq!(v.pages.len(), 2);
         assert!(v.marked.is_empty(), "an area on a page taken off is cleared");
         drop(s);
         std::fs::remove_dir_all(&dir).ok();

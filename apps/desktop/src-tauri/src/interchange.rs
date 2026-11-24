@@ -734,6 +734,14 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
                 if r.blocks_as_segments > 0 {
                     lines.push(format!("{} with no <s> inside came in a segment each.", plural(r.blocks_as_segments, "paragraph or turn", "paragraphs or turns")));
                 }
+                if r.pages > 0 {
+                    lines.push(format!(
+                        "The facsimile came in as {} with {} marked on {}; the images themselves are not in a TEI file, so add them in the Facsimile panel.",
+                        plural(r.pages, "page", "pages"),
+                        plural(r.regions, "line", "lines"),
+                        if r.pages == 1 { "it" } else { "them" }
+                    ));
+                }
             }
             if !r.matched.is_empty() {
                 lines.push(format!("{} matched a text already here; nothing was added for them.", plural(r.matched.len(), "document", "documents")));
