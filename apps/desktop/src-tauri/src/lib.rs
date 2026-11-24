@@ -28,6 +28,7 @@ pub mod topics;
 pub mod saved_searches;
 pub mod cldf_import;
 pub mod pangloss;
+pub mod align;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -707,6 +708,18 @@ fn orthography_convert(s: State<SessionThread>, profile: String, tier_id: String
 #[tauri::command]
 fn world_land() -> &'static str {
     typology::LAND
+}
+
+/// The pairs of a text's sentences and another text's that translate them (`align.rs`), writing nothing.
+#[tauri::command(async)]
+fn align_preview(s: State<SessionThread>, source: String, translation: String) -> Result<align::Alignment, String> {
+    s.run(move |s| align::preview(s, &source, &translation))
+}
+
+/// Writes each matched translation on its sentence (`align.rs`).
+#[tauri::command(async)]
+fn align_write(s: State<SessionThread>, source: String, translation: String) -> Result<align::Alignment, String> {
+    s.run(move |s| align::write(s, &source, &translation))
 }
 
 /// The Concordance's saved searches (`saved_searches.rs`).
@@ -2536,6 +2549,8 @@ pub fn run() {
             glottolog_place,
             world_land,
             saved_searches,
+            align_preview,
+            align_write,
             save_search,
             delete_saved_search,
             typology_profile,

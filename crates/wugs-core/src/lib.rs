@@ -1210,6 +1210,50 @@ impl Project {
         Ok((id, res))
     }
 
+    /// Several translations on `tier` in one plain `add-translations` txn:
+    /// each `(segment, index, content)` as `add_translation` writes it. A
+    /// segment that already has a live translation there, or empty content,
+    /// is skipped; returns how many were written.
+    pub fn add_translations(&mut self, text: &str, tier: &str, rows: &[(String, usize, String)]) -> Result<(usize, Option<CommitResult>), String> {
+        let mut checked: Vec<String> = Vec::new();
+        let mut keep = Vec::new();
+        for (segment, index, content) in rows {
+            let content = content.trim();
+            if content.is_empty() {
+                continue;
+            }
+            self.require_in_text(segment, "segment", text)?;
+            let own = self.proj.field_str(segment, "tier")?.unwrap_or_default();
+            if !checked.contains(&own) {
+                self.require_paired_tier(tier, &own)?;
+                checked.push(own);
+            }
+            let mut has = false;
+            for other in self.proj.children_by_ref("parent", segment, "segment")? {
+                if self.proj.field_str(&other, "tier")?.as_deref() == Some(tier) && !self.proj.is_tombstoned(&other)? {
+                    has = true;
+                }
+            }
+            if !has {
+                keep.push((segment.as_str(), *index, content));
+            }
+        }
+        if keep.is_empty() {
+            return Ok((0, None));
+        }
+        let mut t = self.intent("add-translations");
+        for (segment, index, content) in &keep {
+            t.create(
+                "segment",
+                "seg",
+                text,
+                vec![("text", Value::str(text)), ("tier", Value::str(tier)), ("pos", Value::str(&wugs_model::pos_seq(*index))), ("content", Value::str(content)), ("parent", Value::str(segment))],
+            );
+        }
+        let res = t.commit()?;
+        Ok((keep.len(), Some(res)))
+    }
+
     /// Returns the new segment's id together with the commit's findings, so
     /// a UI can surface warnings (e.g. tier-overlap) on adds, not only edits.
     pub fn add_segment(

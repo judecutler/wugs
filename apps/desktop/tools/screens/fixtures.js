@@ -1302,6 +1302,17 @@ const LEXICON = [
     }),
     world_land: () => window.__WUGS_SCREENS__.land,
     saved_searches: () => window.__WUGS_SAVED_SEARCHES__ ?? [],
+    align_preview: ({ source, translation }) => {
+      window.__WUGS_ALIGN__ = { source, translation };
+      return {
+        sources: 4, translations: 3, oneToOne: 2, unmatched: 0, already: 0, written: 0,
+        pairs: [
+          { segment: "a1", source: ["Mtu mmoja alikwenda sokoni asubuhi."], translation: ["A man went to the market in the morning."], hasOne: false },
+          { segment: "a2", source: ["Alinunua ndizi.", "Na machungwa."], translation: ["He bought bananas and oranges."], hasOne: false },
+          { segment: "a4", source: ["Kisha akarudi nyumbani."], translation: ["Then he went back home."], hasOne: false },
+        ],
+      };
+    },
     save_search: ({ search }) => (window.__WUGS_SAVED_SEARCHES__ = [...(window.__WUGS_SAVED_SEARCHES__ ?? []).filter((x) => x.name.toLowerCase() !== search.name.trim().toLowerCase()), { ...search, name: search.name.trim() }]),
     delete_saved_search: ({ name }) => (window.__WUGS_SAVED_SEARCHES__ = (window.__WUGS_SAVED_SEARCHES__ ?? []).filter((x) => x.name.toLowerCase() !== name.toLowerCase())),
     lexicon_add: () => ({ entry: lexiconEntry({ id: LEXICON[0].id }), notes: [] }),

@@ -480,6 +480,16 @@ pub(crate) fn tier_role(p: &Project, tier: &str) -> Result<Option<String>, Strin
 /// name (case ignored) and makes it when missing, so `Translation (English)`
 /// and `Translation (Spanish)` columns keep their own tracks; with no name
 /// the first by id is used, made as "translation" when there is none.
+/// The first translation track paired with `sentences`, if there is one.
+pub(crate) fn existing_translation_track(p: &Project, sentences: &str) -> Result<Option<String>, String> {
+    for t in p.proj.entities_of_kind("tier")? {
+        if p.proj.field_str(&t, "kind")?.as_deref() == Some("symbolic-association") && p.proj.field_str(&t, "parent")?.as_deref() == Some(sentences) && tier_role(p, &t)?.as_deref() == Some("translation") {
+            return Ok(Some(t));
+        }
+    }
+    Ok(None)
+}
+
 pub(crate) fn translation_track(p: &mut Project, sentences: &str, named: Option<&str>) -> Result<String, String> {
     for t in p.proj.entities_of_kind("tier")? {
         let paired = p.proj.field_str(&t, "kind")?.as_deref() == Some("symbolic-association") && p.proj.field_str(&t, "parent")?.as_deref() == Some(sentences);

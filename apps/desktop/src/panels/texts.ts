@@ -21,6 +21,8 @@ import { emptyState, h } from "../dom";
 import { attempt, getState, refreshAll, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { readGlossingLines, tierGlossingLines, type TierGlossing } from "../elan/glossing";
 import { batchLines, type BatchResult } from "../drop/logic";
+import { alignLine, pairNote, toWrite, writtenLine, type Alignment } from "../align/logic";
+import { alignPreview, alignWrite } from "../api";
 import { loanSources, tableImportLines } from "../lexicon/logic";
 import { sliced, type PanelDef } from "./panel";
 import { provide } from "../palette/registry";
@@ -600,6 +602,70 @@ let cardOrder = (() => {
 /** The Wikipedia form: open or not, and what is typed in it (the code kept on this computer). */
 const WIKI_KEY = "wugs.texts.wiki";
 let wikiOpen = false;
+// Pairing the selected text with a text that translates it: which text, and the last preview (for that pair).
+let alignOpen = false;
+let alignWith = "";
+let alignShown: { source: string; translation: string; result: Alignment } | null = null;
+/** At most this many pairs are drawn in the preview. */
+const ALIGN_SHOWN = 300;
+
+function alignForm(text: TextDetail | null, texts: { id: string; title: string }[]): HTMLElement | null {
+  if (!alignOpen || text === null) return null;
+  const others = texts.filter((t) => t.id !== text.id);
+  if (others.length === 0) return h("div", { className: "align-form" }, h("p", { className: "note", textContent: "Import or make the translation as a text of its own first (a plain-text file, a sentence a line or as prose), then pair it with this one here." }));
+  if (!others.some((t) => t.id === alignWith)) alignWith = others[0]?.id ?? "";
+  const pick = h("select", {}, ...others.map((t) => h("option", { value: t.id, textContent: t.title || "(untitled)", selected: t.id === alignWith })));
+  pick.setAttribute("aria-label", "The text that translates it");
+  pick.onchange = () => {
+    alignWith = pick.value;
+    alignShown = null;
+    redrawAll();
+  };
+  const shown = alignShown !== null && alignShown.source === text.id && alignShown.translation === alignWith ? alignShown.result : null;
+  const translationTitle = others.find((t) => t.id === alignWith)?.title || "(untitled)";
+  const preview = () =>
+    void work("align", async () => {
+      alignShown = { source: text.id, translation: alignWith, result: await alignPreview({ source: text.id, translation: alignWith }) };
+    });
+  const write = () =>
+    void work("align", async () => {
+      const r = await alignWrite({ source: text.id, translation: alignWith });
+      alignShown = { source: text.id, translation: alignWith, result: await alignPreview({ source: text.id, translation: alignWith }) };
+      showToast({ tone: "info", lines: [writtenLine(r, translationTitle)] });
+      await refreshAll();
+    });
+  const adds = shown === null ? 0 : toWrite(shown);
+  return h(
+    "div",
+    { className: "align-form" },
+    h("p", { className: "note", textContent: "A translation kept as a text of its own, such as a published translation or a parallel text, becomes this text's translation sentence by sentence. Sentences are paired by their lengths, so one translation sentence may cover two of them. Check the pairs before writing." }),
+    h("label", {}, "Translated in ", pick),
+    h(
+      "div",
+      { className: "share-row" },
+      h("button", { type: "button", textContent: busy === "align" ? "Pairing…" : "Pair the sentences", disabled: busy !== null, onclick: preview }),
+      shown === null ? null : h("button", { type: "button", className: "primary", textContent: adds === 0 ? "Nothing to write" : `Write ${adds} ${adds === 1 ? "translation" : "translations"}`, disabled: busy !== null || adds === 0, onclick: write }),
+    ),
+    shown === null ? null : h("p", { className: "note align-line", textContent: alignLine(shown) }),
+    shown === null
+      ? null
+      : h(
+          "table",
+          { className: "align-pairs" },
+          ...shown.pairs.slice(0, ALIGN_SHOWN).map((p) => {
+            const note = pairNote(p);
+            return h(
+              "tr",
+              { className: [note === null ? "" : "align-odd", p.hasOne ? "align-done" : ""].filter(Boolean).join(" "), title: p.hasOne ? "Already translated; left as it is" : (note ?? "") },
+              h("td", { textContent: p.source.join(" ‖ ") || "—" }),
+              h("td", { textContent: p.translation.join(" ") || "—" }),
+            );
+          }),
+        ),
+    shown !== null && shown.pairs.length > ALIGN_SHOWN ? h("p", { className: "note", textContent: `The first ${ALIGN_SHOWN} of ${shown.pairs.length} pairs are shown; writing writes them all.` }) : null,
+  );
+}
+
 let wikiCode = (() => {
   try {
     return localStorage.getItem(WIKI_KEY) ?? "";
@@ -807,7 +873,21 @@ export const textsPanel: PanelDef = {
                 disabled: busy !== null,
                 onclick: () => void exportOne(text.id),
               }),
+          text === null
+            ? null
+            : h("button", {
+                type: "button",
+                className: alignOpen ? "active" : "",
+                textContent: "Pair with a translation…",
+                title: "Make another text, which translates this one, into this text's translations, sentence by sentence",
+                disabled: busy !== null,
+                onclick: () => {
+                  alignOpen = !alignOpen;
+                  redrawAll();
+                },
+              }),
         ),
+        alignForm(text, s.texts),
         text === null
           ? null
           : h(

@@ -439,6 +439,14 @@ def main():
                 failures.append(f"From Wikipedia did not ask for the articles typed: {asked}")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.locator(".panel-texts button", has_text="From Wikipedia").click()
+            # Pairing the text with another that translates it.
+            run.page.locator(".panel-texts button", has_text="Pair with a translation").click()
+            run.page.locator(".panel-texts .align-form button", has_text="Pair the sentences").click()
+            run.page.locator(".panel-texts .align-pairs tr").first.wait_for()
+            run.shot("state-texts-align", run.page.locator(".panel-texts"))
+            if "Write 3 translations" not in run.page.locator(".panel-texts .align-form").inner_text():
+                failures.append("Pair with a translation did not offer to write the three pairs")
+            run.page.locator(".panel-texts button", has_text="Pair with a translation").click()
             # A reader to print ends with the words the text uses.
             run.page.evaluate("window.__WUGS_PICK__ = '/tmp/reader'")
             run.page.locator(".panel-texts .share-row", has_text="Reader to print").locator("button", has_text="Save").click()
