@@ -48,6 +48,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "checks",                        # glosses to tidy: a morph glossed more than one way; not placed either
   "vowels",                        # vowel space: F1 against F2 per segment; not placed either
   "contours",                      # pitch contours per segment, time-normalized, for tone and intonation; not placed either
+  "durations",                     # how long each label's segments last, with a comparison of two; not placed either
   "sounds",                        # the sound inventory on the IPA chart; not placed either
   "typology",                      # Grambank's grammar features for the language, beside its relatives; not placed either
   "progress",                      # how far the documentation has come, for reports; not placed either

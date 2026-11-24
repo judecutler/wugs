@@ -678,6 +678,18 @@ Segment the recording one syllable, word or phrase to a segment, and label each 
 
 The numbers come from the same analysis as the overlays and **Measure…**: your Praat when wugs finds it, else wugs's own.
 
+### Compare how long sounds last
+
+The **Durations** panel shows how long each label's segments last on one track of the text on screen: the numbers a study of vowel length, gemination or speaking rate starts from. Open it from Settings (Closed panels) or with **Find an action**. It reads the segments' own start and end times, so nothing is measured and no recording is needed.
+
+Segment the recording one sound, syllable or word to a segment and type a label in each, such as `a` and `aː`, or `t` and `tː`. Choose the **Track**. The panel shows:
+
+- a strip plot with a row per label, a dot for every segment (click one to hear it) and a bar for the mean and one standard deviation either side;
+- a table with each label's count, mean, standard deviation, median, shortest and longest, in milliseconds;
+- **Compare two labels**: pick two, and it says how many times as long one is as the other on average, with Welch's t-test (which does not assume the two vary alike), such as "«aː» is 1.86 times as long as «a» on average (152 ms against 82 ms): Welch's t(17.3) = 9.41, p < 0.001". Each label needs at least two segments.
+
+**Show** leaves labels with few segments out of the plot. **Copy table** copies the summary, and **Copy every segment** copies one row per segment (label, start, end, duration) for R or a spreadsheet. **Save picture…** saves the plot as an SVG file.
+
 ### Write a track in IPA from a practical spelling
 
 Many projects transcribe in a practical orthography. The **Orthography** panel writes such a track in another spelling, usually IPA, with an *orthography profile*: a table that lists the letters and letter groups of the spelling in a **Grapheme** column and what each is in IPA in an **IPA** column. These are the profiles of *The Unicode Cookbook for Linguists* (Moran & Cysouw 2018), which the `segments` package and CLDF datasets also read, so a profile made here works there too. Open the panel from Settings (Closed panels) or with **Find an action**.
