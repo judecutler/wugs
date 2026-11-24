@@ -15,7 +15,7 @@ test("vowel harmony shows as pairs above and below chance", () => {
   assert.ok(at("i", "e")! > 1.8, `i…e: ${at("i", "e")}`);
   const s = standouts(c);
   assert.ok(s.some((x) => x.a === "i" && x.b === "u" && x.ratio === 0));
-  assert.match(cooccurrenceNote(c, "V"), /^72 pairs of a vowel and the next vowel in a word.*avoided/u);
+  assert.match(cooccurrenceNote(c, "V"), /^72 pairs of a vowel and the next vowel in a word.*never met/u);
   assert.match(cooccurrenceTsv(c).split("\n")[0]!, /^\t/u);
 });
 
@@ -23,4 +23,18 @@ test("consonants across a vowel, and nothing to count", () => {
   const c = cooccurrence([{ word: "pita", count: 3 }, { word: "pita", count: 1 }], "C");
   assert.equal(c.total, 1, "a word type counts once");
   assert.equal(cooccurrenceNote(cooccurrence([{ word: "a", count: 1 }], "V"), "V"), "No word has two vowels yet.");
+});
+
+test("consonant before vowel: a rectangular table with gaps", () => {
+  // t and k before every vowel, but ʃ only before i and e.
+  const words = ["ta", "ti", "tu", "te", "ka", "ki", "ku", "ke", "ʃi", "ʃe", "ʃie", "tʃi"].flatMap((w, n) => [{ word: `${w}`, count: 1 }, { word: `${w}${"ptk"[n % 3]}a`, count: 1 }]);
+  const c = cooccurrence(words, "CV");
+  assert.ok(c.sounds.every((x) => !"aeiou".includes(x)), "rows are consonants");
+  assert.ok(c.columns.every((x) => "aeiou".includes(x)), "columns are vowels");
+  const sh = c.sounds.indexOf("ʃ");
+  assert.equal(c.observed[sh]![c.columns.indexOf("u")], 0);
+  assert.ok(c.observed[sh]![c.columns.indexOf("i")]! > 0);
+  assert.match(cooccurrenceNote(c, "CV"), /pairs of a consonant and the vowel right after it/u);
+  assert.equal(cooccurrenceTsv(c).split("\n")[0], ["", ...c.columns].join("\t"));
+  assert.equal(cooccurrenceNote(cooccurrence([{ word: "a", count: 1 }], "CV"), "CV"), "No word has a consonant before a vowel yet.");
 });

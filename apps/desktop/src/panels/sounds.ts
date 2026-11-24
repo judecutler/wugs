@@ -26,7 +26,7 @@ import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
 import { dataGeneration, getState, showToast } from "../store";
 import { likeness, likenessLine, likenessModel, likenessTsv, type Model as LikenessModel } from "../sounds/likeness";
-import { cooccurrence, cooccurrenceNote, cooccurrenceTsv, type Cooccurrence } from "../sounds/cooccur";
+import { cooccurrence, cooccurrenceNote, cooccurrenceTsv, type Cooccurrence, type Together } from "../sounds/cooccur";
 import { typeWithShortcuts } from "../typing";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
@@ -346,15 +346,15 @@ export const soundsPanel: PanelDef = {
     };
 
     // Which vowels (or consonants) come together in a word: vowel harmony and co-occurrence restrictions.
-    let togetherKind: "V" | "C" = "V";
-    let togetherMemo: { for: Loaded; kind: "V" | "C"; value: Cooccurrence } | null = null;
+    let togetherKind: Together = "V";
+    let togetherMemo: { for: Loaded; kind: Together; value: Cooccurrence } | null = null;
     const togetherSection = (l: Loaded): HTMLElement[] => {
       if (togetherMemo?.for !== l || togetherMemo.kind !== togetherKind) togetherMemo = { for: l, kind: togetherKind, value: cooccurrence(l.words, togetherKind) };
       const c = togetherMemo.value;
-      const kindPick = h("select", { className: "sd-together-kind", title: "Vowels: each vowel and the next vowel in the word (vowel harmony). Consonants: each consonant and the next (place restrictions, as in Semitic roots)." }, h("option", { value: "V", textContent: "Vowels", selected: togetherKind === "V" }), h("option", { value: "C", textContent: "Consonants", selected: togetherKind === "C" }));
+      const kindPick = h("select", { className: "sd-together-kind", title: "Vowels: each vowel and the next vowel in the word (vowel harmony). Consonants: each consonant and the next (place restrictions, as in Semitic roots). Consonant + vowel: each consonant and the vowel right after it (gaps such as no palatal before a back vowel)." }, h("option", { value: "V", textContent: "Vowels", selected: togetherKind === "V" }), h("option", { value: "C", textContent: "Consonants", selected: togetherKind === "C" }), h("option", { value: "CV", textContent: "Consonant + vowel", selected: togetherKind === "CV" }));
       kindPick.setAttribute("aria-label", "Which sounds");
       kindPick.onchange = () => {
-        togetherKind = kindPick.value === "C" ? "C" : "V";
+        togetherKind = kindPick.value === "C" ? "C" : kindPick.value === "CV" ? "CV" : "V";
         paint();
       };
       const copy = h("button", { type: "button", textContent: "Copy table", disabled: c.total === 0, title: "Each pair's ratio of observed to expected, with its count" });
@@ -371,8 +371,8 @@ export const soundsPanel: PanelDef = {
           : h(
               "table",
               { className: "fq-table sd-together" },
-              h("thead", {}, h("tr", {}, h("th", { textContent: "then →" }), ...c.sounds.map((s) => h("th", { className: "ipa", textContent: s })))),
-              h("tbody", {}, ...c.sounds.map((a, i) => h("tr", {}, h("th", { className: "ipa", textContent: a }), ...c.sounds.map((_, j) => cell(c.ratio[i]![j]!, c.observed[i]![j]!, c.expected[i]![j]!))))),
+              h("thead", {}, h("tr", {}, h("th", { textContent: "then →" }), ...c.columns.map((s) => h("th", { className: "ipa", textContent: s })))),
+              h("tbody", {}, ...c.sounds.map((a, i) => h("tr", {}, h("th", { className: "ipa", textContent: a }), ...c.columns.map((_, j) => cell(c.ratio[i]![j]!, c.observed[i]![j]!, c.expected[i]![j]!))))),
             );
       return [
         h("h4", { className: "sd-h", textContent: "Sounds together" }),

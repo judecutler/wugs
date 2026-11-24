@@ -191,7 +191,7 @@ test("vowel harmony shows in the vowels section", () => {
   const back = ["pu", "tu", "ku", "mo", "lo", "so"];
   const words = [...front.flatMap((a) => front.map((b) => a + b)), ...back.flatMap((a) => back.map((b) => a + b))].map((word) => ({ word, count: 1 }));
   const html = grammarSketch({ ...base, words });
-  assert.match(html, /pairs of a vowel and the next vowel in a word.*avoided.*may point to vowel harmony/su);
+  assert.match(html, /pairs of a vowel and the next vowel in a word.*never met.*may point to vowel harmony/su);
   assert.doesNotMatch(grammarSketch(base), /may point to vowel harmony/u, "no standout, no paragraph");
 });
 
