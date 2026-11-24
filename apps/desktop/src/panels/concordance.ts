@@ -15,6 +15,7 @@ import { mapView } from "../typology/map";
 import { nearHits, nearLine, NEAR_SIDES, NEAR_WINDOWS, type NearSide } from "../concordance/near";
 import { savedLine, type SavedSearch, asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { linesUnder } from "../concordance/under";
+import { around } from "../concordance/around";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
@@ -290,6 +291,43 @@ export const concordancePanel: PanelDef = {
         // A read dropped by a newer epoch leaves its texts unread: drawing again reads them.
         if (underOn) drawRows();
       });
+    };
+    /** Lines opened to their wider context (`textId|segmentId`), and the texts read for them in this data generation. */
+    const opened = new Set<string>();
+    const aroundTexts = new Map<string, TextDetail | null>();
+    let aroundGeneration = -1;
+    const aroundOf = (hit: Hit): HTMLElement | null => {
+      if (!opened.has(`${hit.textId}|${hit.segmentId}`)) return null;
+      if (aroundGeneration !== dataGeneration()) {
+        aroundTexts.clear();
+        aroundGeneration = dataGeneration();
+      }
+      if (!aroundTexts.has(hit.textId)) {
+        aroundTexts.set(hit.textId, null);
+        const gen = aroundGeneration;
+        void getText({ textId: hit.textId }).then(
+          (t) => {
+            if (gen !== aroundGeneration) return;
+            aroundTexts.set(hit.textId, t);
+            drawRows();
+          },
+          (e) => showToast({ tone: "error", lines: [`Could not read «${hit.textTitle}»: ${errorText(e)}`] }),
+        );
+      }
+      const text = aroundTexts.get(hit.textId);
+      if (text === null || text === undefined) return h("div", { className: "cc-around note", textContent: "Reading the text…" });
+      const near = around(text.segments, hit.segmentId);
+      if (near === null) return h("div", { className: "cc-around note", textContent: "This sentence is no longer in the text." });
+      const line = (content: string, me: boolean) => h("p", { className: me ? "cc-around-me" : "", textContent: content });
+      const mine = text.segments.find((x) => x.id === hit.segmentId)?.content ?? "";
+      return h(
+        "div",
+        { className: "cc-around", dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },
+        ...near.before.map((x) => line(x.content, false)),
+        line(mine, true),
+        ...near.after.map((x) => line(x.content, false)),
+        near.before.length + near.after.length === 0 ? h("p", { className: "note", textContent: "Nothing else on this track." }) : null,
+      );
     };
     /** Thinned to a random sample of this many lines (0: every line). */
     let thinTo = 0;
@@ -705,6 +743,16 @@ export const concordancePanel: PanelDef = {
           const play = playButton("Open this segment and play it", () => void open(hit, true));
           play.classList.add("cc-play");
           play.disabled = hit.startMs === null;
+          const openKey = `${hit.textId}|${hit.segmentId}`;
+          const more = h("button", { type: "button", className: "cc-more", textContent: "⋯", title: "Show the sentences around this one" });
+          more.setAttribute("aria-expanded", String(opened.has(openKey)));
+          more.setAttribute("aria-label", "Sentences around it");
+          more.onclick = (e) => {
+            e.stopPropagation();
+            if (opened.has(openKey)) opened.delete(openKey);
+            else opened.add(openKey);
+            drawRows();
+          };
           const row = h(
             "div",
             { className: sortOn && sorted !== null ? "cc-row cc-row-cat" : "cc-row", role: "listitem", tabIndex: 0, title: `${hit.textTitle}: open this segment`, dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },
@@ -719,7 +767,9 @@ export const concordancePanel: PanelDef = {
               h("span", { textContent: hit.breakdown === null ? "" : `${hit.breakdown} ‘${hit.glosses ?? ""}’` }),
               h("span", { textContent: who === null ? hit.textTitle : `${hit.textTitle} · ${who(hit)}` }),
             ),
+            more,
             ...(underOn ? [h("span", { className: "cc-under", textContent: under.get(hit.textId)?.get(hit.segmentId) ?? "" })] : []),
+            aroundOf(hit),
           );
           row.onclick = () => void open(hit, false);
           row.onkeydown = (e) => {
@@ -995,6 +1045,8 @@ export const concordancePanel: PanelDef = {
       under.clear();
       underEpoch += 1;
       underGeneration = -1;
+      opened.clear();
+      aroundTexts.clear();
       input.value = "";
       saved = [];
       keepBar.hidden = true;
