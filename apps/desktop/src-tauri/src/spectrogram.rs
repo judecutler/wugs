@@ -24,8 +24,11 @@ pub const STEP_MS: f64 = 4.0;
 pub const ROWS: usize = 100;
 pub const MAX_HZ: f64 = 5000.0;
 /// Praat's broadband window: a Gaussian of effective length 5 ms, which
-/// spans twice that.
+/// spans twice that; formants show as bands.
 const WINDOW_MS: f64 = 10.0;
+/// A narrowband window, as Praat users set it for pitch: effective length
+/// 30 ms, so the harmonics of the voice show as lines (tone and intonation).
+const NARROW_WINDOW_MS: f64 = 60.0;
 /// Pre-emphasis starts here (6 dB per octave above it), as in Praat.
 const EMPHASIS_FROM_HZ: f64 = 50.0;
 
@@ -74,13 +77,15 @@ pub(crate) fn read_mono(wav: &Path, start_ms: f64, end_ms: f64) -> Result<(Vec<f
     Ok((out, fmt.sample_rate))
 }
 
-/// The spectrogram of chunk `index` of `wav` (see the module comment for the layout).
-pub fn chunk(wav: &Path, index: u32) -> Result<Vec<u8>, String> {
+/// The spectrogram of chunk `index` of `wav` (see the module comment for
+/// the layout), broadband or, when `narrow`, narrowband.
+pub fn chunk(wav: &Path, index: u32, narrow: bool) -> Result<Vec<u8>, String> {
+    let window_ms = if narrow { NARROW_WINDOW_MS } else { WINDOW_MS };
     let start = f64::from(index) * f64::from(CHUNK_MS);
-    let half = WINDOW_MS / 2.0;
+    let half = window_ms / 2.0;
     let (samples, rate) = read_mono(wav, start - half, start + f64::from(CHUNK_MS) + half)?;
     let rate_f = f64::from(rate);
-    let win = ((WINDOW_MS / 1000.0) * rate_f).round().max(8.0) as usize;
+    let win = ((window_ms / 1000.0) * rate_f).round().max(8.0) as usize;
     let size = win.next_power_of_two().max(256);
     // Gaussian window as Praat makes it (edges at about -26 dB).
     let window: Vec<f32> = (0..win)
@@ -142,6 +147,10 @@ mod tests {
         let samples: Vec<i16> = (0..n)
             .map(|i| if i < n / 2 { ((i as f64 / rate as f64 * hz * std::f64::consts::TAU).sin() * 16000.0) as i16 } else { 0 })
             .collect();
+        write_wav(path, rate, samples);
+    }
+
+    fn write_wav(path: &Path, rate: u32, samples: Vec<i16>) {
         let bytes = (samples.len() * 2) as u32;
         let mut w = Vec::new();
         w.extend_from_slice(b"RIFF");
@@ -163,13 +172,34 @@ mod tests {
     }
 
     #[test]
+    fn narrowband_shows_the_harmonics_broadband_smears() {
+        let dir = std::env::temp_dir().join(format!("wugs-spectro-n-{}", wugs_model::ulid()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let rate = 16_000u32;
+        let wav = dir.join("voice.wav");
+        // A voice at 225 Hz: its first eight harmonics, equally loud.
+        let samples = (0..rate as usize).map(|i| ((1..=8).map(|k| (i as f64 / f64::from(rate) * 225.0 * f64::from(k) * std::f64::consts::TAU).sin()).sum::<f64>() * 3000.0) as i16).collect();
+        write_wav(&wav, rate, samples);
+        let col = (500.0 / STEP_MS) as usize;
+        // Row 4 is centred on 225 Hz, a harmonic; row 6 on 325 Hz, between two.
+        let contrast = |narrow: bool| {
+            let data = chunk(&wav, 0, narrow).unwrap();
+            i32::from(data[col * ROWS + 4]) - i32::from(data[col * ROWS + 6])
+        };
+        let (narrow, broad) = (contrast(true), contrast(false));
+        assert!(narrow > 40, "narrowband: a harmonic 20 dB above the gap, got {narrow} half-dB");
+        assert!(narrow > broad + 20, "broadband smears the gap: {broad} against {narrow}");
+        std::fs::remove_dir_all(dir).ok();
+    }
+
+    #[test]
     fn a_tone_shows_in_its_row_while_it_sounds() {
         let dir = std::env::temp_dir().join(format!("wugs-spectro-{}", wugs_model::ulid()));
         std::fs::create_dir_all(&dir).unwrap();
         for rate in [16_000u32, 44_100] {
             let wav = dir.join(format!("tone-{rate}.wav"));
             tone(&wav, rate, 2.0, 1000.0);
-            let data = chunk(&wav, 0).unwrap();
+            let data = chunk(&wav, 0, false).unwrap();
             let columns = data.len() / ROWS;
             assert_eq!(columns, 2500);
             let at = |c: usize, r: usize| data[c * ROWS + r];
@@ -184,7 +214,7 @@ mod tests {
             assert!(at((1500.0 / STEP_MS) as usize, loudest) < 10);
             assert!(at(columns - 1, loudest) < 10);
             // A chunk wholly past the end reads as silence, not an error.
-            assert!(chunk(&wav, 3).unwrap().iter().all(|&v| v < 10));
+            assert!(chunk(&wav, 3, false).unwrap().iter().all(|&v| v < 10));
         }
         std::fs::remove_dir_all(dir).ok();
     }

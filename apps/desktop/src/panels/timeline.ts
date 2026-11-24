@@ -89,12 +89,20 @@ export const timelinePanel: PanelDef = {
     const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, splitButton, mergeButton, undoButton, redoButton);
     const spectroButton = h("button", { textContent: "Spectrogram", title: "Show the recording's spectrogram under the waveform (0–5000 Hz, darker where louder), made by wugs itself, a minute of view at a time" });
     spectroButton.setAttribute("aria-pressed", "false");
+    const bandPicker = h(
+      "select",
+      { className: "tl-band", title: "Broadband shows formants as dark bands (vowels, consonants); narrowband shows the voice's harmonics as lines (pitch, tone, intonation)" },
+      h("option", { value: "broad", textContent: "Broadband" }),
+      h("option", { value: "narrow", textContent: "Narrowband" }),
+    );
+    bandPicker.setAttribute("aria-label", "Spectrogram band");
+    bandPicker.hidden = true;
     const MEASURE_TITLE = "Measure every segment of the selected segment's track (else the utterance track): duration, pitch, intensity and formants, saved as a CSV table for R or a spreadsheet";
     const measureButton = h("button", { textContent: "Measure…", title: MEASURE_TITLE });
     const CLIPS_TITLE = "Save every timed segment of that track as its own sound file, named after its transcription, with a clips.csv list of them (for Praat scripts, stimulus lists, flash cards or sharing)";
     const clipsButton = h("button", { textContent: "Save clips…", title: CLIPS_TITLE });
     const pictureButton = h("button", { textContent: "Save picture…", title: "Save what the Timeline shows (waveform, spectrogram and curves that are on, and the tracks) as a PNG picture for a paper or a handout" });
-    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, measureButton, clipsButton, pictureButton, perfButton, praat.element);
+    const toolbar = h("div", { className: "tl-toolbar" }, sourcePicker, importButton, editTools, spectroButton, bandPicker, measureButton, clipsButton, pictureButton, perfButton, praat.element);
 
     const updateEditButtons = () => {
       const stack = view?.history() ?? null;
@@ -289,6 +297,11 @@ export const timelinePanel: PanelDef = {
       spectroButton.classList.toggle("active", on);
       spectroButton.setAttribute("aria-pressed", String(on));
       spectroButton.disabled = view === null || selectedSource === null;
+      bandPicker.hidden = !on;
+      bandPicker.value = view?.spectrogram.isNarrow() ? "narrow" : "broad";
+    };
+    bandPicker.onchange = () => {
+      view?.spectrogram.setNarrow(bandPicker.value === "narrow");
     };
     spectroButton.onclick = () => {
       if (view === null) return;

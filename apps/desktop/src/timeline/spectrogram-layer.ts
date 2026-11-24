@@ -13,6 +13,9 @@ const KEEP_CHUNKS = 60;
 /** Chunks are painted again when the loudest value moves this much (half-dB steps). */
 const REPAINT_STEP = 6;
 
+/** Where the band chosen is kept on this computer. */
+export const BAND_KEY = "wugs.timeline.spectroBand";
+
 type Painted = { bytes: Uint8Array; canvas: HTMLCanvasElement | null; top: number };
 
 let ink: [number, number, number] | null = null;
@@ -26,6 +29,8 @@ export class SpectrogramLayer {
   private problem: string | null = null;
   private generation = 0;
   private repaintAll = false;
+  /** Narrowband (harmonics as lines) rather than broadband (formants as bands). */
+  private narrow = localStorage.getItem(BAND_KEY) === "narrow";
   /** Told when the layer turns itself off (a failure), so the toggle redraws. */
   onChange: () => void = () => {};
 
@@ -40,6 +45,25 @@ export class SpectrogramLayer {
 
   enabled(): boolean {
     return this.on;
+  }
+
+  isNarrow(): boolean {
+    return this.narrow;
+  }
+
+  /** Switch between broadband and narrowband; the chunks are made again. */
+  setNarrow(narrow: boolean): void {
+    if (narrow === this.narrow) return;
+    this.narrow = narrow;
+    try {
+      localStorage.setItem(BAND_KEY, narrow ? "narrow" : "broad");
+    } catch {
+      // Kept for this run only.
+    }
+    this.chunks.clear();
+    this.inflight = false;
+    this.problem = null;
+    this.generation++;
   }
 
   toggle(): void {
@@ -60,7 +84,7 @@ export class SpectrogramLayer {
     const source = this.source;
     const gen = this.generation;
     this.inflight = true;
-    spectrogramChunk({ source, index: next }).then(
+    spectrogramChunk({ source, index: next, narrow: this.narrow }).then(
       (buffer) => {
         if (gen !== this.generation) return;
         this.inflight = false;

@@ -832,6 +832,8 @@ The **Before** and **After** tables count each sound by what follows and what pr
 
 Click **Spectrogram** in the Timeline toolbar to see the recording's spectrogram under the waveform: frequency from 0 at the bottom to 5000 Hz at the top, darker where louder, the way Praat draws it. Formants show as dark bands, fricatives as noise high up, and stop closures as gaps. wugs makes the spectrogram itself, so it works without Praat. Turn on **Formants** too, and the formant dots sit on the bands.
 
+While the spectrogram shows, the menu beside the button chooses its band. **Broadband**, the default, is what the description above shows, with Praat's 5 ms window. **Narrowband** uses a window six times longer (Praat users set 0.03 s for it). It loses the formant bands but shows the voice's harmonics as lines that rise and fall with the pitch. Use it to look at tone, intonation and voice quality, or to check a pitch track by eye. The choice is remembered on this computer.
+
 Like Praat's analysis, the spectrogram shows at most one minute of view at a time. Zoom in to see it. Click **Spectrogram** again to hide it.
 
 ### Edit in Praat and bring the changes back

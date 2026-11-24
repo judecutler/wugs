@@ -1491,9 +1491,10 @@ async fn measure_points(s: State<'_, SessionThread>, dir: State<'_, AppData>, te
 /// as raw bytes (`src/spectrogram.rs` says the layout); computed off the
 /// session thread.
 #[tauri::command]
-async fn spectrogram(s: State<'_, SessionThread>, source: String, index: u32) -> Result<tauri::ipc::Response, String> {
+async fn spectrogram(s: State<'_, SessionThread>, source: String, index: u32, narrow: Option<bool>) -> Result<tauri::ipc::Response, String> {
     let job = s.run(move |s| praat_analysis::job(s, &source))?;
-    let bytes = tauri::async_runtime::spawn_blocking(move || spectrogram::chunk(&job.wav, index)).await.map_err(|e| e.to_string())??;
+    let narrow = narrow.unwrap_or(false);
+    let bytes = tauri::async_runtime::spawn_blocking(move || spectrogram::chunk(&job.wav, index, narrow)).await.map_err(|e| e.to_string())??;
     Ok(tauri::ipc::Response::new(bytes))
 }
 
