@@ -440,6 +440,12 @@ fn brown_morphemes(s: State<SessionThread>) -> Result<Vec<brown::BrownTrack>, St
     s.run(brown::brown)
 }
 
+/// How many words of the texts each entry's senses are linked to, for the Lexicon's Commonest order.
+#[tauri::command(async)]
+fn lexicon_uses(s: State<SessionThread>) -> Result<std::collections::HashMap<String, usize>, String> {
+    s.run(|s| flashcards::uses_by_entry(session::project(s)?))
+}
+
 /// The words used in the same contexts as a word (src/similar.rs).
 #[tauri::command(async)]
 fn similar_words(s: State<SessionThread>, word: String, kind: concordance::Kind, window: usize, min_freq: usize, text_id: Option<String>, within: Option<concordance::Where>) -> Result<similar::Similar, String> {
@@ -2855,6 +2861,7 @@ pub fn run() {
             similar_words,
             collexemes,
             phon_pairs,
+            lexicon_uses,
             brown_morphemes,
             distinctive_collexemes,
             keywords,

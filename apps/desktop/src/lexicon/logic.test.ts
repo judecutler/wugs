@@ -148,3 +148,13 @@ test("the list picks the entries of a semantic domain and its subdomains", async
   assert.deepEqual(domainsOf(rows).map((d) => `${d.code} ${d.count}`), ["1.1 2", "1.1.3 1", "1.10 1", "2 1"]);
   assert.deepEqual(domainsOf([], "dom:9").map((d) => d.code), ["9"]);
 });
+
+test("the commonest order puts the most used entries first and keeps A to Z among equals", async () => {
+  const { ordered, usesLabel } = await import("./logic.ts");
+  const rows = [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }];
+  assert.deepEqual(ordered(rows, "commonest", { c: 5, b: 2, d: 2 }).map((r) => r.id), ["c", "b", "d", "a"]);
+  assert.deepEqual(ordered(rows, "alpha", { c: 5 }).map((r) => r.id), ["a", "b", "c", "d"]);
+  assert.deepEqual(ordered(rows, "commonest", null).map((r) => r.id), ["a", "b", "c", "d"]);
+  assert.equal(usesLabel(0), "unused");
+  assert.equal(usesLabel(1234), "×1,234");
+});

@@ -7,7 +7,7 @@
 // template and returned whole by every form edit.
 import {
   concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconClearPicture, lexiconSetPicture, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
-  deleteParadigmTemplate, domainSuggestions, lexiconDeleteForm, lexiconFillCell, lexiconMerge, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
+  deleteParadigmTemplate, domainSuggestions, lexiconDeleteForm, lexiconFillCell, lexiconMerge, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconUses, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
   lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
   saveDocument,
@@ -21,7 +21,7 @@ import { typeWithShortcuts } from "../typing";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
-import { domainsOf, loansLine, categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
+import { domainsOf, loansLine, categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel, LIST_ORDERS, ordered, usesLabel, type ListOrder } from "../lexicon/logic";
 import { attestedForms, attestedLine, axesOf, fillable, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, paradigmSheet, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry, takeWantedList } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
@@ -39,6 +39,7 @@ const SELECT_FIRST = "Select the segment where the word is said (on the Timeline
 const LANG_KEY = "wugs.gloss-lang";
 /** The paradigm template last chosen on this machine. */
 const PARADIGM_KEY = "wugs.lexicon.paradigm";
+const ORDER_KEY = "wugs.lexicon.order";
 /** The template picker's choice that opens the form for a new one. */
 const NEW_TEMPLATE = "\u0000new";
 const ATTRIBUTION = "SIL Semantic Domains v4 · © SIL Global · semdom.org · licensed CC BY-SA 4.0 (creativecommons.org/licenses/by-sa/4.0)";
@@ -55,7 +56,14 @@ export const lexiconPanel: PanelDef = {
     let show: ListShow = "all";
     const showPicker = h("select", { className: "lx-show", ariaLabel: "Which entries to list" });
     const printList = h("button", { type: "button", className: "lx-print", textContent: "Print…", title: "The entries listed, as a checklist to go through with a speaker: headword, category and meaning, a box to tick and room for a correction" });
-    const searchBar = h("div", { className: "lx-search" }, search, showPicker, printList);
+    const orderPicker = h("select", { className: "lx-order", ariaLabel: "Order of the entries", title: "List the entries A to Z, or those used in most words of the texts first (each with how many)" },
+      ...LIST_ORDERS.map((o) => h("option", { value: o.id, textContent: o.label })));
+    let order: ListOrder = localStorage.getItem(ORDER_KEY) === "commonest" ? "commonest" : "alpha";
+    orderPicker.value = order;
+    /** Words of the texts per entry, read once per project and data generation while the commonest order is on. */
+    let entryUses: Record<string, number> | null = null;
+    let entryUsesFor = "";
+    const searchBar = h("div", { className: "lx-search" }, search, showPicker, orderPicker, printList);
     const newLemma = typeWithShortcuts(h("input", { placeholder: "Lemma", ariaLabel: "New entry lemma" }));
     const newGloss = h("input", { placeholder: "Gloss", ariaLabel: "New entry gloss" });
     const addForm = h(
@@ -113,10 +121,22 @@ export const lexiconPanel: PanelDef = {
         const r = await lexiconList({ query: search.value });
         if (mine !== listSeq) return;
         rows = r;
+        await loadEntryUses();
+        if (mine !== listSeq) return;
         drawList();
       } catch (e) {
         showToast({ tone: "error", lines: [errorText(e)] });
       }
+    }
+
+    /** The counts the commonest order sorts by; nothing is read while the list is A to Z. */
+    async function loadEntryUses() {
+      if (order !== "commonest") return;
+      const s = getState();
+      const key = s.kind === "open" ? `${s.info.path}|${dataGeneration()}|${lexiconRevision()}` : "";
+      if (key === entryUsesFor && entryUses !== null) return;
+      entryUses = await lexiconUses();
+      entryUsesFor = key;
     }
 
     async function loadEntry(id: string | null, keepUi = false) {
@@ -422,7 +442,7 @@ export const lexiconPanel: PanelDef = {
 
     function drawList() {
       drawShowPicker();
-      const listed = rows.filter((r) => shows(r, show));
+      const listed = ordered(rows.filter((r) => shows(r, show)), order, entryUses);
       if (rows.length > 0 && listed.length === 0) {
         list.replaceChildren(h("li", { className: "empty", textContent: show.startsWith("pos:") ? `No entry found has the category «${show.slice(4)}».` : show.startsWith("dom:") ? `No entry found is in the semantic domain ${show.slice(4)}.` : (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).done }));
         return;
@@ -462,6 +482,7 @@ export const lexiconPanel: PanelDef = {
             },
             h("span", { className: "lx-hw", textContent: headword(r.lemma, r.homograph) }),
             r.posOfSpeech === "" ? null : h("span", { className: "lx-pos", textContent: r.posOfSpeech }),
+            order === "commonest" && entryUses !== null ? h("span", { className: "lx-uses", textContent: usesLabel(entryUses[r.id] ?? 0), title: "How many words of the texts are glossed with this entry" }) : null,
             h("span", { className: "lx-gl", textContent: glossLine(r.glosses) }),
           ),
         ),
@@ -1410,7 +1431,7 @@ export const lexiconPanel: PanelDef = {
 
     let timer: number | undefined;
     printList.onclick = async () => {
-      const listed = rows.filter((r) => shows(r, show));
+      const listed = ordered(rows.filter((r) => shows(r, show)), order, entryUses);
       if (listed.length === 0) {
         showToast({ tone: "info", lines: ["No entries are listed to print."] });
         return;
@@ -1425,6 +1446,11 @@ export const lexiconPanel: PanelDef = {
       } catch (e) {
         showToast({ tone: "error", lines: [errorText(e)] });
       }
+    };
+    orderPicker.onchange = () => {
+      order = orderPicker.value === "commonest" ? "commonest" : "alpha";
+      localStorage.setItem(ORDER_KEY, order);
+      void loadEntryUses().then(() => quietly(drawList), (e) => showToast({ tone: "error", lines: [errorText(e)] }));
     };
     showPicker.onchange = () => {
       show = showPicker.value as ListShow;

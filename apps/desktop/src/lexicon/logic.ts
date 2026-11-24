@@ -208,3 +208,19 @@ export function loansLine(rows: readonly ListRow[]): string {
   const pct = rows.length === 0 ? 0 : Math.round((loans * 100) / rows.length);
   return `${loans} ${loans === 1 ? "loanword" : "loanwords"} (${pct}% of ${rows.length} ${rows.length === 1 ? "entry" : "entries"}): ${src.map((s) => `${s.language} ${s.count}`).join(", ")}.`;
 }
+
+/** The entry list's orders: by headword (as the backend lists them), or the most used in the texts first. */
+export const LIST_ORDERS = [
+  { id: "alpha", label: "A to Z" },
+  { id: "commonest", label: "Commonest in the texts first" },
+] as const;
+export type ListOrder = (typeof LIST_ORDERS)[number]["id"];
+
+/** Rows in the chosen order; the commonest order keeps A to Z among equals and puts unused entries last. */
+export function ordered<R extends { id: string }>(rows: readonly R[], order: ListOrder, uses: Readonly<Record<string, number>> | null): R[] {
+  if (order === "alpha" || uses === null) return [...rows];
+  return rows.map((r, i) => ({ r, i, n: uses[r.id] ?? 0 })).sort((a, b) => b.n - a.n || a.i - b.i).map((x) => x.r);
+}
+
+/** "×12": how many words of the texts an entry is used in, for the commonest order. */
+export const usesLabel = (n: number): string => (n === 0 ? "unused" : `×${n.toLocaleString("en")}`);
