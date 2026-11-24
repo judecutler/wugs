@@ -1097,6 +1097,15 @@ def main():
                 failures.append("Needs a gloss did not list the one entry without a gloss")
             run.page.locator(".panel-lexicon .lx-show").select_option("pos:num")
             run.page.wait_for_timeout(200)
+            # The listed entries as a checklist to print.
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/lists'")
+            run.page.locator(".panel-lexicon .lx-print").click()
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            sheet = (run.page.evaluate("window.__WUGS_SAVED__") or {}).get("contents", "")
+            if "entries to check" not in sheet or sheet.count('<td class="ok">') != 7:
+                failures.append("Lexicon did not print the listed entries as a checklist")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             if run.page.locator(".panel-lexicon .lx-list li").count() != 7:
                 failures.append("the num category did not list its seven entries")
             run.page.locator(".panel-lexicon .lx-show").select_option("all")

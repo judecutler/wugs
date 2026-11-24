@@ -11,6 +11,7 @@ import {
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
   lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
   saveDocument,
+  projectLanguage,
   type DomainItem, type PronunciationView, type ExampleView, type EntryEdit, type EntryRow, type EntryView, type LexemeField, type ParadigmEdit, type ParadigmForm, type ParadigmView, type SenseView,
 } from "../api";
 import { emptyState, h } from "../dom";
@@ -22,6 +23,7 @@ import { categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel
 import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, paradigmSheet, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
+import { checklistSheet } from "../lexicon/checklist";
 import { keyword, type Hit } from "../concordance/logic";
 import { EXAMPLE_FORMATS, FORMAT_KEY, glossRuns, parseFormat } from "../gloss/example";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -49,7 +51,8 @@ export const lexiconPanel: PanelDef = {
     /** Which entries the list shows: every one, or those with work left. */
     let show: ListShow = "all";
     const showPicker = h("select", { className: "lx-show", ariaLabel: "Which entries to list" });
-    const searchBar = h("div", { className: "lx-search" }, search, showPicker);
+    const printList = h("button", { type: "button", className: "lx-print", textContent: "Print…", title: "The entries listed, as a checklist to go through with a speaker: headword, category and meaning, a box to tick and room for a correction" });
+    const searchBar = h("div", { className: "lx-search" }, search, showPicker, printList);
     const newLemma = typeWithShortcuts(h("input", { placeholder: "Lemma", ariaLabel: "New entry lemma" }));
     const newGloss = h("input", { placeholder: "Gloss", ariaLabel: "New entry gloss" });
     const addForm = h(
@@ -1219,6 +1222,23 @@ export const lexiconPanel: PanelDef = {
     // ------------------------------------------------------------------ wiring
 
     let timer: number | undefined;
+    printList.onclick = async () => {
+      const listed = rows.filter((r) => shows(r, show));
+      if (listed.length === 0) {
+        showToast({ tone: "info", lines: ["No entries are listed to print."] });
+        return;
+      }
+      const folder = await pickFile({ directory: true, title: "Where should the checklist go?" });
+      if (typeof folder !== "string") return;
+      const which = show.startsWith("pos:") ? show.slice(4) : (LIST_SHOWS.find((x) => x.id === show) ?? LIST_SHOWS[0]!).label;
+      try {
+        const language = await projectLanguage().then((l) => l.name, () => "");
+        const r = await saveDocument({ folder, title: `${language.trim() === "" ? "Lexicon" : language.trim()} checklist`, extension: "html", contents: checklistSheet(listed, language, search.value.trim() === "" ? which : `${which}, matching «${search.value.trim()}»`) });
+        showToast({ tone: "info", lines: [`Saved a checklist of ${listed.length} ${listed.length === 1 ? "entry" : "entries"} as ${r.path}. Open it in a browser and print it.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    };
     showPicker.onchange = () => {
       show = showPicker.value as ListShow;
       quietly(drawList);
