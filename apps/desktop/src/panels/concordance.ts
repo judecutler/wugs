@@ -7,7 +7,7 @@ import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { byDetail, detailTsv, marks, NOT_GIVEN, per1000, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
-import { asTsv, clip, countLine, hasTags, isRtl, keyword, left, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
+import { asTsv, clip, countLine, hasTags, isRtl, keyword, left, markWord, sortedWord, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
@@ -340,6 +340,14 @@ export const concordancePanel: PanelDef = {
       const thinned = thinTo > 0 && hits.length > thinTo;
       count.textContent = countLine(hits.length, total, texts) + (only.length > 0 ? ` Only in ${only.join(", among ")}.` : "") + (thinned ? thinLine(thinTo, hits.length, total) : "");
       tagsToggle.hidden = !hasTags(hits);
+      // The word the lines are sorted by is marked, as concordancers colour it.
+      const mark = sortedWord(sortBy);
+      const context = (text: string, side: "left" | "right"): HTMLElement => {
+        const span = h("span", { className: side === "left" ? "cc-left" : "cc-right" });
+        const [before, word, after] = mark !== null && (mark < 0) === (side === "left") ? markWord(text, side, mark) : [text, "", ""];
+        span.append(before, ...(word === "" ? [] : [h("mark", { className: "cc-sorted", textContent: word })]), after);
+        return span;
+      };
       rows.replaceChildren(
         ...sortHits(shownHits(), sortBy).map((hit) => {
           const play = playButton("Open this segment and play it", () => void open(hit, true));
@@ -349,9 +357,9 @@ export const concordancePanel: PanelDef = {
             "div",
             { className: "cc-row", role: "listitem", tabIndex: 0, title: `${hit.textTitle}: open this segment`, dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },
             play,
-            h("span", { className: "cc-left", textContent: clip(left(hit), CONTEXT, "left") }),
+            context(clip(left(hit), CONTEXT, "left"), "left"),
             h("span", { className: "cc-key", textContent: keyword(hit) }),
-            h("span", { className: "cc-right", textContent: clip(right(hit), CONTEXT, "right") }),
+            context(clip(right(hit), CONTEXT, "right"), "right"),
             h(
               "span",
               { className: "cc-meta" },

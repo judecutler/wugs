@@ -1054,7 +1054,7 @@ The **Concordance** panel lists every place a word is used, one line per occurre
 
 1. Choose what to look for: **Words** as transcribed, **Morphs**, **Glosses** (such as PL or 1SG), or words of **Translations**.
 2. Type it. Capital letters do not matter, but diacritics do: ŋa never finds na. Morph markers do not matter either: `-ra` and `ra` find the same morph. Use `*` for any letters (`ni*` finds every word starting with ni) and `?` for one letter.
-3. Sort the lines **By the word before** or **By the word after** to see patterns, as in a concordancer such as AntConc.
+3. Sort the lines **By the word before** or **By the word after** to see patterns, as in a concordancer such as AntConc. **By the second word before** and **By the second word after** sort by the word one further out (AntConc's 2L and 2R), and **By the match, then after** groups the different words a pattern such as `kan*` matched. The word the lines are sorted by is underlined in each line.
 
 Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
 

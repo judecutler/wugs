@@ -1222,6 +1222,7 @@ body::before {
 .play-seg:disabled { opacity: 0.4; cursor: default; }
 .cc-left { grid-area: left; text-align: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; unicode-bidi: plaintext; }
 .cc-key { grid-area: key; color: var(--ink); font-weight: 600; }
+.cc-sorted { background: none; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
 .cc-right { grid-area: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cc-meta { grid-area: meta; display: flex; gap: 8px; justify-content: space-between; font-family: var(--font-ui, inherit); font-size: var(--text-xs); color: var(--muted); min-width: 0; }
 .cc-meta span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
