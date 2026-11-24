@@ -3,6 +3,7 @@
 // and a table behind it. Words and tables in ../affixes/logic.ts. Read-only:
 // an affix opens the Concordance on it, an example opens its sentence.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { indexRows, indicesNote, indicesTsv } from "../affixes/greenberg";
 import { errorText, projectAffixes, setTypologyAnswer, soundWords, typologyAnswers } from "../api";
 import { affixLabel, guessedLine, signatures, signaturesTsv, type Side, type WordCount } from "../affixes/signatures";
 import { allomorphSets, allomorphsTsv, setNote, soundsLine } from "../affixes/allomorphs";
@@ -32,6 +33,9 @@ export const affixesPanel: PanelDef = {
     const copyTable = h("button", { type: "button", textContent: "Copy table", title: "Every affix with its gloss, slot, uses, roots and an example" });
     const recount = h("button", { type: "button", textContent: "Read again" });
     const orderNote = h("p", { className: "note" });
+    const typeNote = h("p", { className: "note af-type-note" });
+    const typeTable = h("table", { className: "pg-table af-type" });
+    const copyType = h("button", { type: "button", textContent: "Copy indices", title: "Greenberg's indices with their ratios, for a typology table" });
     const orderTable = h("table", { className: "pg-table af-order" });
     const copyOrder = h("button", { type: "button", textContent: "Copy pairs", title: "Every two affixes met in one word, with how often each order is met" });
     const formsNote = h("p", { className: "note" });
@@ -148,10 +152,21 @@ export const affixesPanel: PanelDef = {
         table.replaceChildren();
         orderTable.replaceChildren();
         orderNote.textContent = "";
+        typeTable.replaceChildren();
+        typeNote.textContent = "";
         forms.replaceChildren();
         formsNote.textContent = "";
         return;
       }
+      // Greenberg's indices of morphological type over every glossed word.
+      const ix = data.indices;
+      typeNote.textContent = ix === undefined ? "" : indicesNote(ix);
+      copyType.disabled = ix === undefined || ix.words === 0;
+      typeTable.replaceChildren(
+        ...(ix === undefined
+          ? []
+          : indexRows(ix).map((r) => h("tr", { title: r.about }, h("th", { scope: "row", textContent: r.name }), h("td", { textContent: r.ratio }), h("td", { className: "num", textContent: r.value.toFixed(2) })))),
+      );
       const sets = allomorphSets(data.affixes);
       copyForms.disabled = sets.length === 0;
       formsNote.textContent =
@@ -304,6 +319,7 @@ export const affixesPanel: PanelDef = {
     };
     copyChart.onclick = () => copy("position-class chart", () => (data === null ? null : chartTsv(slotChart(data.affixes))));
     copyTable.onclick = () => copy("affix table", () => (data === null ? null : affixTsv(data.affixes)));
+    copyType.onclick = () => copy("indices", () => (data?.indices === undefined ? null : indicesTsv(data.indices)));
     copyOrder.onclick = () => copy("pairs of affixes", () => (data === null ? null : pairsTsv(pairs(data))));
     copyForms.onclick = () => copy("forms of each gloss", () => (data === null ? null : allomorphsTsv(allomorphSets(data.affixes), marked)));
     copyGuess.onclick = () => copy("sets of endings", () => (words === null ? null : signaturesTsv(signatures(words, side), side)));
@@ -332,6 +348,10 @@ export const affixesPanel: PanelDef = {
         chart,
         h("p", { className: "note", textContent: "Each affix stands in the slot it holds most often, counted from the root: −1 right before it, +1 right after. Click one for every word it is in." }),
         h("div", { className: "pg-rows" }, table),
+        h("h3", { textContent: "Morphological type" }),
+        h("div", { className: "cc-bar" }, copyType),
+        typeNote,
+        h("div", { className: "pg-rows" }, typeTable),
         h("h3", { textContent: "Order" }),
         h("div", { className: "cc-bar" }, copyOrder),
         orderNote,

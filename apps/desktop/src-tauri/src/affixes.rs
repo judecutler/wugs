@@ -69,10 +69,30 @@ pub struct Affixes {
     pub words: usize,
     /// Words broken into morphs but with no morph typed as a root.
     pub without_root: usize,
+    /// Every analysed word's morphs by type, for Greenberg's (1960) indices.
+    pub indices: Indices,
     /// Two affixes met in one word, `first` before `second` (indices into
     /// `affixes`), with how many words: the evidence for their order and for
     /// whether two affixes can share a slot. Most frequent first, at most `MAX_ORDERS`.
     pub orders: Vec<Order>,
+}
+
+/// Morph counts over every word broken into morphs (one morph or more), from
+/// which Greenberg's indices are ratios: synthesis = morphs / words,
+/// compounding = roots / words, prefixing and suffixing = prefixes or
+/// suffixes / words, isolation = words of one morph / words.
+#[derive(Debug, Clone, Default, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Indices {
+    pub words: usize,
+    pub morphs: usize,
+    pub roots: usize,
+    pub prefixes: usize,
+    pub suffixes: usize,
+    pub infixes: usize,
+    pub clitics: usize,
+    /// Words that are one morph.
+    pub single: usize,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -110,6 +130,22 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
     each_segment(p, Read::Analyses, &Scope::all(), |seg| {
         for tok in &seg.tokens {
             let morphs = morphs_of(p, tok)?;
+            if !morphs.is_empty() {
+                let ix = &mut out.indices;
+                ix.words += 1;
+                ix.morphs += morphs.len();
+                ix.single += usize::from(morphs.len() == 1);
+                for m in &morphs {
+                    match m.kind.as_str() {
+                        "root" => ix.roots += 1,
+                        "prefix" => ix.prefixes += 1,
+                        "suffix" => ix.suffixes += 1,
+                        "infix" => ix.infixes += 1,
+                        "proclitic" | "enclitic" | "clitic" => ix.clitics += 1,
+                        _ => {}
+                    }
+                }
+            }
             if morphs.len() < 2 {
                 continue;
             }
@@ -237,6 +273,12 @@ mod tests {
         // Productivity: -ra is in one word form, met once.
         assert_eq!((find("ra").types, find("ra").hapaxes), (1, 1));
         assert!(ni.types >= 1 && ni.hapaxes <= ni.types, "{ni:?}");
+        // Greenberg's counts: every analysed word, one morph or more.
+        let ix = &r.indices;
+        assert!(ix.words > r.words, "the tutorial's one-morph words count too: {ix:?}");
+        assert!(ix.single > 0 && ix.single < ix.words, "{ix:?}");
+        assert_eq!((ix.prefixes, ix.suffixes), (find("ni").uses, find("ra").uses), "{ix:?}");
+        assert!(ix.clitics >= 2 && ix.morphs >= ix.roots + ix.prefixes + ix.suffixes + ix.clitics, "{ix:?}");
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }
