@@ -8,6 +8,7 @@
 
 import { chart, gridOf, inventory, MANNER_NAMES, PLACE_NAMES, type Sound } from "../sounds/ipa.ts";
 import { gapsNote, positions, shapes, share } from "../sounds/shapes.ts";
+import { syllableNote, syllableTypes } from "../sounds/syllables.ts";
 import type { Grid } from "../orthography/logic.ts";
 import type { Answer, Ours } from "../typology/logic.ts";
 
@@ -149,8 +150,17 @@ export function grammarSketch(d: SketchInput): string {
     );
     const gaps = gapsNote(positions(d.words, sounds.map((x) => x.sound)));
     if (gaps !== "") parts.push(`<p>${esc(gaps)}</p>`);
+    const syllables = syllableTypes(d.words);
+    const total = syllables.reduce((n, x) => n + x.count, 0);
+    if (syllables.length > 0)
+      parts.push(
+      `<p>Syllables, cut so each starts with the longest run of consonants that starts a word: ${esc(syllableNote(syllables))}</p><table><tr><th>Syllable</th><th>Share of syllables</th><th>Example</th></tr>${syllables
+        .slice(0, 8)
+        .map((x) => `<tr><td>${esc(x.shape)}</td><td>${share(x.count, total)}</td><td class="ipa">${esc(x.example)}</td></tr>`)
+        .join("")}</table>`,
+    );
   }
-  parts.push(todo("Syllable structure, stress or tone"));
+  parts.push(todo("Syllable structure (check the cuts above), stress or tone"));
 
   parts.push(`<h2>3. Orthography</h2>`);
   if (d.graphemes.length === 0) {
