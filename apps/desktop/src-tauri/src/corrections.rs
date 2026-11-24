@@ -43,8 +43,8 @@ pub struct Summary {
 }
 
 /// Guests never receive the people scope (sync shares only open scopes with them).
-const GUEST: &str = "This device is a guest, so it does not receive the project's consent records: a clip shown without a record may have one.";
-const ARRIVING: &str = "Some of the project's consent records are still arriving on this device: a clip shown without a record may have one.";
+pub(crate) const GUEST: &str = "This device is a guest, so it does not receive the project's consent records: a clip shown without a record may have one.";
+pub(crate) const ARRIVING: &str = "Some of the project's consent records are still arriving on this device: a clip shown without a record may have one.";
 
 /// One clip to cut and its lines in the folder's tables.
 #[derive(Debug, Clone)]
@@ -281,7 +281,7 @@ pub fn date_or_today(date: &str) -> String {
     if ok { date.to_string() } else { today() }
 }
 
-fn write_wav(path: &Path, audio: &[f32]) -> Result<(), String> {
+pub(crate) fn write_wav(path: &Path, audio: &[f32]) -> Result<(), String> {
     let data = (audio.len() * 2) as u32;
     let mut out = Vec::with_capacity(44 + audio.len() * 2);
     out.extend_from_slice(b"RIFF");

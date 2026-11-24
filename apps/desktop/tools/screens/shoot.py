@@ -1253,6 +1253,23 @@ def main():
             run.page.wait_for_timeout(400)
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
 
+            # Speech assist: every transcribed segment exported as a speech dataset.
+            run.front("assist", "Speech assist")
+            ds = run.page.locator(".panel-assist .as-dataset")
+            ds.wait_for()
+            ds.scroll_into_view_if_needed()
+            run.shot("state-assist-dataset", run.page.locator(".panel-assist"))
+            if "Export 40 clips" not in ds.inner_text():
+                failures.append(f"Speech assist did not offer the speech dataset: {ds.inner_text()}")
+            else:
+                run.page.evaluate("window.__WUGS_PICK__ = '/tmp/speech'")
+                ds.click()
+                run.page.wait_for_timeout(400)
+                run.page.evaluate("window.__WUGS_PICK__ = null")
+                if not any("Exported 40 clips" in t for t in run.toasts()):
+                    failures.append(f"Speech assist did not export the dataset: {run.toasts()}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+
             # Hear it everywhere (roadmap 72): a lexicon sense lists where it is used, each with ▶.
             run.front("lexicon", "Lexicon")
             run.page.locator(".panel-lexicon").get_by_text("kani", exact=True).first.click()

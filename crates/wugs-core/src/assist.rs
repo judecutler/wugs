@@ -191,6 +191,35 @@ pub struct Corrections {
     pub records_incomplete: bool,
 }
 
+/// One transcribed segment for a speech dataset export.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TranscribedClip {
+    pub segment: String,
+    pub text: String,
+    pub tier: String,
+    pub source: String,
+    pub start_ms: f64,
+    pub end_ms: f64,
+    pub transcription: String,
+    pub consent: Consent,
+    /// The text's effective access or the recording's is not open.
+    pub restricted: bool,
+}
+
+/// Every transcribed segment a speech dataset could hold, and what is left out.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Transcribed {
+    pub clips: Vec<TranscribedClip>,
+    /// Transcribed segments with no times.
+    pub untimed: usize,
+    /// Timed ones whose text has no recording linked.
+    pub no_recording: usize,
+    /// Ones whose transcription is a machine suggestion no person has checked.
+    pub unchecked: usize,
+    /// As in `Corrections`: consent records still arriving here.
+    pub records_incomplete: bool,
+}
+
 impl Project {
     /// The checked machine suggestions in this project, for a corrections
     /// export. A segment counts once, with its newest suggestion, once a
@@ -299,6 +328,69 @@ impl Project {
             });
         }
         out.pairs.sort_by(|a, b| a.text.cmp(&b.text).then(a.start_ms.total_cmp(&b.start_ms)).then(a.segment.cmp(&b.segment)));
+        Ok(out)
+    }
+
+    /// Every timed, transcribed segment on `tiers` (the transcription tracks)
+    /// of a live text whose linked recording is live, with what consent
+    /// records and access levels say about it, for a speech dataset export.
+    /// A segment whose transcription is still an unchecked machine
+    /// suggestion is counted, not listed: a dataset must hold what people
+    /// wrote. Text by text in segment order. Nothing is written.
+    pub fn transcribed(&self, tiers: &std::collections::HashSet<String>) -> Result<Transcribed, String> {
+        let mut out = Transcribed {
+            records_incomplete: !self.proj.held_op_ids(crate::SCOPE_PEOPLE)?.is_empty() || !self.proj.pending_op_ids(crate::SCOPE_PEOPLE)?.is_empty(),
+            ..Transcribed::default()
+        };
+        let consent = self.ai_consent()?;
+        let mut texts = self.proj.entities_of_kind("text")?;
+        texts.sort();
+        for text in texts {
+            if self.proj.is_tombstoned(&text)? {
+                continue;
+            }
+            let recording = self.text_recording(&text)?.map(|(source, _)| source);
+            let restricted_text = self.text_access(&text)? != "open";
+            for seg in self.proj.ordered_children("text", &text, "segment")? {
+                if self.proj.is_tombstoned(&seg)? {
+                    continue;
+                }
+                let tier = self.proj.field_str(&seg, "tier")?.unwrap_or_default();
+                if !tiers.contains(&tier) {
+                    continue;
+                }
+                let transcription = self.proj.field_str(&seg, "content")?.unwrap_or_default();
+                if transcription.trim().is_empty() {
+                    continue;
+                }
+                let (Some(start_ms), Some(end_ms)) = (self.proj.field_num(&seg, "start")?, self.proj.field_num(&seg, "end")?) else {
+                    out.untimed += 1;
+                    continue;
+                };
+                if end_ms <= start_ms {
+                    out.untimed += 1;
+                    continue;
+                }
+                let Some(source) = recording.clone() else {
+                    out.no_recording += 1;
+                    continue;
+                };
+                if self.machine_mark(&seg)?.is_some() {
+                    out.unchecked += 1;
+                    continue;
+                }
+                let covers = [text.as_str(), source.as_str(), self.project_id.as_str()];
+                let said = if covers.iter().any(|c| consent.get(*c) == Some(&false)) {
+                    Consent::No
+                } else if covers.iter().any(|c| consent.get(*c) == Some(&true)) {
+                    Consent::Yes
+                } else {
+                    Consent::Unrecorded
+                };
+                let restricted = restricted_text || self.proj.field_str(&source, "access")?.is_some_and(|a| a != "open");
+                out.clips.push(TranscribedClip { segment: seg, text: text.clone(), tier, source, start_ms, end_ms, transcription, consent: said, restricted });
+            }
+        }
         Ok(out)
     }
 

@@ -5,8 +5,8 @@
 // tinted until someone edits them (src/assist/logic.ts).
 import { open as pickDirectory } from "@tauri-apps/plugin-dialog";
 import { localDay } from "../dates";
-import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, correctionsExport, correctionsSummary, errorText, MODEL_CHANGED, type AssistModel, type CapabilityView, type CorrectionsSummary } from "../api";
-import { batchTargets, correctionsLine, count, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
+import { assistCancel, assistDelete, assistDownload, assistModels, assistSuggest, capabilityChoose, capabilityPin, correctionsExport, correctionsSummary, errorText, speechDatasetExport, speechDatasetSummary, type DatasetSummary, MODEL_CHANGED, type AssistModel, type CapabilityView, type CorrectionsSummary } from "../api";
+import { batchTargets, datasetLine, correctionsLine, count, exportable, flaggedLine, megabytes, progressLabel, VERY_UNSURE_BELOW } from "../assist/logic";
 import { choiceOptions, pinTarget, statusLine } from "../capability/logic";
 import { emptyState, h } from "../dom";
 import { recordingForShown } from "../hear/hear";
@@ -82,6 +82,9 @@ export const assistPanel: PanelDef = {
     const el = h("div", { className: "panel panel-assist" });
     let tierChoice: string | null = null;
     let corrections: CorrectionsSummary | null = null;
+    let dataset: DatasetSummary | null = null;
+    let includeDatasetFlagged = false;
+    let exportingDataset = false;
     /** Include clips the project's records speak against: chosen per project. */
     let includeFlagged = false;
     let countedFor: string | null = null;
@@ -106,7 +109,7 @@ export const assistPanel: PanelDef = {
         ...(phones === null ? [] : [h("h4", { textContent: "Which model" }), chooser(phones, s.kind === "open")]),
         h("h4", { textContent: "Fill empty segments" }),
         batchControls(s, phones),
-        ...(s.kind === "open" ? [h("h4", { textContent: "Share corrections" }), correctionControls()] : []),
+        ...(s.kind === "open" ? [h("h4", { textContent: "Share corrections" }), correctionControls(), h("h4", { textContent: "Speech dataset" }), datasetControls()] : []),
       );
     }
 
@@ -257,6 +260,54 @@ export const assistPanel: PanelDef = {
       );
     }
 
+    /** Every transcribed segment as training and test data for speech models. */
+    function datasetControls() {
+      if (dataset === null) return h("p", { className: "as-note", textContent: "Counting…" });
+      const d = dataset;
+      const n = d.ready + (includeDatasetFlagged ? d.recordedNo + d.restricted : 0);
+      const flagged = d.recordedNo + d.restricted;
+      return h(
+        "div",
+        { className: "as-choice" },
+        h("p", { className: "as-note", textContent: "Every segment a person transcribed, with its sound, as a folder speech toolkits read (Kaldi, ESPnet, Hugging Face audio folders): data to train or test a recognizer on this language. Nothing is sent anywhere." }),
+        h("p", { className: "as-note", textContent: datasetLine(d) }),
+        d.partial === null ? null : h("p", { className: "as-note", textContent: d.partial }),
+        flagged === 0
+          ? null
+          : h(
+              "label",
+              { className: "as-note" },
+              h("input", { type: "checkbox", checked: includeDatasetFlagged, onchange: (e: Event) => { includeDatasetFlagged = (e.target as HTMLInputElement).checked; draw(); } }),
+              ` Include the ${flagged} the project's records speak against (a consent record without AI use, or a restricted level)`,
+            ),
+        h("div", { className: "as-actions" }, h("button", {
+          type: "button",
+          className: "as-dataset",
+          textContent: exportingDataset ? "Exporting…" : n === 0 ? "Export a speech dataset" : `Export ${n} clip${n === 1 ? "" : "s"}…`,
+          disabled: n === 0 || exportingDataset,
+          onclick: () => void exportDataset(),
+        })),
+      );
+    }
+
+    async function exportDataset() {
+      const folder = await pickDirectory({ directory: true, title: "Choose where the speech dataset goes" });
+      if (typeof folder !== "string") return;
+      exportingDataset = true;
+      draw();
+      try {
+        const r = await speechDatasetExport({ folder, flagged: includeDatasetFlagged, date: localDay(new Date()) });
+        showToast({
+          tone: r.failed > 0 ? "warn" : "info",
+          lines: [`Exported ${r.written} clip${r.written === 1 ? "" : "s"} to ${r.folder}. Its README says what the project's records say about them.`, ...(r.failed > 0 ? [`${r.failed} could not be cut from the recording.`, ...r.problems] : [])],
+        });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      exportingDataset = false;
+      draw();
+    }
+
     async function exportCorrections() {
       const folder = await pickDirectory({ directory: true, title: "Choose where the corrections folder goes" });
       if (typeof folder !== "string") return;
@@ -285,7 +336,9 @@ export const assistPanel: PanelDef = {
       if (st.info.path !== countedFor) {
         countedFor = st.info.path;
         includeFlagged = false;
+        includeDatasetFlagged = false;
         corrections = null;
+        dataset = null;
       }
       if (counting) {
         again = true;
@@ -296,6 +349,11 @@ export const assistPanel: PanelDef = {
         corrections = await correctionsSummary();
       } catch {
         corrections = null;
+      }
+      try {
+        dataset = await speechDatasetSummary();
+      } catch {
+        dataset = null;
       }
       counting = false;
       draw();

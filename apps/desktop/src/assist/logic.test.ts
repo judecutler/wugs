@@ -60,3 +60,12 @@ test("what the records say against is told, and included only on the person's ch
   assert.match(flaggedLine(s) ?? "", /1 has a consent record that does not allow AI use and 3 are marked restricted/);
   assert.equal(flaggedLine({ ...s, recordedNo: 0, restricted: 0 }), null);
 });
+
+test("a speech dataset's holdings in words", async () => {
+  const { datasetLine } = await import("./logic.ts");
+  assert.equal(datasetLine({ ready: 0, recordedNo: 0, restricted: 0, untimed: 0, noRecording: 0, unchecked: 0 }), "No transcribed segments with times and a recording yet.");
+  assert.equal(
+    datasetLine({ ready: 40, recordedNo: 2, restricted: 1, untimed: 5, noRecording: 0, unchecked: 3 }),
+    "43 transcribed segments: 40 ready, 3 left out unless you include them. Not exported: 5 transcribed segments without times; 3 machine suggestions not checked yet.",
+  );
+});
