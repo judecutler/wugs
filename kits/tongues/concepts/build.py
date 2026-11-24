@@ -10,6 +10,9 @@ LISTS = [
     ("Swadesh-1955-100", "Swadesh 100 (1955)", "Swadesh, Morris. 1955. Towards greater accuracy in lexicostatistic dating."),
     ("Swadesh-1952-200", "Swadesh 200 (1952)", "Swadesh, Morris. 1952. Lexicostatistic dating of prehistoric ethnic contacts."),
     ("Tadmor-2009-100", "Leipzig-Jakarta list (Tadmor 2009)", "Tadmor, Uri, Martin Haspelmath and Bradley Taylor. 2010. Borrowability and the notion of basic vocabulary."),
+    ("Holman-2008-40", "ASJP 40 (Holman et al. 2008)", "Holman, Eric W., Søren Wichmann, Cecil H. Brown, Viveka Velupillai, André Müller and Dik Bakker. 2008. Explorations in automated language classification. Folia Linguistica 42(3-4): 331-354."),
+    ("Starostin-1991-110", "Starostin 110 (1991)", "Starostin, Sergej A. 1991. Altajskaja problema i proisxoždenie japonskogo jazyka. Moscow: Nauka."),
+    ("Dolgopolsky-1964-15", "Dolgopolsky 15 (1964)", "Dolgopolsky, Aaron B. 1964. Gipoteza drevnejšego rodstva jazykovyx semej severnoj Evrazii s verojatnostnoj točki zrenija. Voprosy jazykoznanija 2: 53-63."),
 ]
 
 src, out = pathlib.Path(sys.argv[1]) / "concepticondata" / "conceptlists", pathlib.Path(sys.argv[2])
