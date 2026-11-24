@@ -11,7 +11,7 @@ import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { spreadReading } from "../concordance/plot";
 import { decades, zipfFit, zipfLine, zipfPoints } from "../frequencies/zipf";
-import { ADD_AT_ONCE, addedLine, addLabel, asTsv, dpCell, hasSpread, spreadNote, cqpFor, unlabelledNote, filterRows, inTexts, rangeNote, TEXT_RANGES, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
+import { ADD_AT_ONCE, addedLine, addLabel, adjustedCell, asTsv, dpCell, hasSpread, spreadNote, cqpFor, unlabelledNote, filterRows, inTexts, rangeNote, TEXT_RANGES, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast, touchLexicon } from "../store";
 import { askConcordance } from "./concordance";
@@ -311,7 +311,7 @@ export const frequenciesPanel: PanelDef = {
         );
       };
       const spread = hasSpread(rankedRows);
-      const columns = ["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts", ...(spread ? ["DP"] : []), ...(withLexicon ? ["In lexicon"] : [])];
+      const columns = ["#", noun().one[0]!.toUpperCase() + noun().one.slice(1), "Count", "Per 1000 words", "Texts", ...(spread ? ["DP", "Adjusted"] : []), ...(withLexicon ? ["In lexicon"] : [])];
       const head = h("tr", {}, ...columns.map((t) => h("th", { textContent: t, scope: "col" })));
       // A reverse list lines its words up at their ends, so shared endings read down the column.
       table.classList.toggle("fq-endings", sortBy === "ending");
@@ -330,6 +330,7 @@ export const frequenciesPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: perThousand(r.count, tokens) }),
               h("td", { className: "fq-num", textContent: String(r.texts) }),
               spread ? h("td", { className: "fq-num", textContent: dpCell(r.dp), title: typeof r.dp === "number" ? spreadReading(r.dp) : "" }) : null,
+              spread ? h("td", { className: "fq-num", textContent: adjustedCell(r), title: "The count times 1 − DP: what a word spread over every text keeps, one crowded into one text loses" }) : null,
               withLexicon ? lexiconTd(r) : null,
             );
             const sc = scopeOf(scope);
