@@ -1096,6 +1096,8 @@ body::before {
 .cc-plot-count { grid-area: count; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
 .cc-plot-bar { grid-area: bar; position: relative; height: 18px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-raised); }
 .pg-growth .pg-head { font-family: var(--font-display); font-size: 15px; margin: 14px 0 4px; }
+.pg-speakers-head { display: flex; align-items: baseline; gap: 10px; }
+.pg-speakers .pg-head { font-family: var(--font-display); font-size: 15px; margin: 14px 0 4px; }
 .pg-chart { width: 100%; max-width: 520px; height: auto; display: block; }
 .pg-chart .grid { stroke: var(--line); stroke-width: 1; }
 .pg-chart .text-start { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }

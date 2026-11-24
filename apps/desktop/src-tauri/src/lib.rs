@@ -4,6 +4,7 @@ pub mod capability;
 pub mod clips;
 pub mod capture;
 pub mod chat;
+pub mod mlu;
 pub mod characters;
 pub mod concordance;
 pub mod cqp;
@@ -431,6 +432,11 @@ fn word_sketch(s: State<SessionThread>, lemma: String) -> Result<wordsketch::Wor
 #[tauri::command(async)]
 fn vocabulary_growth(s: State<SessionThread>) -> Result<growth::Growth, String> {
     s.run(growth::vocabulary_growth)
+}
+
+#[tauri::command(async)]
+fn speaker_lengths(s: State<SessionThread>) -> Result<Vec<mlu::SpeakerRow>, String> {
+    s.run(mlu::speakers)
 }
 
 #[tauri::command(async)]
@@ -2308,6 +2314,7 @@ pub fn run() {
             character_inventory,
         all_notes,
         vocabulary_growth,
+        speaker_lengths,
         word_sketch,
         sound_changes,
         compare_read,

@@ -722,6 +722,7 @@ export type TreeProblem = { textId: string; textTitle: string; tierId: string; s
 export const treeProblems = () => invoke<{ sentences: TreeProblem[]; total: number; annotated: number }>("tree_problems");
 export const allNotes = () => invoke<import("./notes/logic").Notes>("all_notes");
 export const vocabularyGrowth = () => invoke<import("./progress/growth").Growth>("vocabulary_growth");
+export const speakerLengths = () => invoke<import("./progress/speakers").SpeakerRow[]>("speaker_lengths");
 export const wordSketch = (args: { lemma: string }) => invoke<import("./wordsketch/logic").WordSketch>("word_sketch", args);
 export const soundChanges = () => invoke<string>("sound_changes");
 export const setSoundChanges = (args: { rules: string }) => invoke<string>("set_sound_changes", args);
