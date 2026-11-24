@@ -243,7 +243,7 @@ export const glossRetokenize = (args: SegmentArgs & { forms: string[] }) => invo
 export const glossApply = (args: SegmentArgs & { tokenId: string; morphs: MorphSpec[] }) => invoke<GlossEdit>("gloss_apply", args);
 export const glossApplyAll = (args: SegmentArgs & { form: string; morphs: MorphSpec[] }) => invoke<ApplyAllResult>("gloss_apply_all", args);
 /** A word form with uses not yet analysed, and the analysis it would most likely get. */
-export type WordTypeRow = { form: string; unanalysed: number; uses: number; suggestion: Suggestion | null; /** Translation words that stand with it, best first. */ meanings: import("./wordtypes/logic").Meaning[] };
+export type WordTypeRow = { form: string; unanalysed: number; uses: number; suggestion: Suggestion | null; /** Translation words that stand with it, best first. */ meanings: import("./wordtypes/logic").Meaning[]; /** The guess is the word's own lexicon entry (one root, one entry, one sense). */ headword: boolean };
 export type WordTypes = { rows: WordTypeRow[]; unbrokenWords: number; unbrokenSentences: number; types: number };
 export const glossWordTypes = (args: { textId: string | null }) => invoke<WordTypes>("gloss_word_types", args);
 /** For each form, the translation words that stand with it most often, best first. */

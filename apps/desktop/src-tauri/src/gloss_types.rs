@@ -28,6 +28,9 @@ pub struct TypeRow {
     pub suggestion: Option<SuggestionView>,
     /// Translation words that stand with it in the same sentences' translations.
     pub meanings: Vec<crate::meanings::Meaning>,
+    /// The suggestion is the word's own lexicon entry: one root spelled as the
+    /// word, the only live entry with that spelling, with one sense.
+    pub headword: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -66,7 +69,7 @@ pub fn word_types(session: &mut Session, text: Option<&str>) -> Result<WordTypes
         .iter()
         .zip(unanalysed)
         .filter(|(_, n)| *n > 0)
-        .map(|(r, n)| TypeRow { form: r.item.clone(), unanalysed: n, uses: r.count, suggestion: None, meanings: Vec::new() })
+        .map(|(r, n)| TypeRow { form: r.item.clone(), unanalysed: n, uses: r.count, suggestion: None, meanings: Vec::new(), headword: false })
         .collect();
     // Stable: equal counts keep the frequency list's order.
     rows.sort_by(|a, b| b.unanalysed.cmp(&a.unanalysed));
@@ -78,12 +81,44 @@ pub fn word_types(session: &mut Session, text: Option<&str>) -> Result<WordTypes
             None => (p.guess_analysis(&inventory, &row.form).into_iter().next(), true),
         };
         row.suggestion = first.map(|s| SuggestionView { morphs: s.morphs.into_iter().map(Into::into).collect(), count: s.count, guessed });
+        if guessed {
+            row.headword = is_headword(p, &row.form, row.suggestion.as_ref())?;
+        }
     }
     let suggested: Vec<String> = rows.iter().take(SUGGESTED).map(|r| r.form.clone()).collect();
     for (row, meanings) in rows.iter_mut().zip(crate::meanings::likely_meanings(p, &scope, &suggested)?) {
         row.meanings = meanings;
     }
     Ok(WordTypes { rows, unbroken_words, unbroken_sentences, types: freq.types })
+}
+
+/// Whether a guess is the word's own entry beyond doubt: one root spelled as
+/// the word, linked to the one sense of the one live entry spelled so.
+fn is_headword(p: &wugs_core::Project, form: &str, guess: Option<&SuggestionView>) -> Result<bool, String> {
+    let Some(SuggestionView { morphs, .. }) = guess else { return Ok(false) };
+    let [m] = morphs.as_slice() else { return Ok(false) };
+    let key = wugs_model::lexicon_key(&p.proj.nfc(form));
+    if m.morph_type != "root" || wugs_model::lexicon_key(&p.proj.nfc(&m.surface)) != key {
+        return Ok(false);
+    }
+    let Some(sense) = &m.sense else { return Ok(false) };
+    let Some(lex) = p.proj.field_str(sense, "lexeme")? else { return Ok(false) };
+    let mut live = Vec::new();
+    for l in p.proj.by_lookup_key("lexeme", &key)? {
+        if p.proj.entity_kind(&l)?.as_deref() == Some("lexeme") && !p.proj.is_tombstoned(&l)? {
+            live.push(l);
+        }
+    }
+    if live != [lex.clone()] {
+        return Ok(false);
+    }
+    let mut senses = 0;
+    for s in p.proj.ordered_children("lexeme", &lex, "sense")? {
+        if !p.proj.is_tombstoned(&s)? {
+            senses += 1;
+        }
+    }
+    Ok(senses == 1)
 }
 
 /// Break every sentence with text but no words yet into words, in one text
@@ -192,6 +227,26 @@ mod tests {
         assert_eq!(linked.len(), 3, "every use's root links to the sense");
         let last = word_types(&mut s, None).unwrap();
         assert!(!last.rows.iter().any(|r| r.form == "kanu"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_word_spelled_as_one_entry_is_marked_a_headword() {
+        let dir = std::env::temp_dir().join(format!("wugs-gloss-heads-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "prs_Ana").unwrap();
+        let p = project(&mut s).unwrap();
+        let text = p.proj.entities_of_kind("text").unwrap()[0].clone();
+        let tier = p.proj.field_str(&p.proj.ordered_children("text", &text, "segment").unwrap()[0], "tier").unwrap().unwrap();
+        p.add_lexeme("mosa", "fish").unwrap();
+        p.add_lexeme("tela", "cloth").unwrap();
+        p.add_lexeme("tela", "weave").unwrap();
+        p.add_segment(&text, &tier, 90, None, None, "mosa tela").unwrap();
+        break_all(&mut s, None).unwrap();
+        let rows = word_types(&mut s, None).unwrap().rows;
+        let row = |f: &str| rows.iter().find(|r| r.form == f).unwrap();
+        assert!(row("mosa").headword, "{:?}", row("mosa").suggestion);
+        assert!(!row("tela").headword, "two entries spelled tela: which is meant is a person's call");
         std::fs::remove_dir_all(&dir).ok();
     }
 }

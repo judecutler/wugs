@@ -9,7 +9,7 @@ import { formatBreakdown, joinedBreakdown, type MorphType } from "../gloss/morph
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, refreshAll, showToast } from "../store";
 import { typeWithShortcuts } from "../typing";
-import { applyAllLabel, appliedAllLine, earlierRows, appliedLine, meaningTitle, typedAnalysis, typesLine, withMeaning } from "../wordtypes/logic";
+import { applyAllLabel, appliedAllLine, earlierRows, headwordLabel, headwordRows, appliedLine, meaningTitle, typedAnalysis, typesLine, withMeaning } from "../wordtypes/logic";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -35,6 +35,12 @@ export const wordTypesPanel: PanelDef = {
     const breakAll = h("button", { type: "button" });
     // Every form with an earlier analysis given it for all its uses, after a second click (FLEx's approve-all).
     const applyAll = h("button", { type: "button", className: "wt-apply-all", title: "Give every word form listed with an earlier analysis (not a guess) that analysis for all its unanalysed uses" });
+    const applyHeadwords = h("button", {
+      type: "button",
+      className: "wt-apply-headwords",
+      title: "Gloss every word form spelled exactly as one lexicon entry with a single sense (particles, nouns, words that take no affixes) as that entry, for all its unanalysed uses. A word two entries share is left for you.",
+    });
+    let headArmed = false;
     let allArmed = false;
 
     async function apply(row: WordTypeRow, morphs: MorphSpec[]) {
@@ -148,6 +154,10 @@ export const wordTypesPanel: PanelDef = {
       applyAll.hidden = earlier.length === 0;
       applyAll.disabled = busy;
       applyAll.textContent = applyAllLabel(earlier.length, earlier.reduce((n, r) => n + r.unanalysed, 0), allArmed);
+      const heads = headwordRows(data.rows);
+      applyHeadwords.hidden = heads.length === 0;
+      applyHeadwords.disabled = busy;
+      applyHeadwords.textContent = headwordLabel(heads.length, heads.reduce((n, r) => n + r.unanalysed, 0), headArmed);
       list.replaceChildren(...data.rows.slice(0, DRAWN).map(rowOf));
       if (focused !== undefined) list.querySelector<HTMLElement>(`[data-key="${CSS.escape(focused)}"]`)?.focus();
     };
@@ -167,6 +177,37 @@ export const wordTypesPanel: PanelDef = {
     }
 
     reread.onclick = () => void load();
+    /** Apply each row's suggestion to all its unanalysed uses, one form after another. */
+    async function applyRows(rows: WordTypeRow[], button: HTMLButtonElement, done: (forms: number, uses: number, failed: number) => string) {
+      busy = true;
+      draw();
+      let uses = 0;
+      let failed = 0;
+      for (const [i, row] of rows.entries()) {
+        button.textContent = `Analysing ${i + 1} of ${rows.length}…`;
+        try {
+          uses += (await glossApplyType({ form: row.form, morphs: row.suggestion!.morphs })).applied;
+        } catch {
+          failed += 1;
+        }
+      }
+      showToast({ tone: failed === 0 ? "info" : "warn", lines: [done(rows.length - failed, uses, failed)] });
+      busy = false;
+      await refreshAll();
+      void load();
+    }
+    applyHeadwords.onclick = async () => {
+      if (data === null) return;
+      if (!headArmed) {
+        headArmed = true;
+        draw();
+        return;
+      }
+      headArmed = false;
+      await applyRows(headwordRows(data.rows), applyHeadwords, (forms, uses, failed) =>
+        `Glossed ${uses === 1 ? "1 use" : `${uses} uses`} of ${forms === 1 ? "1 word form" : `${forms} word forms`} as their lexicon entries.` + (failed > 0 ? ` ${failed} could not be glossed; try them one at a time.` : " Check them in the Interlinear tab."),
+      );
+    };
     applyAll.onclick = async () => {
       if (data === null) return;
       if (!allArmed) {
@@ -175,23 +216,7 @@ export const wordTypesPanel: PanelDef = {
         return;
       }
       allArmed = false;
-      const rows = earlierRows(data.rows);
-      busy = true;
-      draw();
-      let uses = 0;
-      let failed = 0;
-      for (const [i, row] of rows.entries()) {
-        applyAll.textContent = `Analysing ${i + 1} of ${rows.length}…`;
-        try {
-          uses += (await glossApplyType({ form: row.form, morphs: row.suggestion!.morphs })).applied;
-        } catch {
-          failed += 1;
-        }
-      }
-      showToast({ tone: failed === 0 ? "info" : "warn", lines: [appliedAllLine(rows.length - failed, uses, failed)] });
-      busy = false;
-      await refreshAll();
-      void load();
+      await applyRows(earlierRows(data.rows), applyAll, appliedAllLine);
     };
     breakAll.onclick = async () => {
       busy = true;
@@ -224,7 +249,7 @@ export const wordTypesPanel: PanelDef = {
         return;
       }
       el.replaceChildren(
-        h("div", { className: "cc-bar" }, reread, breakAll, applyAll),
+        h("div", { className: "cc-bar" }, reread, breakAll, applyAll, applyHeadwords),
         summary,
         h("p", { className: "note", textContent: "Type a word's morphs and their glosses once (ni- kani, 1SG count) and press Enter or Apply: every use not yet analysed gets it. Enter in an empty field takes the suggestion." }),
         list,

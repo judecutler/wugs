@@ -64,6 +64,18 @@ export function earlierRows<R extends { suggestion: { guessed?: boolean } | null
   return rows.filter((r) => r.suggestion !== null && r.suggestion.guessed !== true);
 }
 
+/** The rows whose guess is the word's own lexicon entry beyond doubt: one
+ * root spelled as the word, the only entry spelled so, with one sense. */
+export function headwordRows<R extends { headword?: boolean; suggestion: unknown }>(rows: readonly R[]): R[] {
+  return rows.filter((r) => r.headword === true && r.suggestion !== null);
+}
+
+/** The headword button: how many forms and uses, and the second click it asks for. */
+export function headwordLabel(forms: number, uses: number, armed: boolean): string {
+  const f = forms === 1 ? "1 word form" : `${forms} word forms`;
+  return armed ? `Gloss ${uses === 1 ? "1 use" : `${uses} uses`} of ${f} from the lexicon? Click again` : forms === 1 ? "Gloss 1 word form that is a lexicon headword" : `Gloss ${f} that are lexicon headwords`;
+}
+
 /** The Apply all button: how many forms and uses, and the second click it asks for. */
 export function applyAllLabel(forms: number, uses: number, armed: boolean): string {
   const f = forms === 1 ? "1 word form" : `${forms} word forms`;
