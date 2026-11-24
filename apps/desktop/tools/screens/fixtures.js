@@ -1345,7 +1345,7 @@ const LEXICON = [
     work_log: () => {
       const iso = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
       const day = (date, over) => ({ date, segments: 0, transcribed: 0, translated: 0, analysed: 0, glossed: 0, entries: 0, senses: 0, notes: 0, importedTexts: 0, importedEntries: 0, machine: 0, ops: 40, devices: 1, ...over });
-      return [day(iso(0), { analysed: 24, glossed: 61, entries: 5, senses: 6 }), day(iso(2), { segments: 18, transcribed: 18, translated: 11, notes: 2 }), day(iso(12), { importedTexts: 3, devices: 2 })];
+      return [day(iso(0), { analysed: 24, glossed: 61, entries: 5, senses: 6 }), day(iso(2), { segments: 18, transcribed: 18, translated: 11, notes: 2 }), day(iso(9), { transcribed: 12, analysed: 30 }), day(iso(12), { importedTexts: 3, devices: 2 })];
     },
     speaker_lengths: () => [
       { tier: "tier-mot", name: "MOT", texts: 2, utterances: 48, words: 211, types: 96, longest: 11, analysed: 48, morphemes: 262, mtld: 52.4, vocd: 58.3, person: "", sex: "", age: "", born: "", byText: [] },

@@ -1139,8 +1139,10 @@ def main():
             work = run.page.locator(".panel-progress .pg-work")
             work.scroll_into_view_if_needed()
             run.shot("state-worklog", work)
-            if "61 glosses" not in work.inner_text() or run.page.locator(".panel-progress .pg-work-table tbody tr").count() != 3:
+            if "61 glosses" not in work.inner_text() or run.page.locator(".panel-progress .pg-work-table tbody tr").count() != 4:
                 failures.append(f"Progress did not show the work day by day: {work.inner_text()[:200]}")
+            if "a working day lately" not in run.page.locator(".panel-progress .pg-pace").inner_text():
+                failures.append(f"Progress did not forecast the work left at the recent pace: {work.inner_text()[:300]}")
             # Word sketch: a lemma's company by relation.
             run.front("wordsketch", "Word sketch")
             run.page.locator(".panel-wordsketch .ws-lemma:not(.ws-versus)").fill("eat")
