@@ -313,6 +313,7 @@ fn metadata_reparses_and_names_the_project_and_texts() {
     assert!(olac.child("dc:title").is_some_and(|t| !t.text.is_empty()));
     assert!(olac.child("dc:date").is_some());
     assert!(olac.child("dc:language").is_none(), "no language entities, so no dc:language");
+    assert!(olac.child("dcterms:spatial").is_none(), "no coordinates, so no place");
 
     let imdi = wugs_xml::parse(&read(&bag, "data/metadata/imdi.xml")).unwrap();
     assert_eq!(imdi.name, "METATRANSCRIPT");
@@ -860,4 +861,17 @@ fn imdi_sessions_carry_details_and_actors() {
     assert_eq!(actors[0].child("FullName").unwrap().text, "Ana Reyes");
     assert_eq!(actors[0].child("BirthDate").unwrap().text, "1958");
     assert_eq!(actors[0].child("Languages").unwrap().child("Description").unwrap().text, "Kanu, Tok Pisin");
+}
+
+#[test]
+fn recording_sites_go_in_the_olac_record() {
+    let mut f = fixture();
+    let texts = live(&f.project, "text");
+    f.project.set_text_metadata(&texts[0], "coordinates", "8.51 S, 115.26 E").unwrap();
+    let bag = temp_dir("bag");
+    seal(&f.project, &bag, &SealOptions::default()).unwrap();
+    let olac = wugs_xml::parse(&read(&bag, "data/metadata/olac.xml")).unwrap();
+    let spatial = olac.child("dcterms:spatial").expect("a place");
+    assert_eq!(spatial.attr("xsi:type"), Some("dcterms:Point"));
+    assert!(spatial.text.starts_with("east=115.26000; north=-8.51000; name="), "{}", spatial.text);
 }

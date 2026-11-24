@@ -70,6 +70,9 @@ pub fn session_info(project: &Project, text: &str) -> Result<SessionInfo, String
     })
 }
 
+/// The most recording sites an OLAC record lists.
+pub const MAX_SITES: usize = 50;
+
 pub fn olac(project: &Project, title: &str, date: &str, has_lexicon: bool) -> Result<String, String> {
     let dc = |name: &str, text: &str| XmlNode::new(&format!("dc:{name}")).with_text(text);
     let mut rec = XmlNode::new("olac:olac")
@@ -97,6 +100,20 @@ pub fn olac(project: &Project, title: &str, date: &str, has_lexicon: bool) -> Re
         );
     }
     rec.children.push(dc("date", date));
+    // Each place a text was recorded, by its coordinates detail, as a DCMI Point.
+    let mut sites: Vec<(String, String)> = Vec::new();
+    for text in live_of_kind(project, "text")? {
+        if let Some((lat, lon)) = wugs_core::metadata::place_of(&project.text_metadata(&text)?) {
+            let point = format!("east={lon:.5}; north={lat:.5}");
+            if sites.len() < MAX_SITES && !sites.iter().any(|(p, _)| *p == point) {
+                sites.push((point, project.proj.field_str(&text, "title")?.unwrap_or_default()));
+            }
+        }
+    }
+    for (point, title) in sites {
+        let value = if title.trim().is_empty() { point } else { format!("{point}; name={}", title.replace(';', ",")) };
+        rec.children.push(XmlNode::new("dcterms:spatial").with_attr("xsi:type", "dcterms:Point").with_text(&value));
+    }
     for lng in live_of_kind(project, "language")? {
         let name = project.proj.field_str(&lng, "name")?.unwrap_or_default();
         let mut node = dc("language", &name);
