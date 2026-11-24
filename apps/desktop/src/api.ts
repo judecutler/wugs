@@ -686,6 +686,8 @@ export const alignPreview = (args: { source: string; translation: string }) => i
 export const alignWrite = (args: { source: string; translation: string }) => invoke<import("./align/logic").Alignment>("align_write", args);
 /** Words as entries with an empty sense each (`lexicon::lexicon_add_words`). */
 export const lexiconAddWords = (args: { words: string[] }) => invoke<number>("lexicon_add_words", args);
+/** Words on the rise and falling over the years a detail gives (`src-tauri/src/trends.rs`). */
+export const frequencyTrends = (args: { kind: "word" | "translation"; key: string | null; minCount: number; textId: string | null; within: import("./metadata/logic").Where | null }) => invoke<import("./frequencies/trends").Trends>("frequency_trends", args);
 export const exportLexiconTable = (args: { folder: string }) => invoke<string>("export_lexicon_table", args);
 export const projectAffixes = () => invoke<import("./affixes/logic").Affixes>("project_affixes");
 export const projectProgress = () => invoke<import("./progress/logic").Progress>("project_progress");
