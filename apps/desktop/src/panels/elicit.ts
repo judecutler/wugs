@@ -463,7 +463,7 @@ export const elicitPanel: PanelDef = {
           type: "button",
           textContent: "Load a table…",
           onclick: async () => {
-            const path = await pickFolder({ multiple: false, title: "Choose a word list table", filters: [{ name: "Tables", extensions: ["csv", "tsv", "txt", "tab"] }] });
+            const path = await pickFolder({ multiple: false, title: "Choose a word list table", filters: [{ name: "Tables", extensions: ["csv", "tsv", "txt", "tab", "xlsx", "xls", "ods"] }] });
             if (typeof path !== "string") return;
             void enqueue(async () => {
               try {

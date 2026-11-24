@@ -101,7 +101,7 @@ async function importOne() {
   const path = await pickFile({
     title: "Import a file from ELAN, FLEx, Praat, Toolbox, CoNLL-U or TEI, or plain text",
     filters: [
-      { name: "ELAN, FLEx, Praat, Toolbox, CoNLL-U, TEI, tables of sentences, subtitles, Audacity labels, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "csv", "tsv", "srt", "vtt", "txt"] },
+      { name: "ELAN, FLEx, Praat, Toolbox, CoNLL-U, TEI, tables of sentences, subtitles, Audacity labels, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "csv", "tsv", "xlsx", "xls", "ods", "srt", "vtt", "txt"] },
       { name: "All files", extensions: ["*"] },
     ],
   });
@@ -122,7 +122,7 @@ async function importDetails() {
   const path = await pickFile({
     title: "Import document details: a table with a row per text (a title or file column, then author, date, genre…)",
     filters: [
-      { name: "Tables", extensions: ["csv", "tsv", "txt"] },
+      { name: "Tables", extensions: ["csv", "tsv", "txt", "xlsx", "xls", "ods"] },
       { name: "All files", extensions: ["*"] },
     ],
   });
@@ -134,7 +134,7 @@ async function importLexTable() {
   const path = await pickFile({
     title: "Import a lexicon table: a row per sense, with a word (lemma or headword) column and a gloss column; category, definition and glosses in other languages are read too",
     filters: [
-      { name: "Tables", extensions: ["csv", "tsv", "txt"] },
+      { name: "Tables", extensions: ["csv", "tsv", "txt", "xlsx", "xls", "ods"] },
       { name: "All files", extensions: ["*"] },
     ],
   });

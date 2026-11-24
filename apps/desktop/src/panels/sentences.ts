@@ -227,7 +227,7 @@ export const sentencesPanel: PanelDef = {
       draw();
     };
     load.onclick = async () => {
-      const picked = await pickFile({ multiple: false, title: "A list of prompts", filters: [{ name: "Prompts", extensions: ["txt", "csv", "tsv", "tab"] }] });
+      const picked = await pickFile({ multiple: false, title: "A list of prompts", filters: [{ name: "Prompts", extensions: ["txt", "csv", "tsv", "tab", "xlsx", "xls", "ods"] }] });
       if (typeof picked !== "string") return;
       try {
         const l = await sentenceListImport({ path: picked });

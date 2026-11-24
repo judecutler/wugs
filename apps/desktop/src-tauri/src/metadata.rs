@@ -119,9 +119,7 @@ fn forms(p: &wugs_core::Project, name: &str) -> Vec<String> {
 /// (case-blind, with or without a file extension, or the exported file's
 /// name). One txn for the whole table; an empty cell writes nothing.
 pub fn import_metadata(s: &mut Session, path: &Path) -> Result<MetaImport, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let text = crate::interchange::windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes);
-    let tabs = matches!(path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).as_deref(), Some("tsv" | "txt" | "tab"));
+    let (text, tabs) = crate::table_text::read_table(path, &["tsv", "txt", "tab"])?;
     let (header, rows, _) = crate::table_text::records(&text, tabs)?;
     let named = |wanted: &str| header.iter().position(|h| wugs_core::metadata::key_of(h).as_deref() == Some(wanted));
     let by = NAMES.iter().find_map(|n| named(n)).unwrap_or(0);

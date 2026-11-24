@@ -39,12 +39,7 @@ fn find(header: &[String], names: &[&str]) -> Option<usize> {
 }
 
 pub fn read_list(path: &Path) -> Result<OtherList, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if bytes.len() > 50_000_000 {
-        return Err("a word list file is at most 50 MB".into());
-    }
-    let text = crate::interchange::windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes);
-    let tabs = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("tsv") || e.eq_ignore_ascii_case("tab") || e.eq_ignore_ascii_case("txt"));
+    let (text, tabs) = crate::table_text::read_table(path, &["tsv", "tab", "txt"])?;
     let (header, rows, _) = crate::table_text::records(&text, tabs)?;
     let name = path.file_stem().map(|s| s.to_string_lossy().trim().to_string()).unwrap_or_default();
     // A CLDF forms.csv names its concepts and languages by id; the tables

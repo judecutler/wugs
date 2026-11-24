@@ -302,12 +302,10 @@ pub struct OwnList {
 /// Load a word list of one's own from a CSV or tab-separated table; the
 /// list is named for the file.
 pub fn concept_list_import(session: &mut Session, path: &std::path::Path) -> Result<OwnList, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if bytes.len() > 5_000_000 {
+    if std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.len() > 5_000_000 {
         return Err("a word list file is at most 5 MB".into());
     }
-    let text = crate::interchange::windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes);
-    let tabs = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("tsv") || e.eq_ignore_ascii_case("tab") || e.eq_ignore_ascii_case("txt"));
+    let (text, tabs) = crate::table_text::read_table(path, &["tsv", "tab", "txt"])?;
     let (header, rows, _) = crate::table_text::records(&text, tabs)?;
     let concepts = own_list_rows(&header, &rows)?;
     let name = path.file_stem().map(|s| s.to_string_lossy().trim().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "My word list".into());

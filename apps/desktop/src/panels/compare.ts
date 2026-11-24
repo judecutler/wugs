@@ -186,7 +186,7 @@ export const comparePanel: PanelDef = {
       draw();
     };
     load.onclick = async () => {
-      const picked = await pickFile({ multiple: true, title: "Another language's word list", filters: [{ name: "Word lists", extensions: ["csv", "tsv", "tab", "txt"] }] });
+      const picked = await pickFile({ multiple: true, title: "Another language's word list", filters: [{ name: "Word lists", extensions: ["csv", "tsv", "tab", "txt", "xlsx", "xls", "ods"] }] });
       const paths = picked === null ? [] : Array.isArray(picked) ? picked : [picked];
       const lines: string[] = [];
       for (const path of paths) {
