@@ -92,6 +92,7 @@ const STYLE: &str = "
 :root { color-scheme: light; }
 body { font-family: 'Charis SIL', 'Gentium Plus', 'Doulos SIL', 'Noto Serif', Georgia, serif; font-size: 17px; line-height: 1.45; color: #1b1a17; background: #fffdf5; max-width: 52em; margin: 0 auto; padding: 1.5em 1em 4em; }
 a { color: #00718a; } h1 { font-size: 1.9em; margin: .2em 0; } .front, .details { color: #555; }
+figure.where { margin: 1em 0; } figure.where img { width: 100%; max-width: 32em; display: block; border: 1px solid #e0d6b6; } figure.where figcaption { color: #555; font-size: .9em; }
 nav { margin-bottom: 1em; } ul.texts { list-style: none; padding: 0; } ul.texts li { margin: .6em 0; } ul.texts .count { color: #666; font-size: .9em; }
 ol.sentences { list-style: none; padding: 0; } ol.sentences li { display: grid; grid-template-columns: 2.4em 2em 1fr; gap: 0 .4em; padding: .6em 0; border-bottom: 1px solid #eee6cc; }
 .n { color: #888; text-align: right; } .body { grid-column: 3; } .tx { font-size: 1.1em; margin: 0; }
@@ -322,6 +323,18 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     if !codes.is_empty() {
         body.push_str(&format!("<p class=\"front\">{}</p>\n", esc(&codes.join(" · "))));
     }
+    // Where the language is spoken, as Glottolog places it, with its nearest languages.
+    if let Some(place) = (!lang.glottocode.is_empty()).then(|| crate::glottolog::place(&lang.glottocode, 8)).flatten() {
+        let label = if lang.name.trim().is_empty() { "the language".to_string() } else { lang.name.trim().to_string() };
+        files.push(("map.svg".into(), crate::glottolog::locator_svg(&place, &format!("Where {label} is spoken"))));
+        let near: Vec<&str> = place.neighbours.iter().take(4).map(|n| n.name).collect();
+        body.push_str(&format!(
+            "<figure class=\"where\"><img src=\"map.svg\" alt=\"{}\"><figcaption>Where Glottolog places {}{}. Land from Natural Earth.</figcaption></figure>\n",
+            esc(&format!("A map showing where {label} is spoken")),
+            esc(&label),
+            if near.is_empty() { String::new() } else { esc(&format!(", near {}", near.join(", "))) }
+        ));
+    }
     body.push_str(&format!(
         "<div class=\"search\" role=\"search\"><label for=\"q\">Search {}</label><input id=\"q\" type=\"search\" autocomplete=\"off\" spellcheck=\"false\"></div>\n<div id=\"results\" aria-live=\"polite\"></div>\n",
         match (dictionary, listed.is_empty()) {
@@ -420,7 +433,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("wugs-site-{}", wugs_model::ulid()));
         let mut s: Session = None;
         crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
-        session::project(&mut s).unwrap().set_project_language("Tutorial English", "", "eng").unwrap();
+        session::project(&mut s).unwrap().set_project_language("Tutorial English", "stan1293", "eng").unwrap();
         let out = dir.join("out");
         fs::create_dir_all(&out).unwrap();
         // A restricted text: nothing of it goes out unless chosen.
@@ -441,6 +454,10 @@ mod tests {
         let root = Path::new(&site.path);
         let index = fs::read_to_string(root.join("index.html")).unwrap();
         assert!(index.contains("<h1 lang=\"eng\">Tutorial English: texts and dictionary</h1>") && index.contains("href=\"text-1.html\""), "{index}");
+        // With a Glottocode, a locator map beside the front page, kept for offline use.
+        assert!(index.contains("<img src=\"map.svg\"") && index.contains("Where Glottolog places Tutorial English, near "), "{index}");
+        assert!(root.join("map.svg").is_file());
+        assert!(std::fs::read_to_string(root.join("sw.js")).unwrap().contains("map.svg"));
         let text = fs::read_to_string(root.join("text-1.html")).unwrap();
         assert!(text.contains("<p class=\"tx\">wʌn tuː θɹiː</p>"), "{text}");
         assert!(text.contains("<button class=\"play\" data-src=\"audio/1-1.wav\""), "{text}");
