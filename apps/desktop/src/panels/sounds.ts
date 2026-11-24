@@ -17,7 +17,7 @@ import { againstRelatives, checkInventory, phoibleLine, phonemeKey, shareOf, typ
 import { chartClipboard } from "../sounds/chartcopy";
 import { EXAMPLE_FORMATS, FORMAT_KEY, parseFormat } from "../gloss/example";
 import { syllableNote, syllableTypes, type SyllableType } from "../sounds/syllables";
-import { distributionNote, envLabel, environments, environmentsTsv, type NeighbourRow } from "../sounds/environments";
+import { distributionNote, envLabel, environments, environmentsTsv, suggestedRule, type NeighbourRow } from "../sounds/environments";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
 import { dataGeneration, getState, showToast } from "../store";
@@ -366,6 +366,18 @@ export const soundsPanel: PanelDef = {
         h("h4", { className: "sd-h", textContent: "Environments" }),
         h("div", { className: "sd-bar" }, pick(a, "First sound", (v) => (envA = v)), h("span", { className: "sd-tilde", textContent: "and" }), pick(b, "Second sound", (v) => (envB = v)), copy),
         h("p", { className: "note sd-env-note", textContent: distributionNote(e) }),
+        ...((rule) =>
+          rule === null
+            ? []
+            : [
+                h(
+                  "p",
+                  { className: "sd-rule", title: "The sound with the narrower, natural-class environment is taken as conditioned; the other, found elsewhere, as the underlying one. A hypothesis to test on more words." },
+                  "A rule to try: ",
+                  h("span", { className: "ipa", textContent: rule.rule }),
+                  h("span", { className: "note", textContent: ` ([${rule.underlying}] elsewhere)` }),
+                ),
+              ])(suggestedRule(e)),
         h("div", { className: "sd-env-sides" }, side("Before", e.before), side("After", e.after)),
         h(
           "div",

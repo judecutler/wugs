@@ -1544,3 +1544,6 @@ body::before {
 .fq-zipf-plot { max-width: 460px; }
 .fq-zipf-dot { fill: var(--accent-bright); stroke: var(--accent); stroke-width: 0.5; }
 .fq-zipf-fit { stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 5 3; }
+
+.sd-rule { font-size: var(--text-sm); margin: 2px 0 6px; }
+.sd-rule .ipa { font-weight: 600; }

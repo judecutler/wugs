@@ -88,6 +88,39 @@ export function distributionNote(e: Environments): string {
   return `«${e.a}» and «${e.b}» never occur in the same environment in these words, so they may be allophones of one sound in complementary distribution.${decided}`;
 }
 
+/** A rule to try when the two are in complementary distribution: the sound
+ * whose neighbours on one side form a natural class (the narrower one) is the
+ * conditioned allophone, the other the elsewhere form and the likely
+ * underlying sound, as phonology courses set out such problems
+ * (`/s/ → [ʃ] / _ front vowels`). Null when they share an environment or no
+ * side gives a natural class. */
+export function suggestedRule(e: Environments): { rule: string; underlying: string; allophone: string } | null {
+  if (e.a === e.b || e.countA === 0 || e.countB === 0) return null;
+  if (e.whole.some((r) => r.a > 0 && r.b > 0)) return null;
+  for (const [rows, side] of [
+    [e.before, "before"],
+    [e.after, "after"],
+  ] as const) {
+    if (rows.some((r) => r.a > 0 && r.b > 0)) continue;
+    const na = rows.filter((r) => r.a > 0).map((r) => r.neighbour);
+    const nb = rows.filter((r) => r.b > 0).map((r) => r.neighbour);
+    const ca = naturalClass(na, EDGE);
+    const cb = naturalClass(nb, EDGE);
+    // A single neighbour is its own class.
+    const named = (ns: string[], c: string | null) => c ?? (ns.length === 1 ? (ns[0] === EDGE ? "a word edge" : ns[0]!) : null);
+    const options = [
+      { allophone: e.a, underlying: e.b, cls: named(na, ca), width: na.length, count: e.countA },
+      { allophone: e.b, underlying: e.a, cls: named(nb, cb), width: nb.length, count: e.countB },
+    ].filter((o) => o.cls !== null);
+    if (options.length === 0) continue;
+    options.sort((x, y) => x.width - y.width || x.count - y.count);
+    const o = options[0]!;
+    const where = side === "before" ? `_ ${o.cls}` : `${o.cls} _`;
+    return { rule: `/${o.underlying}/ → [${o.allophone}] / ${where}`, underlying: o.underlying, allophone: o.allophone };
+  }
+  return null;
+}
+
 /** The whole environments as a table for a spreadsheet. */
 export function environmentsTsv(e: Environments): string {
   const rows = e.whole.map((r) => [envLabel(r), r.a, r.b, r.exampleA, r.exampleB].join("\t"));

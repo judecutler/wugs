@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { distributionNote, envLabel, environments, environmentsTsv } from "./environments.ts";
+import { distributionNote, envLabel, environments, environmentsTsv, suggestedRule } from "./environments.ts";
 
 // s before a, o, u and at the end; ʃ only before i and e: complementary.
 const words = [
@@ -29,4 +29,15 @@ test("a shared environment is named, and missing sounds said", () => {
   assert.match(distributionNote(e), /^«s» and «ʃ» share 1 environment \(a_a\): there they contrast/);
   assert.equal(distributionNote(environments(words, "s", "z")), "«z» is not in these words.");
   assert.equal(distributionNote(environments(words, "s", "s")), "Choose two different sounds.");
+});
+
+test("complementary sounds get a rule to try, the narrower one conditioned", () => {
+  assert.deepEqual(suggestedRule(environments(words, "s", "ʃ")), { rule: "/s/ → [ʃ] / _ front vowels", underlying: "s", allophone: "ʃ" });
+  // Either order of the two sounds gives the same rule.
+  assert.equal(suggestedRule(environments(words, "ʃ", "s"))?.rule, "/s/ → [ʃ] / _ front vowels");
+  // Sharing an environment: no rule.
+  assert.equal(suggestedRule(environments([...words, { word: "aʃa", count: 1 }], "s", "ʃ")), null);
+  // Final devoicing, decided by what follows: d inside, t at the end.
+  const dev = [{ word: "bada", count: 2 }, { word: "bat", count: 2 }, { word: "dodi", count: 1 }, { word: "kat", count: 1 }];
+  assert.equal(suggestedRule(environments(dev, "d", "t"))?.rule, "/d/ → [t] / _ a word edge");
 });
