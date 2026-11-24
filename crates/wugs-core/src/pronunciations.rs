@@ -97,6 +97,47 @@ impl Project {
         Ok((id, t.commit()?))
     }
 
+    /// Written pronunciations for many entries in one plain txn (the
+    /// lexicon's headwords through an orthography profile), each after its
+    /// entry's last, with `x.converted-by` naming how it was made. An empty
+    /// form, or one the entry already has, writes nothing. Returns how many
+    /// were added.
+    pub fn add_pronunciation_forms(&mut self, forms: &[(String, String)], by: &str) -> Result<(usize, Option<CommitResult>), String> {
+        let mut plan: Vec<(String, String, String)> = Vec::new();
+        for (lexeme, form) in forms {
+            self.require(lexeme, "lexeme")?;
+            let form = clean(self, form)?;
+            if form.is_empty() || plan.iter().any(|(l, f, _)| l == lexeme && *f == form) {
+                continue;
+            }
+            let mut last = String::new();
+            let mut has = false;
+            for id in self.proj.ordered_children("lexeme", lexeme, "pronunciation")? {
+                last = last.max(self.proj.field_str(&id, "pos")?.unwrap_or_default());
+                has |= self.proj.field_str(&id, "form")?.unwrap_or_default() == form;
+            }
+            if has {
+                continue;
+            }
+            if let Some((_, _, before)) = plan.iter().rev().find(|(l, _, _)| l == lexeme) {
+                last = before.clone();
+            }
+            plan.push((lexeme.clone(), form, crate::lexicon::after(&last)));
+        }
+        if plan.is_empty() {
+            return Ok((0, None));
+        }
+        let mut t = self.intent("add-pronunciations");
+        for (lexeme, form, pos) in &plan {
+            let mut fields = vec![("lexeme", Value::str(lexeme)), ("pos", Value::str(pos)), ("form", Value::str(form))];
+            if !by.trim().is_empty() {
+                fields.push(("x.converted-by", Value::str(by.trim())));
+            }
+            t.create("pronunciation", "prn", SCOPE_LEXICON, fields);
+        }
+        Ok((plan.len(), Some(t.commit()?)))
+    }
+
     /// Retype a pronunciation (a person's edit). The same form writes nothing.
     pub fn set_pronunciation_form(&mut self, pronunciation: &str, form: &str) -> Result<Option<CommitResult>, String> {
         self.require(pronunciation, "pronunciation")?;
@@ -162,6 +203,15 @@ mod tests {
         assert_eq!((got[0].audio.as_ref(), got[1].audio.as_ref(), got[1].form.as_str()), (Some(&heard), None, "ˈkani"));
         p.delete_pronunciation(&a).unwrap();
         assert_eq!(p.pronunciations(&lex).unwrap().len(), 1);
+        // Many at once: one txn, after the entry's last; a form it has, or an empty one, writes nothing.
+        let ((lari, _), _) = p.add_lexeme("lari", "run").unwrap();
+        let forms = vec![(lex.clone(), "ˈkani".to_string()), (lex.clone(), " kaˈni ".to_string()), (lari.clone(), "ˈlaɾi".to_string()), (lari.clone(), "ˈlaɾi".to_string()), (lari.clone(), " ".to_string())];
+        let (added, res) = p.add_pronunciation_forms(&forms, "orthography profile: IPA").unwrap();
+        assert_eq!((added, res.is_some()), (2, true));
+        let got = p.pronunciations(&lex).unwrap();
+        assert_eq!(got.iter().map(|x| x.form.as_str()).collect::<Vec<_>>(), ["ˈkani", "kaˈni"]);
+        assert_eq!(p.proj.field_str(&got[1].id, "x.converted-by").unwrap().as_deref(), Some("orthography profile: IPA"));
+        assert_eq!(p.add_pronunciation_forms(&forms, "").unwrap().0, 0, "twice adds nothing");
         // Search finds an entry's pronunciation by its form.
         assert!(p.proj.search("ˈkani", &["pronunciation"], 10).unwrap().iter().any(|h| h.field == "form"));
         std::fs::remove_dir_all(root).ok();

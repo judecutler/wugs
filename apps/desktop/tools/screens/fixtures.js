@@ -829,6 +829,10 @@ const LEXICON = [
       ],
       unknown: [{ text: "q", count: 2, example: "qelo" }],
     }),
+    orthography_pronounce: ({ write }) => {
+      if (write) window.__WUGS_PRONOUNCED__ = true;
+      return { entries: 41, already: 6, unconverted: 2, examples: [{ before: "nikani", after: "nikani" }, { before: "ngai", after: "ŋai" }, { before: "toruma", after: "toɾuma" }], unknown: [{ text: "q", count: 2, example: "qela" }], written: !!write };
+    },
     orthography_convert: () => ({ track: "tier-ipa2", trackName: "IPA (converted)", texts: 3, created: 60, updated: 0, unchanged: 0, kept: 0, empty: 4, unknown: [] }),
     typology_answers: () => [
       { id: "GB020", value: "1", note: "«ang» before common nouns (Kanu notebook 3, p. 12)" },

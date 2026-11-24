@@ -1220,6 +1220,16 @@ def main():
             run.shot("state-orthography", run.page.locator(".panel-orthography"))
             if run.page.locator(".panel-orthography .or-changes tbody tr").count() < 2:
                 failures.append("Orthography did not preview the conversion")
+            # Pronunciations for the lexicon from the profile: counted, then written.
+            run.page.locator(".panel-orthography button", has_text="See which entries").click()
+            run.page.locator(".panel-orthography button", has_text="Add pronunciations to 41 entries").wait_for()
+            run.page.locator(".panel-orthography button", has_text="Add pronunciations to 41 entries").scroll_into_view_if_needed()
+            run.shot("state-orthography-pronounce", run.page.locator(".panel-orthography"))
+            run.page.locator(".panel-orthography button", has_text="Add pronunciations to 41 entries").click()
+            run.page.wait_for_timeout(300)
+            if not run.page.evaluate("() => window.__WUGS_PRONOUNCED__"):
+                failures.append("Orthography did not write the lexicon's pronunciations")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Elicit: answers heard in the Timeline's selected segment.
             run.front("elicit", "Elicit")
             run.page.locator(".panel-elicit .el-sound input").check()

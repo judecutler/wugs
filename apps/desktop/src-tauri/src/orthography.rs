@@ -526,9 +526,101 @@ pub fn convert(session: &mut Session, profile: &str, tier: &str, text: Option<St
     })
 }
 
+/// The lexicon's headwords through the profile, as written pronunciations.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Pronounced {
+    /// Entries that get a pronunciation (or got one, when written).
+    pub entries: usize,
+    /// Entries that already have a written pronunciation, left alone.
+    pub already: usize,
+    /// Entries whose headword has a letter the profile does not convert, left out.
+    pub unconverted: usize,
+    /// A few headwords and what they become, for the panel to show first.
+    pub examples: Vec<Change>,
+    pub unknown: Vec<Unknown>,
+    pub written: bool,
+}
+
+/// Every live entry with a headword and no written pronunciation gets its
+/// headword through the profile's `column` as one, in one txn, when `write`;
+/// else only counted. A headword with a letter no row matches is left out,
+/// so nothing half-converted lands in the dictionary.
+pub fn pronounce(session: &mut Session, profile: &str, column: &str, ignore_case: bool, write: bool) -> Result<Pronounced, String> {
+    let parsed = Profile::parse(profile);
+    let col = parsed.column(column)?;
+    if write {
+        save(session, profile)?;
+    }
+    let p = session::project(session)?;
+    let mut forms: Vec<(String, String)> = Vec::new();
+    let mut unknown = HashMap::new();
+    let mut out = Pronounced { entries: 0, already: 0, unconverted: 0, examples: Vec::new(), unknown: Vec::new(), written: false };
+    let mut ids = p.proj.entities_of_kind("lexeme")?;
+    ids.sort();
+    for id in ids {
+        if p.proj.is_tombstoned(&id)? {
+            continue;
+        }
+        let lemma = p.proj.field_str(&id, "lemma")?.unwrap_or_default();
+        if lemma.trim().is_empty() {
+            continue;
+        }
+        if p.pronunciations(&id)?.iter().any(|x| !x.form.trim().is_empty()) {
+            out.already += 1;
+            continue;
+        }
+        let (after, found) = parsed.convert(&lemma, col, ignore_case);
+        if !found.is_empty() {
+            tally(&mut unknown, found, &lemma);
+            out.unconverted += 1;
+            continue;
+        }
+        if after.trim().is_empty() {
+            continue;
+        }
+        if out.examples.len() < PREVIEW_ROWS {
+            out.examples.push(Change { before: lemma.clone(), after: after.clone() });
+        }
+        forms.push((id, after));
+    }
+    out.entries = forms.len();
+    out.unknown = unknown_list(unknown);
+    if write && !forms.is_empty() {
+        let (added, _) = p.add_pronunciation_forms(&forms, &format!("orthography profile: {column}"))?;
+        out.entries = added;
+        out.written = true;
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn headwords_become_written_pronunciations() {
+        let dir = std::env::temp_dir().join(format!("wugs-pronounce-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        session::create_project(&mut s, dir.to_str().unwrap(), "tester").unwrap();
+        for (lemma, gloss) in [("shanga", "sand"), ("hay", "here"), ("aqa", "who")] {
+            crate::lexicon::lexicon_add(&mut s, lemma, gloss).unwrap();
+        }
+        let said = crate::lexicon::lexicon_list(&mut s, "hay").unwrap()[0].id.clone();
+        crate::lexicon::lexicon_add_pronunciation(&mut s, &said, "hai", None).unwrap();
+        let first = pronounce(&mut s, PROFILE, "IPA", true, false).unwrap();
+        assert_eq!((first.entries, first.already, first.unconverted, first.written), (1, 1, 1, false), "{first:?}");
+        assert_eq!(first.examples[0].after, "ʃaŋa");
+        assert_eq!(first.unknown[0].text, "q", "aqa has a q no row converts");
+        let done = pronounce(&mut s, PROFILE, "IPA", true, true).unwrap();
+        assert_eq!((done.entries, done.written), (1, true));
+        let shanga = crate::lexicon::lexicon_list(&mut s, "shanga").unwrap()[0].id.clone();
+        let view = crate::lexicon::entry_view(session::project(&mut s).unwrap(), &shanga).unwrap();
+        assert_eq!(view.pronunciations.iter().map(|x| x.form.as_str()).collect::<Vec<_>>(), ["ʃaŋa"]);
+        assert_eq!(pronounce(&mut s, PROFILE, "IPA", true, false).unwrap().entries, 0, "now it has one");
+        drop(s);
+        std::fs::remove_dir_all(&dir).ok();
+    }
 
     const PROFILE: &str = "# a practical orthography\nGrapheme\tIPA\tFrequency\tComment\nsh\tʃ\t3\t\na\ta\t9\t\nng\tŋ\t2\t\nn\t\t4\tas written\n^h\tʔ\t1\tword-initial h is a glottal stop\nh\th\t1\t\ny$\ti\t1\t\ny\tj\t1\t\nx\tNULL\t1\t\nj\tdʒ\t\t\n";
 

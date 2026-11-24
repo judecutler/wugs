@@ -5,11 +5,11 @@
 // kept when the track is converted again (src-tauri/src/orthography.rs,
 // wugs_core::converted). Words in ../orthography/logic.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, orthographyConvert, orthographyDraft, orthographyGet, orthographyPreview, orthographySave } from "../api";
+import { errorText, orthographyConvert, orthographyPronounce, orthographyDraft, orthographyGet, orthographyPreview, orthographySave } from "../api";
 import { emptyState, h } from "../dom";
-import { checkLine, convertedLines, defaultColumn, defaultSource, defaultTarget, fromGrid, previewNote, toGrid, unknownLine, type Check, type Grid, type Preview, type Track } from "../orthography/logic";
+import { pronouncedLine, type Pronounced, checkLine, convertedLines, defaultColumn, defaultSource, defaultTarget, fromGrid, previewNote, toGrid, unknownLine, type Check, type Grid, type Preview, type Track } from "../orthography/logic";
 import { provide } from "../palette/registry";
-import { getState, refreshAll, showToast } from "../store";
+import { getState, refreshAll, showToast, touchLexicon } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 const CASE_KEY = "wugs.orthography.ignoreCase";
@@ -89,6 +89,19 @@ export const orthographyPanel: PanelDef = {
         check = await orthographySave({ profile: profile() });
         saved = profile();
         showToast({ tone: "info", lines: ["The orthography profile is kept with the project."] });
+      });
+
+    /** The lexicon's pronunciations from the profile: counted first, then written. */
+    let pronounced: Pronounced | null = null;
+    const doPronounce = (write: boolean) =>
+      run(async () => {
+        if (column === null) return;
+        pronounced = await orthographyPronounce({ profile: profile(), column, ignoreCase, write });
+        if (write) {
+          saved = profile();
+          showToast({ tone: pronounced.unconverted > 0 ? "warn" : "info", lines: [pronouncedLine(pronounced, column)] });
+          touchLexicon();
+        }
       });
 
     const doConvert = () =>
@@ -264,9 +277,33 @@ export const orthographyPanel: PanelDef = {
         h("h3", { className: "or-title", textContent: "Convert" }),
         h("div", { className: "or-bar" }, h("label", {}, "Write the ", colPick, " column"), h("label", {}, "onto the track ", targetInput), previewBtn, convertBtn),
         previewBox,
+        ...pronounceSection(),
       ];
       el.replaceChildren(...parts.filter((x): x is HTMLElement => x !== null));
     };
+
+    function pronounceSection(): HTMLElement[] {
+      const ready = column !== null && grid.rows.length > 0;
+      const count = h("button", { type: "button", textContent: "See which entries", disabled: busy || !ready, title: "Count the lexicon's entries with no written pronunciation and show what their headwords become" });
+      count.onclick = () => void doPronounce(false);
+      const write = h("button", { type: "button", className: "primary", textContent: pronounced !== null && !pronounced.written && pronounced.entries > 0 ? `Add pronunciations to ${pronounced.entries} ${pronounced.entries === 1 ? "entry" : "entries"}` : "Add pronunciations", disabled: busy || !ready || pronounced === null || pronounced.written || pronounced.entries === 0 });
+      write.onclick = () => void doPronounce(true);
+      const p = pronounced;
+      return [
+        h("h3", { className: "or-title", textContent: "Pronunciations in the lexicon" }),
+        h("p", { className: "note", textContent: `Give every lexicon entry that has no written pronunciation one made from its headword through the «${column ?? "…"}» column, for the printed dictionary, the website and LIFT. Entries that have one keep it; a headword with a letter the profile does not convert is left out. Each can be corrected in the Lexicon.` }),
+        h("div", { className: "or-bar" }, count, write),
+        ...(p === null || column === null
+          ? []
+          : ([
+              h("p", { className: "note", textContent: pronouncedLine(p, column) }),
+              p.unknown.length > 0 ? h("p", { className: "or-unknown", textContent: unknownLine(p.unknown) }) : null,
+              p.examples.length > 0 && !p.written
+                ? h("table", { className: "or-changes" }, h("thead", {}, h("tr", {}, h("th", { scope: "col", textContent: "Headword" }), h("th", { scope: "col", textContent: column }))), h("tbody", {}, ...p.examples.map((c) => h("tr", {}, h("td", { textContent: c.before }), h("td", { className: "or-after", textContent: c.after })))))
+                : null,
+            ] as (HTMLElement | null)[]).filter((x): x is HTMLElement => x !== null)),
+      ];
+    }
 
     const draw = () => {
       const s = getState();
@@ -279,6 +316,7 @@ export const orthographyPanel: PanelDef = {
       project = s.info.projectId;
       source = null;
       preview = null;
+      pronounced = null;
       armedDraft = false;
       void load();
     };
