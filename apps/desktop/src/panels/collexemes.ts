@@ -3,10 +3,10 @@
 // CQP query. A row opens that word's lines in the Concordance. Rules in
 // ../collexemes/logic.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { collexemes, errorText } from "../api";
+import { collexemes, distinctiveCollexemes, errorText } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
-import { collexemeNote, collexemeTsv, narrowed, SIGNIFICANT, strengthCell, type Collexemes } from "../collexemes/logic";
+import { collexemeNote, collexemeTsv, distinctiveNote, distinctiveTsv, narrowed, prefers, SIGNIFICANT, strengthCell, type Collexemes, type Distinctive } from "../collexemes/logic";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
@@ -18,13 +18,18 @@ export const collexemesPanel: PanelDef = {
   create(): PanelView {
     const el = h("div", { className: "panel panel-collexemes" });
     let data: Collexemes | null = null;
-    let asked = { query: "", slot: 1, lemma: true, text: "" };
+    let versusData: Distinctive | null = null;
+    let asked = { query: "", slot: 1, lemma: true, text: "", versus: "", versusSlot: 1 };
     let seq = 0;
     const query = h("input", { type: "search", className: "cx-query", placeholder: `A construction as a CQP query, e.g. ${EXAMPLE}`, spellcheck: false });
     query.setAttribute("aria-label", "Construction (CQP query)");
     const go = h("button", { type: "button", className: "primary", textContent: "Count" });
     const slot = h("select", { className: "cx-slot", title: "Which position of the construction to count the words in" }, ...Array.from({ length: 8 }, (_, i) => h("option", { value: String(i + 1), textContent: `Position ${i + 1}` })));
     slot.setAttribute("aria-label", "Position");
+    const versus = h("input", { type: "search", className: "cx-versus", placeholder: "Compare with another construction (optional)", spellcheck: false });
+    versus.setAttribute("aria-label", "Second construction (CQP query)");
+    const versusSlot = h("select", { className: "cx-slot2", title: "Which position of the second construction holds the same kind of word" }, ...Array.from({ length: 8 }, (_, i) => h("option", { value: String(i + 1), textContent: `Its position ${i + 1}` })));
+    versusSlot.setAttribute("aria-label", "Position in the second construction");
     const by = h("select", { className: "cx-by", title: "Count lemmas (every form together) or words as written" }, h("option", { value: "lemma", textContent: "Lemmas" }), h("option", { value: "word", textContent: "Words" }));
     by.setAttribute("aria-label", "Count");
     const textPicker = h("select", { title: "Search the whole project or one text (a :: condition in the query picks texts by detail)" });
@@ -40,7 +45,46 @@ export const collexemesPanel: PanelDef = {
       textPicker.value = [...textPicker.options].some((o) => o.value === keep) ? keep : "";
     };
 
+    const drawVersus = (d: Distinctive) => {
+      note.textContent = distinctiveNote(d, asked.query, asked.versus);
+      table.className = "fq-table cx-table ws-diff";
+      copy.disabled = d.rows.length === 0;
+      const text = asked.text === "" ? null : { id: asked.text, title: textPicker.selectedOptions[0]?.textContent ?? "" };
+      table.replaceChildren(
+        h("thead", {}, h("tr", {}, ...[[asked.lemma ? "Lemma" : "Word", ""], ["First", `Times it fills position ${asked.slot} of «${asked.query}»`], ["Second", `Times it fills position ${asked.versusSlot} of «${asked.versus}»`], ["Strength", "−log10 of Fisher's exact p: above zero it prefers the first construction, below zero the second; 1.3 or more either way is p < .05"]].map(([t, tip]) => h("th", { scope: "col", textContent: t, title: tip })))),
+        h(
+          "tbody",
+          {},
+          ...d.rows.map((r) => {
+            const lean = prefers(r);
+            const tr = h(
+              "tr",
+              { tabIndex: 0, className: lean === "both" ? "" : `ws-lean-${lean}`, title: "Read its lines in the construction it prefers, in the Concordance" },
+              h("td", { className: "fq-item", textContent: r.item }),
+              h("td", { className: "fq-num", textContent: r.first.toLocaleString("en") }),
+              h("td", { className: "fq-num", textContent: r.second.toLocaleString("en") }),
+              h("td", { className: "fq-num", textContent: strengthCell(r.strength) }),
+            );
+            const open = () => {
+              const [q, sl] = lean === "b" ? [asked.versus, asked.versusSlot] : [asked.query, asked.slot];
+              askConcordance(narrowed(q, sl, r.item, asked.lemma) ?? q, "query", text, true, null);
+            };
+            tr.onclick = open;
+            tr.onkeydown = (e) => {
+              if (e.key === "Enter") open();
+            };
+            return tr;
+          }),
+        ),
+      );
+    };
+
     const drawRows = () => {
+      if (versusData !== null) {
+        drawVersus(versusData);
+        return;
+      }
+      table.className = "fq-table cx-table";
       if (data === null) {
         table.replaceChildren();
         return;
@@ -103,6 +147,7 @@ export const collexemesPanel: PanelDef = {
       const q = query.value.trim();
       const mine = ++seq;
       data = null;
+      versusData = null;
       table.replaceChildren();
       copy.disabled = true;
       if (q === "") {
@@ -110,9 +155,18 @@ export const collexemesPanel: PanelDef = {
         return;
       }
       note.textContent = "Counting…";
-      const ask = { query: q, slot: Number(slot.value), lemma: by.value === "lemma", text: textPicker.value };
+      const ask = { query: q, slot: Number(slot.value), lemma: by.value === "lemma", text: textPicker.value, versus: versus.value.trim(), versusSlot: Number(versusSlot.value) };
       try {
-        const r = await collexemes({ query: ask.query, slot: ask.slot, lemma: ask.lemma, textId: ask.text === "" ? null : ask.text });
+        const textId = ask.text === "" ? null : ask.text;
+        if (ask.versus !== "") {
+          const d = await distinctiveCollexemes({ first: ask.query, firstSlot: ask.slot, second: ask.versus, secondSlot: ask.versusSlot, lemma: ask.lemma, textId });
+          if (mine !== seq) return;
+          versusData = d;
+          asked = ask;
+          drawRows();
+          return;
+        }
+        const r = await collexemes({ query: ask.query, slot: ask.slot, lemma: ask.lemma, textId });
         if (mine !== seq) return;
         data = r;
         asked = ask;
@@ -124,14 +178,25 @@ export const collexemesPanel: PanelDef = {
     }
 
     go.onclick = () => void load();
-    query.onkeydown = (e) => {
+    versus.addEventListener("search", () => {
+      if (versus.value === "") void load();
+    });
+    query.onkeydown = versus.onkeydown = (e) => {
       if (e.key === "Enter" && !e.isComposing) {
         e.preventDefault();
         void load();
       }
     };
-    slot.onchange = by.onchange = textPicker.onchange = () => void load();
+    slot.onchange = by.onchange = textPicker.onchange = versusSlot.onchange = () => void load();
     copy.onclick = () => {
+      if (versusData !== null) {
+        const n = versusData.rows.length;
+        void writeText(distinctiveTsv(versusData)).then(
+          () => showToast({ tone: "info", lines: [`Copied ${n} rows. Paste them into a spreadsheet.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+        return;
+      }
       if (data === null || data.rows.length === 0) return;
       const n = data.rows.length;
       void writeText(collexemeTsv(data)).then(
@@ -160,10 +225,12 @@ export const collexemesPanel: PanelDef = {
       }
       if (!sameProject) {
         query.value = "";
+        versus.value = "";
         data = null;
+        versusData = null;
       }
       drawTexts();
-      el.replaceChildren(h("div", { className: "cc-bar" }, query, go), h("div", { className: "cc-bar" }, slot, by, textPicker, copy), note, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, query, slot, go), h("div", { className: "cc-bar" }, versus, versusSlot), h("div", { className: "cc-bar" }, by, textPicker, copy), note, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };

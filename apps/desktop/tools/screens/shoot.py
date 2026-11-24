@@ -710,6 +710,12 @@ def main():
             run.shot("state-collexemes", run.page.locator(".panel-collexemes"))
             if run.page.locator(".panel-collexemes .cx-table tr.cx-drawn").count() != 2 or "drawn to it beyond chance" not in run.page.locator(".panel-collexemes .fq-count").inner_text():
                 failures.append("Collexemes did not list the fixture's slot fillers")
+            run.page.locator(".panel-collexemes .cx-versus").fill('[] [lemma="kani"]')
+            run.page.locator(".panel-collexemes .cx-versus").press("Enter")
+            run.page.wait_for_timeout(500)
+            run.shot("state-collexemes-versus", run.page.locator(".panel-collexemes"))
+            if run.page.locator(".panel-collexemes .ws-lean-a").count() != 1 or run.page.locator(".panel-collexemes .ws-lean-b").count() != 1:
+                failures.append("Distinctive collexemes did not shade each side's fillers")
             # Keywords (Scrolls): a text's words against the rest.
             run.front("keywords", "Keywords")
             run.page.wait_for_timeout(400)

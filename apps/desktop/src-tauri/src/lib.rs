@@ -418,6 +418,13 @@ fn collexemes(s: State<SessionThread>, query: String, slot: usize, lemma: bool, 
     s.run(move |s| collexemes::collexemes(s, &query, slot, lemma, text_id.as_deref().filter(|t| !t.is_empty())))
 }
 
+/// Distinctive collexemes: the fillers two constructions' slots prefer (src/collexemes.rs).
+#[tauri::command(async)]
+#[allow(clippy::too_many_arguments)]
+fn distinctive_collexemes(s: State<SessionThread>, first: String, first_slot: usize, second: String, second_slot: usize, lemma: bool, text_id: Option<String>) -> Result<collexemes::Distinctive, String> {
+    s.run(move |s| collexemes::distinctive(s, &first, first_slot, &second, second_slot, lemma, text_id.as_deref().filter(|t| !t.is_empty())))
+}
+
 /// The words used in the same contexts as a word (src/similar.rs).
 #[tauri::command(async)]
 fn similar_words(s: State<SessionThread>, word: String, kind: concordance::Kind, window: usize, min_freq: usize, text_id: Option<String>, within: Option<concordance::Where>) -> Result<similar::Similar, String> {
@@ -2825,6 +2832,7 @@ pub fn run() {
             collocates,
             similar_words,
             collexemes,
+            distinctive_collexemes,
             keywords,
             tier_glossing,
             read_tier_glossing,

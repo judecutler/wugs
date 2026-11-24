@@ -40,3 +40,22 @@ export function narrowed(query: string, slot: number, item: string, lemma: boole
   tokens[slot - 1] = inner === "" ? `[${test}]` : `[${inner} & ${test}]`;
   return tokens.join(" ") + (tail === "" ? "" : ` ${tail}`);
 }
+
+export type DistinctiveRow = { item: string; first: number; second: number; strength: number };
+export type Distinctive = { rows: DistinctiveRow[]; first: number; second: number };
+
+/** Which construction a filler prefers: "a", "b", or "both" while it is not 1.3 either way. */
+export const prefers = (r: DistinctiveRow): "a" | "b" | "both" => (r.strength >= SIGNIFICANT ? "a" : r.strength <= -SIGNIFICANT ? "b" : "both");
+
+export function distinctiveNote(d: Distinctive, a: string, b: string): string {
+  const n = (x: number) => x.toLocaleString("en");
+  if (d.first === 0 || d.second === 0) return `${d.first === 0 ? `«${a}»` : `«${b}»`} fills its position nowhere here, so there is nothing to compare.`;
+  const ka = d.rows.filter((r) => prefers(r) === "a").length;
+  const kb = d.rows.filter((r) => prefers(r) === "b").length;
+  return `${n(d.rows.length)} different fillers in ${n(d.first)} matches of «${a}» and ${n(d.second)} of «${b}»: ${n(ka)} prefer the first and ${n(kb)} the second beyond chance (Gries and Stefanowitsch's distinctive collexemes; strength is −log10 of Fisher's exact p, below zero for the second).`;
+}
+
+export function distinctiveTsv(d: Distinctive): string {
+  const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
+  return ["filler\tfirst\tsecond\tstrength", ...d.rows.map((r) => [clean(r.item), r.first, r.second, r.strength.toFixed(3)].join("\t"))].join("\n") + "\n";
+}
