@@ -15,6 +15,7 @@ import type { FeatureMap } from "../typology/map";
 import { drawFeatureMap } from "./featuremap";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
+import { PROFILE_MARK, profileOf, sonorityBreaks, sonorityNote } from "../sounds/sonority";
 import { clustersNote, consonantClusters, gapsNote, positions, shapes, share, type Cluster, type Shape, type Where } from "../sounds/shapes";
 import { againstRelatives, checkInventory, phoibleLine, phonemeKey, shareOf, type PhoibleCompared } from "../sounds/phoible";
 import { chartClipboard } from "../sounds/chartcopy";
@@ -291,18 +292,24 @@ export const soundsPanel: PanelDef = {
     };
 
     const clusterSection = (l: Loaded): HTMLElement[] => {
+      const breaks = sonorityBreaks(l.clusters);
+      const ssp = sonorityNote(l.clusters, breaks);
       const cell = (n: number) => h("td", { className: `num${n === 0 ? " sd-gap" : ""}`, textContent: n === 0 ? "–" : n.toLocaleString() });
       const rows = l.clusters.slice(0, 40).map((c) => {
         const find = h("button", { type: "button", className: "sd-sound", textContent: c.cluster, title: `e.g. «${c.example}», in ${c.words} ${c.words === 1 ? "word" : "words"}: open every word with it in the Concordance` });
         find.onclick = () => askConcordance(`*${c.cluster}*`, "word", null, false);
-        return h("tr", {}, h("td", {}, find), cell(c.initial), cell(c.medial), cell(c.final), h("td", { className: "ipa", textContent: c.example }));
+        const profile = profileOf(c.cluster);
+        const broken = breaks.some((b) => b.cluster === c.cluster);
+        const son = h("td", { className: broken ? "sd-ssp-break" : "", textContent: profile === null ? "" : PROFILE_MARK[profile], title: profile === null ? "A sound the chart does not place by manner" : `Sonority ${profile === "mixed" ? "goes up and down" : profile}${broken ? ": breaks sonority sequencing at a word's edge" : ""}` });
+        return h("tr", {}, h("td", {}, find), cell(c.initial), cell(c.medial), cell(c.final), son, h("td", { className: "ipa", textContent: c.example }));
       });
       return [
         h("h4", { className: "sd-h", textContent: "Consonant clusters" }),
         h("p", { className: "note", textContent: l.clustersNote }),
+        ...(ssp === "" ? [] : [h("p", { className: "note sd-ssp", textContent: ssp })]),
         ...(rows.length === 0
           ? []
-          : [h("div", { className: "sd-scroll" }, h("table", { className: "fq-table sd-where" }, h("thead", {}, h("tr", {}, ...["Cluster", "Word-initial", "Inside", "Word-final", "Example"].map((t) => h("th", { textContent: t })))), h("tbody", {}, ...rows)))]),
+          : [h("div", { className: "sd-scroll" }, h("table", { className: "fq-table sd-where" }, h("thead", {}, h("tr", {}, ...["Cluster", "Word-initial", "Inside", "Word-final", "Sonority", "Example"].map((t) => h("th", { textContent: t })))), h("tbody", {}, ...rows)))]),
       ];
     };
 

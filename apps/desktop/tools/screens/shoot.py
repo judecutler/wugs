@@ -1541,6 +1541,8 @@ def main():
             run.shot("state-sounds-clusters", run.page.locator(".panel-sounds"))
             if "up to 2 consonants" not in run.page.locator(".panel-sounds").inner_text():
                 failures.append("Sounds did not say how many consonants start and end words")
+            if run.page.locator(".panel-sounds .sd-ssp").count() != 1 or "sonority" not in run.page.locator(".panel-sounds .sd-ssp").inner_text().lower():
+                failures.append("Sounds did not check the clusters' sonority sequencing")
             run.page.locator(".panel-sounds .sd-where >> nth=-1").scroll_into_view_if_needed()
             run.shot("state-sounds-where", run.page.locator(".panel-sounds"))
             if run.page.locator(".panel-sounds .sd-shape").count() < 3:
