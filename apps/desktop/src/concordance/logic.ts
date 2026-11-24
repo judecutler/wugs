@@ -139,7 +139,7 @@ export function countLine(shown: number, total: number, texts: number): string {
 }
 
 /** The hits as tab-separated rows (left, keyword, right, text), for a spreadsheet. */
-export function asTsv(hits: readonly Hit[], details?: ReadonlyMap<string, ReadonlyMap<string, string>>): string {
+export function asTsv(hits: readonly Hit[], details?: ReadonlyMap<string, ReadonlyMap<string, string>>, under?: (h: Hit) => string | null): string {
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
   if (details === undefined) return ["left\tkeyword\tright\ttext", ...hits.map((h) => [left(h), keyword(h), right(h), h.textTitle].map(clean).join("\t"))].join("\n");
   // The fuller table, one line per hit with what a statistical analysis of
@@ -147,10 +147,12 @@ export function asTsv(hits: readonly Hit[], details?: ReadonlyMap<string, Readon
   const analysed = hits.some((h) => h.breakdown !== null || h.glosses !== null);
   const keys = [...new Set(hits.flatMap((h) => [...(details.get(h.textId)?.keys() ?? [])]))].sort();
   const secs = (ms: number | null) => (ms === null ? "" : (ms / 1000).toFixed(3));
-  const head = ["left", "keyword", "right", "text", "start_s", "end_s", ...(analysed ? ["breakdown", "glosses"] : []), ...keys];
+  // The line under each hit (its translation, or the sentence a translation translates), when shown.
+  const translated = under !== undefined && hits.some((h) => (under(h) ?? "") !== "");
+  const head = ["left", "keyword", "right", "text", "start_s", "end_s", ...(analysed ? ["breakdown", "glosses"] : []), ...(translated ? ["translation"] : []), ...keys];
   const rows = hits.map((h) => {
     const d = details.get(h.textId);
-    return [left(h), keyword(h), right(h), h.textTitle, secs(h.startMs), secs(h.endMs), ...(analysed ? [h.breakdown ?? "", h.glosses ?? ""] : []), ...keys.map((k) => d?.get(k) ?? "")].map(clean).join("\t");
+    return [left(h), keyword(h), right(h), h.textTitle, secs(h.startMs), secs(h.endMs), ...(analysed ? [h.breakdown ?? "", h.glosses ?? ""] : []), ...(translated ? [under?.(h) ?? ""] : []), ...keys.map((k) => d?.get(k) ?? "")].map(clean).join("\t");
   });
   return [head.map(clean).join("\t"), ...rows].join("\n");
 }
@@ -161,12 +163,14 @@ const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").re
  * the left context right-aligned and clipped to `chars`, the match in bold,
  * the right context clipped, the text's title small; a spreadsheet takes
  * the same table cell by cell. */
-export function kwicHtml(hits: readonly Hit[], chars = 40): string {
+export function kwicHtml(hits: readonly Hit[], chars = 40, under?: (h: Hit) => string | null): string {
   const cell = "padding:1px 6px;vertical-align:baseline;white-space:nowrap";
-  const rows = hits.map(
-    (h) =>
-      `<tr><td style="${cell};text-align:right">${escHtml(clip(left(h), chars, "left"))}</td><td style="${cell}"><b>${escHtml(keyword(h))}</b></td><td style="${cell}">${escHtml(clip(right(h), chars, "right"))}</td><td style="${cell};font-size:80%;color:#555">${escHtml(h.textTitle)}</td></tr>`,
-  );
+  const rows = hits.map((h) => {
+    const line = `<tr><td style="${cell};text-align:right">${escHtml(clip(left(h), chars, "left"))}</td><td style="${cell}"><b>${escHtml(keyword(h))}</b></td><td style="${cell}">${escHtml(clip(right(h), chars, "right"))}</td><td style="${cell};font-size:80%;color:#555">${escHtml(h.textTitle)}</td></tr>`;
+    const t = under?.(h) ?? "";
+    // The translation in italics under its line, as a handout prints it.
+    return t === "" ? line : `${line}<tr><td></td><td colspan="2" style="padding:0 6px 4px;font-style:italic;font-size:90%">‘${escHtml(t)}’</td><td></td></tr>`;
+  });
   return `<table style="border-collapse:collapse;font-family:'Charis SIL','Doulos SIL',serif">${rows.join("")}</table>`;
 }
 
