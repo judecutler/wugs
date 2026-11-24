@@ -6,6 +6,7 @@
 // and what the IPA does not use (capitals, other letters) listed apart, since
 // those are usually spelling slips. Each sound opens the Concordance on the
 // words that hold it.
+import { bundle, FEATURES, featuresOf, featuresTsv, matching, nextValue, type Feature } from "../sounds/features";
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, phoibleCompare, phoibleMap, projectLanguage, soundWords } from "../api";
 import type { FeatureMap } from "../typology/map";
@@ -57,6 +58,8 @@ export const soundsPanel: PanelDef = {
     let openContrast: string | null = null;
     /** The two sounds whose environments are compared (null: the two commonest). */
     let envA: string | null = null;
+    /** Feature values picked in the Features table: the natural class they name. */
+    const picked = new Map<Feature, "+" | "-">();
     let envB: string | null = null;
     /** PHOIBLE, once asked for: its comparison, or why there is none. */
     let phoible: PhoibleCompared | null = null;
@@ -97,6 +100,58 @@ export const soundsPanel: PanelDef = {
       const b = h("button", { type: "button", className: "sd-sound", title: `«${s.sound}» ${s.count.toLocaleString()} ${s.count === 1 ? "time" : "times"} in ${s.words} ${s.words === 1 ? "word" : "words"}, e.g. «${s.example}». Click for every word with it.` }, h("span", { className: "sd-glyph", textContent: s.sound }), h("span", { className: "sd-n", textContent: s.count.toLocaleString() }));
       b.onclick = () => askConcordance(`*${s.sound}*`, "word", onlyThisText ? shownText() : null, false);
       return b;
+    };
+
+    const SHORT: Record<Feature, string> = { syllabic: "syl", consonantal: "cons", sonorant: "son", continuant: "cont", "delayed release": "d.r.", nasal: "nas", lateral: "lat", voice: "voi", labial: "lab", coronal: "cor", dorsal: "dors", high: "hi", low: "lo", back: "back", round: "rnd" };
+    const featuresSection = (l: Loaded): HTMLElement[] => {
+      const placed = l.sounds.map((s) => s.sound).filter((s) => featuresOf(s) !== null);
+      if (placed.length === 0) return [];
+      const inClass = new Set(picked.size === 0 ? placed : matching(placed, picked));
+      const head = h(
+        "tr",
+        {},
+        h("th", { scope: "col", textContent: "" }),
+        ...FEATURES.map((f) => {
+          const v = picked.get(f);
+          const b = h("button", { type: "button", className: v === undefined ? "sd-feat" : "sd-feat is-on", textContent: `${v === undefined ? "" : v === "+" ? "+" : "−"}${SHORT[f]}`, title: `${f}: click for +, again for −, again to drop it. The sounds with every picked value stay lit.` });
+          b.onclick = () => {
+            const next = nextValue(v);
+            if (next === undefined) picked.delete(f);
+            else picked.set(f, next);
+            paint();
+          };
+          return h("th", { scope: "col" }, b);
+        }),
+      );
+      const rows = placed.map((s) => {
+        const f = featuresOf(s)!;
+        return h("tr", { className: inClass.has(s) ? "" : "sd-feat-out" }, h("th", { scope: "row", className: "ipa", textContent: s }), ...FEATURES.map((k) => h("td", { textContent: f[k] === "-" ? "−" : f[k] })));
+      });
+      const members = [...inClass];
+      const line =
+        picked.size === 0
+          ? `${placed.length} sounds on the chart. Click a feature to pick + or −; the sounds with every picked value are a natural class.`
+          : members.length === 0
+            ? `No sound here is ${bundle(picked)}.`
+            : `${bundle(picked)}: ${members.join(" ")} (${members.length} of ${placed.length}).`;
+      const copyF = h("button", { type: "button", textContent: "Copy table", title: "Every sound with its feature values, for a handout or spreadsheet" });
+      copyF.onclick = () =>
+        void writeText(featuresTsv(placed)).then(
+          () => showToast({ tone: "info", lines: [`Copied the features of ${placed.length} sounds.`] }),
+          (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+        );
+      const clear = h("button", { type: "button", textContent: "Clear", disabled: picked.size === 0 });
+      clear.onclick = () => {
+        picked.clear();
+        paint();
+      };
+      return [
+        h("h4", { className: "sd-h", textContent: "Features" }),
+        h("div", { className: "sd-bar" }, copyF, clear),
+        h("p", { className: "note sd-feat-line", textContent: line }),
+        h("div", { className: "sd-scroll" }, h("table", { className: "pg-table sd-features" }, h("thead", {}, head), h("tbody", {}, ...rows))),
+        h("p", { className: "note", textContent: "Values follow from where each sound sits on the IPA chart (after Hayes's Introductory Phonology, simplified); a blank means the feature does not apply. Check them against your analysis." }),
+      ];
     };
 
     const consonantTable = (c: Chart): HTMLElement | null => {
@@ -528,6 +583,7 @@ export const soundsPanel: PanelDef = {
         ...(vowels === null ? [] : [h("h4", { className: "sd-h", textContent: "Vowels" }), vowels]),
         ...listed("Affricates and double articulations", c.affricates),
         ...[...c.others].flatMap(([group, sounds]) => listed(group, sounds)),
+        ...featuresSection(loaded),
         ...pairsSection(loaded),
         ...envSection(loaded),
         ...phoibleSection(loaded),

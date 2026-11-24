@@ -908,6 +908,18 @@ def main():
                 failures.append("Environments did not say where a minimal pair's sounds both occur")
             if run.page.locator(".panel-sounds .sd-env tbody tr").count() == 0:
                 failures.append("Environments listed no environment")
+            # Features: +voice −sonorant picks out the voiced obstruents.
+            feats = run.page.locator(".panel-sounds .sd-features")
+            feats.scroll_into_view_if_needed()
+            run.page.locator(".panel-sounds .sd-feat", has_text="voi").click()
+            run.page.locator(".panel-sounds .sd-feat", has_text="son").click()
+            run.page.locator(".panel-sounds .sd-feat", has_text="son").click()
+            run.page.wait_for_timeout(200)
+            run.page.locator(".panel-sounds .sd-feat-line").scroll_into_view_if_needed()
+            run.shot("state-sounds-features", run.page.locator(".panel-sounds"))
+            if "[+voice, −sonorant]" not in run.page.locator(".panel-sounds .sd-feat-line").inner_text():
+                failures.append("Features did not pick out [+voice, −sonorant]")
+            run.page.locator(".panel-sounds .sd-bar button", has_text="Clear").click()
             # Two sounds never in one environment get a rule to try.
             run.page.locator(".panel-sounds select[aria-label='First sound']").select_option("ɾ")
             run.page.wait_for_timeout(150)
