@@ -4,16 +4,25 @@
 import type { ExampleWord } from "../gloss/example";
 
 export type Seg = { id: string; tier: string; parent: string | null; startMs: number | null; content: string };
-export type Tier = { id: string; utterance: boolean };
+export type Tier = { id: string; utterance: boolean; role?: string | null; name?: string };
 
-/** The text's sentences: the utterance track's segments (else the first track used), translations left out, in numbered order. */
+/** The tracks a text's sentences are on: the utterance track when this text
+ * uses it; else every track with sentences that is not a translation, as a
+ * transcript with a track per speaker (CHAT) has. */
+export function sentenceTracks(segments: readonly Seg[], tiers: readonly Tier[]): string[] {
+  const used = [...new Set(segments.filter((s) => s.parent === null).map((s) => s.tier))].filter((id) => tiers.find((t) => t.id === id)?.role !== "translation");
+  const utterance = tiers.find((t) => t.utterance)?.id;
+  return utterance !== undefined && used.includes(utterance) ? [utterance] : used;
+}
+
+/** The text's sentences on its sentence tracks, translations left out, in numbered order. */
 export function sentencesOf<S extends Seg>(segments: readonly S[], tiers: readonly Tier[], numbers: Map<string, number>): S[] {
-  const track = tiers.find((t) => t.utterance)?.id ?? segments.find((s) => s.parent === null)?.tier ?? "";
-  return segments.filter((s) => s.tier === track && s.parent === null).sort((a, b) => (numbers.get(a.id) ?? 0) - (numbers.get(b.id) ?? 0));
+  const tracks = sentenceTracks(segments, tiers);
+  return segments.filter((s) => tracks.includes(s.tier) && s.parent === null).sort((a, b) => (numbers.get(a.id) ?? 0) - (numbers.get(b.id) ?? 0));
 }
 
 /** One sentence as the panel draws it. */
-export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; notes?: string[] };
+export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; notes?: string[]; speaker?: string };
 
 export const analysed = (l: Line): boolean => l.words.some((w) => w.morphs.length > 0);
 

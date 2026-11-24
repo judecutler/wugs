@@ -9,7 +9,7 @@ import { glossRuns, wordLines, type ExampleWord } from "../gloss/example";
 import { numbering } from "../gloss/document";
 import { translationLines } from "../gloss/translation";
 import { hear, playButton } from "../hear/hear";
-import { analysed, nextWhere, progress, sentencesOf, SHOWS, showOf, type Line, type Show } from "../interlinear/logic";
+import { analysed, nextWhere, progress, sentencesOf, sentenceTracks, SHOWS, showOf, type Line, type Show } from "../interlinear/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getSelection, getState, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
@@ -26,7 +26,9 @@ const BATCH = 8;
 async function linesOf(text: TextDetail): Promise<Line[]> {
   // Numbered on their own track, as Copy example numbers them.
   const segs = text.segments.map((s) => ({ ...s, parent: s.parent ?? null }));
-  const tiers = text.tiers.map((t) => ({ id: t.id, utterance: t.utterance === true }));
+  const tiers = text.tiers.map((t) => ({ id: t.id, utterance: t.utterance === true, role: t.role, name: t.name }));
+  // A transcript with a track per speaker names the speaker on each line.
+  const speakers = sentenceTracks(segs, tiers).length > 1;
   const numbers = numbering(sentencesOf(segs, tiers, new Map()));
   const sentences = sentencesOf(segs, tiers, numbers);
   const lines: Line[] = [];
@@ -37,7 +39,7 @@ async function linesOf(text: TextDetail): Promise<Line[]> {
       const full = text.segments.find((s) => s.id === seg.id)!;
       const translation = translationLines(full, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
       const words: ExampleWord[] = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
-      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, notes: (v.segmentNotes ?? []).map((n) => n.body) });
+      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, notes: (v.segmentNotes ?? []).map((n) => n.body), ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
     });
   }
   return lines;
@@ -148,9 +150,10 @@ export const interlinearPanel: PanelDef = {
           : h("p", { className: "il-plain", textContent: l.content.trim() === "" ? "(not transcribed)" : l.content });
         const row = h(
           "li",
-          { className: `il-row${sel?.segmentId === l.id ? " il-selected" : ""}${analysed(l) ? "" : " il-unglossed"}`, tabIndex: 0, title: "Open this sentence in the Gloss panel" },
+          { className: `il-row${l.speaker === undefined ? "" : " il-row-speaker"}${sel?.segmentId === l.id ? " il-selected" : ""}${analysed(l) ? "" : " il-unglossed"}`, tabIndex: 0, title: "Open this sentence in the Gloss panel" },
           h("span", { className: "il-num", textContent: `(${l.number})` }),
           play,
+          l.speaker === undefined ? null : h("span", { className: "il-speaker", textContent: l.speaker }),
           h("div", { className: "il-body" }, body, l.translation === null ? null : h("p", { className: "il-tr", textContent: `‘${l.translation}’` }), ...(l.notes ?? []).map((n) => h("p", { className: "il-note", textContent: `Note: ${n}` }))),
         );
         row.dataset.id = l.id;

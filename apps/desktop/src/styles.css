@@ -1278,6 +1278,8 @@ body::before {
 .il-row:focus-visible { outline: var(--focus-ring); outline-offset: 1px; }
 .il-selected { background: var(--accent-soft); }
 .il-num { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.2em; text-align: right; }
+.il-row.il-row-speaker { grid-template-columns: auto auto auto 1fr; }
+.il-speaker { font-weight: 600; font-size: var(--text-sm, 12px); color: var(--accent); letter-spacing: 0.04em; min-width: 3em; padding-top: 2px; }
 .il-body { min-width: 0; }
 .il-words { display: flex; flex-wrap: wrap; gap: 2px 14px; }
 .il-word { display: inline-flex; flex-direction: column; }

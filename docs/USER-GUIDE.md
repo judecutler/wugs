@@ -449,7 +449,7 @@ wugs remembers the choice on this computer. The number is the segment's place in
 
 ### Read a whole text glossed
 
-The **Interlinear** tab, beside Gloss, shows the selected text the way you would print it: each sentence with its number, its words, the morph breakdown, the glosses with grammatical glosses in small capitals, and the free translation in quotes. Sentences not glossed yet show their transcription in grey.
+The **Interlinear** tab, beside Gloss, shows the selected text the way you would print it: each sentence with its number, its words, the morph breakdown, the glosses with grammatical glosses in small capitals, and the free translation in quotes. Sentences not glossed yet show their transcription in grey. A transcript with a track per speaker, such as a CHAT file, is read as a conversation: every speaker's utterances in time order, numbered together, each with the speaker's code beside it.
 
 - The line at the top says how many sentences and words are glossed so far. A sentence counts as glossed once every word in it is.
 - Choose **Sentences still to gloss** in the menu above the list to hide the finished ones, or **Sentences without a translation** to list the transcribed sentences no one has translated yet; the button beside it then reads **Next to translate** and opens the next one in the Gloss panel, where its translation line is.
