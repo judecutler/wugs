@@ -4,11 +4,11 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
 import { sequenceWords, unusualLine, unusualWords, type Unusual } from "../checks/sequences";
-import { readinessLine, readinessNote, timingLine, timingNote, type Readiness, type Timing, type TimingIssue } from "../checks/logic";
+import { readinessLine, readinessNote, timingLine, timingNote, twiceLine, twiceNote, type Duplicates, type Readiness, type Timing, type TimingIssue, type Twice } from "../checks/logic";
 import { addedLine, addLabel, consentLine, consentNote, type ConsentGaps, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
 import { headwordOf } from "../notes/logic";
@@ -39,6 +39,7 @@ export const checksPanel: PanelDef = {
     let unusual: { words: Unusual[]; running: number } | null = null;
     let doubles: { pairs: LikelyPair[]; entries: number } | null = null;
     let timing: Timing | null = null;
+    let twice: Duplicates | null = null;
     let gaps: { without: number; fillable: number } | null = null;
     let trees: { sentences: TreeProblem[]; total: number; annotated: number } | null = null;
     let showAllChars = false;
@@ -52,9 +53,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null)]).then(
-        ([r, m, c, w, g, t, d, k, l, tm, ar]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null)]).then(
+        ([r, m, c, w, g, t, d, k, l, tm, ar, du]) => {
           if (mine !== seq) return;
+          twice = du;
           ready = ar;
           timing = tm;
           doubles = { pairs: likelyDuplicates(l), entries: l.length };
@@ -437,6 +439,27 @@ export const checksPanel: PanelDef = {
         ? []
         : [h("h3", { className: "ck-title", textContent: "Segment timing" }), h("p", { className: "note", textContent: timingLine(timing) }), h("ul", { className: "ck-list" }, ...timing.issues.map(timingCard))];
 
+    const twiceCard = (t: Twice): HTMLElement => {
+      const copies = t.copies.slice(0, 6).map((c, i) => {
+        const b = h("button", { type: "button", className: "link-button", textContent: `«${c.textTitle}»`, title: `Open copy ${i + 1} in the Gloss panel` });
+        b.onclick = async () => {
+          await selectText(c.textId);
+          selectSegment({ textId: c.textId, tierId: c.tierId, segmentId: c.segmentId });
+          window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "gloss" }));
+        };
+        return b;
+      });
+      return h(
+        "li",
+        { className: "ck-card" },
+        h("div", { className: "ck-variant" }, h("strong", { textContent: t.sentence }), h("span", { className: "note", textContent: twiceNote(t) })),
+        h("div", { className: "ck-variant" }, ...copies, t.copies.length > 6 ? h("span", { className: "note", textContent: `and ${t.copies.length - 6} more` }) : null),
+      );
+    };
+
+    const twiceSection = (): HTMLElement[] =>
+      twice === null ? [] : [h("h3", { className: "ck-title", textContent: "Sentences written twice" }), h("p", { className: "note", textContent: twiceLine(twice) }), h("ul", { className: "ck-list" }, ...twice.listed.slice(0, 100).map(twiceCard))];
+
     const doublesSection = (): HTMLElement[] =>
       doubles === null
         ? []
@@ -499,6 +522,7 @@ export const checksPanel: PanelDef = {
         h("ul", { className: "ck-list" }, ...drift.map(driftCard)),
         ...doublesSection(),
         ...timingSection(),
+        ...twiceSection(),
         ...examplesSection(),
         ...treesSection(),
         ...consentSection(),

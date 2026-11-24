@@ -33,6 +33,7 @@ pub mod kits;
 pub mod layout;
 pub mod lexicon;
 pub mod lexicon_table;
+pub mod duplicates;
 pub mod meanings;
 pub mod measure;
 pub mod media_bin;
@@ -449,7 +450,13 @@ fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option
     s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
 }
 
-/// Segments that overlap, or are very short or long (src/timing.rs).
+/// Sentences written twice or more (src/duplicates.rs).
+#[tauri::command(async)]
+fn duplicate_sentences(s: State<SessionThread>) -> Result<duplicates::Duplicates, String> {
+    s.run(duplicates::duplicates)
+}
+
+/// Segments that overlap on a track, or are very short or very long.
 #[tauri::command(async)]
 fn segment_timing(s: State<SessionThread>) -> Result<timing::Timing, String> {
     s.run(timing::timing)
@@ -2238,6 +2245,7 @@ pub fn run() {
             cognates,
             sentence_lists,
             segment_timing,
+            duplicate_sentences,
             sentence_list_import,
             sentence_list_make,
             sentence_list_view,
