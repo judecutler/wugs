@@ -56,6 +56,20 @@
     const segments = Array.from({ length: t.segments }, (_, i) =>
       seg(`${t.id}-s${i}`, "tier-utt", 1000 + i * 2400, 3000 + i * 2400 - ((i * 337 + (i % 4) * 280) % 900), ["mopa tela wiripa", "kanu sele", "ŋai toɾu tela", "wiripa ni-kani"][i % 4], `c${i}`),
     );
+    if (t.id === "t-fox" && window.__WUGS_PHONES__) {
+      // A forced aligner's phones for the Durations panel's Rhythm: one sound a segment, pauses as sil.
+      const phones = { id: "tier-phones", name: "phones (aligned)", kind: "time-aligned", role: "alignment", language: "x-tok" };
+      const out = [];
+      let at = 1000;
+      "mopa tela wiripa sil kanu sele sil ŋai toɾu tela sil wiripa nikani".split(" ").forEach((w, wi) => {
+        for (const [k, ch] of (w === "sil" ? ["sil"] : [...w]).entries()) {
+          const ms = ch === "sil" ? 300 : "aeiou".includes(ch) ? 70 + ((wi * 7 + k * 13) % 5) * 22 : 55 + ((wi + k) % 3) * 15;
+          out.push(seg(`${t.id}-p${out.length}`, "tier-phones", at, at + ms, ch, `p${out.length}`));
+          at += ms;
+        }
+      });
+      return { id: t.id, title: t.title, tiers: [tiers[0], phones], segments: [...segments, ...out] };
+    }
     if (t.id !== "t-market") return { id: t.id, title: t.title, tiers: [tiers[0]], segments };
     // The market conversation was transcribed twice, for the Agreement panel:
     // the second hearing moves some boundaries, hears two words otherwise,

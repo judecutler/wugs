@@ -9,6 +9,7 @@ import { errorText, saveDocument } from "../api";
 import { emptyState, h } from "../dom";
 import { atLeast, cannotCompare, compare, compareLine, defaultPair, durationGroups, durationsNote, msTicks, summaryTsv, tokensTsv, type Group } from "../durations/logic";
 import { rateLines, speakingRate } from "../durations/rate";
+import { rhythm, rhythmLines, rhythmTsv } from "../durations/rhythm";
 import { hear } from "../hear/hear";
 import { trackToMeasure } from "../measure/logic";
 import { provide } from "../palette/registry";
@@ -191,6 +192,18 @@ export const durationsPanel: PanelDef = {
         );
       }
       body.push(h("h3", { textContent: "Speaking rate" }), h("div", { className: "ag-summary du-rate" }, ...rateLines(speakingRate(text.segments, tierId)).map((line) => h("p", { textContent: line }))));
+      // Rhythm, when the track holds one sound a segment (phones).
+      const rh = rhythm(text.segments, tierId);
+      const rhLines = rhythmLines(rh);
+      if (rhLines.length > 0) {
+        const copyIntervals = h("button", { type: "button", textContent: "Copy intervals", title: "Every vocalic and consonantal interval with its stretch and length, for a spreadsheet" });
+        copyIntervals.onclick = () =>
+          writeText(rhythmTsv(rh)).then(
+            () => showToast({ tone: "info", lines: [`${rh.stretches.flat().length} intervals copied.`] }),
+            (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+          );
+        body.push(h("h3", { textContent: "Rhythm" }), h("div", { className: "ag-summary du-rhythm" }, ...rhLines.map((line) => h("p", { textContent: line }))), h("div", { className: "vw-bar" }, copyIntervals));
+      }
       el.replaceChildren(bar, ...body);
     };
 
