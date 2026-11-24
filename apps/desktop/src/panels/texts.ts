@@ -597,6 +597,7 @@ async function exportSketch() {
     const abbrMeanings = usedAbbrs.length === 0 ? [] : await abbreviationMeanings(usedAbbrs).catch(() => usedAbbrs.map(() => null));
     const abbreviations = abbreviationList(usedAbbrs, new Map(usedAbbrs.flatMap((a, i) => (abbrMeanings[i] ? [[a, abbrMeanings[i]!] as [string, string]] : []))));
     const html = grammarSketch({
+      indices: affixes?.indices,
       abbreviations,
       topics,
       place,

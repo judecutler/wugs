@@ -18,6 +18,7 @@ import type { Grid } from "../orthography/logic.ts";
 import type { Answer, Ours } from "../typology/logic.ts";
 import { pronounTable, type PronounEntry } from "./pronouns.ts";
 import { asHtml, type Example } from "../gloss/example.ts";
+import { indexRows, indicesNote, type Indices } from "../affixes/greenberg.ts";
 import { abbreviationsIn, abbreviationsOf, sortAbbreviations, type Abbreviation } from "../gloss/abbreviations.ts";
 
 export type Morpheme = { form: string; kind: "prefix" | "suffix" | "infix" | "proclitic" | "enclitic"; glosses: string[]; category: string };
@@ -55,6 +56,8 @@ export type SketchInput = {
   /** The position-class chart read from the glossed words: each slot's
    * label and its affixes as written with their glosses (`ni- 1SG`). */
   slots?: { label: string; affixes: string[] }[];
+  /** Morph counts over every glossed word, for Greenberg's indices (src/affixes/greenberg.ts). */
+  indices?: Indices;
   /** Glosses written more than one way (src/affixes/allomorphs.ts): each
    * gloss, its forms with their neighbours in words, and what may condition them. */
   allomorphs?: { gloss: string; forms: { form: string; uses: number; next: string; vowel: string }[]; note: string }[];
@@ -289,7 +292,13 @@ export function grammarSketch(d: SketchInput): string {
   parts.push(`<h2>4. Morphology</h2>`);
   const glossedWords = d.texts.reduce((n, t) => n + t.glossed, 0);
   const morphCount = d.texts.reduce((n, t) => n + (t.morphs ?? 0), 0);
-  if (glossedWords > 0 && morphCount > 0) {
+  if (d.indices !== undefined && d.indices.words > 0) {
+    // Greenberg's (1960) indices over every word broken into morphs.
+    parts.push(
+      `<p>${esc(indicesNote(d.indices))}</p>`,
+      `<table><tr><th>Index</th><th>Ratio</th><th>Value</th></tr>${indexRows(d.indices).map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.ratio)}</td><td>${r.value.toFixed(2)}</td></tr>`).join("")}</table>`,
+    );
+  } else if (glossedWords > 0 && morphCount > 0) {
     parts.push(`<p>A glossed word in the texts has ${(morphCount / glossedWords).toFixed(1)} morphemes on average (${morphCount.toLocaleString("en")} in ${glossedWords.toLocaleString("en")} words), Greenberg's index of synthesis.</p>`);
   }
   const byKind = ORDER.map((k) => [k, d.morphemes.filter((m) => m.kind === k)] as const).filter(([, ms]) => ms.length > 0);
