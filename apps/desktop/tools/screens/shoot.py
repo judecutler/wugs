@@ -686,6 +686,13 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+            # The words at each position around the match.
+            run.page.locator(".panel-concordance .cc-positions summary").click()
+            run.page.locator(".panel-concordance .cc-pos-word").first.wait_for()
+            run.shot("state-concordance-positions", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance .cc-pos-col").count() != 7:
+                failures.append("Words around it did not show three positions either side of the match")
+            run.page.locator(".panel-concordance .cc-positions summary").click()
             # A line opened to the sentences around it.
             run.page.locator(".panel-concordance .cc-row .cc-more").first.click()
             run.page.locator(".panel-concordance .cc-around-me").first.wait_for()
