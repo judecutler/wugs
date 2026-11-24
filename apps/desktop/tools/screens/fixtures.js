@@ -1068,6 +1068,10 @@ const LEXICON = [
             { glottocode: "cypr1248", iso: "", name: "Cypriot Turkish", dialect: true, family: "Turkic", macroarea: "Eurasia", language: "Turkish" },
           ]
         : [],
+    wikipedia_import: ({ wiki, titles, random }) => {
+      window.__WUGS_WIKI__ = { wiki, titles, random };
+      return { text: null, lines: [`${titles.length + random} new texts from ${wiki}.wikipedia.org, 40 sentences.`] };
+    },
     corpus_tracks: () => [{ id: "tier-utt", name: "utterance" }, { id: "tier-ipa", name: "IPA" }],
     metadata_values: () => [
       { key: "genre", values: [["narrative", 2], ["procedural", 1]] },

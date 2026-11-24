@@ -418,6 +418,19 @@ def main():
             run.page.wait_for_timeout(300)
             if run.page.locator(".panel-texts .glotto-match").count() != 0:
                 failures.append("picking a Glottolog match left the list open")
+            # Articles from a Wikipedia as texts.
+            run.page.locator(".panel-texts button", has_text="From Wikipedia").click()
+            run.page.locator(".panel-texts input.wiki-code").fill("sw")
+            run.page.locator(".panel-texts textarea.wiki-titles").fill("Mlima Kilimanjaro\nMto Nile")
+            run.page.locator(".panel-texts input.wiki-random").fill("3")
+            run.shot("state-texts-wikipedia", run.page.locator(".panel-texts"))
+            run.page.locator(".panel-texts .wiki-form button", has_text="Add the articles").click()
+            run.page.wait_for_timeout(400)
+            asked = run.page.evaluate("window.__WUGS_WIKI__") or {}
+            if asked.get("wiki") != "sw" or asked.get("titles") != ["Mlima Kilimanjaro", "Mto Nile"] or asked.get("random") != 3:
+                failures.append(f"From Wikipedia did not ask for the articles typed: {asked}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            run.page.locator(".panel-texts button", has_text="From Wikipedia").click()
             # A spelling dictionary of the language, for LibreOffice and Firefox.
             run.page.evaluate("window.__WUGS_PICK__ = '/tmp/spell'")
             run.page.locator(".panel-texts button", has_text="Spelling dictionary").click()

@@ -6,7 +6,7 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { corpusLines, dictionaryLines, flashcardLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { sentencesOf } from "../interlinear/logic";
@@ -483,6 +483,65 @@ async function exportExamples(text: TextDetail) {
 
 let readerLayout: "beside" | "under" = "beside";
 
+/** The Wikipedia form: open or not, and what is typed in it (the code kept on this computer). */
+const WIKI_KEY = "wugs.texts.wiki";
+let wikiOpen = false;
+let wikiCode = (() => {
+  try {
+    return localStorage.getItem(WIKI_KEY) ?? "";
+  } catch {
+    return "";
+  }
+})();
+let wikiTitles = "";
+let wikiRandom = 0;
+
+async function gatherWikipedia() {
+  const wiki = wikiCode.trim().toLowerCase();
+  const titles = wikiTitles.split(/\r?\n/u).map((t) => t.trim()).filter((t) => t !== "");
+  if (wiki === "" || (titles.length === 0 && wikiRandom <= 0)) {
+    showToast({ tone: "warn", lines: ["Give the Wikipedia's code (sw for sw.wikipedia.org) and an article title a line, or a number of articles at random."] });
+    return;
+  }
+  try {
+    localStorage.setItem(WIKI_KEY, wiki);
+  } catch {
+    // Kept for this run only.
+  }
+  await work("wikipedia", async () => {
+    const r = await wikipediaImport({ wiki, titles, random: wikiRandom, date: localDay(new Date()) });
+    showToast({ tone: "info", lines: r.lines });
+    wikiTitles = "";
+    await attempt(async () => {
+      await reloadTexts();
+      if (r.text !== null) await selectText(r.text);
+    });
+  });
+}
+
+/** The form under the import buttons: which Wikipedia, which articles. */
+function wikipediaForm(): HTMLElement | null {
+  if (!wikiOpen) return null;
+  const code = h("input", { className: "wiki-code", value: wikiCode, placeholder: "sw", spellcheck: false, title: "The start of the Wikipedia's address: sw for sw.wikipedia.org, yo for Yoruba, zh-yue for Cantonese" });
+  code.setAttribute("aria-label", "Wikipedia's code");
+  code.oninput = () => (wikiCode = code.value);
+  const titles = h("textarea", { className: "wiki-titles", rows: 3, value: wikiTitles, placeholder: "Article titles, a line each", spellcheck: false });
+  titles.setAttribute("aria-label", "Article titles");
+  titles.oninput = () => (wikiTitles = titles.value);
+  const random = h("input", { className: "wiki-random", type: "number", min: "0", max: "200", value: String(wikiRandom), title: "How many articles to add at random as well (at most 200)" });
+  random.setAttribute("aria-label", "Articles at random");
+  random.oninput = () => (wikiRandom = Math.max(0, Math.min(200, Math.floor(Number(random.value) || 0))));
+  return h(
+    "div",
+    { className: "wiki-form" },
+    h("p", { className: "note", textContent: "A written corpus to start from, for a language with a Wikipedia of its own. Each article comes in as a text, cut into sentences, with its address and licence (CC BY-SA 4.0) as details. This asks Wikipedia over the internet." }),
+    h("label", {}, "Wikipedia ", code, ".wikipedia.org"),
+    titles,
+    h("label", {}, "and ", random, " at random"),
+    h("button", { type: "button", className: "primary", textContent: busy === "wikipedia" ? "Reading Wikipedia…" : "Add the articles", disabled: busy !== null, onclick: () => void gatherWikipedia() }),
+  );
+}
+
 /** The text read aloud on paper: its sentences in order with their translations, for a reader or a class handout. */
 async function exportReader(text: TextDetail) {
   const segs = sentenceSegments(text).filter((s) => s.content.trim() !== "");
@@ -602,7 +661,19 @@ export const textsPanel: PanelDef = {
             disabled: busy !== null,
             onclick: () => void importDetails(),
           }),
+          h("button", {
+            type: "button",
+            className: wikiOpen ? "active" : "",
+            textContent: "From Wikipedia…",
+            title: "Add articles from a Wikipedia in the language as texts, to start a written corpus",
+            disabled: busy !== null,
+            onclick: () => {
+              wikiOpen = !wikiOpen;
+              redrawAll();
+            },
+          }),
         ),
+        wikipediaForm(),
         h(
           "div",
           { className: "share-row" },
@@ -775,6 +846,16 @@ export const textsPanel: PanelDef = {
     const unprovide = provide("texts", () =>
       open()
         ? [
+            {
+              id: "texts:wikipedia",
+              title: "Add articles from Wikipedia as texts",
+              group: "Import",
+              words: ["corpus", "web", "written texts", "wiki", "download"],
+              run: () => {
+                wikiOpen = true;
+                redrawAll();
+              },
+            },
             { id: "texts:dictionary", title: "Print the dictionary", group: "Publish", words: ["lexicon", "html", "print", "word list"], run: () => void exportDict() },
             { id: "texts:flashcards", title: "Make flashcards for learners", group: "Publish", words: ["anki", "quizlet", "learn", "vocabulary"], run: () => void exportCards() },
             { id: "texts:spelling", title: "Save a spelling dictionary (spell checker)", group: "Publish", words: ["hunspell", "libreoffice", "firefox", "spellcheck", "orthography"], run: () => void exportSpellingFiles() },
