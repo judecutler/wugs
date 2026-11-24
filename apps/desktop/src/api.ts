@@ -73,7 +73,7 @@ export type ConcordanceResult = { hits: import("./concordance/logic").Hit[]; tot
 /** Every occurrence of a word, morph, gloss or translation word, with its segment's words (roadmap 71). */
 export const frequencies = (args: { kind: import("./concordance/logic").FreqKind; textId: string | null; within?: import("./metadata/logic").Where | null; size?: number }) =>
   invoke<import("./frequencies/logic").Frequencies>("frequencies", args);
-export const collocates = (args: { node: string; kind: "word" | "translation"; left: number; right: number; minTogether: number; textId: string | null; within?: import("./metadata/logic").Where | null }) =>
+export const collocates = (args: { node: string; kind: "word" | "translation" | "lemma"; left: number; right: number; minTogether: number; textId: string | null; within?: import("./metadata/logic").Where | null }) =>
   invoke<import("./collocates/logic").Collocates>("collocates", args);
 export const similarWords = (args: { word: string; kind: "word" | "translation"; window: number; minFreq: number; textId: string | null; within?: import("./metadata/logic").Where | null }) =>
   invoke<import("./similar/logic").Similar>("similar_words", args);

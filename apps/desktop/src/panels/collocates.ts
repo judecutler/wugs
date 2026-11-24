@@ -2,20 +2,22 @@
 // word, with the scores AntConc and Sketch Engine offer (log-likelihood,
 // mutual information, logDice, t-score). A row opens the Concordance on the node, where the pairs
 // can be read in context.
+import type { Where } from "../metadata/logic";
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { collocates, errorText } from "../api";
-import { asTsv, COLLOCATE_SORTS, compareCollocates, compareLine, compareTsv, leansTo, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates, type CompareRow } from "../collocates/logic";
+import { lemmaQuery, asTsv, COLLOCATE_SORTS, compareCollocates, compareLine, compareTsv, leansTo, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates, type CompareRow } from "../collocates/logic";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
-type Kind = "word" | "translation";
+type Kind = "word" | "translation" | "lemma";
 const KIND_CHIPS: { id: Kind; label: string }[] = [
   { id: "word", label: "Words" },
   { id: "translation", label: "Translations" },
+  { id: "lemma", label: "Lemmas" },
 ];
 const MINIMUMS = [1, 2, 3, 5, 10];
 /** Rows drawn at once; Copy table has them all. */
@@ -33,6 +35,9 @@ export const collocatesPanel: PanelDef = {
   create(): PanelView {
     const el = h("div", { className: "panel panel-collocates" });
     let kind: Kind = "word";
+    // A row opens the Concordance on the node: a lemma as the CQP query that finds it.
+    const ask = (node: string, text: { id: string; title: string } | null, within: Where | null) =>
+      kind === "lemma" ? askConcordance(lemmaQuery(node, within), "query", text, true, null) : askConcordance(node, kind, text, false, within);
     let sortBy: CollocateSort = "ll";
     let scope = "";
     let data: Collocates | null = null;
@@ -110,9 +115,9 @@ export const collocatesPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: cell(r.b) }),
               h("td", { className: "fq-num", textContent: score(r.diff) }),
             );
-            tr.onclick = () => askConcordance(word, kind, text, false, sc.within);
+            tr.onclick = () => ask(word, text, sc.within);
             tr.onkeydown = (e) => {
-              if (e.key === "Enter") askConcordance(word, kind, text, false, sc.within);
+              if (e.key === "Enter") ask(word, text, sc.within);
             };
             return tr;
           }),
@@ -164,7 +169,7 @@ export const collocatesPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: score(r.mutualInformation) }),
               h("td", { className: "fq-num", textContent: score(r.logDice) }),
             );
-            const open = () => askConcordance(asked, kind, text, false, sc.within);
+            const open = () => ask(asked, text, sc.within);
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();
