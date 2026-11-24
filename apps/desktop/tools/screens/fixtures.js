@@ -1366,6 +1366,14 @@ const LEXICON = [
       extra: 1,
       read: 31,
     }),
+    unclear_passages: () => ({
+      checked: 41,
+      total: 2,
+      rows: [
+        { textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "s3", content: "toruma kesi (?) liwa", startMs: 4200, endMs: 6100, markers: ["(?)"] },
+        { textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f7", content: "wuno tekal xxx ŋai", startMs: 31200, endMs: 33800, markers: ["xxx"] },
+      ],
+    }),
     segment_timing: () => ({
       timed: 42,
       overlaps: 1,

@@ -30,6 +30,7 @@ pub mod cldf_import;
 pub mod pangloss;
 pub mod align;
 pub mod trends;
+pub mod unclear;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -715,6 +716,12 @@ fn orthography_convert(s: State<SessionThread>, profile: String, tier_id: String
 #[tauri::command]
 fn world_land() -> &'static str {
     typology::LAND
+}
+
+/// Places transcribers marked unclear (`unclear.rs`), for the Checks panel.
+#[tauri::command(async)]
+fn unclear_passages(s: State<SessionThread>) -> Result<unclear::Unclear, String> {
+    s.run(unclear::unclear)
 }
 
 /// The pairs of a text's sentences and another text's that translate them (`align.rs`), writing nothing.
@@ -2563,6 +2570,7 @@ pub fn run() {
             world_land,
             saved_searches,
             align_preview,
+            unclear_passages,
             frequency_trends,
             align_write,
             save_search,
