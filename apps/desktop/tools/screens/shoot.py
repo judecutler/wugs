@@ -1149,6 +1149,8 @@ def main():
             run.page.locator(".panel-wordsketch .ws-lemma:not(.ws-versus)").press("Enter")
             run.page.locator(".panel-wordsketch .ws-group").first.wait_for()
             run.shot("state-wordsketch", run.page.locator(".panel-wordsketch"))
+            if "most often subject + object (46%)" not in run.page.locator(".panel-wordsketch .ws-frames").inner_text():
+                failures.append("Word sketch did not list the verb's argument frames")
             if "Objects of «eat»" not in run.page.locator(".panel-wordsketch").inner_text():
                 failures.append("Word sketch did not name the objects")
             # Sketch difference: eat against drink.

@@ -6,7 +6,9 @@ import { cqpLiteral } from "../frequencies/logic.ts";
 
 export type SketchItem = { lemma: string; count: number; logDice: number; after: number };
 export type SketchGroup = { relation: string; direction: "dependent" | "head"; total: number; items: SketchItem[] };
-export type WordSketch = { lemma: string; count: number; parsed: number; groups: SketchGroup[] };
+/** A valency frame: the argument relations one use of the verb takes, with its first sentence. */
+export type Frame = { frame: string; count: number; textId: string; segmentId: string; tierId: string; content: string };
+export type WordSketch = { lemma: string; count: number; parsed: number; groups: SketchGroup[]; frames?: Frame[] };
 
 /** What a UD relation's dependents are, in words (base relation, before any `:`). */
 const DEPENDENTS: Record<string, string> = {
@@ -133,4 +135,36 @@ export function diffTsv(a: WordSketch, b: WordSketch, groups: readonly DiffGroup
   const head = ["relation", "direction", "lemma", `${a.lemma} count`, `${a.lemma} logDice`, `${b.lemma} count`, `${b.lemma} logDice`, "difference"].join("\t");
   const rows = groups.flatMap((g) => g.items.map((i) => [g.relation, g.direction, i.lemma, i.a?.count ?? 0, i.a?.logDice.toFixed(2) ?? "", i.b?.count ?? 0, i.b?.logDice.toFixed(2) ?? "", i.diff.toFixed(2)].join("\t")));
   return [head, ...rows].join("\n");
+}
+
+/** Each argument relation in words, as a frame lists it. */
+const ARGUMENT_WORDS: Record<string, string> = {
+  nsubj: "subject",
+  "nsubj:pass": "passive subject",
+  csubj: "clausal subject",
+  expl: "expletive",
+  obj: "object",
+  iobj: "indirect object",
+  ccomp: "clause",
+  xcomp: "open clause",
+  obl: "oblique",
+};
+
+/** A frame in words: `nsubj obj` as "subject + object". */
+export function frameWords(frame: string): string {
+  if (frame.trim() === "") return "no core arguments";
+  return frame.split(" ").map((r) => ARGUMENT_WORDS[r] ?? r).join(" + ");
+}
+
+/** The line over the frames: uses as a verb and the commonest frame's share. */
+export function framesLine(lemma: string, frames: readonly Frame[]): string {
+  const uses = frames.reduce((a, f) => a + f.count, 0);
+  if (uses === 0) return "";
+  const top = frames[0]!;
+  return `«${lemma}» as a verb: ${uses} ${uses === 1 ? "use" : "uses"} in ${frames.length} ${frames.length === 1 ? "frame" : "frames"}, most often ${frameWords(top.frame)} (${Math.round((100 * top.count) / uses)}%). Arguments not written in the sentence (a dropped subject) leave a frame shorter.`;
+}
+
+/** The frames as a table for a spreadsheet. */
+export function framesTsv(lemma: string, frames: readonly Frame[]): string {
+  return `lemma\tframe\tin words\tuses\texample\n${frames.map((f) => [lemma, f.frame, frameWords(f.frame), f.count, f.content.replace(/[\t\n]/gu, " ")].join("\t")).join("\n")}\n`;
 }

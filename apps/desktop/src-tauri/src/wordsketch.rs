@@ -52,6 +52,38 @@ pub struct WordSketch {
     pub parsed: usize,
     /// Most filled first.
     pub groups: Vec<SketchGroup>,
+    /// Its argument frames when used as a verb, commonest first.
+    pub frames: Vec<Frame>,
+}
+
+/// A valency frame: the argument relations one use of a verb takes, in a
+/// fixed order (`nsubj obj`), with its uses and the first sentence showing it.
+#[derive(Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Frame {
+    /// The relations joined by spaces; empty for a use with none.
+    pub frame: String,
+    pub count: usize,
+    pub text_id: String,
+    pub segment_id: String,
+    pub tier_id: String,
+    pub content: String,
+}
+
+/// The relations a frame is made of, in the order it lists them: subjects,
+/// objects, clausal complements, then obliques. Subtypes other than the
+/// passive are read as their base relation.
+pub const ARGUMENTS: [&str; 9] = ["nsubj", "nsubj:pass", "csubj", "expl", "obj", "iobj", "ccomp", "xcomp", "obl"];
+
+/// The argument relation a dependent's `deprel` counts as, if any.
+fn argument(deprel: &str) -> Option<&'static str> {
+    let d = deprel.trim();
+    if let Some(a) = ARGUMENTS.iter().find(|a| **a == d) {
+        return Some(a);
+    }
+    let base = d.split(':').next().unwrap_or("");
+    let base = if base == "nsubj" && d.starts_with("nsubj:pass") { "nsubj:pass" } else { base };
+    ARGUMENTS.iter().find(|a| **a == base).copied()
 }
 
 /// A word's lemma, else its form: what a collocate is counted under.
@@ -87,6 +119,7 @@ pub fn word_sketch(session: &mut Session, lemma: &str) -> Result<WordSketch, Str
     let mut freq: HashMap<String, usize> = HashMap::new();
     let mut spellings: HashMap<String, BTreeMap<String, usize>> = HashMap::new();
     let mut pairs: BTreeMap<(String, String, String), Pair> = BTreeMap::new();
+    let mut frames: BTreeMap<String, Frame> = BTreeMap::new();
     each_segment(p, Read::Analyses, &Scope::all(), |seg| {
         if p.proj.field(&seg.id, "analysis")?.is_none() {
             return Ok(());
@@ -126,6 +159,18 @@ pub fn word_sketch(session: &mut Session, lemma: &str) -> Result<WordSketch, Str
             if let Some(h) = rows[i].head.filter(|h| *h >= 1 && *h <= rows.len()) {
                 add(&rows[i].deprel, "head", h - 1, i);
             }
+            // Its valency frame, when used as a verb.
+            if rows[i].upos == "VERB" {
+                let mut args: Vec<&str> = rows.iter().filter(|r| r.head == Some(i + 1)).filter_map(|r| argument(&r.deprel)).collect();
+                args.sort_by_key(|a| ARGUMENTS.iter().position(|x| x == a));
+                args.dedup();
+                let frame = args.join(" ");
+                let f = frames.entry(frame.clone()).or_insert_with(|| Frame { frame, count: 0, text_id: seg.text.clone(), segment_id: seg.id.clone(), tier_id: seg.tier.clone(), content: String::new() });
+                if f.count == 0 {
+                    f.content = p.proj.field_str(&seg.id, "content").ok().flatten().unwrap_or_default();
+                }
+                f.count += 1;
+            }
         }
         Ok(())
     })?;
@@ -146,12 +191,24 @@ pub fn word_sketch(session: &mut Session, lemma: &str) -> Result<WordSketch, Str
     }
     groups.sort_by(|a, b| b.total.cmp(&a.total).then(a.direction.cmp(&b.direction)).then(a.relation.cmp(&b.relation)));
     out.groups = groups;
+    let mut frames: Vec<Frame> = frames.into_values().collect();
+    frames.sort_by(|a, b| b.count.cmp(&a.count).then(a.frame.cmp(&b.frame)));
+    out.frames = frames;
     Ok(out)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn subtypes_count_as_their_base_relation_but_the_passive() {
+        assert_eq!(argument("obl:tmod"), Some("obl"));
+        assert_eq!(argument("nsubj:pass"), Some("nsubj:pass"));
+        assert_eq!(argument("nsubj:outer"), Some("nsubj"));
+        assert_eq!(argument("advmod"), None);
+        assert_eq!(argument("obj"), Some("obj"));
+    }
 
     #[test]
     fn log_dice_is_14_for_words_always_together() {
@@ -194,6 +251,13 @@ mod tests {
         let heads: Vec<_> = dog.groups.iter().map(|g| (g.relation.as_str(), g.direction.as_str(), g.items.iter().map(|i| i.lemma.as_str()).collect::<Vec<_>>())).collect();
         assert_eq!(heads, [("nsubj", "head", vec!["sleep", "eat"]), ("det", "dependent", vec!["the"])]);
         assert!(word_sketch(&mut s, "giraffe").unwrap().lemma.is_empty());
+        // Both uses of eat take a subject and an object; sleep takes a subject.
+        let frames: Vec<_> = w.frames.iter().map(|f| (f.frame.as_str(), f.count)).collect();
+        assert_eq!(frames, [("nsubj obj", 2)]);
+        assert_eq!(w.frames[0].content, "Dogs eat bones.");
+        let sleep = word_sketch(&mut s, "sleep").unwrap();
+        assert_eq!(sleep.frames.iter().map(|f| f.frame.as_str()).collect::<Vec<_>>(), ["nsubj"]);
+        assert!(dog.frames.is_empty(), "a noun has no frame");
         // The query the panel opens for a collocate finds its lines.
         let c = crate::cqp::run(&mut s, r#"[lemma="EAT" %c] []{0,10} [lemma="bone" %c]"#, None).unwrap();
         assert_eq!(c.total, 1);

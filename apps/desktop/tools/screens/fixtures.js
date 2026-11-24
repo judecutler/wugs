@@ -957,6 +957,13 @@ const LEXICON = [
         { relation: "xcomp", direction: "head", total: 17, items: [["want", 9, 9.8, 0], ["go", 5, 7.7, 0], ["start", 3, 7.2, 0]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
         { relation: "obl:tmod", direction: "dependent", total: 7, items: [["morning", 4, 8.8, 4], ["night", 3, 8.3, 3]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
       ],
+      frames: [
+        { frame: "nsubj obj", count: 88, textId: "t-count", segmentId: "u02", tierId: "tier-utt", content: "The children eat bread every morning." },
+        { frame: "nsubj", count: 61, textId: "t-count", segmentId: "u02", tierId: "tier-utt", content: "We ate together." },
+        { frame: "obj", count: 30, textId: "t-count", segmentId: "u02", tierId: "tier-utt", content: "Eat the fish!" },
+        { frame: "nsubj obj obl", count: 9, textId: "t-count", segmentId: "u02", tierId: "tier-utt", content: "They eat rice with their hands." },
+        { frame: "", count: 4, textId: "t-count", segmentId: "u02", tierId: "tier-utt", content: "Eat!" },
+      ],
     }),
     archive_readiness: () => ({
       total: 3,
