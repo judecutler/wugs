@@ -228,3 +228,38 @@ export function attestedLine(forms: readonly Attested[], lines: number, total: n
   const gap = missing === 0 ? " Every one is in the paradigm." : missing === forms.length ? " None is in the paradigm yet." : ` ${missing} not in the paradigm yet.`;
   return `${kinds} of this entry in the texts${more}.${gap}`;
 }
+
+/** The paradigm as a table for a paper, in the format Copy example uses:
+ * an HTML table (with the same as tab-separated text beside it) for Word
+ * and Google Docs, a LaTeX `tabular`, or columns lined up with spaces. */
+export function paradigmClipboard<C extends CellLike>(t: Template, cells: C[], headword: string, format: "word" | "gb4e" | "expex" | "text"): { text: string; html: string | null } {
+  const grid = layout(t, cells);
+  const head = ["", ...(t.cols === null ? ["form"] : t.cols.values.map((v) => v.label))];
+  const body = t.rows.values.map((r, i) => [r.label, ...grid[i]!.map((c) => (c === null || c.forms.length === 0 ? "—" : c.forms.map((f) => f.form).join(", ")))]);
+  const tsv = [head, ...body].map((row) => row.join("\t")).join("\n") + "\n";
+  if (format === "word") {
+    const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const th = (s: string) => `<th style="text-align:left;padding:2px 10px;border-bottom:1px solid #000">${esc(s)}</th>`;
+    const html = `<table style="border-collapse:collapse"><caption style="text-align:left"><i>${esc(headword)}</i></caption><tr>${head.map(th).join("")}</tr>${body
+      .map((row) => `<tr>${row.map((c, j) => (j === 0 ? `<td style="padding:2px 10px">${esc(c)}</td>` : `<td style="padding:2px 10px"><i>${esc(c)}</i></td>`)).join("")}</tr>`)
+      .join("")}</table>`;
+    return { text: tsv, html };
+  }
+  if (format === "gb4e" || format === "expex") {
+    const tex = (s: string) => s.replace(/\\/g, "\\textbackslash{}").replace(/([&%$#_{}])/g, "\\$1").replace(/~/g, "\\textasciitilde{}").replace(/\^/g, "\\textasciicircum{}");
+    const lines = [
+      `% ${tex(headword)}`,
+      `\\begin{tabular}{l${"l".repeat(head.length - 1)}}`,
+      `${head.map(tex).join(" & ")} \\\\ \\hline`,
+      ...body.map((row) => `${row.map((c, j) => (j === 0 ? tex(c) : `\\textit{${tex(c)}}`)).join(" & ")} \\\\`),
+      "\\end{tabular}",
+    ];
+    return { text: lines.join("\n") + "\n", html: null };
+  }
+  const units = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const width = (s: string) => [...units.segment(s)].filter((g) => !/^\p{M}+$/u.test(g.segment)).length;
+  const rows = [head, ...body];
+  const widths = head.map((_, j) => Math.max(...rows.map((r) => width(r[j]!))));
+  const text = [headword, ...rows.map((r) => r.map((c, j) => c + " ".repeat(widths[j]! - width(c))).join("  ").trimEnd())].join("\n") + "\n";
+  return { text, html: null };
+}

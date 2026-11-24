@@ -18,11 +18,12 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
 import { categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
-import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
+import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { keyword, type Hit } from "../concordance/logic";
-import { glossRuns } from "../gloss/example";
+import { EXAMPLE_FORMATS, FORMAT_KEY, glossRuns, parseFormat } from "../gloss/example";
+import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -660,6 +661,29 @@ export const lexiconPanel: PanelDef = {
           : null,
         own ? confirmButton(`pdg-del:${t.id}`, "Delete template", () => void deleteTemplate(t), { title: "Remove this template from the project; the forms stay in the lexicon" }) : null,
         h("span", { className: "note", textContent: pd === null ? "Loading…" : coverageLine(t, pd.cells) }),
+        pd === null
+          ? null
+          : (() => {
+              let format = parseFormat(null);
+              try {
+                format = parseFormat(localStorage.getItem(FORMAT_KEY));
+              } catch {
+                /* the default */
+              }
+              const label = EXAMPLE_FORMATS.find((f) => f.id === format)?.label ?? "";
+              return h("button", {
+                type: "button",
+                textContent: "Copy table",
+                title: `Copy this paradigm as a table for a paper, as ${label} (the format chosen for Copy example in the Gloss panel)`,
+                onclick: () => {
+                  const out = paradigmClipboard(t, pd.cells, headword(e.lemma, e.homograph), format);
+                  void (out.html === null ? writeText(out.text) : writeHtml(out.html, out.text)).then(
+                    () => showToast({ tone: "info", lines: [`Copied the paradigm as ${label}.`] }),
+                    (err) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(err)}`] }),
+                  );
+                },
+              });
+            })(),
       );
       const form = templateForm === null ? null : templateFormBlock(templateForm);
       if (pd === null) return h("section", { className: "lx-paradigm" }, head, form);

@@ -809,6 +809,12 @@ def main():
             pdg.wait_for()
             pdg.select_option("noun-class")
             run.page.locator(".panel-lexicon .lx-pdg th", has_text="singular").first.wait_for()
+            run.page.locator(".panel-lexicon .lx-pdg-head button", has_text="Copy table").click()
+            run.page.wait_for_timeout(300)
+            clip = run.page.evaluate("window.__WUGS_CLIPBOARD__")
+            if not clip or "<table" not in (clip.get("html") or "") or "\t" not in clip.get("text", ""):
+                failures.append(f"Copy table did not put the paradigm on the clipboard: {clip}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.shot("state-paradigm-own", run.page.locator(".panel-lexicon .lx-paradigm"))
             pdg.select_option(label="New template…")
             run.page.locator(".panel-lexicon .lx-pdg-template").wait_for()
