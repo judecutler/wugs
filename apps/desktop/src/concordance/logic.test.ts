@@ -103,3 +103,14 @@ test("the sorted word is marked in its context", async () => {
   assert.equal(sortedWord("keyword"), null);
   assert.equal(sortedWord("text"), null);
 });
+
+test("lines copied as a KWIC table for a word processor", async () => {
+  const { kwicHtml } = await import("./logic.ts");
+  const html = kwicHtml([hit(["a", "<b>", "KEY", "c"], 2, "Fox & well")]);
+  assert.match(html, /^<table /u);
+  assert.match(html, /text-align:right">a &lt;b&gt;<\/td>/u, "left context right-aligned and escaped");
+  assert.match(html, /<b>KEY<\/b>/u);
+  assert.match(html, /Fox &amp; well/u);
+  const long = kwicHtml([hit([..."abcdefghijklmnopqrstuvwxyz".split("").map((c) => c.repeat(4)), "KEY"], 26)], 20);
+  assert.match(long, />…/u, "the left context is clipped on its far side");
+});

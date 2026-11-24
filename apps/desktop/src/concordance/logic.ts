@@ -144,6 +144,21 @@ export function asTsv(hits: readonly Hit[]): string {
   return ["left\tkeyword\tright\ttext", ...hits.map((h) => [left(h), keyword(h), right(h), h.textTitle].map(clean).join("\t"))].join("\n");
 }
 
+const escHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** The lines as an HTML table a word processor takes as a KWIC display:
+ * the left context right-aligned and clipped to `chars`, the match in bold,
+ * the right context clipped, the text's title small; a spreadsheet takes
+ * the same table cell by cell. */
+export function kwicHtml(hits: readonly Hit[], chars = 40): string {
+  const cell = "padding:1px 6px;vertical-align:baseline;white-space:nowrap";
+  const rows = hits.map(
+    (h) =>
+      `<tr><td style="${cell};text-align:right">${escHtml(clip(left(h), chars, "left"))}</td><td style="${cell}"><b>${escHtml(keyword(h))}</b></td><td style="${cell}">${escHtml(clip(right(h), chars, "right"))}</td><td style="${cell};font-size:80%;color:#555">${escHtml(h.textTitle)}</td></tr>`,
+  );
+  return `<table style="border-collapse:collapse;font-family:'Charis SIL','Doulos SIL',serif">${rows.join("")}</table>`;
+}
+
 /** Whether any line carries a word's tag (a CQP query over a tagged corpus). */
 export const hasTags = (hits: readonly Hit[]): boolean => hits.some((h) => h.tags?.some((t) => t !== "") ?? false);
 
