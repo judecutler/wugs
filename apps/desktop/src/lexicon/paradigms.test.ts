@@ -110,3 +110,22 @@ test("an entry's forms in the texts", () => {
   assert.equal(attestedLine(forms.slice(1), 2, 9), "2 forms of this entry in the texts (from the first 2 of 9 uses). Every one is in the paradigm.");
   assert.equal(attestedLine([], 0, 0), "No word in the texts is linked to this entry yet. Gloss a few and link them to it.");
 });
+
+test("a paradigm copies as a table for a paper", async () => {
+  const { paradigmClipboard } = await import("./paradigms.ts");
+  const t = TEMPLATES[0]!;
+  const cell = (person: string, number: string, forms: string[]) => ({ features: { person, number }, forms: forms.map((form, i) => ({ id: `${person}${number}${i}`, form, features: { person, number } })) });
+  const cells = [cell("1", "sg", ["kani"]), cell("1", "pl", ["kani-ra", "kanira"]), cell("2", "sg", []), cell("3", "sg", ["ka_ni"])];
+  const word = paradigmClipboard(t, cells, "kani", "word");
+  assert.equal(word.text.split("\n")[0], "\tsingular\tplural");
+  assert.equal(word.text.split("\n")[1], "1st person\tkani\tkani-ra, kanira");
+  assert.equal(word.text.split("\n")[2], "2nd person\t—\t—");
+  assert.match(word.html!, /^<table style="border-collapse:collapse"><caption style="text-align:left"><i>kani<\/i><\/caption>/);
+  const tex = paradigmClipboard(t, cells, "kani", "gb4e").text.split("\n");
+  assert.equal(tex[1], "\\begin{tabular}{lll}");
+  assert.equal(tex[2], " & singular & plural \\\\ \\hline");
+  assert.equal(tex[5], "3rd person & \\textit{ka\\_ni} & \\textit{—} \\\\");
+  const text = paradigmClipboard(t, cells, "kani", "text").text.split("\n");
+  assert.equal(text[1], "            singular  plural");
+  assert.equal(text[2], "1st person  kani      kani-ra, kanira");
+});

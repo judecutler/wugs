@@ -474,7 +474,7 @@ Pictures travel with LIFT files too. FLEx exports each sense's picture into a `p
 
 ### Fill in a paradigm
 
-The **Paradigm** section at the bottom of an entry lays out its inflected forms as a grid. Choose a template: **Person × number**, **Tense × person** or **Singular and plural** are built in. Type a form in a cell and press **Enter** or leave the field. The line beside the template says how many cells are filled. Forms that fit no cell of the grid are listed under it.
+The **Paradigm** section at the bottom of an entry lays out its inflected forms as a grid. Choose a template: **Person × number**, **Tense × person** or **Singular and plural** are built in. Type a form in a cell and press **Enter** or leave the field. The line beside the template says how many cells are filled. Forms that fit no cell of the grid are listed under it. **Copy table** copies the grid for a paper or grammar in the format chosen for **Copy example** in the Gloss panel: a table for Word and Google Docs, a LaTeX `tabular`, or columns lined up for plain text. Empty cells show a dash.
 
 To see which forms your texts already show, click **Forms in the texts** under the grid. It lists every word in the texts with a morph linked to one of the entry's senses, grouped by form and analysis (`nikani ni-kani 1SG-count ×3`), commonest first, and greys out the forms the paradigm already holds. Click a form to see its lines in the Concordance.
 
