@@ -61,3 +61,47 @@ export function asTsv(rows: readonly CollocateRow[]): string {
     ...rows.map((r) => [clean(r.item), r.together, r.left, r.right, r.freq, score(r.logLikelihood), score(r.mutualInformation), score(r.logDice), score(r.tScore)].join("\t")),
   ].join("\n");
 }
+
+// ------------------------------------------------------------ two words compared
+
+/** A collocate of either word, with each one's row (null where it is no collocate of that word). */
+export type CompareRow = { item: string; a: CollocateRow | null; b: CollocateRow | null; diff: number };
+
+/**
+ * Two words' collocates side by side, as Sketch Engine's word sketch
+ * difference does with logDice: every collocate of either, the difference of
+ * their logDice (a missing one counting as 0), those typical of the first
+ * word first and of the second last. Collocates are matched case-blind.
+ */
+export function compareCollocates(a: readonly CollocateRow[], b: readonly CollocateRow[]): CompareRow[] {
+  const key = (s: string) => s.normalize("NFC").toLocaleLowerCase();
+  const rows = new Map<string, CompareRow>();
+  for (const r of a) rows.set(key(r.item), { item: r.item, a: r, b: null, diff: 0 });
+  for (const r of b) {
+    const at = rows.get(key(r.item));
+    if (at === undefined) rows.set(key(r.item), { item: r.item, a: null, b: r, diff: 0 });
+    else at.b = r;
+  }
+  const out = [...rows.values()];
+  for (const r of out) r.diff = (r.a?.logDice ?? 0) - (r.b?.logDice ?? 0);
+  return out.sort((p, q) => q.diff - p.diff || collator.compare(p.item, q.item));
+}
+
+/** Which word a collocate goes with: "a", "b", or "both" when both have it within 1 logDice. */
+export const leansTo = (r: CompareRow): "a" | "b" | "both" => (r.a !== null && r.b !== null && Math.abs(r.diff) < 1 ? "both" : r.diff > 0 ? "a" : "b");
+
+/** The line above the comparison. */
+export function compareLine(a: string, b: string, ca: Collocates, cb: Collocates, rows: readonly CompareRow[]): string {
+  if (ca.node === 0 || cb.node === 0) return `${ca.node === 0 && cb.node === 0 ? `Neither «${a}» nor «${b}» occurs` : `«${ca.node === 0 ? a : b}» does not occur`} here.`;
+  const count = (w: "a" | "b" | "both") => rows.filter((r) => leansTo(r) === w).length;
+  return `«${a}» (${ca.node}) against «${b}» (${cb.node}): ${count("a")} collocates go with «${a}», ${count("b")} with «${b}» and ${count("both")} with both alike (within 1 logDice). Those typical of «${a}» first.`;
+}
+
+/** Tab-separated, for a spreadsheet. */
+export function compareTsv(a: string, b: string, rows: readonly CompareRow[]): string {
+  const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
+  return [
+    ["collocate", `${a} together`, `${a} logDice`, `${b} together`, `${b} logDice`, "difference"].map(clean).join("\t"),
+    ...rows.map((r) => [clean(r.item), r.a?.together ?? 0, r.a === null ? "" : score(r.a.logDice), r.b?.together ?? 0, r.b === null ? "" : score(r.b.logDice), score(r.diff)].join("\t")),
+  ].join("\n");
+}
