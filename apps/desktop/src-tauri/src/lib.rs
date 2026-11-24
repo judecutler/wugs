@@ -55,6 +55,7 @@ pub mod website;
 pub mod speech_dataset;
 pub mod spelling;
 pub mod parallel;
+pub mod facsimile;
 pub mod stylometry;
 pub mod subtitles;
 pub mod table_text;
@@ -1505,6 +1506,32 @@ fn export_flashcards(s: State<SessionThread>, folder: String, date: String, incl
     s.run(move |s| flashcards::export_flashcards(s, std::path::Path::new(&folder), &date, include_restricted, order.unwrap_or(flashcards::Order::Alphabet)))
 }
 
+/// A text's page images and the areas its segments stand on (`facsimile.rs`).
+#[tauri::command]
+fn facsimile_view(s: State<SessionThread>, text: String) -> Result<facsimile::FacsimileView, String> {
+    s.run(move |s| facsimile::view(s, &text))
+}
+
+#[tauri::command(async)]
+fn facsimile_add_page(s: State<SessionThread>, text: String, path: String) -> Result<facsimile::FacsimileView, String> {
+    s.run(move |s| facsimile::add_page(s, &text, &path))
+}
+
+#[tauri::command]
+fn facsimile_remove_page(s: State<SessionThread>, text: String, source: String) -> Result<facsimile::FacsimileView, String> {
+    s.run(move |s| facsimile::remove_page(s, &text, &source))
+}
+
+#[tauri::command]
+fn facsimile_move_page(s: State<SessionThread>, text: String, source: String, by: i32) -> Result<facsimile::FacsimileView, String> {
+    s.run(move |s| facsimile::move_page(s, &text, &source, by))
+}
+
+#[tauri::command]
+fn facsimile_set_area(s: State<SessionThread>, text: String, segment: String, area: Option<facsimile::Area>) -> Result<facsimile::FacsimileView, String> {
+    s.run(move |s| facsimile::set_area(s, &text, &segment, area))
+}
+
 /// Sentences and translations as a parallel corpus (`parallel.rs`).
 #[tauri::command(async)]
 fn export_parallel(s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<parallel::Parallel, String> {
@@ -2480,6 +2507,11 @@ pub fn run() {
             recording_levels,
             export_spelling,
             export_parallel,
+            facsimile_view,
+            facsimile_add_page,
+            facsimile_remove_page,
+            facsimile_move_page,
+            facsimile_set_area,
             save_hit_clips,
             texts_alike,
             gloss_break_all,

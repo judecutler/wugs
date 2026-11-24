@@ -49,6 +49,7 @@ PANELS = [
     ("sessions", "Sessions"),
     ("sounds", "Sounds"),
     ("signs", "Signs"),
+    ("facsimile", "Facsimile"),
     ("typology", "Typology"),
     ("progress", "Progress"),
     ("affixes", "Affixes"),
@@ -475,6 +476,24 @@ def main():
             run.shot("state-glyphs")
             if run.page.locator(".panel-soundchanges").count() == 0:
                 failures.append("Glyphs did not open the Sound changes panel")
+            # The facsimile: boxes on the page; a box selects its line, a drag marks the next.
+            run.front("facsimile", "Facsimile")
+            boxes = run.page.locator(".panel-facsimile .fx-area")
+            boxes.first.wait_for()
+            if boxes.count() != 2:
+                failures.append("Facsimile: page 1 did not show its two marked lines")
+            boxes.nth(1).click()
+            run.page.locator(".panel-facsimile .fx-area.fx-on").wait_for()
+            page_box = run.page.locator(".panel-facsimile .fx-page img").bounding_box()
+            if page_box:
+                run.page.mouse.move(page_box["x"] + page_box["width"] * 0.1, page_box["y"] + page_box["height"] * 0.4)
+                run.page.mouse.down()
+                run.page.mouse.move(page_box["x"] + page_box["width"] * 0.6, page_box["y"] + page_box["height"] * 0.48, steps=4)
+                run.page.mouse.up()
+                run.page.wait_for_timeout(300)
+            run.shot("state-facsimile", run.page.locator(".panel-facsimile"))
+            if boxes.count() != 2:
+                failures.append("Facsimile: dragging moved the selected line's box rather than adding one: " + str(boxes.count()))
             run.page.click(".kit-switcher")
             run.page.wait_for_timeout(200)
             run.page.locator(".menu-list [role=menuitemradio]", has_text="Scrolls").click()

@@ -19,6 +19,7 @@ import { peoplePanel } from "./people";
 import { searchPanel } from "./search";
 import { soundsPanel } from "./sounds";
 import { signsPanel } from "./signs";
+import { facsimilePanel } from "./facsimile";
 import { sentencePanel } from "./sentence";
 import { textsPanel } from "./texts";
 import { timelinePanel } from "./timeline";
@@ -68,6 +69,7 @@ export const PANELS = {
   sessions: sessionsPanel,
   sounds: soundsPanel,
   signs: signsPanel,
+  facsimile: facsimilePanel,
   typology: typologyPanel,
   progress: progressPanel,
   affixes: affixesPanel,

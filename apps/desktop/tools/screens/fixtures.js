@@ -40,6 +40,17 @@
     seg("r06", "tier-tr", 9400, 10700, "Nine, ten.", "b4"),
   ];
   const countingText = { id: "t-count", title: "Counting to ten", tiers, segments: [...utterances, ...translations] };
+  const facsimile = {
+    pages: [
+      { source: "src-page1", label: "notebook p. 1.svg", path: "/project/blobs/page1.svg" },
+      { source: "src-page2", label: "notebook p. 2.svg", path: "/project/blobs/page2.svg" },
+    ],
+    marked: [
+      { segment: "u01", tier: "tier-utt", content: "nikani ŋai toɾuma kesi", area: { source: "src-page1", x: 0.08, y: 0.1, w: 0.8, h: 0.08 } },
+      { segment: "u02", tier: "tier-utt", content: "kesi mopa", area: { source: "src-page1", x: 0.08, y: 0.22, w: 0.5, h: 0.08 } },
+      { segment: "u03", tier: "tier-utt", content: "liwa", area: { source: "src-page2", x: 0.1, y: 0.1, w: 0.3, h: 0.08 } },
+    ],
+  };
 
   const otherText = (t) => {
     const segments = Array.from({ length: t.segments }, (_, i) =>
@@ -1188,6 +1199,17 @@ const LEXICON = [
     }),
     gloss_break_all: () => 3,
     gloss_apply_type: () => ({ applied: 4, texts: 2 }),
+    // Two page images of «Counting to ten» (the brand wug stands in for a scan), three lines marked.
+    facsimile_view: () => facsimile,
+    facsimile_set_area: ({ segment, area }) => {
+      facsimile.marked = facsimile.marked.filter((m) => m.segment !== segment);
+      const s = countingText.segments.find((x) => x.id === segment);
+      if (area !== null && s) facsimile.marked.push({ segment, tier: s.tier, content: s.content, area });
+      return facsimile;
+    },
+    facsimile_add_page: () => facsimile,
+    facsimile_remove_page: () => facsimile,
+    facsimile_move_page: () => facsimile,
     project_affixes: () => {
       const ex = { word: "ni-kani-ra", textId: "t-count", tierId: "tier-utt", segmentId: "seg-1" };
       const a = (surface, kind, gloss, slot, uses, roots, positions, categories, stems = []) => ({ surface, kind, gloss, uses, roots, positions, slot, categories, example: ex, stems, types: roots + 1, hapaxes: Math.max(0, roots - 2) });

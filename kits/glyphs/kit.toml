@@ -23,6 +23,7 @@ offline_core = true
 [tools]                            # panels this kit offers; Conflicts, Devices and Kits are always offered.
 enabled = [
   "texts",                         # the documents: inscriptions, manuscripts, word lists
+  "facsimile",                     # the page images, with where each line stands on them
   "lexicon",                       # headwords, the input to sound changes
   "soundchanges",                  # ordered rules in SCA² notation, checked against reflexes
   "compare",                       # other languages' lists, correspondences, cognates and a tree
@@ -39,18 +40,19 @@ enabled = [
 
 [layout]
 panels = [
-  { panel = "lexicon" },
-  { panel = "texts", place = "left", of = "lexicon", width = 260 },
-  { panel = "soundchanges", place = "right", of = "lexicon", width = 460 },
+  { panel = "facsimile" },
+  { panel = "lexicon", place = "tab", of = "facsimile" },
+  { panel = "texts", place = "left", of = "facsimile", width = 260 },
+  { panel = "soundchanges", place = "right", of = "facsimile", width = 460 },
   { panel = "compare", place = "tab", of = "soundchanges" },
   { panel = "signs", place = "tab", of = "soundchanges" },
-  { panel = "concordance", place = "below", of = "lexicon", height = 300 },
+  { panel = "concordance", place = "below", of = "facsimile", height = 300 },
   { panel = "frequencies", place = "tab", of = "concordance" },
   { panel = "interlinear", place = "tab", of = "concordance" },
   { panel = "gloss", place = "tab", of = "concordance" },
   { panel = "transcribe", place = "tab", of = "concordance" },
 ]
-active = ["texts", "lexicon", "soundchanges", "concordance"]
+active = ["texts", "facsimile", "soundchanges", "concordance"]
 
 [wug]
 body = "#7fb3a3"                   # verdigris, like old bronze
