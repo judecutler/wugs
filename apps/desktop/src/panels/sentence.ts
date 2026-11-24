@@ -2,12 +2,15 @@
 // sentence's dependency tree drawn as arcs over its words, and a table of
 // lemma, tags, features, head and relation to correct in place. Each change
 // is one write of the sentence's annotation (wugs_conllu::tree::set_cell).
-import { errorText, sentenceCheckStatus, sentenceGet, sentenceMarkChecked, sentenceSet } from "../api";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { errorText, saveDocument, sentenceCheckStatus, sentenceGet, sentenceMarkChecked, sentenceSet } from "../api";
 import { emptyState, h } from "../dom";
-import { arcs, checkLine, columns, DEPRELS, headChoices, machineNote, nextUnchecked, rootOf, UPOS, type CheckView, type SentenceView, type WordRow } from "../sentence/logic";
+import { arcs, checkLine, columns, conlluOf, DEPRELS, headChoices, machineNote, nextUnchecked, rootOf, tikzDependency, UPOS, type CheckView, type SentenceView, type WordRow } from "../sentence/logic";
 import { dataGeneration, getSelection, getState, refreshAll, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 import { tagBar } from "../morphosyntax/bar";
+import { standalone } from "./vowels";
 
 const SVG = "http://www.w3.org/2000/svg";
 const LEVEL_PX = 26;
@@ -246,6 +249,35 @@ export const sentencePanel: PanelDef = {
       return out;
     };
 
+    /** Copy or save the tree on screen, for a paper or a handout. */
+    const copyAs = (what: string, text: string) =>
+      void writeText(text).then(
+        () => showToast({ tone: "info", lines: [`Copied the sentence ${what}.`] }),
+        (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+      );
+    const savePicture = async (v: SentenceView) => {
+      const shown = el.querySelector<SVGSVGElement>(".st-tree");
+      if (shown === null) return;
+      const contents = standalone(shown);
+      const folder = await pickFile({ directory: true, title: "Where should the picture go?" });
+      if (typeof folder !== "string") return;
+      try {
+        const words = v.words.slice(0, 6).map((w) => w.form).join(" ");
+        const r = await saveDocument({ folder, title: `tree ${words}`, extension: "svg", contents });
+        showToast({ tone: "info", lines: [`Saved the tree as ${r.path}.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    };
+    const exports = (v: SentenceView): HTMLElement =>
+      h(
+        "div",
+        { className: "st-export" },
+        h("button", { type: "button", textContent: "Copy for LaTeX", title: "Copy the tree as a tikz-dependency figure", onclick: () => copyAs("as a tikz-dependency figure", tikzDependency(v)) }),
+        h("button", { type: "button", textContent: "Copy as CoNLL-U", title: "Copy the words, tags and tree as CoNLL-U lines", onclick: () => copyAs("as CoNLL-U", conlluOf(v)) }),
+        h("button", { type: "button", textContent: "Save picture…", title: "Save the tree as an SVG picture", onclick: () => void savePicture(v) }),
+      );
+
     function paint(): void {
       if (view === null) return;
       const v = view;
@@ -266,6 +298,7 @@ export const sentencePanel: PanelDef = {
           paint();
           el.querySelectorAll<HTMLInputElement>(".st-table tbody tr")[i]?.querySelector<HTMLInputElement>("input")?.focus();
         })),
+        exports(v),
         ...notes,
         h("div", { className: "st-table-box" }, table(v)),
         relations,

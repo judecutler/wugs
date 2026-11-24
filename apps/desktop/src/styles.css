@@ -1283,6 +1283,7 @@ body::before {
 .panel-sentence > * { flex: none; }
 .st-content { margin: 0; font-family: var(--font-ipa); color: var(--ink); }
 .st-tree-box { overflow-x: auto; padding: 4px 0 6px; border-bottom: 1px solid var(--line); }
+.st-export { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
 .st-tree { display: block; }
 .st-arc { fill: none; stroke: var(--accent); stroke-width: 1.4; }
 .st-arc.st-picked { stroke: var(--accent-bright); stroke-width: 2.4; }

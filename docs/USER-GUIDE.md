@@ -1192,6 +1192,8 @@ Click a word in the tree to find its row. If the tree has a problem (no root, tw
 
 Sentences imported from CoNLL-U or TEI arrive with their tags and tree. A sentence typed in wugs gets them the first time you correct a cell. Every correction comes back out in a CoNLL-U or TEI export.
 
+To put a tree in a paper or a handout, use the buttons under it. **Copy for LaTeX** copies a `tikz-dependency` figure: words over their tags, an arc labelled with each relation, and the root. Paste it into a document that loads `\usepackage{tikz-dependency}`. **Copy as CoNLL-U** copies the sentence's rows, for a mailing list or a UD issue. **Save picture…** saves the tree as it looks on screen, as an SVG file you can open in Word, Inkscape or a browser.
+
 ### Tag and parse a text automatically
 
 A tagger can fill in lemmas, parts of speech, features and a tree for every sentence, ready for you to check. wugs works with three taggers you may know: UDPipe, made at Charles University with models for over a hundred languages, spaCy, and Stanza, made at Stanford with models for about seventy languages trained on Universal Dependencies. Select a sentence of the text, then press **Tag and parse this text** at the top of the **Sentence** panel. To tag a whole corpus, press **Every text** beside it: wugs tags one text after another with the same tagger, each written as soon as it is done, and **Stop** halts it after the text it is on. A text that cannot be tagged (one that is not open, for the web service) is named at the end and the rest go on; if two texts in a row fail the same way, the tagger itself is not working, so wugs stops and says why.
