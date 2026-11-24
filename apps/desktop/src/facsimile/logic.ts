@@ -67,3 +67,16 @@ export function zoomBy(now: number, step: 1 | -1): number {
   const at = i < 0 ? ZOOMS.length - 1 : i;
   return ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, at + step))]!;
 }
+
+/** CSS that shows just an area of a page as a background: the image scaled
+ * so the area fills the element's width, shifted to the area, and the
+ * element's shape the area's, from the image's natural size in pixels. */
+export function cropStyle(a: Area, natural: { width: number; height: number }): { backgroundSize: string; backgroundPosition: string; aspectRatio: string } {
+  const pos = (start: number, side: number) => (side >= 1 ? 0 : (start / (1 - side)) * 100);
+  const pct = (v: number) => `${Math.round(v * 1000) / 1000}%`;
+  return {
+    backgroundSize: `${pct(100 / a.w)} auto`,
+    backgroundPosition: `${pct(pos(a.x, a.w))} ${pct(pos(a.y, a.h))}`,
+    aspectRatio: `${Math.round(a.w * natural.width)} / ${Math.max(1, Math.round(a.h * natural.height))}`,
+  };
+}

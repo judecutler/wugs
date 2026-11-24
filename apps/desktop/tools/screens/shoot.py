@@ -777,6 +777,11 @@ def main():
             if run.page.locator(".panel-interlinear .il-tr").count() != 0:
                 failures.append("Sentences without a translation listed a translated one")
             run.page.locator(".panel-interlinear .il-show").select_option("all")
+            # Lines marked on a page image show their crop above them.
+            run.page.locator(".panel-interlinear .il-crop").first.wait_for()
+            run.shot("state-interlinear-crops", run.page.locator(".panel-interlinear"))
+            if run.page.locator(".panel-interlinear .il-crop").count() != 3:
+                failures.append("Interlinear did not show the three marked lines' crops: " + str(run.page.locator(".panel-interlinear .il-crop").count()))
             # Checks: the character inventory, a Cyrillic letter among Latin ones flagged.
             run.front("checks", "Checks")
             run.page.locator(".panel-checks .ck-char").first.wait_for()
