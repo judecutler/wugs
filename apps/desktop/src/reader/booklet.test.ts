@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readerDetails, readerHtml } from "./booklet.ts";
+import { readerDetails, readerGlossary, readerHtml } from "./booklet.ts";
 
 const base = {
   title: "The fox & the well",
@@ -48,4 +48,26 @@ test("a conversation names each speaker", () => {
   const html = readerHtml({ title: "Lunch", language: "English", details: [], layout: "under", date: "2026-11-24", sentences: [{ number: 1, text: "look", translation: null, speaker: "MOT" }, { number: 2, text: "ball <", translation: null, speaker: "CHI" }] });
   assert.match(html, /<b class="who">MOT:<\/b> look/u);
   assert.match(html, /<b class="who">CHI:<\/b> ball &lt;/u);
+});
+
+test("the words of the text, for a learner", () => {
+  const m = (surface: string, type: string, gloss: string | null, senseLabel: string | null = null) => ({ surface, type, gloss, senseLabel });
+  const words = [
+    { form: "Nikani,", morphs: [m("ni", "prefix", "1SG"), m("kani", "root", "count", "kani – count")] },
+    { form: "kani", morphs: [m("kani", "root", "count", "kani – count")] },
+    { form: "kaniri", morphs: [m("kani", "root", "count", "kani – count"), m("ri", "suffix", "PL")] },
+    { form: "ŋai", morphs: [m("ŋai", "", "one")] },
+    { form: "tela", morphs: [m("tela", "root", null)] },
+    { form: "Ánu", morphs: [m("Ánu", "root", "water")] },
+  ];
+  const g = readerGlossary(words);
+  assert.deepEqual(g, [
+    { word: "Ánu", meaning: "water", forms: [] },
+    { word: "kani", meaning: "count", forms: ["nikani", "kaniri"] },
+    { word: "ŋai", meaning: "one", forms: [] },
+  ], "grammatical morphs and unglossed roots left out; forms in lower case without punctuation; the headword's own form not repeated");
+  const html = readerHtml({ ...base, layout: "under", glossary: g });
+  assert.match(html, /<h2>Words in this text<\/h2>/);
+  assert.match(html, /<dt>kani<\/dt><dd>‘count’ <span class="forms">\(nikani, kaniri\)<\/span><\/dd>/);
+  assert.doesNotMatch(readerHtml({ ...base, layout: "under", glossary: [] }), /Words in this text/);
 });
