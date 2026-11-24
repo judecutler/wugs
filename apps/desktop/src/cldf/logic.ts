@@ -69,13 +69,30 @@ export function sheetLines(r: Sheet): string[] {
   return lines;
 }
 
-export type Flashcards = { path: string; cards: number; sounds: number; noGloss: number };
+export type Flashcards = { path: string; cards: number; sounds: number; noGloss: number; used?: number | null; pastLimit?: number };
+
+/** Which cards, in what order (`flashcards::Order`). */
+export type CardOrder = { order: "alphabet" } | { order: "commonest"; limit: number };
+
+/** The choices beside Flashcards…, as select values. */
+export const CARD_ORDERS: { id: string; label: string; order: CardOrder }[] = [
+  { id: "alphabet", label: "every word, A to Z", order: { order: "alphabet" } },
+  { id: "commonest", label: "every word, commonest first", order: { order: "commonest", limit: 0 } },
+  { id: "top100", label: "the 100 commonest", order: { order: "commonest", limit: 100 } },
+  { id: "top250", label: "the 250 commonest", order: { order: "commonest", limit: 250 } },
+  { id: "top500", label: "the 500 commonest", order: { order: "commonest", limit: 500 } },
+];
 
 export function flashcardLines(r: Flashcards): string[] {
   const lines = [`Saved ${plural(r.cards, "flashcard", "flashcards")} in ${r.path}: anki.txt for Anki (each word asked both ways) and quizlet.txt for Quizlet. The README there says how to import them.`];
   if (r.sounds > 0) lines.push(`${plural(r.sounds, "card plays", "cards play")} the word as it is said: copy the sounds folder into Anki's media folder first.`);
   else lines.push("No card has a sound yet: give an entry a pronunciation heard in a recording, in the Lexicon.");
   if (r.noGloss > 0) lines.push(`${plural(r.noGloss, "entry with no gloss was", "entries with no gloss were")} left out.`);
+  if (r.used !== undefined && r.used !== null) {
+    const rest = r.cards - r.used;
+    lines.push(r.used === 0 ? "No word of them is glossed in a text yet, so they are in A to Z order: gloss the texts and link the words to the lexicon to rank them." : `Commonest first: ${plural(r.used, "card is a word", "cards are words")} the glossed texts use, most used first${rest > 0 ? `, then ${plural(rest, "card", "cards")} the texts do not use yet, A to Z` : ""}.`);
+  }
+  if (r.pastLimit !== undefined && r.pastLimit > 0) lines.push(`${plural(r.pastLimit, "less common word was", "less common words were")} left for a later set.`);
   return lines;
 }
 

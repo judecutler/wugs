@@ -1468,8 +1468,8 @@ fn export_archive_sheet(s: State<SessionThread>, folder: String) -> Result<archi
 
 /// The lexicon as flashcards for Anki and Quizlet (`flashcards.rs`).
 #[tauri::command(async)]
-fn export_flashcards(s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<flashcards::Flashcards, String> {
-    s.run(move |s| flashcards::export_flashcards(s, std::path::Path::new(&folder), &date, include_restricted))
+fn export_flashcards(s: State<SessionThread>, folder: String, date: String, include_restricted: bool, order: Option<flashcards::Order>) -> Result<flashcards::Flashcards, String> {
+    s.run(move |s| flashcards::export_flashcards(s, std::path::Path::new(&folder), &date, include_restricted, order.unwrap_or(flashcards::Order::Alphabet)))
 }
 
 /// A Hunspell spelling dictionary of the language (`spelling.rs`).

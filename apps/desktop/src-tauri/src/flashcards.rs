@@ -28,6 +28,48 @@ pub struct Flashcards {
     pub pictures: usize,
     /// Entries left out because no sense has a gloss yet.
     pub no_gloss: usize,
+    /// Commonest first: cards whose word the texts use (the rest come after); None A to Z.
+    pub used: Option<usize>,
+    /// Commonest first with a limit: glossed entries past it, left out.
+    pub past_limit: usize,
+}
+
+/// Which cards, in what order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "camelCase", tag = "order")]
+pub enum Order {
+    /// Every glossed entry by its headword.
+    Alphabet,
+    /// The words the texts use most first, then the rest by headword; at
+    /// most `limit` cards (0 = all), so a class can start with the commonest.
+    Commonest { limit: usize },
+}
+
+/// How many words of the texts each entry's senses are linked to (a word
+/// counted once however many of its morphs link to the entry).
+pub fn uses_by_entry(p: &wugs_core::Project) -> Result<std::collections::HashMap<String, usize>, String> {
+    let mut entry_of: std::collections::HashMap<String, Option<String>> = std::collections::HashMap::new();
+    let mut uses: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    crate::concordance::each_segment(p, crate::concordance::Read::Analyses, &crate::concordance::Scope::all(), |seg| {
+        for tok in &seg.tokens {
+            let mut seen: Vec<String> = Vec::new();
+            for m in p.proj.members(tok)? {
+                let Some(sense) = p.proj.field_str(&m, "sense")?.filter(|s| !s.is_empty()) else { continue };
+                if !entry_of.contains_key(&sense) {
+                    let lexeme = p.proj.field_str(&sense, "lexeme")?;
+                    entry_of.insert(sense.clone(), lexeme);
+                }
+                if let Some(Some(entry)) = entry_of.get(&sense) {
+                    if !seen.contains(entry) {
+                        seen.push(entry.clone());
+                        *uses.entry(entry.clone()).or_default() += 1;
+                    }
+                }
+            }
+        }
+        Ok(())
+    })?;
+    Ok(uses)
 }
 
 /// Anki's built-in note type that makes a card each way.
@@ -101,7 +143,7 @@ and set \"between term and definition\" to Tab. Sounds and pictures are not
 carried there.
 ";
 
-pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_restricted: bool) -> Result<Flashcards, String> {
+pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_restricted: bool, order: Order) -> Result<Flashcards, String> {
     if !folder.is_dir() {
         return Err(format!("{} is not a folder", folder.display()));
     }
@@ -113,6 +155,19 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
     let mut entries: Vec<EntryView> = p.proj.entities_of_kind("lexeme")?.iter().map(|id| entry_view(p, id)).collect::<Result<_, _>>()?;
     entries.retain(|e| !e.lemma.trim().is_empty());
     entries.sort_by(|a, b| wugs_model::fold_key(&p.proj.nfc(&a.lemma)).cmp(&wugs_model::fold_key(&p.proj.nfc(&b.lemma))).then(a.homograph.cmp(&b.homograph)).then(a.id.cmp(&b.id)));
+    let uses = match order {
+        Order::Alphabet => None,
+        Order::Commonest { .. } => {
+            let uses = uses_by_entry(p)?;
+            // Stable: equal counts keep the headword order.
+            entries.sort_by_key(|e| std::cmp::Reverse(uses.get(&e.id).copied().unwrap_or(0)));
+            Some(uses)
+        }
+    };
+    let limit = match order {
+        Order::Commonest { limit } if limit > 0 => limit,
+        _ => usize::MAX,
+    };
 
     // The note type and deck as columns, not `#notetype`/`#deck` headers, which some Anki versions ignore.
     let mut anki = String::from("#separator:tab\n#html:true\n#guid column:1\n#notetype column:2\n#deck column:3\n#columns:GUID\tNotetype\tDeck\tFront\tBack\n");
@@ -120,11 +175,20 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
     let mut quizlet = String::new();
     let mut sounds: Vec<(String, String, f64, f64)> = Vec::new();
     let mut pictures: Vec<(String, std::path::PathBuf)> = Vec::new();
-    let mut out = Flashcards { path: String::new(), cards: 0, sounds: 0, pictures: 0, no_gloss: 0 };
+    let mut out = Flashcards { path: String::new(), cards: 0, sounds: 0, pictures: 0, no_gloss: 0, used: uses.as_ref().map(|_| 0), past_limit: 0 };
     for e in &entries {
         if e.senses.iter().all(|s| s.gloss.trim().is_empty()) {
             out.no_gloss += 1;
             continue;
+        }
+        if out.cards >= limit {
+            out.past_limit += 1;
+            continue;
+        }
+        if let (Some(u), Some(n)) = (&uses, out.used.as_mut()) {
+            if u.get(&e.id).is_some_and(|c| *c > 0) {
+                *n += 1;
+            }
         }
         let word = headword(e);
         let mut front = esc(&word);
@@ -200,7 +264,7 @@ mod tests {
         // An entry with no gloss yet makes no card.
         session::project(&mut s).unwrap().add_lexeme("zzz", "").unwrap();
 
-        let r = export_flashcards(&mut s, &out, "2026-11-23", false).unwrap();
+        let r = export_flashcards(&mut s, &out, "2026-11-23", false, Order::Alphabet).unwrap();
         assert!(r.cards >= 5 && r.sounds == 1 && r.no_gloss == 1, "{r:?}");
         let root = Path::new(&r.path);
         assert!(r.path.ends_with("wugs-flashcards-2026-11-23"));
@@ -220,8 +284,20 @@ mod tests {
         session::project(&mut s).unwrap().set_access(&text, "restricted").unwrap();
         let src = session::project(&mut s).unwrap().text_recording(&text).unwrap().unwrap().0;
         session::project(&mut s).unwrap().set_access(&src, "restricted").unwrap();
-        let again = export_flashcards(&mut s, &out, "2026-11-23", false).unwrap();
+        let again = export_flashcards(&mut s, &out, "2026-11-23", false, Order::Alphabet).unwrap();
         assert!(again.path.ends_with("-2") && again.sounds == 0 && again.cards == r.cards, "{again:?}");
+        // Commonest first: the words the texts use, then the rest; with a limit, only the first.
+        let uses = uses_by_entry(session::project(&mut s).unwrap()).unwrap();
+        assert_eq!(uses.get(&entry), Some(&1), "wʌn is glossed in one word of the tutorial");
+        let top = export_flashcards(&mut s, &out, "2026-11-23", false, Order::Commonest { limit: 2 }).unwrap();
+        assert_eq!((top.cards, top.used, top.past_limit), (2, Some(2), r.cards - 2), "{top:?}");
+        assert_eq!(r.used, None, "A to Z says nothing of uses");
+        let all = export_flashcards(&mut s, &out, "2026-11-23", false, Order::Commonest { limit: 0 }).unwrap();
+        assert_eq!(all.cards, r.cards);
+        let quizlet = fs::read_to_string(Path::new(&all.path).join("quizlet.txt")).unwrap();
+        let words: Vec<&str> = quizlet.lines().map(|l| l.split('\t').next().unwrap()).collect();
+        let n = all.used.unwrap();
+        assert!(words[..n].contains(&"wʌn") && !words[n..].contains(&"wʌn"), "{words:?}");
         fs::remove_dir_all(&dir).ok();
     }
 
@@ -254,7 +330,7 @@ mod tests {
         assert!(Path::new(&site.path).join("pictures/p-1.png").is_file());
         assert!(fs::read_to_string(Path::new(&site.path).join("dictionary.html")).unwrap().contains("src=\"pictures/p-1.png\""));
 
-        let cards = export_flashcards(&mut s, &out, "2026-11-23", false).unwrap();
+        let cards = export_flashcards(&mut s, &out, "2026-11-23", false, Order::Alphabet).unwrap();
         assert_eq!(cards.pictures, 1);
         let file = format!("wugs-{}.png", sense.to_ascii_lowercase());
         assert!(Path::new(&cards.path).join("media").join(&file).is_file());

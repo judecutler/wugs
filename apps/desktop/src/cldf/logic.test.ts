@@ -69,6 +69,10 @@ test("flashcard lines say what to import and what is missing", () => {
   assert.match(lines[0]!, /^Saved 40 flashcards in \/x\/wugs-flashcards-2026-11-23: anki\.txt/u);
   assert.equal(lines[1], "1 card plays the word as it is said: copy the sounds folder into Anki's media folder first.");
   assert.equal(lines[2], "2 entries with no gloss were left out.");
+  const top = flashcardLines({ path: "/x", cards: 100, sounds: 0, noGloss: 0, used: 60, pastLimit: 312 });
+  assert.equal(top[2], "Commonest first: 60 cards are words the glossed texts use, most used first, then 40 cards the texts do not use yet, A to Z.");
+  assert.equal(top[3], "312 less common words were left for a later set.");
+  assert.match(flashcardLines({ path: "/x", cards: 3, sounds: 0, noGloss: 0, used: 0, pastLimit: 0 })[2]!, /^No word of them is glossed/u);
   assert.match(flashcardLines({ path: "/x", cards: 1, sounds: 0, noGloss: 0 })[1]!, /^No card has a sound yet/u);
 });
 

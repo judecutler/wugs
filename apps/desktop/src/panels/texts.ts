@@ -7,7 +7,7 @@ import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
 import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { corpusLines, dictionaryLines, flashcardLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
+import { CARD_ORDERS, corpusLines, dictionaryLines, flashcardLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { sentencesOf } from "../interlinear/logic";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
@@ -325,7 +325,8 @@ async function exportCards() {
   const folder = await chooseFolder("Choose where the flashcards go");
   if (folder === null) return;
   await work("flashcards", async () => {
-    const r = await exportFlashcards({ folder, date: localDay(new Date()), includeRestricted });
+    const order = (CARD_ORDERS.find((o) => o.id === cardOrder) ?? CARD_ORDERS[0]!).order;
+    const r = await exportFlashcards({ folder, date: localDay(new Date()), includeRestricted, order });
     showToast({ tone: "info", lines: flashcardLines(r) });
   });
 }
@@ -485,6 +486,14 @@ async function exportExamples(text: TextDetail) {
 let readerLayout: "beside" | "under" = "beside";
 /** Whether the reader ends with the words it uses and their meanings. */
 let readerWords = true;
+/** Which flashcards, in what order (`CARD_ORDERS` id), kept on this computer. */
+let cardOrder = (() => {
+  try {
+    return localStorage.getItem("wugs.flashcards.order") ?? "alphabet";
+  } catch {
+    return "alphabet";
+  }
+})();
 
 /** The Wikipedia form: open or not, and what is typed in it (the code kept on this computer). */
 const WIKI_KEY = "wugs.texts.wiki";
@@ -760,6 +769,18 @@ export const textsPanel: PanelDef = {
             disabled: busy !== null,
             onclick: () => void exportSketch(),
           }),
+          select(
+            CARD_ORDERS.map((o) => [o.id, o.label] as [string, string]),
+            cardOrder,
+            (v) => {
+              cardOrder = v;
+              try {
+                localStorage.setItem("wugs.flashcards.order", v);
+              } catch {
+                // Kept for this session.
+              }
+            },
+          ),
           h("button", {
             type: "button",
             textContent: busy === "flashcards" ? "Making…" : "Flashcards…",
