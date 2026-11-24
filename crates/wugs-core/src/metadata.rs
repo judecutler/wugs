@@ -44,6 +44,99 @@ pub fn key_of(raw: &str) -> Option<String> {
     Some(out.chars().take(MAX_KEY).collect::<String>().trim_end_matches('_').to_string())
 }
 
+/// The detail keys that hold a "lat, lon" pair, in the order they are read
+/// (the Progress panel's map reads the same, `src/progress/places.ts`).
+pub const COORDINATE_KEYS: [&str; 6] = ["coordinates", "gps", "latlon", "lat_lon", "location", "geo"];
+
+/// One coordinate as written: a number, then optional minutes and seconds
+/// after a degree sign, then an optional N S E W.
+fn coordinates_in(text: &str) -> Vec<(f64, Option<char>)> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    let number = |i: &mut usize| -> Option<f64> {
+        let start = *i;
+        while *i < chars.len() && (chars[*i].is_ascii_digit() || chars[*i] == '.') {
+            *i += 1;
+        }
+        chars[start..*i].iter().collect::<String>().parse().ok()
+    };
+    let skip_space = |i: &mut usize| {
+        while *i < chars.len() && chars[*i].is_whitespace() {
+            *i += 1;
+        }
+    };
+    while i < chars.len() {
+        let negative = matches!(chars[i], '-' | '−');
+        let signed = negative || chars[i] == '+';
+        if !(chars[i].is_ascii_digit() || (signed && chars.get(i + 1).is_some_and(|c| c.is_ascii_digit()))) {
+            i += 1;
+            continue;
+        }
+        if signed {
+            i += 1;
+        }
+        let Some(deg) = number(&mut i) else { return Vec::new() };
+        let mut value = deg;
+        skip_space(&mut i);
+        if i < chars.len() && matches!(chars[i], '°' | 'º' | '˚') {
+            i += 1;
+            for divisor in [60.0, 3600.0] {
+                skip_space(&mut i);
+                let at = i;
+                match number(&mut i) {
+                    Some(n) => {
+                        skip_space(&mut i);
+                        if i < chars.len() && matches!(chars[i], '\'' | '′' | '’' | '"' | '″' | '”') {
+                            i += 1;
+                            value += n / divisor;
+                        } else {
+                            i = at;
+                            break;
+                        }
+                    }
+                    None => break,
+                }
+            }
+        }
+        skip_space(&mut i);
+        let hemi = chars.get(i).map(|c| c.to_ascii_uppercase()).filter(|c| matches!(c, 'N' | 'S' | 'E' | 'W'));
+        if hemi.is_some() {
+            i += 1;
+        }
+        let south_west = matches!(hemi, Some('S' | 'W'));
+        out.push((if negative || south_west { -value } else { value }, hemi));
+    }
+    out
+}
+
+/// "lat, lon" in the usual writings (signed decimals, N S E W, degrees,
+/// minutes and seconds; longitude first when its hemisphere says so), or
+/// None when it does not read as a place on Earth.
+pub fn parse_coordinates(text: &str) -> Option<(f64, f64)> {
+    let found = coordinates_in(text);
+    let [mut a, mut b] = <[(f64, Option<char>); 2]>::try_from(found).ok()?;
+    if matches!(a.1, Some('E' | 'W')) && matches!(b.1, Some('N' | 'S')) {
+        std::mem::swap(&mut a, &mut b);
+    }
+    if matches!(a.1, Some('E' | 'W')) || matches!(b.1, Some('N' | 'S')) {
+        return None;
+    }
+    (a.0.abs() <= 90.0 && b.0.abs() <= 180.0).then_some((a.0, b.0))
+}
+
+/// Where a text (or recording) was made, from its details: a pair under
+/// `COORDINATE_KEYS`, else `latitude` and `longitude`.
+pub fn place_of(meta: &[(String, String)]) -> Option<(f64, f64)> {
+    let get = |k: &str| meta.iter().find(|(key, v)| key == k && !v.trim().is_empty()).map(|(_, v)| v.as_str());
+    if let Some(p) = COORDINATE_KEYS.iter().filter_map(|k| get(k)).find_map(parse_coordinates) {
+        return Some(p);
+    }
+    let one = |keys: &[&str]| keys.iter().find_map(|k| get(k)).map(coordinates_in).filter(|v| v.len() == 1).map(|v| v[0].0);
+    let (lat, lon) = (one(&["latitude", "lat"])?, one(&["longitude", "lon", "long", "lng"])?);
+    (lat.abs() <= 90.0 && lon.abs() <= 180.0).then_some((lat, lon))
+}
+
 /// The Source fields DATA-MODEL §3 names that a recording's details edit directly.
 const SOURCE_FIELDS: [&str; 2] = ["date", "place"];
 
@@ -175,6 +268,23 @@ impl Project {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn coordinates_are_read_in_the_usual_writings() {
+        use super::{parse_coordinates, place_of};
+        let near = |p: Option<(f64, f64)>, lat: f64, lon: f64| p.is_some_and(|(a, b)| (a - lat).abs() < 1e-4 && (b - lon).abs() < 1e-4);
+        assert!(near(parse_coordinates("-8.65, 115.22"), -8.65, 115.22));
+        assert!(near(parse_coordinates("−8.65 115.22"), -8.65, 115.22));
+        assert!(near(parse_coordinates("8.65 S, 115.22 E"), -8.65, 115.22));
+        assert!(near(parse_coordinates("115.22E 8.65S"), -8.65, 115.22));
+        assert!(near(parse_coordinates("8°39'0\"S 115°13'12\"E"), -8.65, 115.22));
+        assert_eq!(parse_coordinates("the village by the river"), None);
+        assert_eq!(parse_coordinates("95, 10"), None);
+        let meta = |pairs: &[(&str, &str)]| pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect::<Vec<_>>();
+        assert!(near(place_of(&meta(&[("place", "Ubud"), ("gps", "-8.5, 115.26")])), -8.5, 115.26));
+        assert!(near(place_of(&meta(&[("latitude", "8.5S"), ("longitude", "115.26")])), -8.5, 115.26));
+        assert_eq!(place_of(&meta(&[("place", "Ubud")])), None);
+    }
+
     use super::*;
 
     #[test]
