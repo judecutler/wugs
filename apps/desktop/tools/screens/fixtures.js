@@ -821,7 +821,15 @@ const LEXICON = [
     lexicon_example_gaps: () => ({ without: 6, fillable: 4 }),
     sound_changes: () => "",
     set_sound_changes: ({ rules }) => rules.trim(),
-    word_sketch: ({ lemma }) => ({
+    word_sketch: ({ lemma }) => lemma.trim().toLowerCase() === "drink" ? {
+      lemma: "drink",
+      count: 120,
+      parsed: 1180,
+      groups: [
+        { relation: "obj", direction: "dependent", total: 58, items: [["water", 25, 11.6, 25], ["tea", 14, 10.4, 14], ["fish", 2, 6.1, 2], ["bread", 2, 6.0, 2], ["milk", 9, 9.6, 9]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
+        { relation: "nsubj", direction: "dependent", total: 40, items: [["child", 10, 9.7, 0], ["they", 12, 8.4, 0], ["cattle", 6, 8.9, 0]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
+      ],
+    } : ({
       lemma: lemma.trim().toLowerCase(),
       count: 214,
       parsed: 1180,

@@ -708,12 +708,20 @@ def main():
                 failures.append("Progress did not describe the vocabulary growth")
             # Word sketch: a lemma's company by relation.
             run.front("wordsketch", "Word sketch")
-            run.page.locator(".panel-wordsketch .ws-lemma").fill("eat")
-            run.page.locator(".panel-wordsketch .ws-lemma").press("Enter")
+            run.page.locator(".panel-wordsketch .ws-lemma:not(.ws-versus)").fill("eat")
+            run.page.locator(".panel-wordsketch .ws-lemma:not(.ws-versus)").press("Enter")
             run.page.locator(".panel-wordsketch .ws-group").first.wait_for()
             run.shot("state-wordsketch", run.page.locator(".panel-wordsketch"))
             if "Objects of «eat»" not in run.page.locator(".panel-wordsketch").inner_text():
                 failures.append("Word sketch did not name the objects")
+            # Sketch difference: eat against drink.
+            run.page.locator(".panel-wordsketch .ws-versus").fill("drink")
+            run.page.locator(".panel-wordsketch .ws-versus").press("Enter")
+            run.page.locator(".panel-wordsketch .ws-diff").first.wait_for()
+            run.shot("state-wordsketch-diff", run.page.locator(".panel-wordsketch"))
+            if "against «drink»" not in run.page.locator(".panel-wordsketch .ws-line").inner_text() or run.page.locator(".panel-wordsketch tr.ws-lean-b").count() == 0:
+                failures.append("Word sketch did not set eat against drink")
+            run.page.locator(".panel-wordsketch .ws-versus").fill("")
             # People: a person's details, and everyone copied as a table.
             run.front("people", "People")
             run.page.locator(".panel-people .pp-details summary").first.click()

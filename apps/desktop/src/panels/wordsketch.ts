@@ -7,7 +7,7 @@ import { errorText, wordSketch } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
-import { groupTitle, pairQuery, sketchLine, sketchTsv, type WordSketch } from "../wordsketch/logic";
+import { diffLine, diffTsv, groupTitle, leaning, pairQuery, sketchDiff, sketchLine, sketchTsv, type WordSketch } from "../wordsketch/logic";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -16,11 +16,15 @@ export const wordSketchPanel: PanelDef = {
   create(): PanelView {
     const el = h("div", { className: "panel panel-wordsketch" });
     let data: WordSketch | null = null;
+    /** The second lemma's sketch, for a sketch difference. */
+    let other: WordSketch | null = null;
     let asked = "";
     let seq = 0;
     let shownFor = "";
     const field = h("input", { type: "search", className: "ws-lemma", placeholder: "A lemma, such as eat", spellcheck: false });
     field.setAttribute("aria-label", "Lemma to sketch");
+    const versus = h("input", { type: "search", className: "ws-lemma ws-versus", placeholder: "Compare with… (optional)", spellcheck: false, title: "A second lemma: its sketch is set beside the first, as Sketch Engine's sketch difference" });
+    versus.setAttribute("aria-label", "Second lemma to compare");
     const go = h("button", { type: "button", className: "primary", textContent: "Sketch" });
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every relation and collocate with its count and logDice" });
     const line = h("p", { className: "note ws-line" });
@@ -34,6 +38,39 @@ export const wordSketchPanel: PanelDef = {
         return;
       }
       const w = data;
+      if (other !== null) {
+        const b = other;
+        const groups = sketchDiff(w, b);
+        line.textContent = diffLine(w, b, groups);
+        const score = (x: { logDice: number; count: number } | null) => (x === null ? "–" : `${x.logDice.toFixed(1)} (${x.count})`);
+        grid.replaceChildren(
+          ...groups.map((g) =>
+            h(
+              "section",
+              { className: "ws-group" },
+              h("h3", { className: "ws-head", textContent: groupTitle(g, `${w.lemma} / ${b.lemma}`) }, h("span", { className: "ws-total", textContent: ` ${g.total}` })),
+              h(
+                "table",
+                { className: "ws-items ws-diff" },
+                h("thead", {}, h("tr", {}, h("th", { scope: "col", textContent: "" }), h("th", { scope: "col", className: "num", textContent: w.lemma, title: `logDice (and count) with «${w.lemma}»` }), h("th", { scope: "col", className: "num", textContent: b.lemma, title: `logDice (and count) with «${b.lemma}»` }))),
+                h(
+                  "tbody",
+                  {},
+                  ...g.items.map((i) => {
+                    const lean = leaning(i);
+                    const with_ = lean === "b" ? b : w;
+                    const it = (lean === "b" ? i.b : i.a) ?? i.a ?? i.b!;
+                    const btn = h("button", { type: "button", className: "link-button", textContent: i.lemma, title: `Open the lines with «${with_.lemma}» and «${i.lemma}» in the Concordance` });
+                    btn.onclick = () => askConcordance(pairQuery(with_.lemma, it), "query");
+                    return h("tr", { className: `ws-lean-${lean}` }, h("td", {}, btn), h("td", { className: "num", textContent: score(i.a) }), h("td", { className: "num", textContent: score(i.b) }));
+                  }),
+                ),
+              ),
+            ),
+          ),
+        );
+        return;
+      }
       line.textContent = sketchLine(w, asked);
       grid.replaceChildren(
         ...w.groups.map((g) =>
@@ -65,13 +102,16 @@ export const wordSketchPanel: PanelDef = {
       const mine = ++seq;
       asked = lemma;
       go.disabled = true;
+      const second = versus.value.trim();
       try {
-        const r = await wordSketch({ lemma });
+        const [r, o] = await Promise.all([wordSketch({ lemma }), second === "" ? Promise.resolve(null) : wordSketch({ lemma: second })]);
         if (mine !== seq) return;
         data = r;
+        other = o;
       } catch (e) {
         if (mine !== seq) return;
         data = null;
+        other = null;
         showToast({ tone: "error", lines: [errorText(e)] });
       } finally {
         if (mine === seq) go.disabled = false;
@@ -83,9 +123,10 @@ export const wordSketchPanel: PanelDef = {
     field.onkeydown = (e) => {
       if (e.key === "Enter" && !e.isComposing) void run();
     };
+    versus.onkeydown = field.onkeydown;
     copy.onclick = () => {
       if (data === null) return;
-      void writeText(sketchTsv(data)).then(
+      void writeText(other === null ? sketchTsv(data) : diffTsv(data, other, sketchDiff(data, other))).then(
         () => showToast({ tone: "info", lines: ["Copied the word sketch."] }),
         (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
       );
@@ -109,8 +150,10 @@ export const wordSketchPanel: PanelDef = {
       }
       if (!sameProject) {
         data = null;
+        other = null;
         field.value = asked = "";
-        el.replaceChildren(h("div", { className: "cc-bar" }, field, go, copy), line, grid);
+        versus.value = "";
+        el.replaceChildren(h("div", { className: "cc-bar" }, field, versus, go, copy), line, grid);
         draw();
       } else if (asked !== "") {
         void run(asked);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { groupTitle, pairQuery, sketchLine, sketchTsv, type WordSketch } from "./logic.ts";
+import { diffLine, diffTsv, groupTitle, leaning, pairQuery, sketchDiff, sketchLine, sketchTsv, type WordSketch } from "./logic.ts";
 
 const sketch: WordSketch = {
   lemma: "eat",
@@ -28,4 +28,16 @@ test("the line, the query and the copy", () => {
   assert.equal(pairQuery("eat", sketch.groups[1]!.items[0]!), '[lemma="cat" %c] []{0,10} [lemma="eat" %c]');
   assert.equal(pairQuery("a.b", { lemma: "x", count: 1, logDice: 1, after: 1 }), '[lemma="a\\.b" %c] []{0,10} [lemma="x" %c]');
   assert.equal(sketchTsv(sketch), "relation\tdirection\tlemma\tcount\tlogDice\nobj\tdependent\tbone\t1\t13.41\nnsubj\tdependent\tcat\t3\t12.50");
+});
+
+test("a sketch difference sets two lemmas' collocates side by side", () => {
+  const item = (lemma: string, count: number, logDice: number) => ({ lemma, count, logDice, after: 0 });
+  const eat: WordSketch = { lemma: "eat", count: 20, parsed: 100, groups: [{ relation: "obj", direction: "dependent", total: 12, items: [item("bread", 6, 11), item("fish", 4, 9.5), item("soup", 2, 8)] }] };
+  const drink: WordSketch = { lemma: "drink", count: 15, parsed: 100, groups: [{ relation: "obj", direction: "dependent", total: 9, items: [item("water", 5, 11.5), item("soup", 2, 8.5), item("fish", 1, 4)] }, { relation: "advmod", direction: "dependent", total: 2, items: [item("slowly", 2, 9)] }] };
+  const d = sketchDiff(eat, drink);
+  assert.deepEqual(d.map((g) => [g.relation, g.total]), [["obj", 21], ["advmod", 2]]);
+  assert.deepEqual(d[0]!.items.map((i) => [i.lemma, leaning(i)]), [["bread", "a"], ["fish", "a"], ["soup", "both"], ["water", "b"]]);
+  assert.equal(diffLine(eat, drink, d), "«eat» (20) against «drink» (15): 5 collocates in 2 relations, 1 used alike. Those typical of «eat» first, of «drink» last.");
+  assert.equal(diffLine({ ...eat, lemma: "" }, drink, d), "One lemma is not in the parsed sentences.");
+  assert.equal(diffTsv(eat, drink, d).split("\n")[1], "obj\tdependent\tbread\t6\t11.00\t0\t\t11.00");
 });
