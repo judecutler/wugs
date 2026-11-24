@@ -812,6 +812,8 @@ Segment the recording one syllable, word or phrase to a segment, and label each 
 
 The numbers come from the same analysis as the overlays and **Measure…**: your Praat when wugs finds it, else wugs's own.
 
+Under the plot, **Pitch range** sums up the speaker's pitch over every voiced point of the segments drawn: the median, the range holding the middle 80% (10th to 90th percentile) with its span in semitones, and the spread in semitones around the median. Sociophonetics and clinical work report these figures, and the semitone span lets you compare speakers with high and low voices. A table then gives each label's **level**: its median pitch and how many semitones it lies above or below the speaker's median. In a tone language, that shows how far apart the registers are (H several semitones over L). Since only the segments drawn count, a track of one kind of utterance gives that kind's range.
+
 ### Compare how long sounds last
 
 The **Durations** panel shows how long each label's segments last on one track of the text on screen: the numbers a study of vowel length, gemination or speaking rate starts from. Open it from Settings (Closed panels) or with **Find an action**. It reads the segments' own start and end times, so nothing is measured and no recording is needed.
