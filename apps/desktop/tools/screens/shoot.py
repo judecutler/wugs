@@ -1594,6 +1594,13 @@ def main():
                 failures.append("The entry's etymology was not shown")
             if run.page.locator(".panel-lexicon textarea[data-key='nsen:sense-kani-2']").input_value() != "Only heard from younger speakers.":
                 failures.append("A sense's notes were not shown")
+            # The domain picker offers the domains SIL lists the gloss under.
+            run.page.locator(".panel-lexicon .lx-add-domain", has_text="Semantic domain").first.click()
+            run.page.locator(".panel-lexicon .lx-dom-suggest").wait_for()
+            run.shot("state-lexicon-domain-suggest", run.page.locator(".panel-lexicon .lx-picker"))
+            if run.page.locator(".panel-lexicon .lx-dom-suggest button").count() < 1:
+                failures.append("The domain picker did not suggest domains for the gloss")
+            run.page.locator(".panel-lexicon .lx-add-domain", has_text="Close").first.click()
             # Two entries share a lemma: number them, or merge the other into this one.
             run.page.locator(".panel-lexicon .lx-list li", has_text="river").first.click()
             run.page.locator(".panel-lexicon .gl-notice button", has_text="Merge").first.wait_for()
