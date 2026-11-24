@@ -33,6 +33,7 @@ pub mod trends;
 pub mod unclear;
 pub mod tei_lex;
 pub mod saymore;
+pub mod imdi;
 pub mod rough_align;
 pub mod unimorph;
 pub mod conflicts;
@@ -452,10 +453,12 @@ struct SayMoreImport {
 /// file read as Import a file reads one, else an empty text; its recording
 /// imported and linked when the text has none; its metadata as details.
 #[tauri::command(async)]
-fn import_saymore(s: State<SessionThread>, folder: String) -> Result<SayMoreImport, String> {
-    let found = saymore::sessions(std::path::Path::new(&folder))?;
+fn import_sessions(s: State<SessionThread>, folder: String) -> Result<SayMoreImport, String> {
+    let at = std::path::Path::new(&folder);
+    // IMDI files (archived corpora) when the folder holds any, else SayMore or lameta sessions.
+    let found = if imdi::has_imdi(at) { imdi::sessions(at)? } else { saymore::sessions(at)? };
     if found.is_empty() {
-        return Err("No SayMore session was found there. Choose the SayMore project's folder (the one holding Sessions).".into());
+        return Err("No session was found there. Choose a SayMore or lameta project's folder (the one holding Sessions), or a folder of IMDI files.".into());
     }
     let mut out = SayMoreImport { sessions: found.len(), ..SayMoreImport::default() };
     for ses in found {
@@ -2662,7 +2665,7 @@ pub fn run() {
             saved_searches,
             align_preview,
             unclear_passages,
-            import_saymore,
+            import_sessions,
             frequency_trends,
             align_write,
             save_search,
