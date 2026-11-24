@@ -83,6 +83,16 @@ test("catalogue sheet lines", () => {
   assert.equal(lines[2], "2 texts are not open; the access column says so.");
 });
 
+test("the toast after a parallel corpus was saved", async () => {
+  const { parallelLines } = await import("./logic.ts");
+  const lines = parallelLines({ path: "/x/wugs-parallel-2026-11-24", pairs: 2, texts: 1, languages: [["und", 2]], untranslated: 1, restrictedLeftOut: 3 });
+  assert.match(lines[0]!, /^Saved a parallel corpus of 2 sentence pairs from 1 text in \/x\/wugs-parallel-2026-11-24, translated into und \(2 pairs\)/);
+  assert.match(lines[1]!, /no language are filed under und/);
+  assert.equal(lines[2], "1 transcribed sentence has no translation yet and was left out.");
+  assert.equal(lines[3], "3 texts are not open and were left out.");
+  assert.equal(parallelLines({ path: "p", pairs: 1, texts: 1, languages: [["eng", 1]], untranslated: 0, restrictedLeftOut: 0 }).length, 1);
+});
+
 test("the toast after a spelling dictionary was saved", async () => {
   const { spellingLines } = await import("./logic.ts");
   const lines = spellingLines({ path: "/x/wugs-spelling-2026-11-24", words: 120, fromLexicon: 40, once: 7, code: "und" });

@@ -54,6 +54,7 @@ pub mod replace;
 pub mod website;
 pub mod speech_dataset;
 pub mod spelling;
+pub mod parallel;
 pub mod stylometry;
 pub mod subtitles;
 pub mod table_text;
@@ -1504,6 +1505,12 @@ fn export_flashcards(s: State<SessionThread>, folder: String, date: String, incl
     s.run(move |s| flashcards::export_flashcards(s, std::path::Path::new(&folder), &date, include_restricted, order.unwrap_or(flashcards::Order::Alphabet)))
 }
 
+/// Sentences and translations as a parallel corpus (`parallel.rs`).
+#[tauri::command(async)]
+fn export_parallel(s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<parallel::Parallel, String> {
+    s.run(move |s| parallel::export_parallel(s, std::path::Path::new(&folder), &date, include_restricted))
+}
+
 /// A Hunspell spelling dictionary of the language (`spelling.rs`).
 #[tauri::command(async)]
 fn export_spelling(s: State<SessionThread>, folder: String, date: String) -> Result<spelling::Spelling, String> {
@@ -2472,6 +2479,7 @@ pub fn run() {
             speech_dataset_export,
             recording_levels,
             export_spelling,
+            export_parallel,
             save_hit_clips,
             texts_alike,
             gloss_break_all,

@@ -106,6 +106,21 @@ export function spellingLines(r: Spelling): string[] {
   return lines;
 }
 
+/** What a parallel corpus export wrote (`parallel.rs`). */
+export type Parallel = { path: string; pairs: number; texts: number; languages: [string, number][]; untranslated: number; restrictedLeftOut: number };
+
+/** The toast after a parallel corpus was saved. */
+export function parallelLines(r: Parallel): string[] {
+  const langs = r.languages.map(([code, n]) => `${code} (${plural(n, "pair", "pairs")})`).join(", ");
+  const lines = [
+    `Saved a parallel corpus of ${plural(r.pairs, "sentence pair", "sentence pairs")} from ${plural(r.texts, "text", "texts")} in ${r.path}, translated into ${langs}: a table, the two sides line for line for machine translation toolkits, and TMX for translation memories. Check that the speakers' consent covers this use before you share it.`,
+  ];
+  if (r.languages.some(([code]) => code === "und")) lines.push("Translations whose track has no language are filed under und; set a translation track's language to name them.");
+  if (r.untranslated > 0) lines.push(`${plural(r.untranslated, "transcribed sentence has", "transcribed sentences have")} no translation yet and ${r.untranslated === 1 ? "was" : "were"} left out.`);
+  if (r.restrictedLeftOut > 0) lines.push(`${plural(r.restrictedLeftOut, "text is", "texts are")} not open and ${r.restrictedLeftOut === 1 ? "was" : "were"} left out.`);
+  return lines;
+}
+
 export function publishedLines(r: Published): string[] {
   return [
     `Saved a CLDF dataset in ${r.path}.`,

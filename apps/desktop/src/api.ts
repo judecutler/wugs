@@ -760,6 +760,7 @@ export const exportDictionary = (args: { folder: string; date: string; includeRe
 export const typingShortcuts = () => invoke<string>("typing_shortcuts");
 export const setTypingShortcuts = (args: { table: string }) => invoke<string>("set_typing_shortcuts", args);
 export const exportArchiveSheet = (args: { folder: string }) => invoke<import("./cldf/logic").Sheet>("export_archive_sheet", args);
+export const exportParallel = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Parallel>("export_parallel", args);
 export const exportSpelling = (args: { folder: string; date: string }) => invoke<import("./cldf/logic").Spelling>("export_spelling", args);
 export const exportFlashcards = (args: { folder: string; date: string; includeRestricted: boolean; order?: import("./cldf/logic").CardOrder }) => invoke<import("./cldf/logic").Flashcards>("export_flashcards", args);
 export const exportWebsite = (args: { folder: string; date: string; includeRestricted: boolean; audio: boolean }) => invoke<import("./cldf/logic").Site>("export_website", args);
