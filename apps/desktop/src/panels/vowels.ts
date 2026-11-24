@@ -33,7 +33,7 @@ export function standalone(shown: SVGSVGElement): string {
   const copy = shown.cloneNode(true) as SVGSVGElement;
   const from = [shown, ...shown.querySelectorAll("*")];
   const to = [copy, ...copy.querySelectorAll("*")];
-  const props = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity", "font-family", "font-size", "font-weight", "paint-order"];
+  const props = ["fill", "fill-opacity", "stroke", "stroke-width", "stroke-opacity", "stroke-dasharray", "font-family", "font-size", "font-style", "font-weight", "paint-order"];
   from.forEach((el, i) => {
     const target = to[i];
     if (!(el instanceof SVGElement) || target === undefined || el.tagName === "title") return;
@@ -69,7 +69,11 @@ export const vowelsPanel: PanelDef = {
     let showTokens = localStorage.getItem(TOKENS_KEY) !== "off";
     let showPaths = localStorage.getItem(PATHS_KEY) === "on";
     let tier: string | null = null;
-    let result: { key: string; textId: string; tierId: string; track: string; points: Point[]; untimed: number; analysedBy: string } | null = null;
+    type Measured = { key: string; textId: string; tierId: string; track: string; points: Point[]; untimed: number; analysedBy: string };
+    let result: Measured | null = null;
+    /** A second speaker's track to draw over the first, or none. */
+    let other = "";
+    let otherResult: Measured | null = null;
     let busy = false;
     let problem: string | null = null;
     let lastText = "";
@@ -92,6 +96,12 @@ export const vowelsPanel: PanelDef = {
       try {
         const r = await measurePoints({ textId, tierId, source });
         result = { key: `${textId}|${tierId}`, textId, tierId, track, ...r };
+        const otherId = other;
+        otherResult = null;
+        if (otherId !== "" && otherId !== tierId) {
+          const r2 = await measurePoints({ textId, tierId: otherId, source });
+          otherResult = { key: `${textId}|${otherId}`, textId, tierId: otherId, track: s.text.tiers.find((t) => t.id === otherId)?.name ?? "", ...r2 };
+        }
       } catch (e) {
         problem = errorText(e);
       }
@@ -103,7 +113,11 @@ export const vowelsPanel: PanelDef = {
       const r = result!;
       const ps = plotted(r.points, normalize);
       const gs = groups(ps);
-      const rg = ranges(ps, normalize);
+      // A second speaker, each normalized against their own vowels.
+      const o = otherResult !== null && otherResult.key === `${r.textId}|${other}` ? otherResult : null;
+      const ps2 = o === null ? [] : plotted(o.points, normalize);
+      const gs2 = groups(ps2);
+      const rg = ranges([...ps, ...ps2], normalize);
       const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "vw-plot", role: "img", "aria-label": `Vowel space of ${r.track}: ${gs.length} labels` });
       // Grid and axes.
       for (const t of ticks(rg.x)) {
@@ -167,6 +181,39 @@ export const vowelsPanel: PanelDef = {
         const { px, py } = place(g.x, g.y, rg, BOX);
         layer.append(svg("text", { x: px, y: py + 5, class: "vw-label", "text-anchor": "middle" }, g.label.length > 12 ? `${g.label.slice(0, 11)}…` : g.label));
       }
+      if (o !== null) {
+        for (const g of gs2) {
+          const d = ellipsePath(g)
+            .map((q, i) => {
+              const { px, py } = place(q.x, q.y, rg, BOX);
+              return `${i === 0 ? "M" : "L"}${px.toFixed(1)},${py.toFixed(1)}`;
+            })
+            .join("");
+          if (d !== "") layer.append(svg("path", { d: `${d}Z`, class: "vw-ellipse vw-two" }));
+        }
+        if (showTokens) {
+          for (const p of ps2) {
+            const { px, py } = place(p.x, p.y, rg, BOX);
+            const dot = svg("circle", { cx: px, cy: py, r: 3.2, class: "vw-dot vw-two", tabindex: 0 });
+            dot.append(svg("title", {}, `${o.track}, ${p.group}: F1 ${Math.round(p.point.f1!)} Hz, F2 ${Math.round(p.point.f2!)} Hz — click to hear it`));
+            dot.addEventListener("click", () => void hear({ textId: o.textId, tierId: o.tierId, segmentId: p.point.segment, startMs: p.point.startMs, endMs: p.point.endMs }));
+            layer.append(dot);
+          }
+        }
+        for (const g of gs2) {
+          const { px, py } = place(g.x, g.y, rg, BOX);
+          layer.append(svg("text", { x: px, y: py + 5, class: "vw-label vw-two", "text-anchor": "middle" }, g.label.length > 12 ? `${g.label.slice(0, 11)}…` : g.label));
+        }
+        // Which is which, in the top corner.
+        const key = svg("g", { class: "vw-key" });
+        key.append(
+          svg("circle", { cx: BOX.left + 12, cy: BOX.top + 12, r: 4, class: "vw-dot" }),
+          svg("text", { x: BOX.left + 22, y: BOX.top + 16, class: "vw-key-text" }, r.track),
+          svg("circle", { cx: BOX.left + 12, cy: BOX.top + 30, r: 4, class: "vw-dot vw-two" }),
+          svg("text", { x: BOX.left + 22, y: BOX.top + 34, class: "vw-key-text" }, o.track),
+        );
+        root.append(key);
+      }
       return root;
     };
 
@@ -191,6 +238,18 @@ export const vowelsPanel: PanelDef = {
       picker.onchange = () => {
         tier = picker.value;
         paint();
+      };
+      const otherPicker = h(
+        "select",
+        { className: "vw-other", title: "Another speaker's track to draw over this one, in its own colour and dashed; each is normalized against their own vowels" },
+        h("option", { value: "", textContent: "No one" }),
+        ...timedTiers.filter((t) => t.id !== tier).map((t) => h("option", { value: t.id, textContent: t.name, selected: t.id === other })),
+      );
+      otherPicker.setAttribute("aria-label", "Compare with");
+      otherPicker.onchange = () => {
+        other = otherPicker.value;
+        if (other !== "") void run();
+        else paint();
       };
       const go = h("button", { className: "primary", textContent: busy ? "Measuring…" : "Plot", disabled: busy, title: "Measure every timed segment of this track and plot F1 against F2" });
       go.onclick = () => void run();
@@ -242,6 +301,7 @@ export const vowelsPanel: PanelDef = {
         "div",
         { className: "vw-bar" },
         h("label", {}, "Track ", picker),
+        h("label", {}, "Compare with ", otherPicker),
         go,
         h("label", { title: "Hz as measured, Bark, or normalized so speakers can be compared" }, "Scale ", norm),
         h("label", { title: "Show a dot for every segment, not only each label's mean" }, tok, " Every token"),
@@ -257,6 +317,10 @@ export const vowelsPanel: PanelDef = {
         if (normalize === "watt-fabricius") {
           const s = wattCentroid(current.points.filter((p): p is Point & { f1: number; f2: number } => p.f1 !== null && p.f2 !== null && p.f1 > 0 && p.f2 > 0));
           notes.push(s === null ? "Watt–Fabricius needs at least two vowels to find the triangle." : `The triangle's corners: /${s.i}/ as /i/ and /${s.a}/ as /a/; its centre at F1 ${Math.round(s.f1)} Hz, F2 ${Math.round(s.f2)} Hz.`);
+        }
+        if (otherResult !== null && otherResult.key === `${current.textId}|${other}`) {
+          const n2 = plotted(otherResult.points, "hz").length;
+          notes.push(`Over it, ${otherResult.track}: ${n2} ${n2 === 1 ? "segment" : "segments"}, dashed.${normalize === "hz" || normalize === "bark" ? " In Hz or Bark, a longer vocal tract alone moves every vowel; choose a normalization to compare the vowels themselves." : " Each speaker is normalized against their own vowels."}`);
         }
         body.push(plot(), h("p", { className: "note", textContent: notes.join(" ") }));
       } else if (problem === null) {

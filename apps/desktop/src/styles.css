@@ -1466,6 +1466,10 @@ body::before {
 .vw-dot:hover, .vw-dot:focus { fill-opacity: 1; outline: none; stroke: var(--ink); stroke-width: 1.5; }
 .vw-dot.is-selected { fill: var(--error); fill-opacity: 1; }
 .vw-label { font-family: var(--font-ipa); font-size: 18px; font-weight: 600; fill: var(--ink); paint-order: stroke; stroke: var(--surface-raised); stroke-width: 4px; pointer-events: none; }
+.vw-ellipse.vw-two { fill: var(--warn); fill-opacity: 0.06; stroke: var(--warn); stroke-dasharray: 5 3; }
+.vw-dot.vw-two { fill: var(--surface-raised); fill-opacity: 1; stroke: var(--warn); stroke-width: 1.5; }
+.vw-label.vw-two { fill: var(--warn); font-style: italic; }
+.vw-key-text { font-size: 12px; fill: var(--ink); }
 .vw-path { stroke: var(--ink); stroke-width: 1.8; opacity: 0.85; }
 .vw-head { fill: var(--ink); }
 .vw-path-start { fill: var(--surface-raised); stroke: var(--ink); stroke-width: 1.2; }

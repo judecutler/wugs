@@ -712,6 +712,7 @@ Segment the recording so each vowel (or each word you want to compare) is one se
   - **Watt–Fabricius** (2002, as Fabricius et al. 2009 modified it): each formant divided by the centre of this speaker's vowel triangle of /i/, /a/ and an /u/ at /i/'s F1. It finds /i/ and /a/ by their labels (`i`, `a`, `ɑ`, `æ`), else takes the vowel furthest front and high and the lowest, and the note under the plot names the corners it used.
 
   The last three let you compare recordings of different speakers. The choice is remembered.
+- **Compare with** draws a second track over the first: another speaker on the same recording, such as a mother's and a child's tracks from a CHAT file, or two speakers segmented separately. The second speaker's means, ellipses and dots are dashed and in another colour, and a key in the corner names both tracks. Each speaker is normalized against their own vowels, so with Lobanov, Nearey or Watt–Fabricius the two vowel systems line up where they are alike. In Hz or Bark, a longer vocal tract alone moves every vowel, and the note under the plot says so.
 - **Every token** shows or hides the dots, leaving only the means and ellipses.
 - **Trajectories** draws an arrow for each label from its mean F1 and F2 at 20% of its segments to its mean at 80%: a diphthong such as `ai` shows as a long arrow from the [a] region to the [i] region, and a monophthong's short arrow shows how much it moves (vowel-inherent spectral change).
 - Click a dot to hear its segment and open it on the Timeline.

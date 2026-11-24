@@ -710,7 +710,9 @@ const LEXICON = [
         { id: "low", name: "Low voice (pitch 50–300 Hz, formants to 5000 Hz)", pitchFloor: 50, pitchCeiling: 300, formantCeiling: 5000 },
       ],
     }),
-    measure_points: () => {
+    measure_points: ({ tierId } = {}) => {
+      // Another track is a second speaker with a shorter vocal tract: every formant higher.
+      const k0 = tierId !== undefined && tierId !== "tier-utt" ? 1.18 : 1;
       const means = { i: [300, 2300], e: [450, 2000], a: [750, 1300], o: [480, 900], u: [320, 800] };
       const points = [];
       let k = 0;
@@ -733,6 +735,12 @@ const LEXICON = [
         points.push({ segment: `d${j}`, label: "ai", startMs: 14000 + j * 500, endMs: 14000 + j * 500 + 260, f0: 125, f1: 560 + 20 * w, f2: 1750 + 60 * w, f3: 2700, contour: Array(10).fill(140), onset: [720 + 25 * w, 1350 + 50 * w], offset: [380 + 20 * w, 2150 + 70 * w] });
       }
       points.push({ segment: "v-silent", label: "a", startMs: 13000, endMs: 13200, f0: null, f1: null, f2: null, f3: null, contour: Array(10).fill(null) });
+      if (k0 !== 1)
+        for (const p of points) {
+          if (p.f1 !== null) [p.f1, p.f2] = [p.f1 * k0, p.f2 * k0];
+          if (p.onset) p.onset = p.onset.map((x) => x * k0);
+          if (p.offset) p.offset = p.offset.map((x) => x * k0);
+        }
       return { points, untimed: 1, analysedBy: "Acoustic analysis (built in)" };
     },
     gloss_consistency: () => [
