@@ -2,7 +2,9 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { concordance, concordanceQuery, dispersion, errorText, getText, glossGet, textMetadata, type TextDetail } from "../api";
+import { concordance, concordanceQuery, dispersion, errorText, getText, glossGet, saveHitClips, textMetadata, type TextDetail } from "../api";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { hitClipsLines } from "../measure/logic";
 import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
@@ -131,6 +133,7 @@ export const concordancePanel: PanelDef = {
     sorter.setAttribute("aria-label", "Sort");
     const copy = h("button", { type: "button", textContent: "Copy rows", title: "Copy every row as a table to paste into a spreadsheet, or into a document as lined-up concordance lines" });
     const copyExamples = h("button", { type: "button", textContent: "Copy as examples", title: "Copy the sentences these lines come from as numbered glossed examples for a paper (at most 50)" });
+    const saveClipsButton = h("button", { type: "button", textContent: "Save clips…", title: "Save the sentences these lines come from as sound files, each cut from its text's recording, with a clips.csv index naming the text and what was searched for: every token of a word, ready for Praat" });
     const plotToggle = h("button", { type: "button", textContent: "Plot", title: "Show where in each text it occurs, and how evenly it is spread (AntConc's Plot)" });
     plotToggle.setAttribute("aria-pressed", "false");
     const plotSorter = h("select", { className: "cc-sort", title: "Order of the texts" }, ...PLOT_SORTS.map((x) => h("option", { value: x.id, textContent: x.label })));
@@ -345,6 +348,7 @@ export const concordancePanel: PanelDef = {
       sorter.hidden = on || plotOn;
       thinner.hidden = on || plotOn;
       copyExamples.hidden = on || plotOn;
+      saveClipsButton.hidden = on || plotOn;
     };
 
     const setPlot = (on: boolean) => {
@@ -355,6 +359,7 @@ export const concordancePanel: PanelDef = {
       sorter.hidden = on;
       thinner.hidden = on;
       copyExamples.hidden = on;
+      saveClipsButton.hidden = on;
       plotSorter.hidden = !on;
       plotByPicker.hidden = !on;
     };
@@ -504,6 +509,21 @@ export const concordancePanel: PanelDef = {
           copyExamples.disabled = false;
         });
     };
+    saveClipsButton.onclick = async () => {
+      if (hits.length === 0) return;
+      const folder = await pickFile({ directory: true, title: "Where should the clips go?" });
+      if (typeof folder !== "string") return;
+      const lines = sortHits(sampled(), sortBy);
+      saveClipsButton.disabled = true;
+      try {
+        const r = await saveHitClips({ query: asked, hits: lines.map((h) => ({ textId: h.textId, segmentId: h.segmentId, keyword: keyword(h) })), folder });
+        showToast({ tone: "info", lines: hitClipsLines(r) });
+      } catch (e) {
+        showToast({ tone: "error", lines: [`Could not save the clips: ${errorText(e)}`] });
+      } finally {
+        saveClipsButton.disabled = false;
+      }
+    };
     plotToggle.onclick = () => {
       setPlot(!plotOn);
       if (plotOn && asked !== "") run();
@@ -632,7 +652,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, copy, copyExamples), chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, copy, copyExamples, saveClipsButton), chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */

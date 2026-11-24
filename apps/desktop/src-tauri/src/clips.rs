@@ -17,19 +17,24 @@ use crate::interchange::{cut_clip, file_stem, translations_of};
 use crate::session::{self, Session};
 
 pub struct Row {
+    /// The recording it is cut from.
+    pub wav: PathBuf,
     pub start_ms: f64,
     pub end_ms: f64,
     pub transcription: String,
     pub translation: String,
+    /// For concordance lines: the text's title and what was searched for.
+    pub line: Option<(String, String)>,
 }
 
 /// Everything the cutting needs, gathered on the session thread.
 pub struct Prepared {
-    wav: PathBuf,
-    text: String,
-    track: String,
+    /// The folder's name before ` (2)` and the like.
+    base: String,
     rows: Vec<Row>,
     untimed: usize,
+    /// Concordance lines whose text has no recording on this computer.
+    missing: usize,
 }
 
 /// The timed segments of `tier_id` in `text_id`, in time order, and the
@@ -50,7 +55,7 @@ pub fn prepare(s: &mut Session, text_id: &str, tier_id: &str, source: &str) -> R
         match (seg.start_ms, seg.end_ms) {
             (Some(a), Some(b)) if b > a => {
                 let translation = translations_of(p, &seg.id)?.into_iter().map(|t| t.1).next().unwrap_or_default();
-                rows.push(Row { start_ms: a, end_ms: b, transcription: seg.content.clone(), translation });
+                rows.push(Row { wav: wav.clone(), start_ms: a, end_ms: b, transcription: seg.content.clone(), translation, line: None });
             }
             _ => untimed += 1,
         }
@@ -59,7 +64,63 @@ pub fn prepare(s: &mut Session, text_id: &str, tier_id: &str, source: &str) -> R
         return Err(format!("«{track}» has no timed segments to save."));
     }
     rows.sort_by(|a, b| a.start_ms.total_cmp(&b.start_ms).then(a.end_ms.total_cmp(&b.end_ms)));
-    Ok(Prepared { wav, text: detail.title, track, rows, untimed })
+    Ok(Prepared { base: format!("{} {track} clips", detail.title), rows, untimed, missing: 0 })
+}
+
+/// A concordance line to save: its segment and what was searched for.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HitRef {
+    pub text_id: String,
+    pub segment_id: String,
+    pub keyword: String,
+}
+
+/// The sentences behind concordance lines, each once in the order given,
+/// cut from each text's own recording (`Project::text_recording`); lines
+/// with no times, or whose text has no recording here, are counted.
+pub fn prepare_hits(s: &mut Session, query: &str, hits: &[HitRef]) -> Result<Prepared, String> {
+    let p = session::project(s)?;
+    let mut rows = Vec::new();
+    let (mut untimed, mut missing) = (0, 0);
+    let mut seen = std::collections::HashSet::new();
+    let mut titles: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut wavs: std::collections::HashMap<String, Option<PathBuf>> = std::collections::HashMap::new();
+    for h in hits {
+        if !seen.insert(h.segment_id.clone()) {
+            continue;
+        }
+        let (Some(a), Some(b)) = (p.proj.field_num(&h.segment_id, "start")?, p.proj.field_num(&h.segment_id, "end")?) else {
+            untimed += 1;
+            continue;
+        };
+        if b <= a {
+            untimed += 1;
+            continue;
+        }
+        if !wavs.contains_key(&h.text_id) {
+            let wav = match p.text_recording(&h.text_id)? {
+                Some((_, blob)) => wugs_blob::parse_ref(&blob).map(|hex| p.root.join("blobs").join(hex)).filter(|w| w.is_file()),
+                None => None,
+            };
+            wavs.insert(h.text_id.clone(), wav);
+        }
+        let Some(wav) = wavs[&h.text_id].clone() else {
+            missing += 1;
+            continue;
+        };
+        if !titles.contains_key(&h.text_id) {
+            titles.insert(h.text_id.clone(), p.proj.field_str(&h.text_id, "title")?.unwrap_or_default());
+        }
+        let transcription = p.proj.field_str(&h.segment_id, "content")?.unwrap_or_default();
+        let translation = translations_of(p, &h.segment_id)?.into_iter().map(|t| t.1).next().unwrap_or_default();
+        rows.push(Row { wav, start_ms: a, end_ms: b, transcription, translation, line: Some((titles[&h.text_id].clone(), h.keyword.clone())) });
+    }
+    if rows.is_empty() {
+        return Err(if missing > 0 { "None of these lines' texts has its recording on this computer: pick each text's recording in the Timeline first.".into() } else { "None of these lines is timed, so there is nothing to cut.".into() });
+    }
+    let short: String = query.split_whitespace().collect::<Vec<_>>().join(" ").chars().take(40).collect();
+    Ok(Prepared { base: format!("{} clips", if short.is_empty() { "concordance" } else { short.as_str() }), rows, untimed, missing })
 }
 
 #[derive(Debug, Serialize)]
@@ -68,6 +129,8 @@ pub struct ClipsReport {
     pub path: String,
     pub clips: usize,
     pub untimed: usize,
+    /// Concordance lines whose text has no recording here.
+    pub missing: usize,
 }
 
 /// A clip's file name: its number, then its transcription (at most 40
@@ -87,7 +150,7 @@ pub fn write(prepared: Prepared, folder: &Path) -> Result<ClipsReport, String> {
     if !folder.is_dir() {
         return Err(format!("{} is not a folder", folder.display()));
     }
-    let base = file_stem(&format!("{} {} clips", prepared.text, prepared.track), "clips");
+    let base = file_stem(&prepared.base, "clips");
     let mut out = folder.join(&base);
     let mut k = 2;
     while out.symlink_metadata().is_ok() {
@@ -99,12 +162,21 @@ pub fn write(prepared: Prepared, folder: &Path) -> Result<ClipsReport, String> {
     let written = (|| {
         fs::create_dir(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
         let mut w = csv::WriterBuilder::new().from_writer(Vec::new());
-        w.write_record(["file", "start", "end", "duration", "transcription", "translation"]).map_err(|e| e.to_string())?;
+        let lines = prepared.rows.iter().any(|r| r.line.is_some());
+        let mut head = vec!["file", "start", "end", "duration", "transcription", "translation"];
+        if lines {
+            head.extend(["text", "keyword"]);
+        }
+        w.write_record(&head).map_err(|e| e.to_string())?;
         for (i, r) in prepared.rows.iter().enumerate() {
             let name = clip_name(i + 1, width, &r.transcription);
-            cut_clip(&prepared.wav, r.start_ms, r.end_ms, &scratch.join(&name)).map_err(|e| format!("{name}: {e}"))?;
+            cut_clip(&r.wav, r.start_ms, r.end_ms, &scratch.join(&name)).map_err(|e| format!("{name}: {e}"))?;
             let secs = |ms: f64| format!("{:.3}", ms / 1000.0);
-            w.write_record([name.as_str(), &secs(r.start_ms), &secs(r.end_ms), &secs(r.end_ms - r.start_ms), &r.transcription, &r.translation]).map_err(|e| e.to_string())?;
+            let mut record = vec![name.clone(), secs(r.start_ms), secs(r.end_ms), secs(r.end_ms - r.start_ms), r.transcription.clone(), r.translation.clone()];
+            if let Some((text, keyword)) = &r.line {
+                record.extend([text.clone(), keyword.clone()]);
+            }
+            w.write_record(&record).map_err(|e| e.to_string())?;
         }
         let mut index = "\u{feff}".as_bytes().to_vec();
         index.extend(w.into_inner().map_err(|e| e.to_string())?);
@@ -115,7 +187,7 @@ pub fn write(prepared: Prepared, folder: &Path) -> Result<ClipsReport, String> {
         fs::remove_dir_all(&scratch).ok();
         return Err(e);
     }
-    Ok(ClipsReport { path: out.display().to_string(), clips: prepared.rows.len(), untimed: prepared.untimed })
+    Ok(ClipsReport { path: out.display().to_string(), clips: prepared.rows.len(), untimed: prepared.untimed, missing: prepared.missing })
 }
 
 #[cfg(test)]
@@ -155,6 +227,15 @@ mod tests {
         let again = write(prepare(&mut s, &text, &track, &source).unwrap(), &out).unwrap();
         assert!(again.path.ends_with("clips (2)"), "{}", again.path);
         assert!(!fs::read_dir(&out).unwrap().any(|e| e.unwrap().file_name().to_string_lossy().ends_with(".partial")));
+        // Concordance lines: each sentence once, from its text's recording, with the text and keyword.
+        let first_seg = detail.segments.iter().filter(|x| x.tier == track && x.start_ms.is_some()).min_by(|a, b| a.start_ms.unwrap().total_cmp(&b.start_ms.unwrap())).unwrap().id.clone();
+        let hit = |seg: &str| HitRef { text_id: text.clone(), segment_id: seg.to_string(), keyword: "tuː".into() };
+        let r = write(prepare_hits(&mut s, "tuː", &[hit(&first_seg), hit(&first_seg)]).unwrap(), &out).unwrap();
+        assert_eq!((r.clips, r.untimed, r.missing), (1, 0, 0), "{r:?}");
+        assert!(r.path.ends_with("tuː clips"), "{}", r.path);
+        let index = fs::read_to_string(Path::new(&r.path).join("clips.csv")).unwrap();
+        assert!(index.lines().next().unwrap().ends_with(",text,keyword"), "{index}");
+        assert!(index.lines().nth(1).unwrap().ends_with(",Counting to six (tutorial),tuː"), "{index}");
         drop(s);
         fs::remove_dir_all(dir).ok();
     }

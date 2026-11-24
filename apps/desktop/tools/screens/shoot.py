@@ -557,6 +557,15 @@ def main():
                 failures.append("Concordance: Copy rows did not carry the translations shown")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.locator(".panel-concordance .cc-under-toggle").click()
+            # Every line's sentence saved as a sound file.
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/clips'")
+            run.page.locator(".panel-concordance button", has_text="Save clips").click()
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            asked_clips = run.page.evaluate("window.__WUGS_HITCLIPS__") or {}
+            if len(asked_clips.get("hits") or []) != 3 or asked_clips.get("query") != "kani" or not any("Saved 2 sentences" in t for t in run.toasts()):
+                failures.append(f"Concordance did not save its lines as clips: {asked_clips} {run.toasts()}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Sorted by the word before: that word is marked in each line.
             run.page.locator(".panel-concordance select.cc-sort").first.select_option("left")
             run.page.wait_for_timeout(200)

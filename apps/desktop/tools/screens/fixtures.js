@@ -656,6 +656,11 @@ const LEXICON = [
         { textId: "t-greet", textTitle: "Greetings at the market", segmentId: "g07", tierId: "tier-utt", startMs: 12000, endMs: 13600, words: ["senu", "paki", "nikani"], at: 2, breakdown: "ni-kani", glosses: "1SG-count" },
       ],
     }),
+    // Concordance lines saved as clips: the request kept for the probe.
+    save_hit_clips: ({ query, hits, folder }) => {
+      window.__WUGS_HITCLIPS__ = { query, hits };
+      return { path: `${folder}/${query} clips`, clips: hits.length - 1, untimed: 0, missing: 1 };
+    },
     list_texts: () => texts,
     link_recording: () => null,
     concordance_query: () => ({

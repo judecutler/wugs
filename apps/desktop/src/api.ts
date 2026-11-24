@@ -798,6 +798,9 @@ export const praatDiscard = (args: { text: string }) => invoke<void>("praat_disc
 /** Measure every timed segment of a track into a CSV table in `folder` (src-tauri/src/measure.rs). */
 export const saveClips = (args: { textId: string; tierId: string; source: string; folder: string }) =>
   invoke<import("./measure/logic").ClipsReport>("save_clips", args);
+/** The sentences behind concordance lines as sound files, each from its text's recording. */
+export const saveHitClips = (args: { query: string; hits: { textId: string; segmentId: string; keyword: string }[]; folder: string }) =>
+  invoke<import("./measure/logic").ClipsReport>("save_hit_clips", args);
 export const measureTrack = (args: { textId: string; tierId: string; source: string; folder: string }) =>
   invoke<import("./measure/logic").MeasureReport>("measure_track", args);
 /** F1/F2 of every timed segment of a track, for the Vowel space panel. */

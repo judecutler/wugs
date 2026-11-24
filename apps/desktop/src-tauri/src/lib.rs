@@ -1429,6 +1429,18 @@ async fn save_clips(s: State<'_, SessionThread>, text_id: String, tier_id: Strin
     tauri::async_runtime::spawn_blocking(move || clips::write(prepared, &into)).await.map_err(|e| e.to_string())?
 }
 
+/// Save the sentences behind concordance lines as WAVs, each cut from its
+/// text's recording, with a `clips.csv` index; the cutting runs off the session thread.
+#[tauri::command]
+async fn save_hit_clips(s: State<'_, SessionThread>, query: String, hits: Vec<clips::HitRef>, folder: String) -> Result<clips::ClipsReport, String> {
+    let into = std::path::PathBuf::from(&folder);
+    let prepared = s.run(move |s| {
+        interchange::outside_project(s, std::path::Path::new(&folder))?;
+        clips::prepare_hits(s, &query, &hits)
+    })?;
+    tauri::async_runtime::spawn_blocking(move || clips::write(prepared, &into)).await.map_err(|e| e.to_string())?
+}
+
 /// The F1/F2 of every timed segment of a track, for the Vowel space panel.
 #[tauri::command]
 async fn measure_points(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, tier_id: String, source: String) -> Result<measure::PointsView, String> {
@@ -2298,6 +2310,7 @@ pub fn run() {
             gloss_apply_all,
             gloss_word_types,
             likely_meanings,
+            save_hit_clips,
             texts_alike,
             gloss_break_all,
             gloss_apply_type,
