@@ -1746,3 +1746,12 @@ body::before {
 
 .cx-table tr.cx-drawn td:first-child { font-weight: 600; }
 .panel-collexemes .cx-query, .panel-collexemes .cx-versus { flex: 1 1 22em; }
+.ty-alike { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 6px 8px; margin: 6px 0; background: var(--surface-raised); }
+.ty-alike-list { list-style: none; margin: 4px 0; padding: 0; display: grid; gap: 2px; }
+.ty-alike-row { display: grid; grid-template-columns: minmax(0, 1fr) 4em auto; gap: 8px; align-items: center; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 2px 4px; cursor: pointer; color: var(--ink); }
+.ty-alike-row:hover, .ty-alike-row:focus-visible { border-color: var(--accent); }
+.ty-alike-track { display: block; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+.ty-alike-bar { display: block; height: 100%; background: var(--accent-bright); }
+.ty-alike-n { font-variant-numeric: tabular-nums; font-size: var(--text-sm); }
+.ty-alike-who { display: flex; flex-direction: column; min-width: 0; }
+.ty-alike-family { font-size: var(--text-xs); color: var(--muted); }

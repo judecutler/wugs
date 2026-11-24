@@ -1280,6 +1280,14 @@ def main():
             run.shot("state-typology-map", run.page.locator(".panel-typology"))
             if run.page.locator(".panel-typology .tm-dot").count() != 29 or run.page.locator(".panel-typology .tm-me").count() != 1:
                 failures.append("Typology: the map did not place every language and ring the project's")
+            # The languages most like the project's answers.
+            run.page.locator(".panel-typology .ty-alike-ask").click()
+            run.page.locator(".panel-typology .ty-alike-row").first.wait_for()
+            run.page.locator(".panel-typology .ty-alike").scroll_into_view_if_needed()
+            run.shot("state-typology-alike", run.page.locator(".panel-typology .ty-alike"))
+            if run.page.locator(".panel-typology .ty-alike-row").count() != 3 or "agrees most" not in run.page.locator(".panel-typology .ty-alike").inner_text():
+                failures.append("Typology did not list the languages like the project's answers")
+            run.page.locator(".panel-typology .ty-alike-ask").click()
             # Affixes: the order of two affixes met in one word.
             run.front("affixes", "Affixes")
             order = run.page.locator(".panel-affixes .af-order")

@@ -768,6 +768,12 @@ fn typology_answers(s: State<SessionThread>, source: typology::Source) -> Result
     s.run(move |s| typology::answers(s, source))
 }
 
+/// The dataset's languages most like the project's own typology answers.
+#[tauri::command(async)]
+fn typology_alike(s: State<SessionThread>, source: typology::Source) -> Result<typology::Alikes, String> {
+    s.run(move |s| typology::alike_project(s, source))
+}
+
 /// The project's typology answers as a CLDF StructureDataset in a new folder.
 #[tauri::command(async)]
 fn export_typology(app: AppHandle, s: State<SessionThread>, source: typology::Source, folder: String, date: String) -> Result<typology::StructureExport, String> {
@@ -2808,6 +2814,7 @@ pub fn run() {
             set_cognates,
             word_order,
             typology_answers,
+            typology_alike,
             orthography_get,
             orthography_save,
             orthography_draft,

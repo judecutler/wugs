@@ -6,13 +6,14 @@
 // Rules in ../typology/logic.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { errorText, exportTypology, glottologFind, projectLanguage, setTypologyAnswer, typologyAnswers, typologyMap, typologyProfile } from "../api";
+import { errorText, exportTypology, glottologFind, projectLanguage, setTypologyAnswer, typologyAlike, typologyAnswers, typologyMap, typologyProfile } from "../api";
 import { localDay } from "../dates";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { getState, showToast } from "../store";
-import { answeredCount, cldfValues, counts, differs, othersLine, ownLine, profileNote, profileTable, shown, SOURCES, unlike, type Answer, type Ours, type Profile, type Show, type Source } from "../typology/logic";
+import { answeredCount, cldfValues, counts, differs, othersLine, ownLine, profileNote, profileTable, shown, SOURCES, sourceName, unlike, type Answer, type Ours, type Profile, type Show, type Source } from "../typology/logic";
 import type { FeatureMap } from "../typology/map";
+import { agreement, alikeLine, alikeTsv, percentOf, type Alikes } from "../typology/alike";
 import { drawFeatureMap } from "./featuremap";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -45,6 +46,8 @@ export const typologyPanel: PanelDef = {
     /** The project's language's Glottocode: only its profile takes the project's answers. */
     let projectCode = "";
     let ours = new Map<string, Ours>();
+    /** The languages most like the project's answers, while shown. */
+    let alike: Alikes | null = null;
 
     const load = async (glottocode: string) => {
       const mine = ++seq;
@@ -138,6 +141,7 @@ export const typologyPanel: PanelDef = {
           if (source === id) return;
           source = id;
           localStorage.setItem(SOURCE_KEY, id);
+          alike = null;
           if (shownCode !== null) void load(shownCode);
         };
         return b;
@@ -157,7 +161,40 @@ export const typologyPanel: PanelDef = {
             showToast({ tone: "error", lines: [errorText(e)] });
           }
         })();
-      return h("div", { className: "ty-bar" }, group, input, mine, copy, isMine ? values : null, isMine ? publish : null);
+      const like = h("button", { type: "button", className: "ty-alike-ask", textContent: alike === null ? "Languages like ours" : "Hide the languages like ours", title: "The languages whose coded values agree most with the project's own answers" });
+      like.onclick = () =>
+        void (async () => {
+          if (alike !== null) {
+            alike = null;
+            paint();
+            return;
+          }
+          try {
+            alike = await typologyAlike({ source });
+            paint();
+          } catch (e) {
+            showToast({ tone: "error", lines: [errorText(e)] });
+          }
+        })();
+      return h("div", { className: "ty-bar" }, group, input, mine, copy, isMine ? values : null, isMine ? publish : null, isMine ? like : null);
+    };
+
+    /** The languages like the project's answers: a bar each, a click looks one up. */
+    const alikeBox = (r: Alikes, name: string): HTMLElement[] => {
+      const copy = h("button", { type: "button", textContent: "Copy table" });
+      copy.onclick = () =>
+        writeText(alikeTsv(r)).then(
+          () => showToast({ tone: "info", lines: [`${r.languages.length} languages copied as a table.`] }),
+          (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+        );
+      const rows = r.languages.map((l) => {
+        const bar = h("span", { className: "ty-alike-bar" });
+        bar.style.width = `${Math.round(100 * agreement(l))}%`;
+        const b = h("button", { type: "button", className: "ty-alike-row", title: `Show ${l.name}'s features` }, h("span", { className: "ty-alike-who" }, h("span", { className: "ty-alike-name", textContent: l.name }), h("span", { className: "ty-alike-family", textContent: [l.family, l.macroarea].filter((x) => x !== "").join(", ") })), h("span", { className: "ty-alike-track" }, bar), h("span", { className: "ty-alike-n", textContent: `${percentOf(l)} of ${l.compared}` }));
+        b.onclick = () => void load(l.glottocode);
+        return h("li", {}, b);
+      });
+      return [h("section", { className: "ty-alike" }, h("p", { className: "note", textContent: alikeLine(r, sourceName(source), name) }), rows.length === 0 ? null : h("ol", { className: "ty-alike-list" }, ...rows), rows.length === 0 ? null : h("div", { className: "ty-bar" }, copy))];
     };
 
     const paint = () => {
@@ -303,6 +340,7 @@ export const typologyPanel: PanelDef = {
       drawList();
       el.replaceChildren(
         bar(p),
+        ...(isMine && alike !== null ? alikeBox(alike, p.name) : []),
         h("h3", { className: "ty-title", textContent: `${p.name} (${p.glottocode})` }),
         h("p", { className: "note", textContent: profileNote(p, source) }),
         answeredLine,
@@ -323,6 +361,7 @@ export const typologyPanel: PanelDef = {
       if (s.info.projectId === project) return;
       project = s.info.projectId;
       profile = null;
+      alike = null;
       shownCode = null;
       problem = null;
       paint();

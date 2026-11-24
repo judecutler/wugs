@@ -325,6 +325,87 @@ pub fn profile(glottocode: &str, source: Source) -> Result<Profile, String> {
     })
 }
 
+/// A language whose coded values agree with a set of answers.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Alike {
+    pub glottocode: String,
+    pub name: String,
+    pub family: String,
+    pub macroarea: String,
+    /// Features both have coded, and on how many they agree.
+    pub compared: usize,
+    pub same: usize,
+}
+
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Alikes {
+    pub languages: Vec<Alike>,
+    /// The answers compared (coded, not `?`).
+    pub answered: usize,
+    /// Languages compared on at least `least` features.
+    pub least: usize,
+}
+
+/// The languages at most this list shows.
+pub const ALIKE_SHOWN: usize = 20;
+
+/// The dataset's languages most like a set of answers (feature id, code):
+/// the share of the features both have coded on which they agree, among
+/// languages coded on at least half the answers (and 5 or more); `skip` (the
+/// project's own Glottocode) is left out. Ties go to the language compared on more.
+pub fn alike(source: Source, answered: &[(String, String)], skip: &str) -> Alikes {
+    let d = data(source);
+    let wanted: Vec<(usize, u8)> = answered
+        .iter()
+        .filter(|(_, v)| v.len() == 1 && v != "?")
+        .filter_map(|(id, v)| Some((d.features.iter().position(|f| f.id == id)?, v.as_bytes()[0])))
+        .collect();
+    let least = (wanted.len() / 2).max(5);
+    let mut out: Vec<Alike> = Vec::new();
+    if wanted.len() >= 5 {
+        for (code, bytes) in &d.values {
+            if code.eq_ignore_ascii_case(skip) {
+                continue;
+            }
+            let (mut compared, mut same) = (0, 0);
+            for &(i, v) in &wanted {
+                let Some(&b) = bytes.get(i) else { continue };
+                if b == b'.' || b == b'?' {
+                    continue;
+                }
+                compared += 1;
+                same += usize::from(b == v);
+            }
+            if compared < least {
+                continue;
+            }
+            let l = glottolog::by_glottocode(code);
+            out.push(Alike {
+                glottocode: code.to_string(),
+                name: l.as_ref().map_or_else(|| code.to_string(), |l| l.name.to_string()),
+                family: l.as_ref().map_or("", |l| l.family).to_string(),
+                macroarea: l.as_ref().map_or("", |l| l.macroarea).to_string(),
+                compared,
+                same,
+            });
+        }
+    }
+    let share = |a: &Alike| a.same as f64 / a.compared as f64;
+    out.sort_by(|a, b| share(b).total_cmp(&share(a)).then(b.compared.cmp(&a.compared)).then(a.name.cmp(&b.name)));
+    out.truncate(ALIKE_SHOWN);
+    Alikes { languages: out, answered: wanted.len(), least }
+}
+
+/// The languages most like the project's own answers.
+pub fn alike_project(session: &mut Session, source: Source) -> Result<Alikes, String> {
+    let ours: Vec<(String, String)> = answers(session, source)?.into_iter().map(|o| (o.id, o.value)).collect();
+    let p = session::project(session)?;
+    let me = p.project_language()?.glottocode;
+    Ok(alike(source, &ours, &me))
+}
+
 /// The project's own answer to one feature.
 #[derive(Debug, Serialize, PartialEq)]
 pub struct Ours {
@@ -439,6 +520,23 @@ pub fn export_structure(session: &mut Session, source: Source, folder: &std::pat
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_languages_own_values_find_it_first() {
+        let d = data(Source::Grambank);
+        let bytes = d.values.get("stan1293").expect("English is in Grambank");
+        let answers: Vec<(String, String)> = d.features.iter().zip(bytes.iter()).filter(|(_, b)| **b != b'.' && **b != b'?').take(40).map(|(f, b)| (f.id.to_string(), (*b as char).to_string())).collect();
+        let r = alike(Source::Grambank, &answers, "");
+        assert_eq!(r.answered, 40);
+        assert_eq!(r.least, 20);
+        let top = &r.languages[0];
+        assert_eq!((top.same, top.compared), (40, 40));
+        assert!(r.languages.iter().any(|l| l.glottocode == "stan1293"));
+        assert!(r.languages.len() <= ALIKE_SHOWN);
+        // Skipped, it is gone; too few answers find nothing.
+        assert!(alike(Source::Grambank, &answers, "stan1293").languages.iter().all(|l| l.glottocode != "stan1293"));
+        assert!(alike(Source::Grambank, &answers[..4], "").languages.is_empty());
+    }
 
     #[test]
     fn answers_export_as_a_structure_dataset_beside_the_project() {

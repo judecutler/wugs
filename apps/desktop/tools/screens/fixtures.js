@@ -873,6 +873,15 @@ const LEXICON = [
       return { entries: 41, already: 6, unconverted: 2, examples: [{ before: "nikani", after: "nikani" }, { before: "ngai", after: "ŋai" }, { before: "toruma", after: "toɾuma" }], unknown: [{ text: "q", count: 2, example: "qela" }], written: !!write };
     },
     orthography_convert: () => ({ track: "tier-ipa2", trackName: "IPA (converted)", texts: 3, created: 60, updated: 0, unchanged: 0, kept: 0, empty: 4, unknown: [] }),
+    typology_alike: () => ({
+      answered: 24,
+      least: 12,
+      languages: [
+        { glottocode: "kanu1235", name: "Upper Kanu", family: "Kanuic", macroarea: "Papunesia", compared: 22, same: 20 },
+        { glottocode: "lamb1240", name: "Lamba", family: "Kanuic", macroarea: "Papunesia", compared: 19, same: 15 },
+        { glottocode: "suto1238", name: "Sutori", family: "Austronesian", macroarea: "Papunesia", compared: 24, same: 16 },
+      ],
+    }),
     typology_answers: () => [
       { id: "GB020", value: "1", note: "«ang» before common nouns (Kanu notebook 3, p. 12)" },
       { id: "GB024", value: "2", note: "" },
