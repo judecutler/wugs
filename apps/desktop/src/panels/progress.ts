@@ -2,8 +2,10 @@
 // report, a deposit form or a supervisor (src-tauri/src/progress.rs). Words
 // and sums in ../progress/logic.ts. Read-only; a row opens its text.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { consentGaps, lexiconList, errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog, worldLand } from "../api";
+import { projectLanguage, saveDocument, consentGaps, lexiconList, errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog, worldLand } from "../api";
 import { placesNote, textPlaces } from "../progress/places";
+import { corpusDescription } from "../progress/description";
+import { open as pickFolder } from "@tauri-apps/plugin-dialog";
 import { nextSteps, stepsLine, type LexiconGaps } from "../progress/next";
 import { shows } from "../lexicon/logic";
 import { SHOW_PANEL } from "./panel";
@@ -80,6 +82,29 @@ export const progressPanel: PanelDef = {
     let speakers: SpeakerRow[] = [];
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every text's figures and the totals, to paste into a spreadsheet or a report" });
     const recount = h("button", { type: "button", textContent: "Count again" });
+    const describe = h("button", { type: "button", textContent: "Describe the corpus…", title: "Save a description of the collection for a data paper, an archive deposit or a report: its contents, annotation, speakers and access, with places left to write" });
+    describe.onclick = async () => {
+      if (data === null) return;
+      try {
+        const folder = await pickFolder({ directory: true, title: "Where should the description go?" });
+        if (typeof folder !== "string") return;
+        const language = await projectLanguage();
+        const gaps = await consentGaps().catch(() => null);
+        const html = corpusDescription({
+          progress: data,
+          speakers,
+          language: { name: language.name, glottocode: language.glottocode, iso: language.iso },
+          restricted: data.texts.filter((t) => (t.access ?? "open") !== "open").length,
+          uncovered: gaps === null || gaps.records === 0 ? null : gaps.texts.filter((t) => t.records === 0).length,
+          date: localDay(new Date()),
+          generator: "wugs",
+        });
+        const r = await saveDocument({ folder, title: `${language.name.trim() || "Corpus"} description`, extension: "html", contents: html });
+        showToast({ tone: "info", lines: [`Saved the description in ${r.path}. Open it in Word or a browser and fill in the places marked in yellow.`, ...r.notes] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [`Could not save the description: ${errorText(e)}`] });
+      }
+    };
 
     const draw = () => {
       if (data === null) {
@@ -365,7 +390,7 @@ export const progressPanel: PanelDef = {
         el.replaceChildren(emptyState("Progress", "Open a project to see how far it has come.", "The wug is keeping score."));
         return;
       }
-      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, nextBox, h("div", { className: "pg-rows" }, table), note, makeUp, placesBox, speakersBox, growthBox, workBox);
+      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy, describe), summary, nextBox, h("div", { className: "pg-rows" }, table), note, makeUp, placesBox, speakersBox, growthBox, workBox);
       void load();
     };
     return { element: el, render, dispose: unprovide };
