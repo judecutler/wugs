@@ -3,6 +3,7 @@ import { THEME_EVENT } from "../theme/theme";
 import { captureRecoveredDiscard, captureRecoveredImport, captureRecoveredList, errorText, listSources, mediaOverview, sourceSetDetail, type Recovered, type SourceRow } from "../api";
 import { CARD_TYPE, cardDrag, cards, detailsLine, duration, normalized, recordingDetailKeys, recordingDetailLabel, wavePath, type Card } from "../media/logic";
 import { canRecord } from "../capture/recorder.ts";
+import { parsePattern, readName, writesFor } from "../media/names";
 import { defaultLabel, formatElapsed, meterFill } from "../capture/pcm.ts";
 import {
   armDiscard,
@@ -44,7 +45,102 @@ export const mediaPanel: PanelDef = {
     const bar = h("div", { className: "rec-bar" });
     const recoveredBox = h("div", { className: "rec-recovered" });
     const list = h("div");
-    el.append(bar, recoveredBox, list);
+    // Details read from the recordings' file names by a pattern.
+    const NAME_KEY = "wugs.media.namePattern";
+    const namePattern = h("input", { type: "text", className: "bin-pattern", ariaLabel: "File name pattern", placeholder: "{date}_{participants}_{genre}" });
+    try {
+      namePattern.value = localStorage.getItem(NAME_KEY) ?? "{date}_{participants}_{genre}";
+    } catch {
+      namePattern.value = "{date}_{participants}_{genre}";
+    }
+    const replaceBox = h("input", { type: "checkbox" });
+    const nameNote = h("p", { className: "note" });
+    const namePreview = h("table", { className: "pg-table bin-names" });
+    const fillNames = h("button", { type: "button", textContent: "Fill details" });
+    const namesBox = h(
+      "details",
+      { className: "bin-from-names" },
+      h("summary", { textContent: "Details from file names" }),
+      h("p", { className: "note", textContent: "Write how your files are named, with the details in braces: {date}, {place}, {participants}, {genre}, {recorded_by}, any other name, or {skip} for a part to leave out. 20260312_Ana_story.wav under {date}_{participants}_{genre} gives the date 2026-03-12, Ana and story." }),
+      h("div", { className: "cc-bar" }, namePattern, h("label", { title: "Write over details already filled in" }, replaceBox, " Replace filled details"), fillNames),
+      nameNote,
+      h("div", { className: "pg-rows" }, namePreview),
+    );
+    /** Each recording with audio, what the pattern reads from its name, and what would be written. */
+    const nameReads = () => {
+      const p = parsePattern(namePattern.value);
+      if ("error" in p) return { error: p.error, rows: [] as { src: SourceRow; read: [string, string][] | null; writes: [string, string][] }[] };
+      return {
+        error: null,
+        keys: p.keys,
+        rows: sources.filter((x) => x.kind === "audio" && x.hasMedia).map((src) => {
+          const read = readName(p, src.label);
+          return { src, read, writes: read === null ? [] : writesFor(read, src.details, replaceBox.checked) };
+        }),
+      };
+    };
+    function drawNames() {
+      const r = nameReads();
+      if (r.error !== null) {
+        nameNote.textContent = r.error;
+        namePreview.replaceChildren();
+        fillNames.disabled = true;
+        return;
+      }
+      const keys = r.keys ?? [];
+      const fits = r.rows.filter((x) => x.read !== null).length;
+      const writes = r.rows.reduce((n, x) => n + x.writes.length, 0);
+      nameNote.textContent = r.rows.length === 0 ? "No recordings yet." : `${fits} of ${r.rows.length} file names fit the pattern; ${writes} ${writes === 1 ? "detail" : "details"} would be filled.`;
+      fillNames.disabled = writes === 0;
+      namePreview.replaceChildren(
+        h("thead", {}, h("tr", {}, h("th", { scope: "col", textContent: "Recording" }), ...keys.map((k) => h("th", { scope: "col", textContent: recordingDetailLabel(k) })))),
+        h(
+          "tbody",
+          {},
+          ...r.rows.slice(0, 50).map((x) =>
+            h(
+              "tr",
+              { className: x.read === null ? "bin-nofit" : "" },
+              h("th", { scope: "row", textContent: x.src.label || "(unnamed)" }),
+              ...(x.read === null
+                ? [h("td", { colSpan: Math.max(1, keys.length), className: "note", textContent: "does not fit" })]
+                : keys.map((k) => {
+                    const v = x.read!.find(([d]) => d === k)?.[1] ?? "";
+                    const writing = x.writes.some(([d]) => d === k);
+                    return h("td", { className: writing ? "bin-new" : "", textContent: v, title: writing ? "Will be filled" : "Already so, or kept" });
+                  })),
+            ),
+          ),
+        ),
+      );
+    }
+    namePattern.oninput = () => {
+      try {
+        localStorage.setItem(NAME_KEY, namePattern.value);
+      } catch {
+        /* kept for this session */
+      }
+      drawNames();
+    };
+    replaceBox.onchange = drawNames;
+    fillNames.onclick = async () => {
+      const r = nameReads();
+      if (r.error !== null) return;
+      fillNames.disabled = true;
+      let written = 0;
+      try {
+        for (const x of r.rows)
+          for (const [key, value] of x.writes) {
+            sources = await sourceSetDetail({ source: x.src.id, key, value });
+            written += 1;
+          }
+        showToast({ tone: "info", lines: [`Filled ${written} ${written === 1 ? "detail" : "details"} from the file names.`] });
+      } catch (e) {
+        showToast({ tone: "error", lines: [`Filled ${written} before a problem: ${errorText(e)}`] });
+      }
+      drawList();
+    };
+    el.append(bar, recoveredBox, list, namesBox);
     let sources: SourceRow[] = [];
     let recovered: Recovered[] = [];
     let recoveredError: string | null = null;
@@ -287,6 +383,7 @@ export const mediaPanel: PanelDef = {
     };
 
     const drawList = () => {
+      drawNames();
       if (cardDrag.active()) {
         redrawAfterDrag = true;
         // A dragend the webview lost would leave the bin stale: look again once the drag has lapsed.
