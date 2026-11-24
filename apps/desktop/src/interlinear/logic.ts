@@ -22,7 +22,7 @@ export function sentencesOf<S extends Seg>(segments: readonly S[], tiers: readon
 }
 
 /** One sentence as the panel draws it. */
-export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; notes?: string[]; speaker?: string };
+export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; notes?: string[]; speaker?: string; topics?: string[] };
 
 export const analysed = (l: Line): boolean => l.words.some((w) => w.morphs.length > 0);
 
@@ -45,7 +45,7 @@ export const toGloss = (l: Line): boolean => l.content.trim() !== "" && (l.words
 export const toTranslate = (l: Line): boolean => l.content.trim() !== "" && (l.translation === null || l.translation.trim() === "");
 
 /** Which sentences the panel lists. */
-export type Show = "all" | "gloss" | "translate";
+export type Show = "all" | "gloss" | "translate" | `topic:${string}`;
 
 export const SHOWS: { id: Show; label: string; next: string; done: string; keep: (l: Line) => boolean }[] = [
   { id: "all", label: "Every sentence", next: "Next to gloss", done: "Every sentence of this text is glossed.", keep: () => true },
@@ -53,7 +53,23 @@ export const SHOWS: { id: Show; label: string; next: string; done: string; keep:
   { id: "translate", label: "Sentences without a translation", next: "Next to translate", done: "Every sentence of this text has a translation.", keep: toTranslate },
 ];
 
-export const showOf = (id: string | null): (typeof SHOWS)[number] => SHOWS.find((s) => s.id === id) ?? SHOWS[0]!;
+const fold = (s: string) => s.toLowerCase();
+
+/** What to list: one of `SHOWS`, or the sentences filed under a grammar topic (`topic:<name>`). */
+export const showOf = (id: string | null): (typeof SHOWS)[number] => {
+  if (id !== null && id.startsWith("topic:")) {
+    const name = id.slice(6);
+    return { id: id as Show, label: `On «${name}»`, next: "Next to gloss", done: `No sentence of this text is filed under «${name}».`, keep: (l) => (l.topics ?? []).some((t) => fold(t) === fold(name)) };
+  }
+  return SHOWS.find((s) => s.id === id) ?? SHOWS[0]!;
+};
+
+/** The grammar topics the text's sentences are filed under, in order of name, each once. */
+export function topicsIn(lines: readonly Line[]): string[] {
+  const seen = new Map<string, string>();
+  for (const l of lines) for (const t of l.topics ?? []) if (!seen.has(fold(t))) seen.set(fold(t), t);
+  return [...seen.values()].sort((a, b) => a.localeCompare(b));
+}
 
 /** The next sentence after `current` that `wanted` keeps (from the start when
  * nothing or a sentence not listed is current), wrapping round; null when

@@ -357,6 +357,8 @@ While glossing, file a sentence under the topics it illustrates: under **Topics*
 
 The **Topics** panel (open it from Settings, Closed panels, or **Ctrl+K**) lists every topic with its number of sentences. Pick one to see its sentences, by text, with their translations; click a sentence to open it in the Gloss panel. **Copy as examples** copies them as numbered glossed examples in the format chosen for **Copy example** (Word or Google Docs, LaTeX with gb4e or ExPex, or plain text), ready to paste into a grammar chapter or a paper. **Copy table** copies the sentences and translations as a table. To rename a topic on every sentence, type the new name beside **Rename**; give the name of another topic to fold the two into one.
 
+In the **Interlinear** tab, the list of which sentences to show also offers each topic the text's sentences are filed under (**On «negation»**), to read one text's examples of it in order.
+
 To file many sentences at once, search for what they share in the **Concordance** (a word, a gloss such as NEG, or a CQP query), then click **File under a topic…**, type the topic and click **File their sentences**. Each line's sentence is filed once (a line from a translation files its sentence), and a sentence already under the topic stays as it was. With **N at random** or **near a word**, only the lines shown are filed.
 
 ### See how you translated a sentence like this before

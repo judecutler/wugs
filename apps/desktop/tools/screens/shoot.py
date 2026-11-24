@@ -795,6 +795,12 @@ def main():
             run.shot("state-interlinear-todo", run.page.locator(".panel-interlinear"))
             if run.page.locator(".panel-interlinear .il-row").count() == 0:
                 failures.append("Only sentences still to gloss showed none")
+            run.page.locator(".panel-interlinear .il-show").select_option("topic:Numerals")
+            run.page.wait_for_timeout(300)
+            if run.page.locator(".panel-interlinear .il-row").count() != 1:
+                failures.append(f"On «Numerals» did not list its one sentence: {run.page.locator('.panel-interlinear .il-row').count()}")
+            run.page.locator(".panel-interlinear .il-show").select_option("gloss")
+            run.page.wait_for_timeout(300)
             run.page.locator(".panel-interlinear .il-bar button", has_text="Next to gloss").click()
             run.page.wait_for_timeout(400)
             if run.page.locator(".panel-interlinear .il-selected").count() != 1:

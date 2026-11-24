@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { nextWhere, progress, sentencesOf, sentenceTracks, showOf, toTranslate, type Line } from "./logic.ts";
+import { nextWhere, progress, sentencesOf, sentenceTracks, showOf, toTranslate, topicsIn, type Line } from "./logic.ts";
 
 test("sentences are the utterance track's, translations left out, in number order", () => {
   const segs = [
@@ -60,4 +60,14 @@ test("sentences without a translation, and the next one", () => {
   assert.equal(nextWhere(lines, "d", toTranslate)?.id, "b", "wrapping round");
   assert.equal(showOf("translate").next, "Next to translate");
   assert.equal(showOf("nonsense").id, "all");
+});
+
+test("sentences filed under a grammar topic can be listed alone", () => {
+  const l = (id: string, topics: string[]): Line => ({ id, number: 0, content: "x", words: [], translation: null, startMs: null, topics });
+  const lines = [l("a", ["Negation"]), l("b", []), l("c", ["negation", "Numerals"])];
+  assert.deepEqual(topicsIn(lines), ["Negation", "Numerals"]);
+  const neg = showOf("topic:Negation");
+  assert.equal(neg.label, "On «Negation»");
+  assert.deepEqual(lines.filter(neg.keep).map((x) => x.id), ["a", "c"], "capitals aside");
+  assert.match(showOf("topic:Tone").done, /No sentence of this text is filed under «Tone»/u);
 });
