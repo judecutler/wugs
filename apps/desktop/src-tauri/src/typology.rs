@@ -168,6 +168,104 @@ pub struct Profile {
     pub page: String,
 }
 
+/// The coded languages `me` is compared with, by Glottocode in order, and
+/// what they are in words: its family's, or its macroarea's when the family
+/// has fewer than `MIN_RELATIVES` (`skip` is the languoid whose values are
+/// shown, left out).
+fn compared(me: &glottolog::Languoid, d: &Data, skip: &str) -> (Vec<&'static str>, String) {
+    let relatives = |pick: &dyn Fn(&glottolog::Languoid) -> bool| -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = d.values.keys().copied().filter(|code| *code != skip).filter(|code| glottolog::by_glottocode(code).is_some_and(|l| pick(&l))).collect();
+        v.sort_unstable();
+        v
+    };
+    let in_family = !me.family.is_empty() && me.family != "isolate";
+    let mut compared_with = String::new();
+    let mut others: Vec<&'static str> = Vec::new();
+    if in_family {
+        others = relatives(&|l| l.family == me.family);
+        compared_with = format!("{} languages", me.family);
+    }
+    if others.len() < MIN_RELATIVES && !me.macroarea.is_empty() {
+        others = relatives(&|l| l.macroarea == me.macroarea);
+        compared_with = format!("languages of {}", me.macroarea);
+    }
+    (others, compared_with)
+}
+
+/// The world's land as an SVG path in longitude/latitude (x = lon + 180, y = 90 − lat).
+pub const LAND: &str = include_str!("../../../../datasets/naturalearth/land-110m.path");
+
+/// One language on a feature's map.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MapPoint {
+    pub glottocode: String,
+    pub name: String,
+    pub lat: f32,
+    pub lon: f32,
+    /// Its value for the feature (`?` not known), or None when not coded.
+    pub value: Option<String>,
+    /// The language the map is about (else one it is compared with).
+    pub me: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeatureMap {
+    pub feature: String,
+    pub question: String,
+    pub codes: Vec<Code>,
+    pub compared_with: String,
+    /// The compared languages with an answer and coordinates, then the language itself.
+    pub points: Vec<MapPoint>,
+    /// Compared languages with an answer that Glottolog gives no place for.
+    pub unplaced: usize,
+    pub land: &'static str,
+    pub edition: &'static str,
+}
+
+/// Where the languages `glottocode` is compared with answer one feature, on a map.
+pub fn map(glottocode: &str, source: Source, feature: &str) -> Result<FeatureMap, String> {
+    let me = glottolog::by_glottocode(glottocode).ok_or_else(|| format!("Glottolog has no languoid «{}».", glottocode.trim()))?;
+    let d = data(source);
+    let index = d.features.iter().position(|f| f.id == feature).ok_or_else(|| format!("{} has no feature «{feature}».", source.edition()))?;
+    let f = &d.features[index];
+    let coded_as = if d.values.contains_key(me.glottocode) {
+        Some(me.clone())
+    } else if me.dialect && !me.language.is_empty() {
+        glottolog::by_name(me.language, me.family).filter(|l| d.values.contains_key(l.glottocode))
+    } else {
+        None
+    };
+    let skip = coded_as.as_ref().map(|l| l.glottocode).unwrap_or(me.glottocode);
+    let (group, compared_with) = compared(&me, d, skip);
+    let value_of = |code: &str| d.values.get(code).and_then(|v| v.get(index)).map(|b| *b as char).filter(|c| *c != '.').map(|c| c.to_string());
+    let mut points = Vec::new();
+    let mut unplaced = 0;
+    for code in group {
+        let Some(value) = value_of(code) else { continue };
+        match glottolog::by_glottocode(code) {
+            Some(l) if l.lat.is_some() && l.lon.is_some() => points.push(MapPoint { glottocode: code.to_string(), name: l.name.to_string(), lat: l.lat.unwrap_or(0.0), lon: l.lon.unwrap_or(0.0), value: Some(value), me: false }),
+            _ => unplaced += 1,
+        }
+    }
+    // The language itself last, so it is drawn on top; placed by itself, else by the language it was read as.
+    let place = [Some(me.clone()), coded_as.clone()].into_iter().flatten().find(|l| l.lat.is_some() && l.lon.is_some());
+    if let Some(at) = place {
+        points.push(MapPoint { glottocode: me.glottocode.to_string(), name: me.name.to_string(), lat: at.lat.unwrap_or(0.0), lon: at.lon.unwrap_or(0.0), value: value_of(skip), me: true });
+    }
+    Ok(FeatureMap {
+        feature: f.id.to_string(),
+        question: f.question.to_string(),
+        codes: f.codes.iter().map(|(k, l)| Code { value: k.to_string(), label: l.to_string() }).collect(),
+        compared_with,
+        points,
+        unplaced,
+        land: LAND,
+        edition: source.edition(),
+    })
+}
+
 fn label_of(f: &Feature, v: char) -> Option<String> {
     f.codes.iter().find(|(k, _)| *k == v).map(|(_, l)| l.to_string())
 }
@@ -186,20 +284,8 @@ pub fn profile(glottocode: &str, source: Source) -> Result<Profile, String> {
     };
     let own: Option<&[u8]> = coded_as.as_ref().and_then(|l| d.values.get(l.glottocode).copied());
     let skip = coded_as.as_ref().map(|l| l.glottocode).unwrap_or(me.glottocode);
-    let relatives = |pick: &dyn Fn(&glottolog::Languoid) -> bool| -> Vec<&'static [u8]> {
-        d.values.iter().filter(|(code, _)| **code != skip).filter(|(code, _)| glottolog::by_glottocode(code).is_some_and(|l| pick(&l))).map(|(_, v)| *v).collect()
-    };
-    let in_family = !me.family.is_empty() && me.family != "isolate";
-    let mut compared_with = String::new();
-    let mut others: Vec<&'static [u8]> = Vec::new();
-    if in_family {
-        others = relatives(&|l| l.family == me.family);
-        compared_with = format!("{} languages", me.family);
-    }
-    if others.len() < MIN_RELATIVES && !me.macroarea.is_empty() {
-        others = relatives(&|l| l.macroarea == me.macroarea);
-        compared_with = format!("languages of {}", me.macroarea);
-    }
+    let (group, compared_with) = compared(&me, d, skip);
+    let others: Vec<&'static [u8]> = group.iter().filter_map(|code| d.values.get(code).copied()).collect();
     let features = d
         .features
         .iter()
@@ -376,5 +462,29 @@ mod tests {
         assert!(p.features.iter().all(|a| a.value.is_none()));
         assert!(p.features.iter().any(|a| a.others_coded > 50));
         assert!(profile("zzzz9999", Source::Wals).is_err());
+    }
+
+    #[test]
+    fn a_feature_map_places_the_relatives_and_the_language() {
+        let d = data(Source::Grambank);
+        // A coded Austronesian language Glottolog places.
+        let me = glottolog::all().into_iter().find(|l| !l.dialect && l.family == "Austronesian" && l.lat.is_some() && d.values.contains_key(l.glottocode)).unwrap();
+        let feature = d.features[0].id;
+        let m = map(me.glottocode, Source::Grambank, feature).unwrap();
+        assert_eq!(m.feature, feature);
+        assert!(m.compared_with.starts_with("Austronesian"));
+        let last = m.points.last().unwrap();
+        assert!(last.me && last.glottocode == me.glottocode, "the language itself is drawn last");
+        assert!(m.points.len() > 20);
+        assert!(m.points.iter().all(|p| (-90.0..=90.0).contains(&p.lat) && (-180.0..=180.0).contains(&p.lon)));
+        // Every compared point has an answer the feature allows (or `?`).
+        assert!(m.points.iter().filter(|p| !p.me).all(|p| p.value.as_deref().is_some_and(|v| v == "?" || m.codes.iter().any(|c| c.value == v))));
+        // The map's compared set is the profile's.
+        let profile = profile(me.glottocode, Source::Grambank).unwrap();
+        assert_eq!(profile.compared_with, m.compared_with);
+        assert!(m.points.len() - 1 + m.unplaced <= profile.compared_count);
+        assert!(m.land.starts_with('M') && m.land.len() > 10_000);
+        assert!(map(me.glottocode, Source::Grambank, "GB_nope").is_err());
+        assert_eq!(glottolog::by_glottocode("stan1293").unwrap().lat, Some(53.0));
     }
 }

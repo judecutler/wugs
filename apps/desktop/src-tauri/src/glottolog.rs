@@ -23,6 +23,9 @@ pub struct Languoid {
     pub macroarea: &'static str,
     /// For a dialect, the language it belongs to.
     pub language: &'static str,
+    /// Where Glottolog places it, in degrees, when it does.
+    pub lat: Option<f32>,
+    pub lon: Option<f32>,
 }
 
 struct Row {
@@ -60,6 +63,8 @@ fn rows() -> &'static [Row] {
                     family: f.next()?,
                     macroarea: f.next()?,
                     language: f.next().unwrap_or(""),
+                    lat: f.next().and_then(|v| v.parse().ok()),
+                    lon: f.next().and_then(|v| v.parse().ok()),
                 };
                 Some(Row { key: key(item.name), item })
             })

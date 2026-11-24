@@ -494,6 +494,12 @@ fn typology_profile(glottocode: String, source: typology::Source) -> Result<typo
     typology::profile(&glottocode, source)
 }
 
+/// Where a language's relatives answer one Grambank or WALS feature, with the land to draw them on (src/typology.rs).
+#[tauri::command(async)]
+fn typology_map(glottocode: String, source: typology::Source, feature: String) -> Result<typology::FeatureMap, String> {
+    typology::map(&glottocode, source, &feature)
+}
+
 /// The project's own answers to Grambank or WALS features (src/typology.rs).
 #[tauri::command(async)]
 fn typology_answers(s: State<SessionThread>, source: typology::Source) -> Result<Vec<typology::Ours>, String> {
@@ -2172,6 +2178,7 @@ pub fn run() {
             morphosyntax_choose_stanza,
             glottolog_find,
             typology_profile,
+            typology_map,
             phoible_compare,
             cognates,
             sentence_lists,

@@ -934,6 +934,8 @@ For the project's own language, each feature also has a **This project** row: ch
 - **Copy table** adds your answers and notes as two more columns.
 - **Copy answers as CLDF** copies your answers as a CLDF `values.csv` table (ID, Language_ID, Parameter_ID, Value, Code_ID, Comment), the shape Grambank and WALS publish theirs in. Paste it into a spreadsheet or a CLDF dataset.
 
+**Map** beside a feature draws where the languages it is compared with answer it: a dot per language at its Glottolog coordinates, coloured by its answer (the legend counts each), with the language itself ringed in its own answer, or the project's. A family that spans the Pacific is drawn centred on it. Hover over a dot for the language and its answer. **Save map…** saves the map as an SVG file for a paper or slides. The map shows areal patterns a share cannot: a feature common in one corner of a family and absent in another.
+
 Grambank and WALS answers are kept apart: switching the dataset shows that dataset's answers.
 
 The data comes from Grambank 1.0 (cite Skirgård et al. 2023) and WALS Online (cite Dryer & Haspelmath 2013), both CC BY 4.0 and kept inside the app. The sources and comments behind each value are on the language's page in the dataset, named under the list.

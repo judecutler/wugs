@@ -9,8 +9,9 @@
 - family name (or `isolate`)
 - macroarea
 - the language a dialect belongs to
+- latitude and longitude, two decimals (empty when Glottolog gives none)
 
-The wugs desktop app embeds it. The Texts panel's Language row uses it to offer the Glottocode and ISO code for the name you type. Nothing is sent anywhere.
+The wugs desktop app embeds it. The Texts panel's Language row uses it to offer the Glottocode and ISO code for the name you type. The Typology panel's maps place each language at its coordinates. Nothing is sent anywhere.
 
 ## Source and licence
 
