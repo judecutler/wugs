@@ -9,6 +9,7 @@ import { marked, slotChart, slotLabel } from "../affixes/logic";
 import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
 import { corpusLines, dictionaryLines, flashcardLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
+import { sentencesOf } from "../interlinear/logic";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
@@ -424,10 +425,20 @@ async function exportSketch() {
   });
 }
 
+/** The text's sentences as the Interlinear tab reads them: the utterance
+ * track's, else every speaker's track (a CHAT conversation). */
+function sentenceSegments(text: TextDetail) {
+  const tiers = text.tiers.map((t) => ({ id: t.id, utterance: t.utterance === true, role: t.role, name: t.name }));
+  return sentencesOf(
+    text.segments.map((s) => ({ ...s, parent: s.parent ?? null })),
+    tiers,
+    new Map(),
+  );
+}
+
 /** The text's glossed sentences as numbered examples, read through the Gloss panel's own view. */
 async function examplesOf(text: TextDetail): Promise<{ examples: Example[]; skipped: number }> {
-  const sentences = text.tiers.find((t) => t.utterance)?.id ?? text.segments.find((s) => !s.parent)?.tier ?? "";
-  const segs = text.segments.filter((s) => s.tier === sentences && !s.parent);
+  const segs = sentenceSegments(text);
   const numbers = numbering(segs);
   const examples: Example[] = [];
   let skipped = 0;
@@ -474,8 +485,8 @@ let readerLayout: "beside" | "under" = "beside";
 
 /** The text read aloud on paper: its sentences in order with their translations, for a reader or a class handout. */
 async function exportReader(text: TextDetail) {
-  const sentences = text.tiers.find((t) => t.utterance)?.id ?? text.segments.find((s) => !s.parent)?.tier ?? "";
-  const segs = text.segments.filter((s) => s.tier === sentences && !s.parent && s.content.trim() !== "");
+  const segs = sentenceSegments(text).filter((s) => s.content.trim() !== "");
+  const speakers = new Set(segs.map((s) => s.tier)).size > 1;
   if (segs.length === 0) {
     showToast({ tone: "warn", lines: ["This text has no transcribed sentences yet."] });
     return;
@@ -490,6 +501,7 @@ async function exportReader(text: TextDetail) {
         number: numbers.get(seg.id) ?? 0,
         text: seg.content,
         translation: translationLines(seg, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null,
+        ...(speakers ? { speaker: text.tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}),
       }));
     const [language, meta] = await Promise.all([projectLanguage(), textMetadata({ textId: text.id })]);
     const html = readerHtml({

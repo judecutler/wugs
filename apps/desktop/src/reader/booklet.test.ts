@@ -43,3 +43,9 @@ test("the details a reader prints", () => {
     ],
   );
 });
+
+test("a conversation names each speaker", () => {
+  const html = readerHtml({ title: "Lunch", language: "English", details: [], layout: "under", date: "2026-11-24", sentences: [{ number: 1, text: "look", translation: null, speaker: "MOT" }, { number: 2, text: "ball <", translation: null, speaker: "CHI" }] });
+  assert.match(html, /<b class="who">MOT:<\/b> look/u);
+  assert.match(html, /<b class="who">CHI:<\/b> ball &lt;/u);
+});
