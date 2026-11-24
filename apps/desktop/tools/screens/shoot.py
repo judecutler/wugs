@@ -520,6 +520,13 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+            # Sorted by the word before: that word is marked in each line.
+            run.page.locator(".panel-concordance select.cc-sort").first.select_option("left")
+            run.page.wait_for_timeout(200)
+            run.shot("state-concordance-sorted", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance .cc-sorted").count() == 0:
+                failures.append("Concordance: the word sorted by was not marked")
+            run.page.locator(".panel-concordance select.cc-sort").first.select_option("text")
             # Thinning a short concordance keeps every line.
             before = run.page.locator(".panel-concordance .cc-row").count()
             run.page.select_option(".panel-concordance .cc-thin", "50")

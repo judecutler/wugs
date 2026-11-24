@@ -74,3 +74,32 @@ test("a tagged line reads word_TAG", () => {
   assert.equal(right(t), ".");
   assert.equal(withTags({ ...h, tags: undefined }).words[0], "a");
 });
+
+test("second-word and match sorts, as AntConc's sort levels", () => {
+  const hits = [hit(["x", "b", "KEY", "q", "z"], 2), hit(["y", "a", "KEY", "p", "a"], 2), hit(["w", "c", "KEY"], 2)];
+  // 2L first: w, x, y; ties broken by 1L.
+  assert.deepEqual(sortHits(hits, "left2").map((h) => h.words[0]), ["w", "x", "y"]);
+  // 2R first: the line with no second word after sorts first, then a, z.
+  assert.deepEqual(sortHits(hits, "right2").map((h) => h.words[0]), ["w", "y", "x"]);
+  // The match itself, then the word after: different matches of a pattern sort together.
+  const glob = [hit(["kanu", "z"], 0), hit(["kani", "b"], 0), hit(["kani", "a"], 0)];
+  assert.deepEqual(sortHits(glob, "keyword").map((h) => h.words.join(" ")), ["kani a", "kani b", "kanu z"]);
+  // A phrase match counts its whole length before the word after.
+  const phrase = { ...hit(["a", "b", "c", "d"], 1), len: 2 };
+  assert.deepEqual(sortHits([phrase], "right2"), [phrase]);
+});
+
+test("the sorted word is marked in its context", async () => {
+  const { markWord, sortedWord } = await import("./logic.ts");
+  assert.deepEqual(markWord("a b c", "left", -1), ["a b ", "c", ""]);
+  assert.deepEqual(markWord("a b c", "left", -2), ["a ", "b", " c"]);
+  assert.deepEqual(markWord("x y", "right", 1), ["", "x", " y"]);
+  assert.deepEqual(markWord("x y", "right", 2), ["x ", "y", ""]);
+  assert.deepEqual(markWord("x", "right", 2), ["x", "", ""], "too short");
+  assert.deepEqual(markWord("", "left", -1), ["", "", ""]);
+  assert.deepEqual(markWord("…far b", "left", -2), ["…far b", "", ""], "a clipped word is not marked");
+  assert.equal(sortedWord("left2"), -2);
+  assert.equal(sortedWord("right"), 1);
+  assert.equal(sortedWord("keyword"), null);
+  assert.equal(sortedWord("text"), null);
+});

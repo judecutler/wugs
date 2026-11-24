@@ -47,13 +47,27 @@ export const PANEL_KINDS: { id: PanelKind; label: string; hint: string }[] = [..
 export const QUERY_HELP =
   'Tokens in [ ]: word, lemma, upos, xpos, feats or gloss = "a regular expression" (whole value; %c ignores case, %d diacritics), joined with & | !. [] is any token; ? * + {1,3} repeat it. "dog" is [word="dog"]. End with :: match.text_genre="news" to search only texts with that detail.';
 
-export type SortBy = "text" | "left" | "right";
+export type SortBy = "text" | "left" | "right" | "left2" | "right2" | "keyword";
 
 export const SORTS: { id: SortBy; label: string }[] = [
   { id: "text", label: "In text order" },
   { id: "left", label: "By the word before" },
   { id: "right", label: "By the word after" },
+  { id: "left2", label: "By the second word before" },
+  { id: "right2", label: "By the second word after" },
+  { id: "keyword", label: "By the match, then after" },
 ];
+
+/** Each sort's keys as positions, AntConc's sort levels: −1 the word just
+ * before the match, 1 the word just after, 0 the match itself; `null` the
+ * rest of the context outward from the last key. */
+const LEVELS: Record<Exclude<SortBy, "text">, number[]> = {
+  left: [-1, -2, -3, -4, -5],
+  right: [1, 2, 3, 4, 5],
+  left2: [-2, -1, -3, -4],
+  right2: [2, 1, 3, 4],
+  keyword: [0, 1, 2, 3],
+};
 
 const span = (h: Hit): number => Math.max(1, h.len ?? 1);
 export const left = (h: Hit): string => h.words.slice(0, h.at).join(" ");
@@ -67,13 +81,17 @@ const collator = new Intl.Collator(undefined, { sensitivity: "accent", numeric: 
  * one out, as concordancers (AntConc's 1L, 2L) do; right context likewise. */
 export function sortHits(hits: readonly Hit[], by: SortBy): Hit[] {
   if (by === "text") return [...hits];
-  const keyOf = (h: Hit): string[] => (by === "left" ? h.words.slice(0, h.at).reverse() : h.words.slice(h.at + span(h)));
+  const levels = LEVELS[by];
+  // A word that is not there (the sentence starts or ends first) sorts before any word.
+  const at = (h: Hit, pos: number): string | undefined => (pos === 0 ? keyword(h) : pos < 0 ? h.words[h.at + pos] : h.words[h.at + span(h) - 1 + pos]);
+  const keyOf = (h: Hit): (string | undefined)[] => levels.map((pos) => at(h, pos));
   return [...hits].sort((a, b) => {
     const ka = keyOf(a);
     const kb = keyOf(b);
     for (let i = 0; i < Math.max(ka.length, kb.length); i++) {
       const x = ka[i];
       const y = kb[i];
+      if (x === undefined && y === undefined) continue;
       if (x === undefined) return -1;
       if (y === undefined) return 1;
       const c = collator.compare(x, y);
@@ -81,6 +99,22 @@ export function sortHits(hits: readonly Hit[], by: SortBy): Hit[] {
     }
     return 0;
   });
+}
+
+/** The context word a sort orders by first (−1 just before, 2 the second after), to mark in the lines; null when none. */
+export const sortedWord = (by: SortBy): number | null => (by === "text" || by === "keyword" ? null : LEVELS[by][0]!);
+
+/** A shown context cut around the word `pos` counts from the match
+ * (−1 the last word of the left context, 1 the first of the right), so the
+ * line can mark it: [before, word, after]; the word is "" when the context
+ * is too short to hold it. */
+export function markWord(context: string, side: "left" | "right", pos: number): [string, string, string] {
+  const words = context.split(" ");
+  const i = side === "left" ? words.length + pos : pos - 1;
+  if (context === "" || i < 0 || i >= words.length || words[i] === "…" || words[i]!.startsWith("…")) return [context, "", ""];
+  const before = words.slice(0, i).join(" ");
+  const after = words.slice(i + 1).join(" ");
+  return [before === "" ? "" : `${before} `, words[i]!, after === "" ? "" : ` ${after}`];
 }
 
 /** At most `chars` characters of context, cut at a word and marked with … on the far side. */
