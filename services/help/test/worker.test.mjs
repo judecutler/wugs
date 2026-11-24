@@ -58,9 +58,9 @@ for (const [question, expected] of [
   ["How do I split a segment at the playhead?", "Split, merge, and nudge"],
   ["How can I copy a glossed example into Word or LaTeX?", "Copy an example into a paper"],
   ["How do I pair a second laptop?", "Pair a new device"],
-  ["Can I import an ELAN file?", "Import files from other tools"],
+  ["Can I import an ELAN file?", "Import files from ELAN, FLEx, Praat and other tools"],
   ["How do I type IPA symbols?", "Type IPA symbols"],
-  ["How do I import a file?", "Import files from other tools"],
+  ["How do I import a file?", "Import files from ELAN, FLEx, Praat and other tools"],
 ]) {
   test(`"${question}" finds ${expected}`, () => {
     const picked = search(ALL, question);

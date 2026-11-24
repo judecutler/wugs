@@ -24,10 +24,16 @@ fn clean(p: &Project, body: &str) -> Result<String, String> {
 impl Project {
     /// The live notes on a segment, oldest first: `(note id, body)`.
     pub fn segment_notes(&self, segment: &str) -> Result<Vec<(String, String)>, String> {
-        let mut ids = self.proj.children_by_ref("target", segment, "annotation")?;
+        // Oldest first by when each was written (its `target`'s HLC): two
+        // notes made in one millisecond have ULIDs in random order.
+        let mut ids = Vec::new();
+        for id in self.proj.children_by_ref("target", segment, "annotation")? {
+            let hlc = self.proj.field(&id, "target")?.map(|(_, h)| h).unwrap_or_default();
+            ids.push((hlc, id));
+        }
         ids.sort();
         let mut out = Vec::new();
-        for id in ids {
+        for (_, id) in ids {
             if self.proj.field_str(&id, "kind")?.as_deref() == Some("note") {
                 out.push((id.clone(), self.proj.field_str(&id, "body")?.unwrap_or_default()));
             }
