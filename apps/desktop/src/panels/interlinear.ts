@@ -12,7 +12,7 @@ import { numbering } from "../gloss/document";
 import { translationLines } from "../gloss/translation";
 import { hear, playButton } from "../hear/hear";
 import * as playback from "../playback";
-import { lineAt, readAlongSpan, analysed, nextWhere, progress, sentencesOf, sentenceTracks, SHOWS, showOf, topicsIn, type Line, type Show } from "../interlinear/logic";
+import { wordCategory, lineAt, readAlongSpan, analysed, nextWhere, progress, sentencesOf, sentenceTracks, SHOWS, showOf, topicsIn, type Line, type Show } from "../interlinear/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getSelection, getState, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
@@ -26,6 +26,8 @@ let showAbbreviations = false;
 /** Show each sentence's area of its page image under it (kept on this computer). */
 const CROPS_KEY = "wugs.interlinear.pageLines";
 let showCrops = localStorage.getItem(CROPS_KEY) !== "off";
+const CATS_KEY = "wugs.interlinear.categories";
+let showCats = localStorage.getItem(CATS_KEY) === "on";
 
 /** The natural size of page images already loaded, by URL. */
 const sizes = new Map<string, { width: number; height: number }>();
@@ -49,7 +51,7 @@ async function linesOf(text: TextDetail): Promise<Line[]> {
       const full = text.segments.find((s) => s.id === seg.id)!;
       const translation = translationLines(full, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
       const words: ExampleWord[] = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
-      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, endMs: full.endMs ?? null, notes: (v.segmentNotes ?? []).map((n) => n.body), topics: v.topics ?? [], ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
+      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, endMs: full.endMs ?? null, notes: (v.segmentNotes ?? []).map((n) => n.body), topics: v.topics ?? [], categories: v.words.map((w) => wordCategory(w.morphs)), ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
     });
   }
   return lines;
@@ -209,9 +211,16 @@ export const interlinearPanel: PanelDef = {
           ? h(
               "div",
               { className: "il-words" },
-              ...l.words.map((w) => {
+              ...l.words.map((w, wi) => {
                 const { morphs, glosses } = wordLines(w);
-                return h("span", { className: "il-word" }, h("span", { className: "il-form", textContent: w.form }), h("span", { className: "il-morphs", textContent: w.morphs.length > 0 ? morphs : "" }), glossLine(glosses));
+                return h(
+                  "span",
+                  { className: "il-word" },
+                  h("span", { className: "il-form", textContent: w.form }),
+                  h("span", { className: "il-morphs", textContent: w.morphs.length > 0 ? morphs : "" }),
+                  glossLine(glosses),
+                  showCats ? h("span", { className: "il-cat", textContent: l.categories?.[wi] ?? "" }) : null,
+                );
               }),
             )
           : h("p", { className: "il-plain", textContent: l.content.trim() === "" ? "(not transcribed)" : l.content });
@@ -283,7 +292,14 @@ export const interlinearPanel: PanelDef = {
       };
       const read = h("button", { type: "button", className: "il-read", textContent: reading ? "Stop" : "Read along", title: "Play the whole text from its recording, marking each sentence as it is heard" });
       read.onclick = () => void readAlong(text);
-      const bar = h("div", { className: "il-bar" }, only, next, abbrButton, read);
+      const cats = h("button", { type: "button", textContent: "Categories", title: "Show each word's part of speech under its glosses, from its root's lexicon entry (FLEx's Word Cat. line)" });
+      cats.setAttribute("aria-pressed", String(showCats));
+      cats.onclick = () => {
+        showCats = !showCats;
+        localStorage.setItem(CATS_KEY, showCats ? "on" : "off");
+        paint(text);
+      };
+      const bar = h("div", { className: "il-bar" }, only, next, abbrButton, read, cats);
       if ((facs?.marked.length ?? 0) > 0) {
         const crops = h("button", { type: "button", textContent: "Page lines", title: "Show each sentence's line from its page image above it" });
         crops.setAttribute("aria-pressed", String(showCrops));

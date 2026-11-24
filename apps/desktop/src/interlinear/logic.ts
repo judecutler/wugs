@@ -22,7 +22,14 @@ export function sentencesOf<S extends Seg>(segments: readonly S[], tiers: readon
 }
 
 /** One sentence as the panel draws it. */
-export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; endMs?: number | null; notes?: string[]; speaker?: string; topics?: string[] };
+export type Line = { id: string; number: number; content: string; words: ExampleWord[]; translation: string | null; startMs: number | null; endMs?: number | null; notes?: string[]; speaker?: string; topics?: string[]; categories?: (string | null)[] };
+
+/** A word's part of speech, FLEx's Word Cat.: its root's entry's category, else the first morph's that has one. */
+export function wordCategory(morphs: readonly { type: string; category?: string | null }[]): string | null {
+  const has = (m: { category?: string | null }) => (m.category ?? "").trim() !== "";
+  const root = morphs.find((m) => m.type === "root" && has(m)) ?? morphs.find(has);
+  return root === undefined ? null : root.category!.trim();
+}
 
 export const analysed = (l: Line): boolean => l.words.some((w) => w.morphs.length > 0);
 

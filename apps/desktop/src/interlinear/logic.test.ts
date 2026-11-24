@@ -82,3 +82,10 @@ test("a read-along plays the timed sentences and follows the one heard", () => {
   assert.equal(lineAt(lines, 3700), null, "a pause between sentences");
   assert.equal(readAlongSpan([l("b", null, null)]), null);
 });
+
+test("a word's category is its root's entry's", async () => {
+  const { wordCategory } = await import("./logic.ts");
+  assert.equal(wordCategory([{ type: "prefix", category: "aux" }, { type: "root", category: "v" }]), "v");
+  assert.equal(wordCategory([{ type: "prefix", category: "aux" }, { type: "root", category: null }]), "aux");
+  assert.equal(wordCategory([{ type: "root" }]), null);
+});

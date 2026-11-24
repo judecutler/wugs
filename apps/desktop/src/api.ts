@@ -191,6 +191,8 @@ export type MorphView = MorphSpec & {
   id: string;
   /** `lemma – gloss` of the linked sense. */
   senseLabel: string | null;
+  /** The linked sense's entry's part of speech. */
+  category?: string | null;
 };
 
 export type WordView = {
