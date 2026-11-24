@@ -5,7 +5,9 @@
 // list is a questionnaire to fill in; the answers copy out as CLDF values.
 // Rules in ../typology/logic.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, glottologFind, projectLanguage, setTypologyAnswer, typologyAnswers, typologyMap, typologyProfile } from "../api";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { errorText, exportTypology, glottologFind, projectLanguage, setTypologyAnswer, typologyAnswers, typologyMap, typologyProfile } from "../api";
+import { localDay } from "../dates";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { getState, showToast } from "../store";
@@ -143,7 +145,19 @@ export const typologyPanel: PanelDef = {
       const group = h("div", { className: "ty-sources" }, ...which);
       group.setAttribute("role", "group");
       group.setAttribute("aria-label", "Dataset");
-      return h("div", { className: "ty-bar" }, group, input, mine, copy, isMine ? values : null);
+      const publish = h("button", { type: "button", textContent: "Publish answers as CLDF…", title: "The project's answers as a whole CLDF StructureDataset in a folder of its own (values, the features answered, their codes, the language), ready for cldf validate, Zenodo or a comparison with Grambank and WALS" });
+      publish.onclick = () =>
+        void (async () => {
+          const folder = await pickFile({ directory: true, title: "Where should the dataset go?" });
+          if (typeof folder !== "string") return;
+          try {
+            const r = await exportTypology({ source, folder, date: localDay(new Date()) });
+            showToast({ tone: "info", lines: [`Saved ${r.coded + r.unknown} answers (${r.unknown} not known) as a CLDF StructureDataset in ${r.path}.`, ...r.notes] });
+          } catch (e) {
+            showToast({ tone: "error", lines: [errorText(e)] });
+          }
+        })();
+      return h("div", { className: "ty-bar" }, group, input, mine, copy, isMine ? values : null, isMine ? publish : null);
     };
 
     const paint = () => {

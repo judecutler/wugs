@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use wugs_cldf::{export, export_wordlist, Dataset, Options, WordlistOptions};
+use wugs_cldf::{export, export_structure, export_wordlist, structure, Dataset, Options, StructureOptions, WordlistOptions};
 use wugs_core::{concept_id, domain_id, ConceptRow, DomainRow, MorphSpec, Project};
 
 fn temp_project() -> (PathBuf, Project) {
@@ -218,6 +218,45 @@ fn elicited_answers_export_as_a_cldf_wordlist_and_an_edictor_table() {
         Err(_) => eprintln!("pycldf is not installed (pip install pycldf); skipped the reference validator"),
     }
     assert!(export_wordlist(&p, &WordlistOptions { title: "x", generator: "x", list: Some("cpl_nope"), segment: &cut }).is_err());
+    drop(p);
+    std::fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn typology_answers_export_as_a_cldf_structure_dataset() {
+    let (root, mut p) = temp_project();
+    p.set_project_language("Kanu", "abcd1234", "xyz").unwrap();
+    let codes = |v: &[(&str, &'static str)]| v.iter().map(|(a, b)| (a.to_string(), *b)).collect::<Vec<_>>();
+    let features = [
+        structure::Feature { id: "GB020", question: "Are there definite or specific articles?", codes: codes(&[("0", "absent"), ("1", "present")]) },
+        structure::Feature { id: "GB021", question: "Do indefinite nominals commonly have indefinite articles?", codes: codes(&[("0", "absent"), ("1", "present")]) },
+        structure::Feature { id: "GB022", question: "Are there prenominal articles?", codes: codes(&[("0", "absent"), ("1", "present")]) },
+    ];
+    let answers = [
+        structure::Answer { feature: "GB020", value: "1", note: "the word «ang», as in \"ang aso\"" },
+        structure::Answer { feature: "GB021", value: "?", note: "" },
+    ];
+    let s = export_structure(&p, &StructureOptions { title: "Kanu typology", generator: "wugs test", source: "Grambank 1.0", features: &features, answers: &answers }).unwrap();
+    assert_eq!((s.coded, s.unknown), (1, 1));
+    let file = |name: &str| s.files.iter().find(|(n, _)| n == name).map(|(_, c)| c.clone()).unwrap();
+    let values = file("values.csv");
+    assert!(values.contains("abcd1234-GB020,abcd1234,GB020,1,GB020-1,"), "{values}");
+    assert!(values.contains("abcd1234-GB021,abcd1234,GB021,?,,"), "an unknown has no code: {values}");
+    assert!(!file("parameters.csv").contains("GB022"), "an unanswered feature is left out");
+    let dir = root.join("structure");
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, contents) in &s.files {
+        std::fs::write(dir.join(name), contents).unwrap();
+    }
+    match Command::new("cldf").arg("validate").arg(dir.join("StructureDataset-metadata.json")).output() {
+        Ok(out) => {
+            let said = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+            assert!(out.status.success() && !said.contains("WARNING") && !said.contains("ERROR"), "cldf validate:\n{said}");
+        }
+        Err(_) => eprintln!("pycldf is not installed (pip install pycldf); skipped the reference validator"),
+    }
+    let bad = [structure::Answer { feature: "GB020", value: "7", note: "" }];
+    assert!(export_structure(&p, &StructureOptions { title: "x", generator: "x", source: "x", features: &features, answers: &bad }).is_err());
     drop(p);
     std::fs::remove_dir_all(&root).ok();
 }

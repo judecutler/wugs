@@ -23,7 +23,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use wugs_core::Project;
 use wugs_model::Value;
 
+pub mod structure;
 pub mod wordlist;
+pub use structure::{export_structure, Structure, StructureOptions};
 pub use wordlist::{export_wordlist, Wordlist, WordlistOptions};
 
 const TERMS: &str = "http://cldf.clld.org/v1.0/terms.rdf#";

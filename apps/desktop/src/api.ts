@@ -712,6 +712,7 @@ export const orthographyPreview = (args: { profile: string; tierId: string; text
 export const orthographyConvert = (args: { profile: string; tierId: string; textId: string | null; column: string; ignoreCase: boolean; target: string }) => invoke<import("./orthography/logic").Converted>("orthography_convert", args);
 /** The project's own answers to Grambank or WALS features. */
 export const typologyAnswers = (args: { source: import("./typology/logic").Source }) => invoke<import("./typology/logic").Ours[]>("typology_answers", args);
+export const exportTypology = (args: { source: import("./typology/logic").Source; folder: string; date: string }) => invoke<{ path: string; coded: number; unknown: number; notes: string[] }>("export_typology", args);
 /** Write (or clear, with an empty value and note) the project's answer to one feature. */
 export const setTypologyAnswer = (args: { source: import("./typology/logic").Source; id: string; value: string; note: string }) => invoke<import("./typology/logic").Ours>("set_typology_answer", args);
 export const glottologFind = (args: { query: string }) => invoke<Languoid[]>("glottolog_find", args);

@@ -382,9 +382,83 @@ pub fn set_answer(session: &mut Session, source: Source, id: &str, value: &str, 
     Ok(Ours { id: id.to_string(), value: value.to_string(), note })
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StructureExport {
+    pub path: String,
+    pub coded: usize,
+    pub unknown: usize,
+    pub notes: Vec<String>,
+}
+
+/// The project's answers for `source` as a CLDF StructureDataset in a new
+/// folder `wugs-<source>-<date>[-n]` inside `folder` (never inside the
+/// project), written through a `.partial` folder.
+pub fn export_structure(session: &mut Session, source: Source, folder: &std::path::Path, date: &str, generator: &str) -> Result<StructureExport, String> {
+    if !folder.is_dir() {
+        return Err(format!("{} is not a folder", folder.display()));
+    }
+    crate::interchange::outside_project(session, folder)?;
+    let ours = answers(session, source)?;
+    let p = session::project(session)?;
+    let lang = p.project_language()?;
+    let d = data(source);
+    let features: Vec<wugs_cldf::structure::Feature> = d
+        .features
+        .iter()
+        .map(|f| wugs_cldf::structure::Feature { id: f.id, question: f.question, codes: f.codes.iter().map(|(k, v)| (k.to_string(), *v)).collect() })
+        .collect();
+    let given: Vec<wugs_cldf::structure::Answer> = ours.iter().map(|o| wugs_cldf::structure::Answer { feature: &o.id, value: &o.value, note: &o.note }).collect();
+    let title = format!("{} typology ({})", if lang.name.is_empty() { "Unnamed language" } else { &lang.name }, source.key());
+    let s = wugs_cldf::export_structure(p, &wugs_cldf::StructureOptions { title: &title, generator, source: source.edition(), features: &features, answers: &given })?;
+    if s.coded + s.unknown == 0 {
+        return Err("The project has not answered any feature yet: answer some in the Typology panel first.".into());
+    }
+    let date = crate::corrections::date_or_today(date);
+    let mut out = folder.join(format!("wugs-{}-{date}", source.key()));
+    let mut n = 2;
+    while out.symlink_metadata().is_ok() {
+        out = folder.join(format!("wugs-{}-{date}-{n}", source.key()));
+        n += 1;
+    }
+    let scratch = folder.join(format!(".{}.partial", out.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
+    let written = (|| {
+        std::fs::create_dir(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
+        for (name, contents) in &s.files {
+            std::fs::write(scratch.join(name), contents).map_err(|e| format!("{name}: {e}"))?;
+        }
+        std::fs::rename(&scratch, &out).map_err(|e| format!("{}: {e}", out.display()))
+    })();
+    if let Err(e) = written {
+        std::fs::remove_dir_all(&scratch).ok();
+        return Err(e);
+    }
+    Ok(StructureExport { path: out.display().to_string(), coded: s.coded, unknown: s.unknown, notes: s.notes })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn answers_export_as_a_structure_dataset_beside_the_project() {
+        let dir = std::env::temp_dir().join(format!("wugs-typology-cldf-{}", wugs_model::ulid()));
+        let mut session: Session = None;
+        crate::sample::open_sample(&mut session, &dir.join("project"), "tester").unwrap();
+        let out = dir.join("out");
+        std::fs::create_dir_all(&out).unwrap();
+        assert!(export_structure(&mut session, Source::Grambank, &out, "2026-11-24", "wugs test").is_err(), "nothing answered yet");
+        set_answer(&mut session, Source::Grambank, "GB020", "1", "the word ang").unwrap();
+        set_answer(&mut session, Source::Grambank, "GB021", "?", "").unwrap();
+        let done = export_structure(&mut session, Source::Grambank, &out, "2026-11-24", "wugs test").unwrap();
+        assert_eq!((done.coded, done.unknown), (1, 1));
+        assert!(done.path.ends_with("wugs-grambank-2026-11-24"), "{}", done.path);
+        let values = std::fs::read_to_string(std::path::Path::new(&done.path).join("values.csv")).unwrap();
+        assert!(values.contains(",GB020,1,GB020-1,the word ang"), "{values}");
+        assert!(export_structure(&mut session, Source::Grambank, &dir.join("project"), "2026-11-24", "x").is_err(), "never inside the project");
+        drop(session);
+        std::fs::remove_dir_all(dir).ok();
+    }
 
     #[test]
     fn the_projects_answers_are_kept_checked_and_cleared() {
