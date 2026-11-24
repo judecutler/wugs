@@ -6,6 +6,10 @@ pub const F_ORIGIN: &str = "origin";
 pub const F_LING_TYPE: &str = "x.elan.linguistic_type";
 pub const F_CONSTRAINTS: &str = "x.elan.constraints";
 pub const F_PARTICIPANT: &str = "x.elan.participant";
+/// A tier's ELAN language: its `LANG_REF` goes to the tier's `language`; the
+/// header's `<LANGUAGE>` label and definition (an ISO or Glottolog URL) are kept here.
+pub const F_LANG_LABEL: &str = "x.elan.lang-label";
+pub const F_LANG_DEF: &str = "x.elan.lang-def";
 pub const F_TIER_ORDER: &str = "x.elan.order";
 /// Tiers are project-scoped but TIER_ID is only unique within one file, so
 /// each imported tier records the text it came from.

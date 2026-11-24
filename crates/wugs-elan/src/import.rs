@@ -71,6 +71,8 @@ struct TierIn {
     kind: &'static str,
     parent: Option<String>,
     participant: Option<String>,
+    /// `LANG_REF`, with the header `<LANGUAGE>`'s label and definition.
+    lang: Option<(String, Option<String>, Option<String>)>,
     anns: Vec<AnnIn>,
 }
 
@@ -142,10 +144,17 @@ pub fn import_eaf(
                 if let Some(p) = &tier.parent {
                     fields.push(("parent", Value::str(&tier_ids[p])));
                 }
+                let (lang, label, def) = match &tier.lang {
+                    Some((l, label, def)) => (Some(l.clone()), label.clone(), def.clone()),
+                    None => (None, None, None),
+                };
                 for (key, val) in [
                     (F_LING_TYPE, &tier.lt_ref),
                     (F_CONSTRAINTS, &tier.constraints),
                     (F_PARTICIPANT, &tier.participant),
+                    ("language", &lang),
+                    (F_LANG_LABEL, &label),
+                    (F_LANG_DEF, &def),
                 ] {
                     if let Some(v) = val {
                         fields.push((key, Value::str(v)));
@@ -275,6 +284,7 @@ fn parse_eaf(input: &str) -> Result<EafDoc, ImportError> {
         }
     }
 
+    let languages: HashMap<&str, (Option<&str>, Option<&str>)> = root.children_named("LANGUAGE").filter_map(|l| Some((l.attr("LANG_ID")?, (l.attr("LANG_LABEL"), l.attr("LANG_DEF"))))).collect();
     let mut types: HashMap<&str, (bool, Option<&str>)> = HashMap::new();
     for lt in root.children_named("LINGUISTIC_TYPE") {
         types.insert(
@@ -343,6 +353,10 @@ fn parse_eaf(input: &str) -> Result<EafDoc, ImportError> {
             kind: kind_for(alignable, constraints),
             parent: t.attr("PARENT_REF").map(str::to_string),
             participant: t.attr("PARTICIPANT").map(str::to_string),
+            lang: t.attr("LANG_REF").filter(|l| !l.trim().is_empty()).map(|l| {
+                let (label, def) = languages.get(l).copied().unwrap_or((None, None));
+                (l.to_string(), label.map(str::to_string), def.map(str::to_string))
+            }),
             anns,
         });
     }

@@ -26,6 +26,8 @@ struct Tier {
     lt_ref: Option<String>,
     constraints: Option<String>,
     participant: Option<String>,
+    /// The tier's language (`LANG_REF`) with its label and definition, as imported.
+    lang: Option<(String, Option<String>, Option<String>)>,
     order: f64,
 }
 
@@ -85,6 +87,10 @@ pub fn export_eaf_with_media(project: &Project, text: &str, media: Option<Media>
             lt_ref: p.field_str(&id, F_LING_TYPE)?,
             constraints: p.field_str(&id, F_CONSTRAINTS)?,
             participant: p.field_str(&id, F_PARTICIPANT)?,
+            lang: match p.field_text(&id, "language")? {
+                Some(l) => Some((l, p.field_text(&id, F_LANG_LABEL)?, p.field_text(&id, F_LANG_DEF)?)),
+                None => None,
+            },
             order: p.field_num(&id, F_TIER_ORDER)?.unwrap_or(f64::MAX),
             parent,
             id,
@@ -163,6 +169,9 @@ pub fn export_eaf_with_media(project: &Project, text: &str, media: Option<Media>
         }
         if let Some(pt) = &t.participant {
             node = node.with_attr("PARTICIPANT", pt);
+        }
+        if let Some((l, _, _)) = &t.lang {
+            node = node.with_attr("LANG_REF", l);
         }
 
         let mut last_in_group: HashMap<&str, &str> = HashMap::new();
@@ -315,6 +324,21 @@ pub fn export_eaf_with_media(project: &Project, text: &str, media: Option<Media>
             lt = lt.with_attr("CONSTRAINTS", c);
         }
         doc.children.push(lt);
+    }
+    // Each tier language once, as ELAN declares them (after the types, before the constraints).
+    let mut langs: BTreeMap<&str, (&Option<String>, &Option<String>)> = BTreeMap::new();
+    for t in &tiers {
+        if let Some((l, label, def)) = &t.lang {
+            langs.entry(l.as_str()).or_insert((label, def));
+        }
+    }
+    for (l, (label, def)) in langs {
+        let mut node = XmlNode::new("LANGUAGE");
+        if let Some(d) = def {
+            node = node.with_attr("LANG_DEF", d);
+        }
+        node = node.with_attr("LANG_ID", l).with_attr("LANG_LABEL", label.as_deref().unwrap_or(l));
+        doc.children.push(node);
     }
     for (desc, stereotype) in ELAN_CONSTRAINTS {
         doc.children.push(
