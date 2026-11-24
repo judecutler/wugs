@@ -4,6 +4,7 @@ import { conflictsPanel } from "./conflicts";
 import { devicesPanel } from "./devices";
 import { elicitPanel } from "./elicit";
 import { collocatesPanel } from "./collocates";
+import { similarPanel } from "./similar";
 import { keywordsPanel } from "./keywords";
 import { checksPanel } from "./checks";
 import { frequenciesPanel } from "./frequencies";
@@ -54,6 +55,7 @@ export const PANELS = {
   concordance: concordancePanel,
   frequencies: frequenciesPanel,
   collocates: collocatesPanel,
+  similar: similarPanel,
   keywords: keywordsPanel,
   checks: checksPanel,
   vowels: vowelsPanel,
