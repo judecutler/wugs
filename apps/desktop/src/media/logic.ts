@@ -86,3 +86,34 @@ export const cardDrag = {
 export function isCardDrag(active: boolean, types: readonly string[]): boolean {
   return active && types.includes(CARD_TYPE) && !types.includes("text/uri-list") && !types.includes("Files");
 }
+
+/** The details a recording's card offers, in order: what an archive's
+ * session or bundle record asks for. Other keys it has are shown too. */
+export const RECORDING_DETAILS: readonly [string, string][] = [
+  ["date", "Date"],
+  ["place", "Place"],
+  ["recorded_by", "Recorded by"],
+  ["participants", "Participants"],
+  ["genre", "Genre"],
+  ["equipment", "Equipment"],
+  ["description", "Description"],
+];
+
+/** The keys to show for a recording: the offered ones, then any others it has. */
+export const recordingDetailKeys = (details: readonly [string, string][]): string[] => [
+  ...RECORDING_DETAILS.map(([k]) => k),
+  ...details.map(([k]) => k).filter((k) => !RECORDING_DETAILS.some(([d]) => d === k)),
+];
+
+/** A detail's name in words. */
+export const recordingDetailLabel = (key: string): string => RECORDING_DETAILS.find(([k]) => k === key)?.[1] ?? key.replace(/_/g, " ");
+
+/** "Date, place and 2 more" for a card: which details are filled, or none. */
+export function detailsLine(details: readonly [string, string][]): string {
+  const filled = recordingDetailKeys(details)
+    .filter((k) => details.some(([d, v]) => d === k && v !== ""))
+    .map((k) => recordingDetailLabel(k).toLowerCase());
+  if (filled.length === 0) return "No details yet";
+  const shown = filled.slice(0, 2).join(", ");
+  return `${shown.charAt(0).toUpperCase()}${shown.slice(1)}${filled.length > 2 ? ` and ${filled.length - 2} more` : ""}`;
+}

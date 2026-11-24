@@ -53,9 +53,9 @@
   // ------------------------------------------------------------ recordings
 
   const SOURCES = [
-    { id: "src-count", label: "Counting session, 3 Nov", kind: "audio", access: null, hasMedia: true },
-    { id: "src-fox", label: "Fox story (phone memo)", kind: "audio", access: "restricted", hasMedia: true },
-    { id: "src-notes", label: "Notebook scan, p. 12", kind: "image", access: null, hasMedia: false },
+    { id: "src-count", label: "Counting session, 3 Nov", kind: "audio", access: null, hasMedia: true, details: [["date", "2026-11-03"], ["equipment", "Zoom H5, lapel mic"], ["place", "Kelani village"]] },
+    { id: "src-fox", label: "Fox story (phone memo)", kind: "audio", access: "restricted", hasMedia: true, details: [] },
+    { id: "src-notes", label: "Notebook scan, p. 12", kind: "image", access: null, hasMedia: false, details: [] },
   ];
   const SAMPLE_RATE = 16000;
   const DURATION_MS = 20000;
@@ -881,6 +881,11 @@ const LEXICON = [
     get_text: ({ textId }) => (textId === "t-count" ? countingText : otherText(texts.find((t) => t.id === textId) ?? texts[1])),
     conflict_count: () => conflicts.length,
     list_sources: () => SOURCES,
+    source_set_detail: ({ source, key, value }) => {
+      const s = SOURCES.find((x) => x.id === source);
+      s.details = [...s.details.filter(([k]) => k !== key), ...(value ? [[key, value]] : [])].sort();
+      return SOURCES;
+    },
     peaks_info: ({ sourceId }) => ({ frames: FRAMES, sampleRate: SAMPLE_RATE, channels: 1, durationMs: DURATION_MS, mediaPath: `${PROJECT_PATH}/blobs/${sourceId}.wav` }),
     peaks_query: peaksQuery,
     media_overview: () => {

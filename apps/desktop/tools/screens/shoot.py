@@ -885,6 +885,18 @@ def main():
             run.front("media", "Media")
             fox = run.page.locator(".panel-media .bin-card", has_text="Fox story")
             fox.wait_for()
+            # A recording's details for the archive.
+            run.page.locator(".panel-media .bin-card", has_text="Counting session").locator(".bin-details-open").click()
+            rb = run.page.locator(".panel-media .bin-detail[data-key='recorded_by']")
+            rb.fill("J. Cutler")
+            rb.press("Enter")
+            run.page.locator(".panel-media .bin-details-head h3").click()
+            run.page.wait_for_timeout(300)
+            run.page.locator(".panel-media .bin-details").scroll_into_view_if_needed()
+            run.shot("state-media-details", run.page.locator(".panel-media"))
+            if "Date, place and 2 more" not in run.page.locator(".panel-media .bin-card", has_text="Counting session").inner_text():
+                failures.append("Media did not keep a recording's detail")
+            run.page.locator(".panel-media .bin-details-head button", has_text="Close").click()
             fox.drag_to(run.page.locator(".panel-timeline .tl-body"))
             run.page.wait_for_timeout(600)
             if run.page.locator(".tl-sources").input_value() != "src-fox":

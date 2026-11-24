@@ -68,7 +68,7 @@ Field types: `str`, `int`, `real`, `bool`, `ms` (milliseconds), `ref:<kind>`, `e
 ### Media & texts
 | Entity | Fields |
 | --- | --- |
-| **Source** `src` | kind `enum(audio,video,image,document)` · label `str` · blob `blob?` (whole-file scan or document; A/V attaches via MediaTrack) · date, place `str` · access `enum(open,restricted,community)` · duration `ms` · origin `str` · notes `text` |
+| **Source** `src` | kind `enum(audio,video,image,document)` · label `str` · blob `blob?` (whole-file scan or document; A/V attaches via MediaTrack) · date, place `str` · access `enum(open,restricted,community)` · duration `ms` · origin `str` · notes `text` · further details as `meta:<key>` `str` fields (recorded by, equipment…; keys as a text's metadata) |
 | **MediaTrack** `trk` | source `ref` · blob `blob` · kind `enum(audio,video)` · label `str` · channel `int` |
 | **SpeakerRole** `grp`-style link | source `ref` · person `ref` · role `enum(speaker,signer,addressee,researcher,…)` |
 | **Text** `txt` | source `ref?` (null for born-written) · title `str` · language `ref` · ws `ref` · kind `enum(narrative,conversation,elicitation,song,written,…)` · access (inherits source if linked) |

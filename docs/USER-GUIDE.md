@@ -99,6 +99,8 @@ Recording is meant to work on Windows and macOS. On Linux, the system's web view
 
 Below the Record button, the **Media** panel shows each recording as a card: its waveform, name, length, sharing level and the texts that use it. The card of the text on screen has a blue outline and says **In this text**. To use a recording for the text on screen, drag its card onto the Timeline, double-click it, or click **Use for this text**. The text remembers it, so every panel can play its segments.
 
+Under each card's text line, a link names the recording's details (**No details yet** at first). Click it to open them under the cards: date, place, who recorded it, participants, genre, equipment and a description, what an archive asks about a recording. Each saves when you press Enter or leave the field. The **Catalogue sheet…** uses a recording's date, place, genre and description for a text linked to it that has none of its own.
+
 ## Segment the recording
 
 A segment marks where one utterance, or one word, starts and ends. The Transcribe and Gloss panels work segment by segment.
@@ -985,7 +987,7 @@ If any of the project is restricted, the message says so. The package then holds
 
 Sealing copies every recording. Other actions wait until it finishes.
 
-Archives also ask for a description of each item in their deposit forms. Click **Catalogue sheet…** beside the seal to save a spreadsheet with a row per text: its title, date, place, speakers, genre, description and keywords (from the text's **Details**), the language with its ISO 639-3 code and Glottocode, the linked recording and its length in seconds, its sharing level, and how many of its sentences are transcribed and translated and how many words are glossed. Any other details follow in their own columns. Fill the archive's forms from it, or import it where the archive's tool takes a spreadsheet. The message says which texts have no recording linked.
+Archives also ask for a description of each item in their deposit forms. Click **Catalogue sheet…** beside the seal to save a spreadsheet with a row per text: its title, date, place, speakers, genre, description and keywords (from the text's **Details**, else from its recording's details in the Media panel), the language with its ISO 639-3 code and Glottocode, the linked recording and its length in seconds, its sharing level, and how many of its sentences are transcribed and translated and how many words are glossed. Any other details follow in their own columns. Fill the archive's forms from it, or import it where the archive's tool takes a spreadsheet. The message says which texts have no recording linked.
 
 ## Search the project
 

@@ -58,3 +58,12 @@ test("a card drag carries the card type and nothing to open", () => {
   assert.equal(isCardDrag(true, ["text/plain"]), false);
   assert.equal(isCardDrag(true, ["Files", CARD_TYPE]), false);
 });
+
+test("a recording's details in words", async () => {
+  const { detailsLine, recordingDetailKeys, recordingDetailLabel } = await import("./logic.ts");
+  assert.equal(detailsLine([]), "No details yet");
+  assert.equal(detailsLine([["date", "2026-11-03"], ["place", "Kelani"]]), "Date, place");
+  assert.equal(detailsLine([["date", "x"], ["equipment", "Zoom H5"], ["place", "y"], ["session_no", "4"]]), "Date, place and 2 more", "in the card's order, not the keys'");
+  assert.equal(recordingDetailLabel("session_no"), "session no");
+  assert.deepEqual(recordingDetailKeys([["session_no", "4"]]).slice(-2), ["description", "session_no"]);
+});

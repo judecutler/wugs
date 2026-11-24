@@ -64,7 +64,13 @@ pub fn export_sheet(s: &mut Session, folder: &Path) -> Result<Sheet, String> {
     w.write_record(&head).map_err(|e| e.to_string())?;
     let mut sheet = Sheet { path: String::new(), texts: texts.len(), without_recording: 0, not_open: 0 };
     for (t, meta) in texts.iter().zip(&metas) {
-        let get = |keys: &[&str]| keys.iter().find_map(|k| meta.iter().find(|(mk, _)| mk == k).map(|(_, v)| v.clone())).unwrap_or_default();
+        // What the text does not say, its recording's details may (date, place…).
+        let recorded = match p.text_recording(&t.id)? {
+            Some((source, _)) => p.source_details(&source)?,
+            None => Vec::new(),
+        };
+        let find = |m: &[(String, String)], keys: &[&str]| keys.iter().find_map(|k| m.iter().find(|(mk, _)| mk == k).map(|(_, v)| v.clone()));
+        let get = |keys: &[&str]| find(meta, keys).or_else(|| find(&recorded, keys)).unwrap_or_default();
         let mut row = vec![t.title.clone()];
         row.extend(NAMED.iter().map(|(_, keys)| get(keys)));
         let access = p.text_access(&t.id)?;
@@ -106,6 +112,10 @@ mod tests {
         p.set_text_metadata(&text, "Speakers", "J. C.").unwrap();
         p.set_text_metadata(&text, "Place", "Home").unwrap();
         p.set_text_metadata(&text, "Session", "S1").unwrap();
+        // The recording's date fills the text's empty date; the text's own place wins.
+        let (source, _) = p.text_recording(&text).unwrap().unwrap();
+        p.set_source_detail(&source, "date", "2026-11-03").unwrap();
+        p.set_source_detail(&source, "place", "Studio").unwrap();
         let out = dir.join("out");
         std::fs::create_dir_all(&out).unwrap();
         let r = export_sheet(&mut s, &out).unwrap();
@@ -117,7 +127,7 @@ mod tests {
         assert_eq!(&head[..7], ["title", "date", "place", "speakers", "genre", "description", "keywords"]);
         assert_eq!(head.last(), Some(&"session"), "other details follow");
         let row = lines.next().unwrap();
-        assert!(row.starts_with("Counting to six (tutorial),,Home,J. C.,,,,Tutorial English,eng,stan1293,open,"), "{row}");
+        assert!(row.starts_with("Counting to six (tutorial),2026-11-03,Home,J. C.,,,,Tutorial English,eng,stan1293,open,"), "{row}");
         assert!(row.ends_with(",S1"), "{row}");
         std::fs::remove_dir_all(&dir).ok();
     }

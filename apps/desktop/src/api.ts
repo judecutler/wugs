@@ -241,7 +241,10 @@ export type SourceRow = {
   kind: string | null;
   access: string | null;
   hasMedia: boolean;
+  /** Date, place, recorded by… as [key, value], sorted by key. */
+  details: [string, string][];
 };
+export const sourceSetDetail = (args: { source: string; key: string; value: string }) => invoke<SourceRow[]>("source_set_detail", args);
 
 export type SearchRow = {
   target: string;

@@ -687,6 +687,14 @@ pub struct SourceRow {
     /// `None` means unset, which is open (DECISIONS 2026-11-08).
     pub access: Option<String>,
     pub has_media: bool,
+    /// Date, place, recorded by… (`Project::source_details`), sorted by key.
+    pub details: Vec<(String, String)>,
+}
+
+/// Set (or clear) one of a recording's details; the sources as listed after.
+pub fn set_source_detail(session: &mut Session, source: &str, key: &str, value: &str) -> Result<Vec<SourceRow>, String> {
+    project(session)?.set_source_detail(source, key, value)?;
+    list_sources(session)
 }
 
 pub fn list_sources(session: &mut Session) -> Result<Vec<SourceRow>, String> {
@@ -694,6 +702,7 @@ pub fn list_sources(session: &mut Session) -> Result<Vec<SourceRow>, String> {
     let mut rows = Vec::new();
     for id in p.proj.entities_of_kind("source")? {
         rows.push(SourceRow {
+            details: p.source_details(&id)?,
             label: p.proj.field_str(&id, "label")?.unwrap_or_default(),
             kind: p.proj.field_str(&id, "kind")?,
             access: p.proj.field_str(&id, "access")?,
@@ -833,6 +842,7 @@ fn import_wav(open: &mut OpenProject, file: &Path, label: &str) -> Result<Source
         kind: p.proj.field_str(&source, "kind")?,
         access: p.proj.field_str(&source, "access")?,
         has_media: true,
+        details: p.source_details(&source)?,
         id: source,
     })
 }
