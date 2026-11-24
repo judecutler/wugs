@@ -41,6 +41,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "collocates",                    # which words keep company with a word; not placed either
   "wordsketch",                    # a lemma's grammatical company from the dependency trees; not placed
   "wordorder",                     # WALS word orders counted in the parsed sentences; not placed
+  "sentences",                     # prompts worked through one by one, each answer a sentence with its prompt as translation; not placed
   "soundchanges",                  # ordered sound-change rules run over the lexicon or a word list; not placed
   "compare",                       # the project's concept-list answers beside other languages' word lists; not placed
   "keywords",                      # which words set a text apart; not placed either

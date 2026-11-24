@@ -361,6 +361,15 @@ const LEXICON = [
       answers: a === undefined ? [] : [{ senseId: `sense-${a[1]}`, lexemeId: a[1], lemma: a[0], homograph: a[1] === "lx-tela1" ? 1 : null, gloss, sound: a[1] === "lx-tela1" || a[1] === "lx-kani" ? { sourceId: "src-count", startMs: 620, endMs: 1300 } : null }],
     };
   });
+  const promptView = {
+    list: { id: "valency-prompts", name: "Valency prompts", total: 4, answered: 1, textId: "t-count" },
+    prompts: [
+      { id: "1", number: 1, prompt: "The dog sleeps.", answers: [{ segmentId: "u02", tierId: "tier-utt", content: "wiripa nani" }] },
+      { id: "2", number: 2, prompt: "The dog bit the man.", answers: [] },
+      { id: "3", number: 3, prompt: "The man gave the dog a bone.", answers: [] },
+      { id: "4", number: 4, prompt: "The bone was given to the dog.", answers: [] },
+    ],
+  };
   const listSummary = {
     id: "cl-swadesh-100",
     name: "Swadesh 1955 (100)",
@@ -1040,6 +1049,14 @@ const LEXICON = [
       { source: "Tadmor-2009-100", name: "Leipzig-Jakarta (100)", citation: "Tadmor 2009, via Concepticon", count: 100, listId: null },
     ],
     concept_lists: () => [listSummary],
+    sentence_lists: () => [{ ...promptView.list }],
+    sentence_list_view: () => promptView,
+    sentence_answer: ({ prompt, sentence }) => {
+      const r = promptView.prompts.find((x) => x.id === prompt);
+      r.answers.push({ segmentId: `se-${prompt}-${r.answers.length}`, tierId: "tier-utt", content: sentence });
+      promptView.list.answered = promptView.prompts.filter((x) => x.answers.length > 0).length;
+      return promptView;
+    },
     cognates: () => "y\tKelani\tone\tŋaːi",
     set_cognates: ({ table }) => table,
     word_order: () => {

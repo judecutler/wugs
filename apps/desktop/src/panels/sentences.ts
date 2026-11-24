@@ -1,0 +1,201 @@
+// Elicit sentences: a list of prompts (a questionnaire's sentences in a
+// contact language) worked through one by one. Each answer is saved as a
+// sentence of the list's own text with the prompt as its translation, so it
+// is glossed, searched and exported like any other; several answers to one
+// prompt are kept. Commands in src-tauri/src/sentences.rs; rules in
+// ../sentences/logic.ts.
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { errorText, sentenceAnswer, sentenceListImport, sentenceLists, sentenceListView } from "../api";
+import { emptyState, h } from "../dom";
+import { provide } from "../palette/registry";
+import { NO_LISTS, nextToDo, progressLine, shownPrompts, type PromptList, type PromptRow, type PromptView } from "../sentences/logic";
+import { dataGeneration, getState, selectSegment, selectText, showToast } from "../store";
+import { typeWithShortcuts } from "../typing";
+import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
+
+export const sentencesPanel: PanelDef = {
+  title: "Elicit sentences",
+  create(): PanelView {
+    const el = h("div", { className: "panel panel-sentences" });
+    let project = "";
+    let generation = -1;
+    let lists: PromptList[] = [];
+    let listId = "";
+    let view: PromptView | null = null;
+    let toDoOnly = false;
+    let seq = 0;
+    /** Typed but not saved, by prompt id, kept across redraws. */
+    const drafts = new Map<string, string>();
+    /** The prompt whose field should have focus after the next draw. */
+    let focusOn: string | null = null;
+
+    const picker = h("select", { className: "se-list" });
+    picker.setAttribute("aria-label", "Prompt list");
+    const load = h("button", { type: "button", textContent: "Load prompts…", title: "Read a list of prompts: a .txt with one sentence a line, or a CSV or tab-separated table with a prompt column" });
+    const toDoBox = h("input", { type: "checkbox" });
+    const toDo = h("label", { title: "List only the prompts that have no answer yet" }, toDoBox, " Only prompts to do");
+    const line = h("p", { className: "note se-line" });
+    const list = h("ol", { className: "se-prompts" });
+
+    const fetchView = async () => {
+      const mine = ++seq;
+      if (listId === "") {
+        view = null;
+        draw();
+        return;
+      }
+      try {
+        const v = await sentenceListView({ list: listId });
+        if (mine !== seq) return;
+        view = v;
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      draw();
+    };
+
+    const fetchLists = async () => {
+      try {
+        lists = await sentenceLists();
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+        return;
+      }
+      if (!lists.some((l) => l.id === listId)) listId = lists[0]?.id ?? "";
+      picker.replaceChildren(...lists.map((l) => h("option", { value: l.id, textContent: `${l.name} (${l.answered} of ${l.total})`, selected: l.id === listId })));
+      await fetchView();
+    };
+
+    const save = async (r: PromptRow, field: HTMLInputElement) => {
+      const sentence = field.value.trim();
+      if (sentence === "") return;
+      field.disabled = true;
+      try {
+        view = await sentenceAnswer({ list: listId, prompt: r.id, sentence });
+        drafts.delete(r.id);
+        focusOn = nextToDo(view.prompts, r.id)?.id ?? null;
+        const l = lists.find((x) => x.id === listId);
+        if (l !== undefined) Object.assign(l, view.list);
+        picker.querySelector<HTMLOptionElement>(`option[value="${CSS.escape(listId)}"]`)?.replaceChildren(`${view.list.name} (${view.list.answered} of ${view.list.total})`);
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+        focusOn = r.id;
+      }
+      draw();
+    };
+
+    const openAnswer = async (textId: string, a: { segmentId: string; tierId: string }) => {
+      await selectText(textId);
+      selectSegment({ textId, tierId: a.tierId, segmentId: a.segmentId });
+      window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "gloss" }));
+    };
+
+    const draw = () => {
+      if (lists.length === 0) {
+        line.textContent = NO_LISTS;
+        list.replaceChildren();
+        return;
+      }
+      if (view === null) {
+        line.textContent = "Loading…";
+        return;
+      }
+      const v = view;
+      line.textContent = progressLine(v.list);
+      list.replaceChildren(
+        ...shownPrompts(v.prompts, toDoOnly).map((r) => {
+          const field = typeWithShortcuts(h("input", { type: "text", className: "se-answer", placeholder: r.answers.length === 0 ? "Say it in the language…" : "Another way to say it…", value: drafts.get(r.id) ?? "" }));
+          field.setAttribute("aria-label", `Answer to prompt ${r.number}: ${r.prompt}`);
+          field.dataset.prompt = r.id;
+          field.oninput = () => drafts.set(r.id, field.value);
+          field.onkeydown = (e) => {
+            if (e.key === "Enter" && !e.isComposing) {
+              e.preventDefault();
+              void save(r, field);
+            }
+          };
+          const chips = r.answers.map((a) => {
+            const b = h("button", { type: "button", className: "se-chip", textContent: a.content, title: "Open this sentence in the Gloss panel" });
+            b.onclick = () => v.list.textId !== null && void openAnswer(v.list.textId, a);
+            return b;
+          });
+          return h(
+            "li",
+            { className: `se-row${r.answers.length > 0 ? " se-done" : ""}` },
+            h("div", { className: "se-prompt" }, h("span", { className: "se-num", textContent: `${r.number}.` }), h("span", { textContent: r.prompt })),
+            chips.length === 0 ? null : h("div", { className: "se-chips" }, ...chips),
+            field,
+          );
+        }),
+      );
+      if (focusOn !== null) {
+        const f = list.querySelector<HTMLInputElement>(`input[data-prompt="${CSS.escape(focusOn)}"]`);
+        focusOn = null;
+        f?.focus();
+        f?.scrollIntoView({ block: "nearest" });
+      }
+    };
+
+    picker.onchange = () => {
+      listId = picker.value;
+      drafts.clear();
+      void fetchView();
+    };
+    toDoBox.onchange = () => {
+      toDoOnly = toDoBox.checked;
+      draw();
+    };
+    load.onclick = async () => {
+      const picked = await pickFile({ multiple: false, title: "A list of prompts", filters: [{ name: "Prompts", extensions: ["txt", "csv", "tsv", "tab"] }] });
+      if (typeof picked !== "string") return;
+      try {
+        const l = await sentenceListImport({ path: picked });
+        listId = l.id;
+        showToast({ tone: "info", lines: [`${l.name}: ${l.total} prompts, ${l.answered} answered already.`] });
+        await fetchLists();
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+    };
+
+    const unprovide = provide("sentences", () => [
+      { id: "sentences:load", title: "Load prompts for sentence elicitation", group: "Elicit sentences", words: ["questionnaire", "stimulus", "translation", "elicitation", "prompt"], run: () => load.click() },
+      {
+        id: "sentences:next",
+        title: "Go to the next prompt without an answer",
+        group: "Elicit sentences",
+        run: () => {
+          if (view === null) return;
+          const active = (document.activeElement as HTMLElement | null)?.dataset?.prompt ?? null;
+          focusOn = nextToDo(view.prompts, active)?.id ?? null;
+          draw();
+        },
+      },
+    ]);
+
+    const render = () => {
+      const s = getState();
+      if (s.kind !== "open") {
+        project = "";
+        el.replaceChildren(emptyState("Elicit sentences", "Open a project to elicit sentences."));
+        return;
+      }
+      if (s.info.projectId !== project) {
+        project = s.info.projectId;
+        generation = dataGeneration();
+        listId = "";
+        view = null;
+        drafts.clear();
+        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, toDo), line, list);
+        void fetchLists();
+        return;
+      }
+      // Another panel or device changed the data: read the list again, unless a field is being typed in.
+      if (dataGeneration() !== generation && !el.contains(document.activeElement)) {
+        generation = dataGeneration();
+        void fetchLists();
+      }
+    };
+    return { element: el, render, dispose: unprovide };
+  },
+};

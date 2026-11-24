@@ -659,6 +659,11 @@ export const morphosyntaxRun = (args: { textId: string; model: string }) => invo
 export const metadataValues = () => invoke<import("./metadata/logic").MetaValues[]>("metadata_values");
 /** Bring in a CSV or TSV of document metadata, one row per text. */
 export const importMetadata = (args: { path: string }) => invoke<import("./metadata/logic").MetaImport>("import_metadata", args);
+/** Prompt lists for sentence elicitation (src-tauri/src/sentences.rs). */
+export const sentenceLists = () => invoke<import("./sentences/logic").PromptList[]>("sentence_lists");
+export const sentenceListImport = (args: { path: string }) => invoke<import("./sentences/logic").PromptList>("sentence_list_import", args);
+export const sentenceListView = (args: { list: string }) => invoke<import("./sentences/logic").PromptView>("sentence_list_view", args);
+export const sentenceAnswer = (args: { list: string; prompt: string; sentence: string }) => invoke<import("./sentences/logic").PromptView>("sentence_answer", args);
 /** The project's cognate judgements, a line each (src-tauri/src/cognates.rs). */
 export const cognates = () => invoke<string>("cognates");
 export const setCognates = (args: { table: string }) => invoke<string>("set_cognates", args);
