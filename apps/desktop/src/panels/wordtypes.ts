@@ -9,7 +9,7 @@ import { formatBreakdown, joinedBreakdown, type MorphType } from "../gloss/morph
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, refreshAll, showToast } from "../store";
 import { typeWithShortcuts } from "../typing";
-import { appliedLine, typedAnalysis, typesLine } from "../wordtypes/logic";
+import { appliedLine, meaningTitle, typedAnalysis, typesLine, withMeaning } from "../wordtypes/logic";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -102,6 +102,31 @@ export const wordTypesPanel: PanelDef = {
         glosses,
         h("button", { type: "button", textContent: "Apply", disabled: busy, title: "Give every unanalysed use of this word this analysis", onclick: go }),
         take,
+        ...(row.meanings.length === 0
+          ? []
+          : [
+              h(
+                "div",
+                { className: "wt-meanings note" },
+                "Maybe ",
+                ...row.meanings.flatMap((m, i) => {
+                  const b = h("button", {
+                    type: "button",
+                    className: "linkish",
+                    textContent: `‘${m.word}’`,
+                    title: meaningTitle(row.form, m),
+                    onclick: () => {
+                      const next = withMeaning(row.form, breakdown.value, glosses.value, m.word);
+                      breakdown.value = next.breakdown;
+                      glosses.value = next.glosses;
+                      keep();
+                      glosses.focus();
+                    },
+                  });
+                  return [...(i === 0 ? [] : [", "]), b, ` ${m.together}/${m.of}`];
+                }),
+              ),
+            ]),
       );
     };
 

@@ -38,3 +38,23 @@ export function appliedLine(form: string, applied: number, texts: number, linked
   const link = linked === 0 ? "" : ` ${linked === 1 ? "1 morph is" : `${linked} morphs are`} linked to the lexicon entry with that spelling and gloss.`;
   return `Analysed ${applied === 1 ? "1 use" : `${applied} uses`} of «${form}» in ${texts === 1 ? "1 text" : `${texts} texts`}.${link}`;
 }
+
+export type Meaning = { word: string; together: number; of: number; dice: number };
+
+/** The fields after a likely meaning is picked: with nothing typed, the form
+ * as one root glossed with it; else the root's gloss set to it, the other
+ * morphs' glosses kept (or ? where none was typed). */
+export function withMeaning(form: string, breakdown: string, glosses: string, meaning: string): { breakdown: string; glosses: string } {
+  const gloss = meaning.trim().replace(/[\s=~-]+/gu, ".");
+  if (breakdown.trim() === "") return { breakdown: form, glosses: gloss };
+  const parsed = parseBreakdown(breakdown.trim());
+  if (!parsed.ok || parsed.morphs.length === 0) return { breakdown, glosses: gloss };
+  const typed = glosses.trim().split(/[\s=~-]+/u).filter((x) => x !== "");
+  const root = Math.max(0, parsed.morphs.findIndex((m) => m.type === "root"));
+  const out = parsed.morphs.map((_, i) => (i === root ? gloss : typed.length === parsed.morphs.length ? typed[i] : "?"));
+  return { breakdown, glosses: out.join(" ") };
+}
+
+/** A likely meaning's title: how often it stands with the word. */
+export const meaningTitle = (form: string, m: Meaning): string =>
+  `In the translations of ${m.together} of the ${m.of} translated sentences with «${form}» (Dice ${m.dice.toFixed(2)}). Click to gloss the root with it.`;

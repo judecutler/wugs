@@ -33,6 +33,7 @@ pub mod kits;
 pub mod layout;
 pub mod lexicon;
 pub mod lexicon_table;
+pub mod meanings;
 pub mod measure;
 pub mod media_bin;
 pub mod metadata;

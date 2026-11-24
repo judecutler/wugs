@@ -1174,6 +1174,7 @@ body::before {
 .wt-n { white-space: nowrap; }
 .wt-breakdown { font-family: var(--font-ipa); }
 .wt-take { justify-self: start; white-space: nowrap; }
+.wt-meanings { grid-column: 3 / -1; margin: -4px 0 2px; }
 .wt-list .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
 .cc-cluster { display: flex; justify-content: space-between; gap: 10px; padding: 5px 4px; border-radius: var(--radius-sm); cursor: pointer; }
 .cc-cluster:hover, .cc-cluster:focus-visible { background: var(--accent-soft); outline: none; }
