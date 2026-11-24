@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { affixTsv, chartTsv, elsewhere, marked, slotChart, slotLabel, summaryLine, type Affix } from "./logic.ts";
+import { affixTsv, chartTsv, elsewhere, marked, productivity, productivityLine, slotChart, slotLabel, summaryLine, type Affix } from "./logic.ts";
 
 const ex = { word: "ni-kani", textId: "t", tierId: "r", segmentId: "s" };
 const a = (surface: string, kind: string, gloss: string, slot: number, uses: number, positions: [number, number][] = [[slot, uses]]): Affix => ({
@@ -43,7 +43,8 @@ test("the chart has a column per slot, the root in its place", () => {
 test("the table and summary say it in words", () => {
   assert.equal(elsewhere(ma), "also at +1 (×1)");
   assert.equal(elsewhere(ni), "");
-  assert.match(affixTsv([ni]), /^affix\tgloss\ttype\tslot.*\nni-\t1SG\tprefix\t−1\t4\t1\t\tv 4\tni-kani\n$/s);
+  assert.match(affixTsv([ni]), /^affix\tgloss\ttype\tslot.*\nni-\t1SG\tprefix\t−1\t4\t1\t\t\t\t\tv 4\tni-kani\n$/s);
+  assert.match(affixTsv([{ ...ni, types: 3, hapaxes: 2 }]), /\t4\t1\t3\t2\t0\.500\t/);
   assert.equal(summaryLine({ affixes: [ni, ra], words: 5, withoutRoot: 0 }), "2 affixes and clitics, read from 5 glossed words.");
   assert.match(summaryLine({ affixes: [], words: 0, withoutRoot: 0 }), /No word/);
   assert.match(summaryLine({ affixes: [ni], words: 1, withoutRoot: 2 }), /2 words have no morph marked as a root and are left out/);
@@ -80,4 +81,12 @@ test("pairs fold both orders and flag what disagrees with the chart", async () =
   assert.match(pairNote(back[0]!), /other order/);
   assert.equal(pairsTsv(ps).split("\n")[1], "-ra PST\t=ma FOC\t5\t1\tBoth orders are met: check these words, or the order is free");
   assert.deepEqual(pairs({ affixes, words: 1, withoutRoot: 0 }), [], "an older backend sends no orders");
+});
+
+test("productivity is the share of uses in word forms met once", () => {
+  const a = (surface: string, uses: number, hapaxes: number): Affix => ({ surface, kind: "suffix", gloss: "X", uses, roots: 1, positions: [[1, uses]], slot: 1, categories: [], example: { word: "", textId: "", tierId: "", segmentId: "" }, types: hapaxes + 1, hapaxes });
+  assert.equal(productivity(a("ra", 40, 10)), 0.25);
+  assert.equal(productivity({ ...a("ra", 40, 10), hapaxes: undefined }), null);
+  assert.equal(productivityLine([a("ra", 40, 10), a("si", 20, 12), a("ka", 5, 5)]), "Most productive (Baayen's P, the share of an affix's uses in word forms met only once; affixes used 10 times or more): -si X 0.600, -ra X 0.250.");
+  assert.equal(productivityLine([a("ka", 5, 5)]), "");
 });

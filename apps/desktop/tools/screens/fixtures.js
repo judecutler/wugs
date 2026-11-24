@@ -1066,7 +1066,7 @@ const LEXICON = [
     gloss_apply_type: () => ({ applied: 4, texts: 2 }),
     project_affixes: () => {
       const ex = { word: "ni-kani-ra", textId: "t-count", tierId: "tier-utt", segmentId: "seg-1" };
-      const a = (surface, kind, gloss, slot, uses, roots, positions, categories, stems = []) => ({ surface, kind, gloss, uses, roots, positions, slot, categories, example: ex, stems });
+      const a = (surface, kind, gloss, slot, uses, roots, positions, categories, stems = []) => ({ surface, kind, gloss, uses, roots, positions, slot, categories, example: ex, stems, types: roots + 1, hapaxes: Math.max(0, roots - 2) });
       return {
         words: 52,
         withoutRoot: 1,
