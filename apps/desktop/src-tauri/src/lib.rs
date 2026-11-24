@@ -483,6 +483,12 @@ fn word_order(s: State<SessionThread>) -> Result<word_order::WordOrder, String> 
 }
 
 /// PHOIBLE's inventories of a language and its relatives' phonemes (src/phoible.rs).
+/// Which of a language's relatives have one phoneme, on a map (src/phoible.rs).
+#[tauri::command(async)]
+fn phoible_map(glottocode: String, phoneme: String) -> Result<typology::FeatureMap, String> {
+    phoible::map(&glottocode, &phoneme)
+}
+
 #[tauri::command(async)]
 fn phoible_compare(glottocode: String) -> Result<phoible::Compared, String> {
     phoible::compare(&glottocode)
@@ -2187,6 +2193,7 @@ pub fn run() {
             typology_profile,
             typology_map,
             phoible_compare,
+            phoible_map,
             cognates,
             sentence_lists,
             segment_timing,

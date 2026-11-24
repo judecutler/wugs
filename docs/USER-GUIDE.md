@@ -746,6 +746,8 @@ A sound is a letter with every diacritic and modifier written after it, so `tʰ`
 
 Sounds are matched as written, apart from tie bars, so write affricates with a tie bar (`t͡ʃ`) for them to count as one sound. Hover over a sound for its share among the relatives. Nothing is sent anywhere: PHOIBLE's inventories come with the app.
 
+Click any of these sounds for a map of which of the compared languages have it in their PHOIBLE inventory: a dot per language at its Glottolog place, the project's language ringed, as the Typology panel's maps draw them. Click it again to close the map. **Save map…** saves it as an SVG file.
+
 **Environments** compares where two sounds occur, to test whether they are separate phonemes or allophones of one. Choose the two sounds, or press **Environments** beside a pair of sounds under Minimal pairs. The line under them says what the counts suggest:
 
 - If the two share an environment (the same sound before and after, such as `a_a`, with `#` for the edge of a word), they contrast there or vary freely, and minimal pairs tell which.

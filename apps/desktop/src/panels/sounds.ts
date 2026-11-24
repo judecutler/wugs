@@ -7,11 +7,13 @@
 // those are usually spelling slips. Each sound opens the Concordance on the
 // words that hold it.
 import { writeHtml, writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, phoibleCompare, projectLanguage, soundWords } from "../api";
+import { errorText, phoibleCompare, phoibleMap, projectLanguage, soundWords } from "../api";
+import type { FeatureMap } from "../typology/map";
+import { drawFeatureMap } from "./featuremap";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { clustersNote, consonantClusters, gapsNote, positions, shapes, share, type Cluster, type Shape, type Where } from "../sounds/shapes";
-import { againstRelatives, checkInventory, phoibleLine, shareOf, type PhoibleCompared } from "../sounds/phoible";
+import { againstRelatives, checkInventory, phoibleLine, phonemeKey, shareOf, type PhoibleCompared } from "../sounds/phoible";
 import { chartClipboard } from "../sounds/chartcopy";
 import { EXAMPLE_FORMATS, FORMAT_KEY, parseFormat } from "../gloss/example";
 import { syllableNote, syllableTypes, type SyllableType } from "../sounds/syllables";
@@ -61,6 +63,10 @@ export const soundsPanel: PanelDef = {
     let phoibleNote = "";
     let phoibleBusy = false;
     let phoibleInv = 0;
+    /** The phoneme whose map is open under the PHOIBLE comparison, and the map once read. */
+    let phonemeMapFor: string | null = null;
+    let phonemeMap: FeatureMap | null = null;
+    let phonemeGlottocode = "";
 
     const shownText = (): { id: string; title: string } | null => {
       const s = getState();
@@ -219,6 +225,9 @@ export const soundsPanel: PanelDef = {
           phoibleNote = "Give the project's Glottocode first, in the Language row of the Texts panel's Import and export.";
         } else {
           phoible = await phoibleCompare({ glottocode: lang.glottocode.trim() });
+          phonemeGlottocode = lang.glottocode.trim();
+          phonemeMapFor = null;
+          phonemeMap = null;
           phoibleInv = 0;
           phoibleNote = "";
         }
@@ -237,7 +246,37 @@ export const soundsPanel: PanelDef = {
       if (phoible === null) return [...head, h("p", { className: "note sd-phoible-note", textContent: phoibleNote || "See which phonemes PHOIBLE lists for the language that these transcriptions have not shown yet, and which sounds here are rare among its relatives." })];
       const c = phoible;
       const ours = l.sounds;
-      const chips = (sounds: readonly string[], title: (x: string) => string) => h("div", { className: "sd-list" }, ...sounds.map((x) => h("span", { className: "sd-shape ipa", title: title(x), textContent: x })));
+      // A chip opens a map of which relatives have the phoneme (PHOIBLE's own spelling of it, when it lists one).
+      const openMap = async (sound: string) => {
+        if (phonemeMapFor === sound) {
+          phonemeMapFor = null;
+          paint();
+          return;
+        }
+        phonemeMapFor = sound;
+        phonemeMap = null;
+        paint();
+        const phoneme = c.shares.find((s) => phonemeKey(s.phoneme) === phonemeKey(sound))?.phoneme ?? sound;
+        try {
+          const m = await phoibleMap({ glottocode: phonemeGlottocode, phoneme });
+          if (phonemeMapFor !== sound || phoible !== c) return;
+          phonemeMap = m;
+          paint();
+        } catch (e) {
+          showToast({ tone: "error", lines: [errorText(e)] });
+        }
+      };
+      const chips = (sounds: readonly string[], title: (x: string) => string) =>
+        h(
+          "div",
+          { className: "sd-list" },
+          ...sounds.map((x) => {
+            const b = h("button", { type: "button", className: `sd-shape ipa sd-map-chip${phonemeMapFor === x ? " is-open" : ""}`, title: `${title(x)}. Click for a map of which relatives have it`, textContent: x });
+            b.setAttribute("aria-expanded", String(phonemeMapFor === x));
+            b.onclick = () => void openMap(x);
+            return b;
+          }),
+        );
       const out: HTMLElement[] = [...head, h("p", { className: "note sd-phoible-note", textContent: phoibleLine(c) })];
       if (c.own.length > 0) {
         const inv = c.own[Math.min(phoibleInv, c.own.length - 1)]!;
@@ -277,6 +316,7 @@ export const soundsPanel: PanelDef = {
               ]),
         );
       }
+      if (phonemeMapFor !== null) out.push(phonemeMap !== null ? drawFeatureMap(phonemeMap, phonemeMap.points.find((p) => p.me)?.value ?? null) : h("p", { className: "note", textContent: "Drawing the map…" }));
       out.push(h("p", { className: "note sd-credit", textContent: `From ${c.edition}, phoible.org. Moran, Steven & McCloy, Daniel (eds.) 2019. PHOIBLE 2.0. Jena: Max Planck Institute for the Science of Human History.` }));
       return out;
     };

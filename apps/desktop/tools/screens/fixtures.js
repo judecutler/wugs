@@ -1144,6 +1144,12 @@ const LEXICON = [
       shares: [["a", 48], ["i", 48], ["u", 47], ["k", 47], ["m", 47], ["n", 46], ["t", 45], ["p", 44], ["ŋ", 44], ["s", 43], ["l", 41], ["ʔ", 33], ["ə", 27], ["ɓ", 2], ["ǃ", 0]].map(([phoneme, languages]) => ({ phoneme, languages })),
       edition: "PHOIBLE 2.0 (CC BY-SA 3.0)",
     }),
+    phoible_map: ({ phoneme }) => {
+      const places = [[-19, 47], [-6, 106], [-8, 115], [1, 104], [14, 121], [10, 124], [-2, 120], [-6, 147], [-9, 160], [-17, 178], [-13, -172], [-27, -109], [23, 121], [-38, 175]];
+      const points = places.map(([lat, lon], i) => ({ glottocode: `aust${2000 + i}`, name: `Language ${i + 1}`, lat, lon, value: i % 4 === 0 ? "1" : "0", me: false }));
+      points.push({ glottocode: "kela1234", name: "Kelani", lat: 9, lon: 123, value: "0", me: true });
+      return { feature: phoneme, question: `Is /${phoneme}/ in the inventory?`, codes: [{ value: "0", label: `no /${phoneme}/` }, { value: "1", label: `/${phoneme}/` }], comparedWith: "Austronesian languages", points, unplaced: 1, land: window.__WUGS_SCREENS__.land, edition: "PHOIBLE 2.0 (CC BY-SA 3.0)" };
+    },
     compare_read: ({ path }) => ({
       name: path.split("/").pop(),
       columns: ["DOCULECT", "CONCEPT", "FORM"],
