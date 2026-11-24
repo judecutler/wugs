@@ -1000,6 +1000,8 @@ To bring in a dictionary you keep in a spreadsheet, choose it as it is (`.xlsx`,
 
 **Export the lexicon** as a spreadsheet writes the same columns, with each sense's domains and first example, so a table you export, correct in Excel and import again keeps them. Rows with the same word become one entry with a sense per row. A word already in the lexicon gets the new senses, and a sense whose gloss it already has is skipped, so importing the same table twice adds nothing. The message after the import names the columns it read and the ones it left out. When several entries share a word, add a **homograph** column so wugs knows which one a row belongs to.
 
+The same button reads a CLDF Dictionary, such as a dataset from [Dictionaria](https://dictionaria.clld.org) or one wugs published: choose its `Dictionary-metadata.json` (or its `entries.csv`). wugs reads `entries.csv`, `senses.csv` and, when it is there, `examples.csv` from that folder: each sense's description is its gloss, `Gloss_fr`-style columns are glosses in other languages, and its first example comes along.
+
 wugs names the file after the text's title and never replaces a file that exists. It adds " (2)" to the name instead. You cannot export into the project folder itself.
 
 ### Say which language the project documents

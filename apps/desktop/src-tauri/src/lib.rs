@@ -26,6 +26,7 @@ pub mod keywords;
 pub mod elan_glossing;
 pub mod topics;
 pub mod saved_searches;
+pub mod cldf_import;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
