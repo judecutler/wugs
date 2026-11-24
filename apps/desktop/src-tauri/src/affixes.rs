@@ -56,7 +56,24 @@ pub struct Affixes {
     pub words: usize,
     /// Words broken into morphs but with no morph typed as a root.
     pub without_root: usize,
+    /// Two affixes met in one word, `first` before `second` (indices into
+    /// `affixes`), with how many words: the evidence for their order and for
+    /// whether two affixes can share a slot. Most frequent first, at most `MAX_ORDERS`.
+    pub orders: Vec<Order>,
 }
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Order {
+    pub first: usize,
+    pub second: usize,
+    pub count: usize,
+}
+
+/// At most this many ordered pairs are returned.
+pub const MAX_ORDERS: usize = 500;
+
+type Key = (String, String, String);
 
 #[derive(Default)]
 struct Tally {
@@ -71,7 +88,8 @@ struct Tally {
 pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
     let p = project(session)?;
     let mut out = Affixes::default();
-    let mut tallies: HashMap<(String, String, String), Tally> = HashMap::new();
+    let mut tallies: HashMap<Key, Tally> = HashMap::new();
+    let mut pairs: HashMap<(Key, Key), usize> = HashMap::new();
     let mut category_of: HashMap<String, Option<String>> = HashMap::new();
     each_segment(p, Read::Analyses, &Scope::all(), |seg| {
         for tok in &seg.tokens {
@@ -99,6 +117,7 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
                 },
                 None => None,
             };
+            let mut in_word: Vec<Key> = Vec::new();
             let word = crate::concordance::joined(&morphs.iter().map(|m| (bare(&m.surface).to_string(), m.kind.clone())).collect::<Vec<_>>());
             for (i, m) in morphs.iter().enumerate() {
                 if i == root || m.kind == "root" {
@@ -106,6 +125,7 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
                 }
                 let surface = p.proj.nfc(bare(&m.surface));
                 let key = (wugs_model::lexicon_key(&surface), m.kind.clone(), m.gloss.trim().to_string());
+                in_word.push(key.clone());
                 let t = tallies.entry(key).or_default();
                 *t.spellings.entry(surface).or_default() += 1;
                 t.uses += 1;
@@ -118,19 +138,36 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
                     t.example = Some(Example { word: word.clone(), text_id: seg.text.clone(), tier_id: seg.tier.clone(), segment_id: seg.id.clone() });
                 }
             }
+            // Every two affixes of the word in the order they stand, once per word.
+            let mut seen = HashSet::new();
+            for (i, a) in in_word.iter().enumerate() {
+                for b in &in_word[i + 1..] {
+                    if a != b && seen.insert((a.clone(), b.clone())) {
+                        *pairs.entry((a.clone(), b.clone())).or_default() += 1;
+                    }
+                }
+            }
         }
         Ok(())
     })?;
-    for ((_, kind, gloss), t) in tallies {
+    let mut keyed: Vec<(Key, Affix)> = Vec::new();
+    for (key, t) in tallies {
+        let (_, kind, gloss) = key.clone();
         let surface = t.spellings.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0))).map(|s| s.0.clone()).unwrap_or_default();
         let slot = t.positions.iter().max_by(|a, b| a.1.cmp(b.1).then(b.0.abs().cmp(&a.0.abs()))).map(|p| *p.0).unwrap_or(0);
         let mut positions: Vec<(i32, usize)> = t.positions.into_iter().collect();
         positions.sort_by_key(|p| (p.0.abs(), p.0));
         let mut categories: Vec<(String, usize)> = t.categories.into_iter().collect();
         categories.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-        out.affixes.push(Affix { surface, kind, gloss, uses: t.uses, roots: t.roots.len(), positions, slot, categories, example: t.example.unwrap_or(Example { word: String::new(), text_id: String::new(), tier_id: String::new(), segment_id: String::new() }) });
+        keyed.push((key, Affix { surface, kind, gloss, uses: t.uses, roots: t.roots.len(), positions, slot, categories, example: t.example.unwrap_or(Example { word: String::new(), text_id: String::new(), tier_id: String::new(), segment_id: String::new() }) }));
     }
-    out.affixes.sort_by(|a, b| a.slot.cmp(&b.slot).then(b.uses.cmp(&a.uses)).then(a.surface.cmp(&b.surface)));
+    keyed.sort_by(|(ka, a), (kb, b)| a.slot.cmp(&b.slot).then(b.uses.cmp(&a.uses)).then(a.surface.cmp(&b.surface)).then(ka.cmp(kb)));
+    let index: HashMap<&Key, usize> = keyed.iter().enumerate().map(|(i, (k, _))| (k, i)).collect();
+    let mut orders: Vec<Order> = pairs.iter().map(|((a, b), n)| Order { first: index[a], second: index[b], count: *n }).collect();
+    orders.sort_by(|x, y| y.count.cmp(&x.count).then(x.first.cmp(&y.first)).then(x.second.cmp(&y.second)));
+    orders.truncate(MAX_ORDERS);
+    out.orders = orders;
+    out.affixes = keyed.into_iter().map(|(_, a)| a).collect();
     Ok(out)
 }
 
@@ -161,6 +198,13 @@ mod tests {
         assert_eq!(find("ra").slot, 1);
         assert_eq!(r.affixes[0].surface, "ni", "prefixes come first, by slot");
         assert!(ni.example.word == "ni-kani" || ni.example.word == "ni-kani-ra=ma", "{:?}", ni.example);
+        // Order: in ni-kani-ra=ma, ni- before -ra before =ma, each pair once.
+        let at = |s: &str| r.affixes.iter().position(|a| a.surface == s).unwrap();
+        let count = |a: &str, b: &str| r.orders.iter().find(|o| o.first == at(a) && o.second == at(b)).map(|o| o.count);
+        assert_eq!(count("ni", "ra"), Some(1));
+        assert_eq!(count("ra", "ma"), Some(1));
+        assert_eq!(count("ni", "ma"), Some(1));
+        assert_eq!(count("ma", "ra"), None, "never the other way");
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

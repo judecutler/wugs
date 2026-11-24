@@ -1005,6 +1005,12 @@ const LEXICON = [
           a("si", "suffix", "PL", 1, 9, 7, [[1, 9]], [["noun", 9]]),
           a("ma", "clitic", "FOC", 2, 7, 6, [[2, 5], [1, 2]], [["verb", 4], ["noun", 3]]),
         ],
+        orders: [
+          { first: 2, second: 4, count: 5 },
+          { first: 0, second: 2, count: 4 },
+          { first: 2, second: 3, count: 2 },
+          { first: 4, second: 2, count: 1 },
+        ],
       };
     },
     vocabulary_growth: () => {

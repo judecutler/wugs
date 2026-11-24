@@ -48,3 +48,36 @@ test("the table and summary say it in words", () => {
   assert.match(summaryLine({ affixes: [], words: 0, withoutRoot: 0 }), /No word/);
   assert.match(summaryLine({ affixes: [ni], words: 1, withoutRoot: 2 }), /2 words have no morph marked as a root and are left out/);
 });
+
+test("pairs fold both orders and flag what disagrees with the chart", async () => {
+  const { pairs, pairLine, pairNote, pairsSummary, pairsTsv } = await import("./logic.ts");
+  const ex = { word: "", textId: "", tierId: "", segmentId: "" };
+  const a = (surface: string, kind: string, gloss: string, slot: number) => ({ surface, kind, gloss, uses: 1, roots: 1, positions: [[slot, 1]] as [number, number][], slot, categories: [], example: ex });
+  const affixes = [a("ni", "prefix", "1SG", -1), a("ka", "prefix", "2SG", -1), a("ra", "suffix", "PST", 1), a("ma", "clitic", "FOC", 2)];
+  const r = {
+    affixes,
+    words: 9,
+    withoutRoot: 0,
+    orders: [
+      { first: 2, second: 3, count: 5 },
+      { first: 3, second: 2, count: 1 },
+      { first: 0, second: 2, count: 4 },
+      { first: 0, second: 1, count: 1 },
+    ],
+  };
+  const ps = pairs(r);
+  assert.deepEqual(ps.map((p) => [p.a.surface, p.b.surface, p.ab, p.ba]), [["ra", "ma", 5, 1], ["ni", "ra", 4, 0], ["ni", "ka", 1, 0]]);
+  assert.equal(pairLine(ps[0]!), "-ra before =ma ×5, after it ×1");
+  assert.equal(pairLine(ps[1]!), "ni- before -ra ×4");
+  assert.match(pairNote(ps[0]!), /Both orders/);
+  assert.equal(pairNote(ps[1]!), "");
+  assert.match(pairNote(ps[2]!), /one slot/);
+  assert.equal(pairsSummary(ps), "3 pairs of affixes occur in one word. 2 need a look.");
+  assert.match(pairsSummary([]), /No word has two affixes/);
+  // Only met against the chart's order.
+  const back = pairs({ ...r, orders: [{ first: 3, second: 2, count: 2 }] });
+  assert.equal(pairLine(back[0]!), "=ma before -ra ×2");
+  assert.match(pairNote(back[0]!), /other order/);
+  assert.equal(pairsTsv(ps).split("\n")[1], "-ra PST\t=ma FOC\t5\t1\tBoth orders are met: check these words, or the order is free");
+  assert.deepEqual(pairs({ affixes, words: 1, withoutRoot: 0 }), [], "an older backend sends no orders");
+});

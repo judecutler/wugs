@@ -688,6 +688,14 @@ def main():
             if run.page.evaluate("document.activeElement && document.activeElement.dataset.prompt") != "3":
                 failures.append("Elicit sentences did not move to the next prompt")
             # Word order: WALS orders counted in the parsed sentences.
+            # Affixes: the order of two affixes met in one word.
+            run.front("affixes", "Affixes")
+            order = run.page.locator(".panel-affixes .af-order")
+            order.locator("tbody tr").first.wait_for()
+            order.scroll_into_view_if_needed()
+            run.shot("state-affixes-order", run.page.locator(".panel-affixes"))
+            if order.locator("tr.af-flag").count() != 2:
+                failures.append("Affixes: the pairs met in both orders or in one slot are not marked")
             run.front("wordorder", "Word order")
             run.page.locator(".panel-wordorder .wo-card").first.wait_for()
             run.shot("state-wordorder", run.page.locator(".panel-wordorder"))

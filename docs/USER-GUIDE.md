@@ -844,6 +844,8 @@ The **Affixes** panel reads every glossed word in the project and lists its affi
 
 At the top is a position-class chart: a column for each slot, counted from the root (−1 right before it, +1 right after it), with each affix in the slot it holds most often, its gloss and how often it is used. Click an affix to see every word it is in, in the Concordance. Under the chart, a table gives each affix's gloss, slot (and the other slots it turns up in), uses, how many different roots it is found on, the parts of speech of those roots (from their lexicon entries), and an example word. Click the example to open its sentence.
 
+**Order** lists every two affixes found together in one word and how often each comes first: the evidence a slot chart rests on. Two affixes in one slot should never occur in the same word, and two in different slots should always come in the slots' order, so rows that break either rule are marked, with a note saying which. A pair met in both orders may be a glossing slip or a real freedom of order; open the words to see. **Copy pairs** copies the table.
+
 An affix is told apart by its spelling, type and gloss, so `-ler` PL and `-ler` 3PL are two rows. A word with no morph marked as a root is left out, and the panel says how many there are. **Copy chart** and **Copy table** copy them to paste into a document or a spreadsheet, and **Grammar sketch…** prints the chart in its morphology chapter.
 
 ### Test sound changes and phonological rules
