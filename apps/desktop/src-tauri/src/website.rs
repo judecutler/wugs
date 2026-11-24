@@ -131,6 +131,42 @@ const ICON_192: &[u8] = include_bytes!("../site-icons/icon-192.png");
 const ICON_512: &[u8] = include_bytes!("../icons/icon.png");
 
 /// The web app manifest: the language's name, the site's colours, its icons.
+/// A map of recording sites: at least 8° by 5° around them (Natural Earth
+/// 1:110m is too coarse for less), a dot per site titled with its texts.
+fn sites_svg(sites: &[(f64, f64, String)]) -> String {
+    let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    let r1 = |v: f64| (v * 100.0).round() / 100.0;
+    let xs: Vec<f64> = sites.iter().map(|s| s.1 + 180.0).collect();
+    let ys: Vec<f64> = sites.iter().map(|s| 90.0 - s.0).collect();
+    let span = |v: &[f64], least: f64| {
+        let (lo, hi) = v.iter().fold((f64::MAX, f64::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
+        let half = least.max((hi - lo) * 1.15) / 2.0 + 1.0;
+        ((lo + hi) / 2.0 - half, 2.0 * half)
+    };
+    let (x, w) = span(&xs, 8.0);
+    let (y, h) = span(&ys, 5.0);
+    let (y, h) = (y.max(0.0), h.min(180.0));
+    let r = w.max(h) / 70.0;
+    let mut out = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{} {} {} {}\" role=\"img\" aria-label=\"Where the texts were recorded\"><rect x=\"{0}\" y=\"{1}\" width=\"{2}\" height=\"{3}\" fill=\"#dbeef4\"/>", r1(x), r1(y), r1(w), r1(h));
+    for dx in [-360, 0, 360] {
+        out.push_str(&format!("<path d=\"{}\" transform=\"translate({dx} 0)\" fill=\"#f2ede0\" stroke=\"#b9ad8f\" stroke-width=\"{}\"/>", crate::typology::LAND.trim(), r1(r / 4.0).max(0.01)));
+    }
+    // One dot per site (coordinates to about 10 m), titled with its texts.
+    let mut by_site: Vec<((i64, i64), f64, f64, Vec<&str>)> = Vec::new();
+    for (lat, lon, title) in sites {
+        let key = ((lat * 1e4).round() as i64, (lon * 1e4).round() as i64);
+        match by_site.iter_mut().find(|s| s.0 == key) {
+            Some(s) => s.3.push(title),
+            None => by_site.push((key, *lat, *lon, vec![title])),
+        }
+    }
+    for (_, lat, lon, titles) in &by_site {
+        out.push_str(&format!("<circle cx=\"{}\" cy=\"{}\" r=\"{}\" fill=\"#00718a\" stroke=\"#fff\" stroke-width=\"{}\"><title>{}</title></circle>", r1(lon + 180.0), r1(90.0 - lat), r1(r), r1(r / 4.0).max(0.01), esc(&titles.join(", "))));
+    }
+    out.push_str("</svg>\n");
+    out
+}
+
 fn manifest(name: &str, short: &str) -> String {
     serde_json::json!({
         "name": name,
@@ -383,6 +419,16 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     if dictionary {
         body.push_str(&format!("<p><a href=\"dictionary.html\">Dictionary</a> <span class=\"count\">({} entries)</span></p>\n", site.entries));
     }
+    // Where the published texts were recorded, from their coordinates details.
+    let sites: Vec<(f64, f64, String)> = listed.iter().filter_map(|(_, title, _, details)| wugs_core::metadata::place_of(details).map(|(lat, lon)| (lat, lon, title.clone()))).collect();
+    if !sites.is_empty() {
+        files.push(("sites.svg".into(), sites_svg(&sites)));
+        let n = sites.len();
+        body.push_str(&format!(
+            "<figure class=\"where\"><img src=\"sites.svg\" alt=\"A map of where the texts were recorded\"><figcaption>Where {} recorded. Land from Natural Earth.</figcaption></figure>\n",
+            if n == 1 { "one text was".to_string() } else { format!("{n} texts were") }
+        ));
+    }
     if !listed.is_empty() {
         body.push_str("<h2>Texts</h2>\n<ul class=\"texts\">\n");
         for (file, title, count, details) in &listed {
@@ -479,6 +525,7 @@ mod tests {
         // A restricted text: nothing of it goes out unless chosen.
         let text = session::list_texts(&mut s).unwrap()[0].id.clone();
         session::project(&mut s).unwrap().set_access(&text, "restricted").unwrap();
+        session::project(&mut s).unwrap().set_text_metadata(&text, "coordinates", "51.75 N, 1.26 W").unwrap();
         // A headword heard in the recording: its first word, «wʌn».
         let seg = session::get_text(&mut s, &text).unwrap().segments.into_iter().find(|g| g.content.starts_with("wʌn")).unwrap();
         let entry = crate::lexicon::lexicon_list(&mut s, "").unwrap().into_iter().find(|r| r.lemma == "wʌn").unwrap().id;
@@ -503,6 +550,9 @@ mod tests {
         // With a Glottocode, a locator map beside the front page, kept for offline use.
         assert!(index.contains("<img src=\"map.svg\"") && index.contains("Where Glottolog places Tutorial English, near "), "{index}");
         assert!(root.join("map.svg").is_file());
+        assert!(index.contains("<img src=\"sites.svg\"") && index.contains("Where one text was recorded."), "{index}");
+        let sites = fs::read_to_string(root.join("sites.svg")).unwrap();
+        assert!(sites.contains("<circle cx=\"178.74\" cy=\"38.25\"") && sites.contains("<title>"), "{sites}");
         assert!(std::fs::read_to_string(root.join("sw.js")).unwrap().contains("map.svg"));
         let text = fs::read_to_string(root.join("text-1.html")).unwrap();
         assert!(text.contains("<p class=\"tx\">wʌn tuː θɹiː</p>"), "{text}");
