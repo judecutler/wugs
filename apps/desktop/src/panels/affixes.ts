@@ -4,7 +4,7 @@
 // an affix opens the Concordance on it, an example opens its sentence.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, projectAffixes } from "../api";
-import { affixTsv, chartTsv, elsewhere, marked, slotChart, slotLabel, summaryLine, type Affix, type Affixes } from "../affixes/logic";
+import { affixTsv, chartTsv, elsewhere, marked, pairLine, pairNote, pairs, pairsSummary, pairsTsv, slotChart, slotLabel, summaryLine, type Affix, type Affixes } from "../affixes/logic";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { provide } from "../palette/registry";
@@ -27,6 +27,9 @@ export const affixesPanel: PanelDef = {
     const copyChart = h("button", { type: "button", textContent: "Copy chart", title: "The position-class chart as a table, to paste into a grammar or a spreadsheet" });
     const copyTable = h("button", { type: "button", textContent: "Copy table", title: "Every affix with its gloss, slot, uses, roots and an example" });
     const recount = h("button", { type: "button", textContent: "Read again" });
+    const orderNote = h("p", { className: "note" });
+    const orderTable = h("table", { className: "pg-table af-order" });
+    const copyOrder = h("button", { type: "button", textContent: "Copy pairs", title: "Every two affixes met in one word, with how often each order is met" });
 
     const find = (a: Affix) => askConcordance(a.surface, "morph", null, true);
 
@@ -41,8 +44,40 @@ export const affixesPanel: PanelDef = {
       if (data === null) {
         chart.replaceChildren();
         table.replaceChildren();
+        orderTable.replaceChildren();
+        orderNote.textContent = "";
         return;
       }
+      const ps = pairs(data);
+      orderNote.textContent = pairsSummary(ps);
+      copyOrder.disabled = ps.length === 0;
+      orderTable.replaceChildren(
+        ...(ps.length === 0
+          ? []
+          : [
+              h("thead", {}, h("tr", {}, ...["Together", "Words"].map((t) => h("th", { scope: "col", textContent: t })))),
+              h(
+                "tbody",
+                {},
+                ...ps.map((p) => {
+                  const note = pairNote(p);
+                  return h(
+                    "tr",
+                    { className: note === "" ? "" : "af-flag" },
+                    h(
+                      "th",
+                      { scope: "row" },
+                      h("span", { textContent: pairLine(p) }),
+                      " ",
+                      gloss(`${p.a.gloss} ${p.b.gloss}`.trim()),
+                      ...(note === "" ? [] : [h("div", { className: "af-note", textContent: note })]),
+                    ),
+                    h("td", { textContent: String(p.ab + p.ba) }),
+                  );
+                }),
+              ),
+            ]),
+      );
       summary.textContent = summaryLine(data);
       const columns = slotChart(data.affixes);
       chart.replaceChildren(
@@ -107,6 +142,7 @@ export const affixesPanel: PanelDef = {
     };
     copyChart.onclick = () => copy("position-class chart", () => (data === null ? null : chartTsv(slotChart(data.affixes))));
     copyTable.onclick = () => copy("affix table", () => (data === null ? null : affixTsv(data.affixes)));
+    copyOrder.onclick = () => copy("pairs of affixes", () => (data === null ? null : pairsTsv(pairs(data))));
     recount.onclick = () => void load();
 
     const unprovide = provide("affixes", () => [
@@ -130,6 +166,11 @@ export const affixesPanel: PanelDef = {
         chart,
         h("p", { className: "note", textContent: "Each affix stands in the slot it holds most often, counted from the root: −1 right before it, +1 right after. Click one for every word it is in." }),
         h("div", { className: "pg-rows" }, table),
+        h("h3", { textContent: "Order" }),
+        h("div", { className: "cc-bar" }, copyOrder),
+        orderNote,
+        h("div", { className: "pg-rows" }, orderTable),
+        h("p", { className: "note", textContent: "Two affixes in one slot should never occur in one word, and two in different slots should always come in the slots' order. Rows that break either are marked." }),
       );
       void load();
     };

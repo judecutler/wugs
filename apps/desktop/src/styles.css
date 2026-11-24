@@ -1448,6 +1448,9 @@ body::before {
 .af-rootbox { text-align: center; padding: 6px 4px; border: 1px dashed var(--muted); border-radius: var(--radius-sm, 6px); font-size: var(--text-sm); letter-spacing: 0.08em; color: var(--muted); }
 .af-chip { text-align: left; font-family: var(--font-ipa); }
 .af-chip .af-n { color: var(--muted); font-size: var(--text-sm); }
+.af-order th[scope="row"] { font-family: var(--font-ipa); font-weight: normal; text-align: left; }
+.af-order .af-note { color: var(--warn); font-family: var(--font-ui); font-size: var(--text-sm); }
+.af-order tr.af-flag { background: var(--warn-soft); }
 .af-gloss .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
 .af-table td, .af-table th { text-align: left; }
 .af-table tbody tr { cursor: default; }
