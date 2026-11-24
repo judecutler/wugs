@@ -143,3 +143,22 @@ test("a paradigm prints as a form to fill in", () => {
   // A row per value, a column per value plus the row heads.
   assert.equal((html.match(/<tr>/g) ?? []).length, t.rows.values.length + (t.cols === null ? 0 : 1));
 });
+
+test("a glossed word from the texts finds its cell", async () => {
+  const { cellOf, fillable, grammaticalParts, TEMPLATES } = await import("./paradigms.ts");
+  const pn = TEMPLATES.find((t) => t.id === "person-number")!;
+  assert.deepEqual([...grammaticalParts("1SG-count-PST")], ["1", "SG", "PST"]);
+  assert.deepEqual(cellOf(pn, "1SG-count"), { person: "1", number: "sg" });
+  assert.deepEqual(cellOf(pn, "count-3.PL"), { person: "3", number: "pl" });
+  assert.equal(cellOf(pn, "count"), null, "no person or number");
+  assert.equal(cellOf(pn, "1SG-count-2PL"), null, "two persons name no one cell");
+  const cells = [{ features: { person: "1", number: "sg" }, forms: [{ id: "f1", form: "nikani", features: { person: "1", number: "sg" } }] }];
+  const forms = [
+    { form: "nikani", breakdown: "ni-kani", glosses: "1SG-count", count: 4, inGrid: true },
+    { form: "akani", breakdown: "a-kani", glosses: "3SG-count", count: 3, inGrid: false },
+    { form: "akanii", breakdown: "a-kani", glosses: "3SG-count", count: 1, inGrid: false },
+    { form: "nikani2", breakdown: "ni-kani", glosses: "1SG-count", count: 1, inGrid: false },
+    { form: "kani", breakdown: "kani", glosses: "count", count: 9, inGrid: false },
+  ];
+  assert.deepEqual(fillable(pn, cells, forms), [{ form: "akani", features: { person: "3", number: "sg" } }], "only empty cells, the commonest form each");
+});

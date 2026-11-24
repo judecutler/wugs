@@ -682,12 +682,14 @@ const LEXICON = [
     open_project: () => projectInfo,
     create_project: () => projectInfo,
     open_sample: () => projectInfo,
-    concordance: ({ query }) => ({
-      total: 3,
+    concordance: ({ query, kind }) => ({
+      total: kind === "sense" ? 4 : 3,
       hits: [
         { textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", startMs: 620, endMs: 2480, words: ["nikani", "ŋai", "toruma", "kesi"], at: 0, breakdown: "ni-kani", glosses: "1SG-count" },
         { textId: "t-fox", textTitle: "The fox and the well", segmentId: "f03", tierId: "tier-utt", startMs: 5100, endMs: 7900, words: ["wuno", "tekal", "nikani", "ra", "ŋai", "liwa"], at: 2, breakdown: "ni-kani", glosses: "1SG-count" },
         { textId: "t-greet", textTitle: "Greetings at the market", segmentId: "g07", tierId: "tier-utt", startMs: 12000, endMs: 13600, words: ["senu", "paki", "nikani"], at: 2, breakdown: "ni-kani", glosses: "1SG-count" },
+        // An entry's uses (the paradigm's Forms in the texts) include a third person plural.
+        ...(kind === "sense" ? [{ textId: "t-fox", textTitle: "The fox and the well", segmentId: "f05", tierId: "tier-utt", startMs: 9000, endMs: 10200, words: ["sakani", "ŋai"], at: 0, breakdown: "sa-kani", glosses: "3PL-count" }] : []),
       ],
     }),
     // A search's categories, kept in the page for the probe.

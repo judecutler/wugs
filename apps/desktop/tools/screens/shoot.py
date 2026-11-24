@@ -1628,6 +1628,9 @@ def main():
             run.page.locator(".panel-lexicon .lx-pdg-attested li").first.wait_for()
             run.page.locator(".panel-lexicon .lx-pdg-attested").scroll_into_view_if_needed()
             run.shot("state-paradigm-attested", run.page.locator(".panel-lexicon .lx-paradigm"))
+            fill = run.page.locator(".panel-lexicon .lx-pdg-fill")
+            if fill.count() != 1 or "Put 1 form" not in fill.inner_text():
+                failures.append("Paradigm: the 3PL form from the texts did not offer to fill its empty cell")
             if "nikani" not in run.page.locator(".panel-lexicon .lx-pdg-attested").inner_text():
                 failures.append("Forms in the texts did not list the entry's forms")
             # Sentence: a tagger's analysis stays marked until checked; Checked, next moves on.
