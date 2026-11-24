@@ -893,6 +893,47 @@ pub fn write_new(folder: &Path, stem: &str, ext: &str, contents: &[u8]) -> Resul
     Err(format!("{}: too many files named {stem}", folder.display()))
 }
 
+/// The text's linked recording, when it is on this computer, copied into
+/// `folder` as `<stem>.wav` (then ` (2)`… : a file is never replaced).
+fn recording_beside(p: &wugs_core::Project, text: &str, folder: &Path, stem: &str) -> Result<Option<PathBuf>, String> {
+    let Some((_, blob)) = p.text_recording(text)? else { return Ok(None) };
+    let Some(src) = wugs_blob::parse_ref(&blob).map(|hex| p.root.join("blobs").join(hex)).filter(|f| f.is_file()) else { return Ok(None) };
+    for n in 1..1000 {
+        let name = if n == 1 { format!("{stem}.wav") } else { format!("{stem} ({n}).wav") };
+        let path = folder.join(name);
+        match fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut out) => {
+                let mut input = fs::File::open(&src).map_err(|e| e.to_string())?;
+                if let Err(e) = std::io::copy(&mut input, &mut out) {
+                    drop(out);
+                    fs::remove_file(&path).ok();
+                    return Err(format!("{}: {e}", path.display()));
+                }
+                return Ok(Some(path));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        }
+    }
+    Err(format!("{}: too many files named {stem}", folder.display()))
+}
+
+/// A path as a `file:` URL, as ELAN writes MEDIA_URL: forward slashes, a drive
+/// letter after `file:///`, and every byte outside the unreserved set escaped.
+pub(crate) fn file_url(path: &Path) -> String {
+    let s = path.to_string_lossy().replace('\\', "/");
+    let s = if s.starts_with('/') { s } else { format!("/{s}") };
+    let mut out = String::from("file://");
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'/' | b'-' | b'_' | b'.' | b'~' | b':') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
 /// Exports and seals go outside the project folder: inside it, `cache/` is
 /// wiped on a rebuild and `blobs/` would be copied into every later seal.
 pub(crate) fn outside_project(s: &mut Session, folder: &Path) -> Result<(), String> {
@@ -953,7 +994,16 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
             notes.append(&mut more);
             out
         }
-        Format::Elan => wugs_elan::export_eaf(p, text_id)?,
+        Format::Elan => match recording_beside(p, text_id, folder, &file_stem(&title, "text"))? {
+            Some(wav) => {
+                let name = wav.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let url = file_url(&wav);
+                let relative = format!("./{name}");
+                notes.push(format!("The recording is copied beside it as «{name}», so ELAN opens it with the file. Keep the two together."));
+                wugs_elan::export_eaf_with_media(p, text_id, Some(wugs_elan::Media { url: &url, relative: &relative, mime: "audio/x-wav" }))?
+            }
+            None => wugs_elan::export_eaf(p, text_id)?,
+        },
         Format::FlexText => wugs_flex::export_flextext(p, text_id)?,
         Format::TextGrid => {
             let out = wugs_legacy::export_textgrid(p, text_id)?;
@@ -1388,6 +1438,34 @@ pub fn cut_clip(wav: &Path, start_ms: f64, end_ms: f64, out: &Path) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_urls_are_escaped_as_elan_writes_them() {
+        assert_eq!(file_url(Path::new("/home/ana/My Texts/kanu ŋ.wav")), "file:///home/ana/My%20Texts/kanu%20%C5%8B.wav");
+        assert_eq!(file_url(Path::new("C:\\Users\\ana\\a.wav")), "file:///C:/Users/ana/a.wav");
+    }
+
+    #[test]
+    fn an_elan_export_takes_its_recording_with_it() {
+        let dir = std::env::temp_dir().join(format!("wugs-elan-media-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let out = dir.join("out");
+        fs::create_dir_all(&out).unwrap();
+        let text = crate::session::list_texts(&mut s).unwrap()[0].id.clone();
+        let e = export_text(&mut s, &text, Format::Elan, &out).unwrap();
+        let eaf = fs::read_to_string(&e.path).unwrap();
+        let wav = out.join("Counting to six (tutorial).wav");
+        assert!(wav.is_file(), "{:?}", fs::read_dir(&out).unwrap().map(|x| x.unwrap().file_name()).collect::<Vec<_>>());
+        assert!(eaf.contains("RELATIVE_MEDIA_URL=\"./Counting to six (tutorial).wav\""), "{eaf}");
+        assert!(eaf.contains("MIME_TYPE=\"audio/x-wav\""));
+        assert!(e.notes.iter().any(|n| n.contains("copied beside it")), "{:?}", e.notes);
+        // A second export never replaces the first recording.
+        let again = export_text(&mut s, &text, Format::Elan, &out).unwrap();
+        assert!(fs::read_to_string(&again.path).unwrap().contains("./Counting to six (tutorial) (2).wav"));
+        drop(s);
+        fs::remove_dir_all(&dir).ok();
+    }
 
     #[test]
     fn a_project_publishes_as_cldf_beside_its_language() {

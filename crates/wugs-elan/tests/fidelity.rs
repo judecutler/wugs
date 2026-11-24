@@ -312,3 +312,23 @@ fn glossing_goes_out_as_interlinear_tiers_and_is_not_read_back_as_segments() {
     fs::remove_dir_all(root).ok();
     fs::remove_dir_all(root2).ok();
 }
+
+#[test]
+fn a_recording_is_named_for_elan_and_the_file_reimports_onto_itself() {
+    let (root, mut p) = temp_project();
+    let first = import_eaf(&mut p, SAMPLE, "T").unwrap();
+    let media = wugs_elan::Media { url: "file:///tmp/story.wav", relative: "./story.wav", mime: "audio/x-wav" };
+    let exported = wugs_elan::export_eaf_with_media(&p, &first.text, Some(media)).unwrap();
+    let doc = xml::parse(&exported).unwrap();
+    let header = doc.child("HEADER").unwrap();
+    // The schema wants media descriptors before the properties.
+    assert_eq!(header.children.first().map(|c| c.name.as_str()), Some("MEDIA_DESCRIPTOR"));
+    let m = header.child("MEDIA_DESCRIPTOR").unwrap();
+    assert_eq!((m.attr("MEDIA_URL"), m.attr("RELATIVE_MEDIA_URL"), m.attr("MIME_TYPE")), (Some("file:///tmp/story.wav"), Some("./story.wav"), Some("audio/x-wav")));
+    assert_eq!(canon(&exported), canon(&export_eaf(&p, &first.text).unwrap()));
+    let before = entity_counts(&p);
+    let again = import_eaf(&mut p, &exported, "T").unwrap();
+    assert_eq!((again.text, again.segments_created), (first.text, 0));
+    assert_eq!(entity_counts(&p), before);
+    fs::remove_dir_all(root).ok();
+}

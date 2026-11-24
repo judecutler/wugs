@@ -31,6 +31,19 @@ struct Tier {
 
 /// Render a text as an `.eaf` document. Reads the projection only.
 pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
+    export_eaf_with_media(project, text, None)
+}
+
+/// A recording for ELAN to open with the file: its absolute `file:` URL and
+/// the path relative to the `.eaf`, which ELAN tries when the first is gone.
+pub struct Media<'a> {
+    pub url: &'a str,
+    pub relative: &'a str,
+    pub mime: &'a str,
+}
+
+/// `export_eaf`, with a `MEDIA_DESCRIPTOR` naming the recording when given.
+pub fn export_eaf_with_media(project: &Project, text: &str, media: Option<Media>) -> Result<String, String> {
     let p = &project.proj;
     if p.entity_kind(text)?.as_deref() != Some("text") {
         return Err(format!("{text} is not a text"));
@@ -269,10 +282,12 @@ pub fn export_eaf(project: &Project, text: &str) -> Result<String, String> {
         types.insert(TYPE_GLOSSES.into(), (false, Some("Symbolic_Association".into())));
     }
 
-    let mut header = XmlNode::new("HEADER")
-        .with_attr("MEDIA_FILE", "")
-        .with_attr("TIME_UNITS", "milliseconds")
-        .with_child(XmlNode::new("PROPERTY").with_attr("NAME", PROP_TEXT).with_text(text));
+    let mut header = XmlNode::new("HEADER").with_attr("MEDIA_FILE", "").with_attr("TIME_UNITS", "milliseconds");
+    // The schema puts media descriptors before the properties.
+    if let Some(m) = &media {
+        header = header.with_child(XmlNode::new("MEDIA_DESCRIPTOR").with_attr("MEDIA_URL", m.url).with_attr("MIME_TYPE", m.mime).with_attr("RELATIVE_MEDIA_URL", m.relative));
+    }
+    header = header.with_child(XmlNode::new("PROPERTY").with_attr("NAME", PROP_TEXT).with_text(text));
     if let Some(title) = p.field_str(text, "title")? {
         header = header.with_child(XmlNode::new("PROPERTY").with_attr("NAME", PROP_TITLE).with_text(&title));
     }
