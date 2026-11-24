@@ -43,6 +43,10 @@ pub struct Affix {
     /// of one gloss apart (the stem's last vowel, its last sound) is read
     /// from these.
     pub stems: Vec<(String, usize)>,
+    /// Different word forms it is in, and how many of them occur only once
+    /// in the glossed words: Baayen's productivity is `hapaxes / uses`.
+    pub types: usize,
+    pub hapaxes: usize,
 }
 
 /// At most this many stems are returned per affix.
@@ -93,6 +97,8 @@ struct Tally {
     categories: HashMap<String, usize>,
     example: Option<Example>,
     stems: HashMap<String, usize>,
+    /// The word forms it is in (folded), with uses.
+    words: HashMap<String, usize>,
 }
 
 pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
@@ -130,6 +136,7 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
             let mut in_word: Vec<Key> = Vec::new();
             let word = crate::concordance::joined(&morphs.iter().map(|m| (bare(&m.surface).to_string(), m.kind.clone())).collect::<Vec<_>>());
             let plain: Vec<String> = morphs.iter().map(|m| p.proj.nfc(bare(&m.surface))).collect();
+            let word_key = wugs_model::fold_key(&plain.concat());
             for (i, m) in morphs.iter().enumerate() {
                 if i == root || m.kind == "root" {
                     continue;
@@ -147,6 +154,7 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
                 }
                 let stem = if i > root { plain[..i].concat() } else { plain[i + 1..].concat() };
                 *t.stems.entry(stem).or_default() += 1;
+                *t.words.entry(word_key.clone()).or_default() += 1;
                 if t.example.is_none() {
                     t.example = Some(Example { word: word.clone(), text_id: seg.text.clone(), tier_id: seg.tier.clone(), segment_id: seg.id.clone() });
                 }
@@ -175,7 +183,8 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
         let mut stems: Vec<(String, usize)> = t.stems.into_iter().collect();
         stems.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
         stems.truncate(MAX_STEMS);
-        keyed.push((key, Affix { surface, kind, gloss, uses: t.uses, roots: t.roots.len(), positions, slot, categories, example: t.example.unwrap_or(Example { word: String::new(), text_id: String::new(), tier_id: String::new(), segment_id: String::new() }), stems }));
+        let (types, hapaxes) = (t.words.len(), t.words.values().filter(|n| **n == 1).count());
+        keyed.push((key, Affix { surface, kind, gloss, uses: t.uses, roots: t.roots.len(), positions, slot, categories, example: t.example.unwrap_or(Example { word: String::new(), text_id: String::new(), tier_id: String::new(), segment_id: String::new() }), stems, types, hapaxes }));
     }
     keyed.sort_by(|(ka, a), (kb, b)| a.slot.cmp(&b.slot).then(b.uses.cmp(&a.uses)).then(a.surface.cmp(&b.surface)).then(ka.cmp(kb)));
     let index: HashMap<&Key, usize> = keyed.iter().enumerate().map(|(i, (k, _))| (k, i)).collect();
@@ -225,6 +234,9 @@ mod tests {
         assert!(find("ra").stems.contains(&("nikani".to_string(), 1)), "{:?}", find("ra").stems);
         assert!(find("ma").stems.contains(&("nikanira".to_string(), 1)), "{:?}", find("ma").stems);
         assert!(ni.stems.iter().any(|(s, _)| s == "kanirama"), "{:?}", ni.stems);
+        // Productivity: -ra is in one word form, met once.
+        assert_eq!((find("ra").types, find("ra").hapaxes), (1, 1));
+        assert!(ni.types >= 1 && ni.hapaxes <= ni.types, "{ni:?}");
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

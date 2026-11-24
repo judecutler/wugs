@@ -5,7 +5,7 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, projectAffixes } from "../api";
 import { allomorphSets, allomorphsTsv, setNote, soundsLine } from "../affixes/allomorphs";
-import { affixTsv, chartTsv, elsewhere, marked, pairLine, pairNote, pairs, pairsSummary, pairsTsv, slotChart, slotLabel, summaryLine, type Affix, type Affixes } from "../affixes/logic";
+import { affixTsv, chartTsv, elsewhere, marked, productivityCell, productivityLine, pairLine, pairNote, pairs, pairsSummary, pairsTsv, slotChart, slotLabel, summaryLine, type Affix, type Affixes } from "../affixes/logic";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
 import { provide } from "../palette/registry";
@@ -125,7 +125,7 @@ export const affixesPanel: PanelDef = {
               ),
             ]),
       );
-      summary.textContent = summaryLine(data);
+      summary.textContent = [summaryLine(data), productivityLine(data.affixes)].filter((x) => x !== "").join(" ");
       const columns = slotChart(data.affixes);
       chart.replaceChildren(
         ...(data.affixes.length === 0
@@ -139,7 +139,7 @@ export const affixesPanel: PanelDef = {
               ),
             )),
       );
-      const head = ["Affix", "Gloss", "Slot", "Uses", "Roots", "Root categories", "Example"];
+      const head = ["Affix", "Gloss", "Slot", "Uses", "Roots", "P", "Root categories", "Example"];
       table.replaceChildren(
         h("thead", {}, h("tr", {}, ...head.map((t) => h("th", { scope: "col", textContent: t })))),
         h(
@@ -157,6 +157,7 @@ export const affixesPanel: PanelDef = {
               h("td", { textContent: where ? `${slotLabel(a.slot)} (${where})` : slotLabel(a.slot) }),
               h("td", { textContent: String(a.uses) }),
               h("td", { textContent: String(a.roots) }),
+              h("td", { textContent: productivityCell(a), title: a.hapaxes === undefined ? "" : `In ${a.types} word forms, ${a.hapaxes} of them met only once: Baayen's productivity, the share of its uses that are new words` }),
               h("td", { textContent: a.categories.map(([c, n]) => `${c} ${n}`).join(", ") }),
               h("td", {}, example),
             );

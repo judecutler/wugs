@@ -14,7 +14,28 @@ export type Affix = {
   example: { word: string; textId: string; tierId: string; segmentId: string };
   /** What it attaches to as written (the morphs on the root's side), with uses. */
   stems?: [string, number][];
+  /** Different word forms it is in, and those met only once. */
+  types?: number;
+  hapaxes?: number;
 };
+
+/** Baayen's productivity P: the share of its uses in words met only once
+ * (Baayen 1992). Null without the counts. */
+export const productivity = (a: Affix): number | null => (a.hapaxes === undefined || a.uses === 0 ? null : a.hapaxes / a.uses);
+
+/** The P column's cell. */
+export const productivityCell = (a: Affix): string => {
+  const p = productivity(a);
+  return p === null ? "" : p.toFixed(3);
+};
+
+/** A line on productivity: the affixes with most new words, among those used 10 times or more. */
+export function productivityLine(affixes: readonly Affix[]): string {
+  const counted = affixes.filter((a) => a.uses >= 10 && productivity(a) !== null);
+  if (counted.length === 0) return "";
+  const top = [...counted].sort((x, y) => productivity(y)! - productivity(x)! || y.uses - x.uses).slice(0, 3);
+  return `Most productive (Baayen's P, the share of an affix's uses in word forms met only once; affixes used 10 times or more): ${top.map((a) => `${marked(a)} ${a.gloss} ${productivityCell(a)}`.replace(/\s+/gu, " ")).join(", ")}.`;
+}
 /** Two affixes met in one word, `first` (an index into `affixes`) before `second`, in `count` words. */
 export type Order = { first: number; second: number; count: number };
 export type Affixes = { affixes: Affix[]; words: number; withoutRoot: number; orders?: Order[] };
@@ -75,8 +96,8 @@ export function chartTsv(columns: readonly Column[]): string {
 
 /** Every affix as a table row, for a spreadsheet. */
 export function affixTsv(affixes: readonly Affix[]): string {
-  const head = ["affix", "gloss", "type", "slot", "uses", "roots", "elsewhere", "root categories", "example"];
-  const rows = affixes.map((a) => [marked(a), a.gloss, a.kind, slotLabel(a.slot), String(a.uses), String(a.roots), elsewhere(a), a.categories.map(([c, n]) => `${c} ${n}`).join("; "), a.example.word]);
+  const head = ["affix", "gloss", "type", "slot", "uses", "roots", "word forms", "met once", "productivity", "elsewhere", "root categories", "example"];
+  const rows = affixes.map((a) => [marked(a), a.gloss, a.kind, slotLabel(a.slot), String(a.uses), String(a.roots), a.types === undefined ? "" : String(a.types), a.hapaxes === undefined ? "" : String(a.hapaxes), productivityCell(a), elsewhere(a), a.categories.map(([c, n]) => `${c} ${n}`).join("; "), a.example.word]);
   return [head, ...rows].map((r) => r.map((c) => c.replace(/[\t\n]/g, " ")).join("\t")).join("\n") + "\n";
 }
 
