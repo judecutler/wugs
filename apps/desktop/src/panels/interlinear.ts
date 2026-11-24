@@ -11,7 +11,7 @@ import { glossRuns, wordLines, type ExampleWord } from "../gloss/example";
 import { numbering } from "../gloss/document";
 import { translationLines } from "../gloss/translation";
 import { hear, playButton } from "../hear/hear";
-import { analysed, nextWhere, progress, sentencesOf, sentenceTracks, SHOWS, showOf, type Line, type Show } from "../interlinear/logic";
+import { analysed, nextWhere, progress, sentencesOf, sentenceTracks, SHOWS, showOf, topicsIn, type Line, type Show } from "../interlinear/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getSelection, getState, selectSegment, showToast, subscribeSelection } from "../store";
 import type { PanelDef, PanelView } from "./panel";
@@ -48,7 +48,7 @@ async function linesOf(text: TextDetail): Promise<Line[]> {
       const full = text.segments.find((s) => s.id === seg.id)!;
       const translation = translationLines(full, text.segments, text.tiers).find((l) => l.segment !== null)?.segment?.content ?? null;
       const words: ExampleWord[] = v.words.map((w) => ({ form: w.form, morphs: w.morphs.map((m) => ({ surface: m.surface, type: m.type, gloss: m.gloss })) }));
-      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, notes: (v.segmentNotes ?? []).map((n) => n.body), ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
+      lines.push({ id: seg.id, number: numbers.get(seg.id) ?? i + j + 1, content: seg.content, words, translation, startMs: seg.startMs, notes: (v.segmentNotes ?? []).map((n) => n.body), topics: v.topics ?? [], ...(speakers ? { speaker: tiers.find((t) => t.id === seg.tier)?.name ?? "" } : {}) });
     });
   }
   return lines;
@@ -209,7 +209,8 @@ export const interlinearPanel: PanelDef = {
       });
       const focused = el.contains(document.activeElement) ? [...el.querySelectorAll(".il-row")].indexOf(document.activeElement as Element) : -1;
       const focusedAbbr = document.activeElement instanceof HTMLInputElement && el.contains(document.activeElement) ? (document.activeElement.dataset.abbr ?? null) : null;
-      const only = h("select", { className: "il-show", title: "Which sentences to list" }, ...SHOWS.map((x) => h("option", { value: x.id, textContent: x.label, selected: x.id === show })));
+      const topicChoices = topicsIn(lines).map((t) => showOf(`topic:${t}`));
+      const only = h("select", { className: "il-show", title: "Which sentences to list: all, those still to gloss or translate, or those filed under a grammar topic" }, ...[...SHOWS, ...topicChoices].map((x) => h("option", { value: x.id, textContent: x.label, selected: x.id === show })));
       only.setAttribute("aria-label", "Which sentences to list");
       only.onchange = () => {
         show = only.value as Show;
