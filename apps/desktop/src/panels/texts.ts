@@ -6,8 +6,8 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, readTierGlossing, tierGlossing, topicsOverview, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { CARD_ORDERS, corpusLines, dictionaryLines, flashcardLines, parallelLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
+import { abbreviationMeanings, createText, readTierGlossing, tierGlossing, topicsOverview, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportUnimorph, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { CARD_ORDERS, corpusLines, dictionaryLines, flashcardLines, parallelLines, spellingLines, unimorphLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { sentencesOf } from "../interlinear/logic";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
@@ -457,6 +457,15 @@ async function exportSpellingFiles() {
   await work("spelling", async () => {
     const r = await exportSpelling({ folder, date: localDay(new Date()) });
     showToast({ tone: "info", lines: spellingLines(r) });
+  });
+}
+
+async function exportUnimorphForms() {
+  const folder = await chooseFolder("Choose where the UniMorph forms go");
+  if (folder === null) return;
+  await work("unimorph", async () => {
+    const r = await exportUnimorph({ folder, date: localDay(new Date()) });
+    showToast({ tone: r.unknown.length > 0 ? "warn" : "info", lines: unimorphLines(r) });
   });
 }
 
@@ -1032,6 +1041,13 @@ export const textsPanel: PanelDef = {
           }),
           h("button", {
             type: "button",
+            textContent: busy === "unimorph" ? "Making…" : "Inflected forms for UniMorph…",
+            title: "Every inflected form as lemma, form and features (UniMorph's format, for computational morphology and the SIGMORPHON tasks): the Lexicon's paradigm grids, and glossed words whose root is linked to an entry, their affixes' Leipzig glosses read as features",
+            disabled: busy !== null,
+            onclick: () => void exportUnimorphForms(),
+          }),
+          h("button", {
+            type: "button",
             textContent: busy === "parallel" ? "Making…" : "Parallel corpus…",
             title: "Every translated sentence beside its translation, for machine translation and alignment: a table, the two sides line for line (Moses, OPUS) and TMX for translation memories. Texts that are not open are left out unless the box below is ticked",
             disabled: busy !== null,
@@ -1133,6 +1149,7 @@ export const textsPanel: PanelDef = {
             { id: "texts:dictionary", title: "Print the dictionary", group: "Publish", words: ["lexicon", "html", "print", "word list"], run: () => void exportDict() },
             { id: "texts:flashcards", title: "Make flashcards for learners", group: "Publish", words: ["anki", "quizlet", "learn", "vocabulary"], run: () => void exportCards() },
             { id: "texts:parallel", title: "Save a parallel corpus (sentences and translations)", group: "Publish", words: ["machine translation", "mt", "tmx", "moses", "opus", "bitext", "aligned"], run: () => void exportParallelCorpus() },
+            { id: "texts:unimorph", title: "Save inflected forms for UniMorph", group: "Publish", words: ["morphology", "paradigm", "sigmorphon", "inflection", "computational"], run: () => void exportUnimorphForms() },
             { id: "texts:spelling", title: "Save a spelling dictionary (spell checker)", group: "Publish", words: ["hunspell", "libreoffice", "firefox", "spellcheck", "orthography"], run: () => void exportSpellingFiles() },
             { id: "texts:website", title: "Publish as a website", group: "Publish", words: ["community", "web", "app", "site", "share"], run: () => void publishSite() },
             { id: "texts:cldf", title: "Publish as CLDF", group: "Publish", words: ["dataset", "cldf", "zenodo", "data paper"], run: () => void publishCldf() },

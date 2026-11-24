@@ -34,6 +34,7 @@ pub mod unclear;
 pub mod tei_lex;
 pub mod saymore;
 pub mod rough_align;
+pub mod unimorph;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -1944,6 +1945,11 @@ async fn rough_time(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_i
 }
 
 #[tauri::command(async)]
+fn export_unimorph(s: State<SessionThread>, folder: String, date: String) -> Result<unimorph::UniMorph, String> {
+    s.run(move |s| unimorph::export(s, std::path::Path::new(&folder), &date))
+}
+
+#[tauri::command(async)]
 fn rough_untime(s: State<SessionThread>, text_id: String, expect: Vec<session::SegmentCheckView>) -> Result<(), String> {
     s.run(move |s| rough_align::untime(s, &text_id, &expect))
 }
@@ -2744,6 +2750,7 @@ pub fn run() {
             auto_segment,
             rough_time,
             rough_untime,
+            export_unimorph,
             add_tier,
             gloss_get,
             gloss_tokenize,

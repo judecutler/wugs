@@ -115,6 +115,17 @@ export function spellingLines(r: Spelling): string[] {
   return lines;
 }
 
+/** What a UniMorph export wrote (`unimorph.rs`). */
+export type UniMorph = { path: string; code: string; fromGrids: number; fromTexts: number; bare: number; unknown: string[] };
+
+/** The toast after inflected forms were saved for UniMorph. */
+export function unimorphLines(r: UniMorph): string[] {
+  const lines = [`Saved ${plural(r.fromGrids + r.fromTexts, "inflected form", "inflected forms")} in UniMorph's format in ${r.path} (the file ${r.code}): ${r.fromGrids} from the paradigm grids, ${r.fromTexts} from glossed words in the texts.`];
+  if (r.unknown.length > 0) lines.push(`Not in UniMorph's schema, written as glossed: ${r.unknown.join(", ")}. The README says to rename them before sharing.`);
+  if (r.code === "und") lines.push("Set the language's ISO 639-3 code in the Language row to name the file after it, as UniMorph does.");
+  return lines;
+}
+
 /** What a parallel corpus export wrote (`parallel.rs`). */
 export type Parallel = { path: string; pairs: number; texts: number; languages: [string, number][]; untranslated: number; restrictedLeftOut: number };
 
