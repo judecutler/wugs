@@ -45,6 +45,7 @@ PANELS = [
     ("contours", "Pitch contours"),
     ("durations", "Durations"),
     ("agreement", "Agreement"),
+    ("turns", "Turn-taking"),
     ("sessions", "Sessions"),
     ("sounds", "Sounds"),
     ("typology", "Typology"),
@@ -740,6 +741,13 @@ def main():
                 failures.append(f"Agreement: the two hearings were not paired as expected: {summary!r}")
             if run.page.locator(".panel-agreement tr.ag-alone").count() != 2:
                 failures.append("Agreement: the missed turn and the added one were not listed alone")
+            # Turn-taking: the market conversation's two tracks read as two speakers.
+            run.front("turns", "Turn-taking")
+            run.page.locator(".panel-turns .tt-plot").wait_for()
+            run.page.wait_for_timeout(300)
+            run.shot("state-turns", run.page.locator(".panel-turns"))
+            if "changes of speaker" not in run.page.locator(".panel-turns .ag-summary").inner_text():
+                failures.append("Turn-taking did not count changes of speaker")
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); await st.selectText('t-count'); st.selectSegment(window.__keptSelection); }")
             run.page.wait_for_timeout(300)
             # Sessions: a new session dated today goes on top, its notes ready to type in.
