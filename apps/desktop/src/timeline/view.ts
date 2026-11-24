@@ -11,6 +11,7 @@ import {
   autoSegment,
   roughTime,
   roughUntime,
+  shiftTrack,
   deleteSegment,
   deleteSegments,
   editSegmentContent,
@@ -1503,6 +1504,60 @@ export class TimelineView {
       showToast({
         tone: "info",
         lines: roughLines(out),
+        action: {
+          label: "Undo",
+          run: () => {
+            if (stack !== null && stack === this.history() && stack.isNewest(entry)) void this.undo();
+            else showToast({ tone: "info", lines: ["Later edits came after it; use Undo on the timeline to step back to it."] });
+          },
+        },
+      });
+    } catch (e) {
+      showToast({ tone: "error", lines: [errorText(e)] });
+    }
+  }
+
+  /** The track a whole-track edit works on: the selected segment's, else the utterance track. */
+  editTrack(): { id: string; name: string } | null {
+    const text = this.text;
+    if (text === null) return null;
+    const sel = this.selected === null ? null : this.findSegment(this.selected);
+    const tier = sel !== null ? text.tiers.find((t) => t.id === sel.tier) : text.tiers.find((t) => t.utterance === true);
+    return tier === undefined ? null : { id: tier.id, name: tier.name };
+  }
+
+  /** Move every timed segment of the edit track by `deltaMs`; Undo moves them back. */
+  async shiftTimes(deltaMs: number): Promise<void> {
+    await this.track(this.shiftTimesNow(deltaMs));
+  }
+
+  private async shiftTimesNow(deltaMs: number): Promise<void> {
+    const text = this.text;
+    const target = this.editTrack();
+    if (text === null || target === null) return;
+    const why = this.laneBlock(this.lanes.find((l) => l.tierId === target.id));
+    if (why !== null) {
+      showToast({ tone: "info", lines: [why] });
+      return;
+    }
+    const stack = this.history();
+    try {
+      let out = await shiftTrack({ textId: text.id, tierId: target.id, deltaMs, expect: [] });
+      const timesOf = () => out.states.map((st) => checkOf(st, ["startMs", "endMs"]));
+      const entry: UndoEntry = {
+        label: "shift times",
+        undo: async () => {
+          out = await shiftTrack({ textId: text.id, tierId: target.id, deltaMs: -deltaMs, expect: timesOf() });
+        },
+        redo: async () => {
+          out = await shiftTrack({ textId: text.id, tierId: target.id, deltaMs, expect: timesOf() });
+        },
+      };
+      stack?.push(entry);
+      await this.afterEdit();
+      showToast({
+        tone: "info",
+        lines: [`Moved ${out.sentences === 1 ? "1 segment" : `${out.sentences} segments`} of «${out.tierName}» ${deltaMs > 0 ? "later" : "earlier"} by ${Math.abs(deltaMs)} ms.`],
         action: {
           label: "Undo",
           run: () => {

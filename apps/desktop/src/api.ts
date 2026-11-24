@@ -183,6 +183,7 @@ export const autoSegment = (args: { textId: string; source: string; tierId: stri
 export type RoughTimed = { tier: string; tierName: string; sentences: number; spans: number; states: SegmentState[] };
 export const roughTime = (args: { textId: string; source: string; tierId: string | null }) => invoke<RoughTimed>("rough_time", args);
 export const roughUntime = (args: { textId: string; expect: { id: string; startMs?: number; endMs?: number }[] }) => invoke<null>("rough_untime", args);
+export const shiftTrack = (args: { textId: string; tierId: string; deltaMs: number; expect: { id: string; startMs?: number; endMs?: number }[] }) => invoke<RoughTimed>("shift_track", args);
 
 export type TierTemplate = "transcription" | "translation" | "notes" | "custom";
 

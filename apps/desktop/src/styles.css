@@ -1732,3 +1732,8 @@ body::before {
 .lx-match-bar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
 .lx-match-rows { max-height: 50vh; overflow: auto; }
 .lx-match .lx-match-off td { opacity: .5; }
+
+/* Timeline: Shift times. */
+.tl-shift { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: var(--text-sm); flex-wrap: wrap; }
+.tl-shift[hidden] { display: none; }
+.tl-shift-ms { width: 7em; }

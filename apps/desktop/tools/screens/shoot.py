@@ -360,6 +360,16 @@ def main():
                 (run.out / "state-timeline-picture.png").write_bytes(_b64.b64decode(saved["contents"].split(",", 1)[1]))
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
 
+            # Shift times: the row names the track and moves it by the milliseconds typed.
+            run.page.locator(".panel-timeline .tl-toolbar button", has_text="Shift times").click()
+            run.page.locator(".panel-timeline .tl-shift-ms").fill("-200")
+            run.shot("state-timeline-shift", run.page.locator(".panel-timeline .tl-shift"))
+            run.page.locator(".panel-timeline .tl-shift button", has_text="Move").click()
+            run.page.wait_for_timeout(300)
+            if not any("earlier by 200 ms" in t for t in run.toasts()):
+                failures.append(f"Shift times did not say it moved the track: {run.toasts()}")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+
             # Reach for the Timeline group's tabs: they rise and push its content down.
             box = run.page.locator(".panel-timeline").bounding_box()
             if box is not None:
