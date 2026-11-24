@@ -1091,7 +1091,7 @@ fn percent_decode(s: &str) -> Option<String> {
 }
 
 /// A `file:` URL's path on this computer (`file:///C:/x` as `C:/x` on Windows).
-fn url_path(url: &str) -> Option<PathBuf> {
+pub(crate) fn url_path(url: &str) -> Option<PathBuf> {
     let rest = url.strip_prefix("file://")?;
     let rest = rest.strip_prefix("localhost").unwrap_or(rest);
     let decoded = percent_decode(rest)?;

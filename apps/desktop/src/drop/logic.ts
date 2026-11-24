@@ -123,7 +123,7 @@ export type SayMoreImport = { sessions: number; transcribed: number; empty: numb
 /** The toast after a SayMore project was read. */
 export function saymoreLines(r: SayMoreImport): string[] {
   const n = (x: number, one: string, many: string) => `${x} ${x === 1 ? one : many}`;
-  const lines = [`Read ${n(r.sessions, "SayMore session", "SayMore sessions")}: ${n(r.transcribed, "transcription", "transcriptions")} from their ELAN files${r.empty > 0 ? `, and ${n(r.empty, "new empty text", "new empty texts")} for sessions not transcribed yet` : ""}.`];
+  const lines = [`Read ${n(r.sessions, "session", "sessions")}: ${n(r.transcribed, "transcription", "transcriptions")} from their ELAN files${r.empty > 0 ? `, and ${n(r.empty, "new empty text", "new empty texts")} for sessions not transcribed yet` : ""}.`];
   if (r.recordings > 0) lines.push(`${n(r.recordings, "recording was", "recordings were")} imported and linked, so the texts open with their sound.`);
   if (r.details > 0) lines.push(`${n(r.details, "detail", "details")} (date, place, genre, speakers…) written from the session files; see them under the text's Details.`);
   for (const [id, e] of r.failed.slice(0, 5)) lines.push(`${id}: ${e}`);

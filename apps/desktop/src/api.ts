@@ -695,8 +695,8 @@ export const alignWrite = (args: { source: string; translation: string }) => inv
 export const lexiconAddWords = (args: { words: string[] }) => invoke<number>("lexicon_add_words", args);
 /** Words on the rise and falling over the years a detail gives (`src-tauri/src/trends.rs`). */
 export const frequencyTrends = (args: { kind: "word" | "translation"; key: string | null; minCount: number; textId: string | null; within: import("./metadata/logic").Where | null }) => invoke<import("./frequencies/trends").Trends>("frequency_trends", args);
-/** Every session of a SayMore project as a text (`src-tauri/src/saymore.rs`). */
-export const importSaymore = (args: { folder: string }) => invoke<import("./drop/logic").SayMoreImport>("import_saymore", args);
+/** Every session of a SayMore or lameta project, or of a folder of IMDI files, as a text (`src-tauri/src/saymore.rs`, `imdi.rs`). */
+export const importSessions = (args: { folder: string }) => invoke<import("./drop/logic").SayMoreImport>("import_sessions", args);
 export const exportLexiconTable = (args: { folder: string }) => invoke<string>("export_lexicon_table", args);
 export const projectAffixes = () => invoke<import("./affixes/logic").Affixes>("project_affixes");
 export const projectProgress = () => invoke<import("./progress/logic").Progress>("project_progress");

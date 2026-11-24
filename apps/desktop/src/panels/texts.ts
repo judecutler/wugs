@@ -21,7 +21,7 @@ import { emptyState, h } from "../dom";
 import { attempt, getState, refreshAll, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { readGlossingLines, tierGlossingLines, type TierGlossing } from "../elan/glossing";
 import { batchLines, exportedAllLines, saymoreLines, type BatchResult } from "../drop/logic";
-import { importSaymore } from "../api";
+import { importSessions } from "../api";
 import { alignLine, pairNote, toWrite, writtenLine, type Alignment } from "../align/logic";
 import { alignPreview, alignWrite } from "../api";
 import { loanSources, tableImportLines } from "../lexicon/logic";
@@ -259,10 +259,10 @@ async function exportAll(texts: { id: string; title: string }[]) {
 
 /** A SayMore project's sessions, each as a text with its recording and details. */
 async function importSaymoreProject() {
-  const folder = await chooseFolder("Choose the SayMore project's folder (the one holding Sessions)");
+  const folder = await chooseFolder("Choose the SayMore or lameta project's folder (the one holding Sessions), or a folder of IMDI files");
   if (folder === null) return;
   await work("saymore", async () => {
-    const r = await importSaymore({ folder });
+    const r = await importSessions({ folder });
     showToast({ tone: r.failed.length > 0 ? "warn" : "info", lines: saymoreLines(r) });
     await reloadTexts();
     if (r.text !== null) await selectText(r.text);
@@ -888,8 +888,8 @@ export const textsPanel: PanelDef = {
           }),
           h("button", {
             type: "button",
-            textContent: busy === "saymore" ? "Reading SayMore…" : "Import a SayMore project…",
-            title: "Every session of a SayMore project as a text: its ELAN transcription, its recording and its date, place, genre and speakers",
+            textContent: busy === "saymore" ? "Reading sessions…" : "Import sessions (SayMore, lameta, IMDI)…",
+            title: "Every session of a SayMore or lameta project, or of a folder of IMDI files from an archive, as a text: its ELAN transcription, its recording and its date, place, genre and speakers",
             disabled: busy !== null,
             onclick: () => void importSaymoreProject(),
           }),
