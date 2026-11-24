@@ -2,6 +2,8 @@
 // dependency tree as arcs over the words, the way brat, UD's own viewer
 // and Arborator draw it. Pure: no DOM.
 
+import { latexEscape } from "../gloss/example.ts";
+
 export type WordRow = { token: string; form: string; lemma: string; upos: string; xpos: string; feats: string; head: number | null; deprel: string };
 export type SentenceView = { segmentId: string; content: string; words: WordRow[]; annotated: boolean; emptyNodes: number; problems: string[]; machine: string | null };
 
@@ -85,4 +87,35 @@ export function columns(words: readonly WordRow[], charPx = 8, gap = 14, min = 3
 /** The head choices for one word: the root, then every other word by number. */
 export function headChoices(words: readonly WordRow[], self: number): { value: string; label: string }[] {
   return [{ value: "", label: "—" }, { value: "0", label: "0 root" }, ...words.flatMap((w, i) => (i === self ? [] : [{ value: String(i + 1), label: `${i + 1} ${w.form}` }]))];
+}
+
+/** A word or relation for tikz-dependency: LaTeX's specials escaped, and a
+ * literal `&` written by its character code, since `\&` is the column
+ * separator inside `deptext`. */
+const tikzWord = (s: string): string => (s === "" ? "{}" : latexEscape(s.replace(/&/gu, "\u0000")).replace(/\u0000/gu, "{\\char38}"));
+
+/** The tree as a tikz-dependency figure (`\usepackage{tikz-dependency}`):
+ * the words over their UPOS, an edge from each head to its dependent with
+ * its relation, `\deproot` for the root. Words with no head get no edge. */
+export function tikzDependency(v: Pick<SentenceView, "content" | "words">): string {
+  const n = v.words.length;
+  const row = (cells: string[]) => `    ${cells.join(" \\& ")} \\\\`;
+  const lines = [`% ${v.content.replace(/[\r\n]+/gu, " ")}`, "% \\usepackage{tikz-dependency}", "\\begin{dependency}", "  \\begin{deptext}"];
+  lines.push(row(v.words.map((w) => tikzWord(w.form))));
+  if (v.words.some((w) => w.upos !== "")) lines.push(row(v.words.map((w) => tikzWord(w.upos))));
+  lines.push("  \\end{deptext}");
+  v.words.forEach((w, i) => {
+    if (w.head === 0) lines.push(`  \\deproot{${i + 1}}{${tikzWord(w.deprel || "root")}}`);
+    else if (w.head !== null && w.head >= 1 && w.head <= n && w.head !== i + 1) lines.push(`  \\depedge{${w.head}}{${i + 1}}{${tikzWord(w.deprel)}}`);
+  });
+  lines.push("\\end{dependency}");
+  return lines.join("\n") + "\n";
+}
+
+/** The sentence as CoNLL-U: `# text`, then a row per word with what the
+ * panel shows (DEPS and MISC left `_`). Empty cells are `_`. */
+export function conlluOf(v: Pick<SentenceView, "content" | "words">): string {
+  const cell = (s: string) => (s === "" ? "_" : s.replace(/[\t\r\n]+/gu, " "));
+  const rows = v.words.map((w, i) => [String(i + 1), cell(w.form), cell(w.lemma), cell(w.upos), cell(w.xpos), cell(w.feats), w.head === null ? "_" : String(w.head), cell(w.deprel), "_", "_"].join("\t"));
+  return [`# text = ${v.content.replace(/[\r\n]+/gu, " ")}`, ...rows, "", ""].join("\n");
 }

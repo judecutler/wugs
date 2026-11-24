@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { arcs, checkLine, columns, headChoices, nextUnchecked, rootOf, type WordRow } from "./logic.ts";
+import { arcs, checkLine, columns, conlluOf, headChoices, nextUnchecked, rootOf, tikzDependency, type WordRow } from "./logic.ts";
 
 const w = (form: string, head: number | null, deprel = ""): WordRow => ({ token: form, form, lemma: "", upos: "", xpos: "", feats: "", head, deprel });
 
@@ -45,4 +45,28 @@ test("the next sentence to check follows the one on screen and wraps round", () 
   assert.equal(checkLine(v), "2 of 4 tagged sentences still to check.");
   assert.equal(checkLine({ ...v, unchecked: [] }), "All 4 tagged sentences are checked.");
   assert.equal(checkLine({ analysed: 0, unchecked: [], sentences: [] }), "");
+});
+
+test("tikzDependency writes words, tags, the root and each edge", () => {
+  const words: WordRow[] = [
+    { ...w("Dogs", 2, "nsubj"), upos: "NOUN" },
+    { ...w("bark", 0, "root"), upos: "VERB" },
+    { ...w("&_co", null), upos: "X" },
+  ];
+  const out = tikzDependency({ content: "Dogs bark &_co", words });
+  assert.match(out, /\\begin\{deptext\}\n {4}Dogs \\& bark \\& \{\\char38\}\\_co \\\\\n {4}NOUN \\& VERB \\& X \\\\/u);
+  assert.match(out, /\\deproot\{2\}\{root\}/u);
+  assert.match(out, /\\depedge\{2\}\{1\}\{nsubj\}/u);
+  assert.equal(out.match(/\\depedge/gu)?.length, 1);
+});
+
+test("tikzDependency leaves out the tag row when nothing is tagged", () => {
+  const out = tikzDependency({ content: "a b", words: [w("a", 2, "det"), w("b", 0, "")] });
+  assert.equal(out.match(/\\\\$/gmu)?.length, 1);
+  assert.match(out, /\\deproot\{2\}\{root\}/u);
+});
+
+test("conlluOf writes ten columns with _ for empty cells", () => {
+  const out = conlluOf({ content: "Dogs bark", words: [{ ...w("Dogs", 2, "nsubj"), lemma: "dog", upos: "NOUN", feats: "Number=Plur" }, w("bark", 0, "root")] });
+  assert.equal(out, "# text = Dogs bark\n1\tDogs\tdog\tNOUN\t_\tNumber=Plur\t2\tnsubj\t_\t_\n2\tbark\t_\t_\t_\t_\t0\troot\t_\t_\n\n");
 });

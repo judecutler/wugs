@@ -1196,6 +1196,20 @@ def main():
             run.page.wait_for_timeout(600)
             if run.page.locator(".panel-sentence .st-check", has_text="3 of 4 tagged sentences").count() != 1:
                 failures.append("Checked, next did not count the sentence as checked")
+            # The tree copied for LaTeX and saved as a picture.
+            run.page.locator(".panel-sentence .st-export button", has_text="Copy for LaTeX").click()
+            run.page.wait_for_timeout(300)
+            clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}
+            if "\\begin{dependency}" not in clip.get("text", "") or "\\deproot" not in clip.get("text", ""):
+                failures.append(f"Copy for LaTeX did not copy a tikz-dependency figure: {clip}")
+            run.page.evaluate("window.__WUGS_PICK__ = '/tmp/trees'")
+            run.page.locator(".panel-sentence .st-export button", has_text="Save picture").click()
+            run.page.wait_for_timeout(400)
+            run.page.evaluate("window.__WUGS_PICK__ = null")
+            saved = run.page.evaluate("window.__WUGS_SAVED__") or {}
+            if saved.get("extension") != "svg" or "<svg" not in saved.get("contents", "") or "fill=" not in saved.get("contents", ""):
+                failures.append(f"Save picture did not save the tree as an SVG: {str(saved)[:200]}")
+            run.shot("state-sentence-export", run.page.locator(".panel-sentence"))
             run.front("interlinear", "Interlinear")
             # The abbreviations the text's glosses use, with Leipzig meanings and the project's own.
             run.page.locator(".panel-interlinear .il-bar button", has_text="Abbreviations").click()
