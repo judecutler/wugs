@@ -4,6 +4,7 @@ pub mod capability;
 pub mod clips;
 pub mod capture;
 pub mod chat;
+pub mod chat_mor;
 pub mod exmaralda;
 pub mod like_sentences;
 pub mod worklog;
@@ -1778,6 +1779,18 @@ fn read_tier_glossing(s: State<SessionThread>, text_id: String, index: usize) ->
     s.run(move |s| elan_glossing::read(s, &text_id, index))
 }
 
+/// How many of a text's sentences carry CHAT `%mor` and `%gra` tiers (`chat_mor.rs`).
+#[tauri::command(async)]
+fn chat_mor_summary(s: State<SessionThread>, text_id: String) -> Result<chat_mor::MorRead, String> {
+    s.run(move |s| chat_mor::summary(s, &text_id))
+}
+
+/// Read a text's `%mor` and `%gra` tiers as its sentences' tags and trees.
+#[tauri::command(async)]
+fn chat_read_mor(s: State<SessionThread>, text_id: String) -> Result<chat_mor::MorRead, String> {
+    s.run(move |s| chat_mor::read(s, &text_id))
+}
+
 /// Sentences and translations as a parallel corpus (`parallel.rs`).
 #[tauri::command(async)]
 fn export_parallel(s: State<SessionThread>, folder: String, date: String, include_restricted: bool) -> Result<parallel::Parallel, String> {
@@ -2800,6 +2813,8 @@ pub fn run() {
             keywords,
             tier_glossing,
             read_tier_glossing,
+            chat_mor_summary,
+            chat_read_mor,
             get_text,
             create_text,
             import_file,
