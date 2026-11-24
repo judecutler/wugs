@@ -92,6 +92,22 @@ fn a_glossed_project_becomes_a_dictionary_with_examples() {
     assert!(file(&d, "README.md").contains("1 example sentence the lexicon gives"), "{}", file(&d, "README.md"));
     let entries = file(&d, "entries.csv");
     assert!(entries.lines().nth(1).unwrap().contains(",abcd1234,kani,v,"), "kani sorts before teka: {entries}");
+    assert!(!entries.starts_with("ID,Language_ID,Headword,Part_Of_Speech,Citation_Form,Homograph,Borrowed_From"), "no origin columns when no entry says: {entries}");
+    std::fs::remove_dir_all(&b.root).ok();
+}
+
+#[test]
+fn an_entrys_origin_goes_out_when_some_entry_has_one() {
+    let mut b = build();
+    let kani = b.p.proj.field_str(&b.count_sense, "lexeme").unwrap().unwrap();
+    b.p.set_lexeme_field(&kani, "borrowed-from", "Malay").unwrap();
+    b.p.set_lexeme_text(&kani, "etymology", "from Malay  kira 'count'").unwrap();
+    let d = run(&b, false);
+    let entries = file(&d, "entries.csv");
+    assert!(entries.starts_with("ID,Language_ID,Headword,Part_Of_Speech,Citation_Form,Homograph,Borrowed_From,Etymology\n"), "{entries}");
+    assert!(entries.lines().nth(1).unwrap().ends_with(",Malay,from Malay kira 'count'"), "{entries}");
+    assert!(entries.lines().nth(2).unwrap().ends_with(",,"), "an entry without an origin has empty cells: {entries}");
+    assert!(file(&d, "Dictionary-metadata.json").contains("\"Borrowed_From\""));
     std::fs::remove_dir_all(&b.root).ok();
 }
 

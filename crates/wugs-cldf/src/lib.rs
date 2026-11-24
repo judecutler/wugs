@@ -399,6 +399,8 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
     lexemes.sort();
     let mut sense_rows: Vec<(String, String, BTreeMap<String, String>)> = Vec::new();
     let mut gloss_langs: BTreeSet<String> = BTreeSet::new();
+    // Where a word came from, as columns only when some entry says.
+    let mut origins: Vec<[String; 2]> = Vec::new();
     for (_, lemma, hom, lex) in &lexemes {
         entries.rows.push(vec![
             cldf_id(lex),
@@ -408,6 +410,7 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
             text_of(p, lex, "citation")?,
             if *hom > 0 { hom.to_string() } else { String::new() },
         ]);
+        origins.push([text_of(p, lex, "borrowed-from")?.trim().to_string(), text_of(p, lex, "etymology")?.split_whitespace().collect::<Vec<_>>().join(" ")]);
         for sen in p.proj.ordered_children("lexeme", lex, "sense")? {
             if !live(p, &sen, "sense")? {
                 continue;
@@ -422,6 +425,14 @@ pub fn export(p: &Project, o: &Options) -> Result<Dataset, String> {
                 }
             }
             sense_rows.push((sen, cldf_id(lex), extra));
+        }
+    }
+    for (i, name) in ["Borrowed_From", "Etymology"].into_iter().enumerate() {
+        if origins.iter().any(|o| !o[i].is_empty()) {
+            entries.columns.push(col(name, None));
+            for (row, o) in entries.rows.iter_mut().zip(&origins) {
+                row.push(o[i].clone());
+            }
         }
     }
     let mut senses = Table {

@@ -1121,7 +1121,7 @@ When the project has more than one transcription track, the same list also offer
 
 Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cldf-<date>` holding a CLDF Dictionary dataset: the CSV tables and metadata that pycldf, Zenodo, Dictionaria and other CLLD sites read.
 
-- `entries.csv`: one row per lexicon entry, with its part of speech, citation form and homograph number
+- `entries.csv`: one row per lexicon entry, with its part of speech, citation form and homograph number, and, when any entry has them, the language a loanword was **Borrowed from** and its **Etymology**
 - `senses.csv`: one row per sense, with its glosses in each language, definition, usage, semantic domains, the Concepticon concept you elicited it for, and the examples that use it
 - `examples.csv`: every glossed sentence in Leipzig form (words, morpheme glosses, free translation), with its text and time span
 - `languages.csv`: the project's language and the languages of its translations
