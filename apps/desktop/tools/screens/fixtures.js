@@ -372,6 +372,18 @@ const LEXICON = [
       answers: a === undefined ? [] : [{ senseId: `sense-${a[1]}`, lexemeId: a[1], lemma: a[0], homograph: a[1] === "lx-tela1" ? 1 : null, gloss, sound: a[1] === "lx-tela1" || a[1] === "lx-kani" ? { sourceId: "src-count", startMs: 620, endMs: 1300 } : null }],
     };
   });
+  // Three lects for the tree: Teva and Tevu differ by a vowel, Rano is further off.
+  const treeLists = (path) => {
+    const base = { I: "nia", you: "kau", we: "kita", one: "tasa", two: "rua", fish: "ikan", bird: "manu", dog: "asu", water: "waiR", hand: "lima", eye: "mata", head: "qulu" };
+    const lects = {
+      Teva: (w) => w,
+      Tevu: (w) => w.replace(/a$/u, "u"),
+      Rano: (w) => [...w].reverse().join("").replace(/k/gu, "h"),
+    };
+    const forms = [];
+    for (const [language, change] of Object.entries(lects)) for (const [concept, w] of Object.entries(base)) forms.push({ language, concept, form: change(w) });
+    return { name: path.split("/").pop(), columns: ["DOCULECT", "CONCEPT", "FORM"], skipped: 0, forms };
+  };
   const promptView = {
     list: { id: "valency-prompts", name: "Valency prompts", total: 4, answered: 1, textId: "t-count" },
     prompts: [
@@ -1245,7 +1257,8 @@ const LEXICON = [
       points.push({ glottocode: "kela1234", name: "Kelani", lat: 9, lon: 123, value: "0", me: true });
       return { feature: phoneme, question: `Is /${phoneme}/ in the inventory?`, codes: [{ value: "0", label: `no /${phoneme}/` }, { value: "1", label: `/${phoneme}/` }], comparedWith: "Austronesian languages", points, unplaced: 1, land: window.__WUGS_SCREENS__.land, edition: "PHOIBLE 2.0 (CC BY-SA 3.0)" };
     },
-    compare_read: ({ path }) => ({
+    // Three related lects of twelve concepts each, for a tree.
+    compare_read: ({ path }) => (path.includes("tree") ? treeLists(path) : {
       name: path.split("/").pop(),
       columns: ["DOCULECT", "CONCEPT", "FORM"],
       skipped: 1,

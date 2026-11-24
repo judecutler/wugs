@@ -1144,6 +1144,13 @@ body::before {
 .panel-compare .cmp-corr-block h3 { margin: 0 0 4px; font-size: var(--text-base); }
 .panel-compare .cmp-corr td.ipa { font-size: 1.15em; }
 .panel-compare .cmp-corr tr.cmp-recurs td { font-weight: 600; }
+.panel-compare .cmp-tree { margin-top: 16px; }
+.panel-compare .cmp-tree h3 { margin: 0 0 4px; font-size: var(--text-base); }
+.panel-compare .cmp-tree-box { overflow-x: auto; }
+.panel-compare .cmp-tree-svg { max-width: 100%; height: auto; }
+.panel-compare .cmp-branch { stroke: var(--ink); stroke-width: 1.5; }
+.panel-compare .cmp-leaf { fill: var(--ink); font-family: var(--font-ui, system-ui); font-size: 13px; }
+.panel-compare .cmp-scale { fill: var(--muted, #666); font-size: 11px; }
 .panel-soundchanges .sca-col { flex: 1 1 260px; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .panel-soundchanges textarea { font-family: var(--font-ipa); font-size: var(--text-base); width: 100%; box-sizing: border-box; resize: vertical; }
 .panel-soundchanges .sca-problems { margin: 0; padding-left: 1.2em; color: var(--error); font-size: var(--text-sm); }
