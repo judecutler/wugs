@@ -831,3 +831,33 @@ fn a_bag_names_the_license_of_loaded_reference_lists() {
     assert!(notice.contains("SIL Semantic Domains") && notice.contains("by-sa/4.0"), "{notice}");
     assert!(verify(&bag).is_ok());
 }
+
+#[test]
+fn imdi_sessions_carry_details_and_actors() {
+    let root = temp_dir("imdi-project");
+    let mut p = Project::open(&root, "prs_Ana").unwrap();
+    let text = p.create_text("Market talk").unwrap();
+    p.set_text_metadata(&text, "Date", "2026-11-03").unwrap();
+    p.set_text_metadata(&text, "Place", "Kelani market").unwrap();
+    p.set_text_metadata(&text, "Genre", "conversation").unwrap();
+    let ana = p.add_named_person("Ana Reyes", &["speaker".to_string()]).unwrap();
+    p.set_person_detail(&ana, "born", "1958").unwrap();
+    p.set_person_detail(&ana, "languages", "Kanu, Tok Pisin").unwrap();
+    p.add_consent(&ana, &text, &[("archive-ok".to_string(), Some(true))], "2026-11-03").unwrap();
+    // A person with no record covering the text is not one of its actors.
+    p.add_named_person("Ben", &[]).unwrap();
+    let bag = temp_dir("bag");
+    seal(&p, &bag, &SealOptions::default()).unwrap();
+    let imdi = wugs_xml::parse(&read(&bag, "data/metadata/imdi.xml")).unwrap();
+    let s = imdi.children_named("Session").next().unwrap();
+    assert_eq!(s.child("Date").unwrap().text, "2026-11-03");
+    let group = s.child("MDGroup").unwrap();
+    assert_eq!(group.child("Location").unwrap().child("Address").unwrap().text, "Kelani market");
+    assert_eq!(group.child("Content").unwrap().child("Genre").unwrap().text, "conversation");
+    let actors: Vec<_> = group.child("Actors").unwrap().children_named("Actor").collect();
+    assert_eq!(actors.len(), 1);
+    assert_eq!(actors[0].child("Role").unwrap().text, "speaker");
+    assert_eq!(actors[0].child("FullName").unwrap().text, "Ana Reyes");
+    assert_eq!(actors[0].child("BirthDate").unwrap().text, "1958");
+    assert_eq!(actors[0].child("Languages").unwrap().child("Description").unwrap().text, "Kanu, Tok Pisin");
+}
