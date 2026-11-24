@@ -2,7 +2,8 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { concordance, concordanceQuery, corpusTracks, dispersion, errorText, getText, glossGet, saveHitClips, textMetadata, type TextDetail } from "../api";
+import { concordance, concordanceQuery, corpusTracks, dispersion, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
+import { categoriesLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
 import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
@@ -216,8 +217,105 @@ export const concordancePanel: PanelDef = {
     const nearBar = h("div", { className: "cc-bar cc-near" }, nearInput, nearWindow, nearSide);
     const nearOn = () => nearInput.value.trim() !== "";
     const kept = (): Hit[] => (nearOn() ? nearHits(hits, nearInput.value, Number(nearWindow.value), nearSide.value as NearSide) : hits);
-    const sampled = (): Hit[] => {
+    // Sorting the lines into categories (CQPweb's categorise): kept in the project per search.
+    let sortOn = false;
+    let sorted: Sorted | null = null;
+    let sortedFor = "";
+    const sortToggle = h("button", { type: "button", className: "cc-sort-toggle", textContent: "Sort into categories", title: "Put each line in a category of your own (literal, figurative, unclear…) and count them, as CQPweb's Categorise does. The categories are kept with the project for this search" });
+    const catInput = h("input", { className: "cc-cats-input", placeholder: "literal, figurative, unclear", spellcheck: false, title: "The categories for this search, separated by commas; Enter keeps them" });
+    catInput.setAttribute("aria-label", "Categories");
+    const catShow = h("select", { className: "cc-cats-show", title: "Which lines to list" });
+    catShow.setAttribute("aria-label", "Lines to list");
+    const catNote = h("p", { className: "note cc-cats-note" });
+    const catBar = h("div", { className: "cc-bar cc-cats" }, catInput, catShow);
+    const catKey = () => `${kind}|${asked}|${dataGeneration()}`;
+    const categoryOf = (hit: Hit): string => (sorted === null ? "" : (new Map(sorted.lines).get(lineKey(hit)) ?? ""));
+    /** The lines after the category filter, when sorting is on. */
+    const chosen = (): Hit[] => {
       const k = kept();
+      if (!sortOn || sorted === null || catShow.value === "" || catShow.value === "all") return k;
+      const of = new Map(sorted.lines);
+      return catShow.value === "none" ? k.filter((h) => !sorted!.categories.includes(of.get(lineKey(h)) ?? "")) : k.filter((h) => of.get(lineKey(h)) === catShow.value);
+    };
+    const drawCats = () => {
+      catBar.hidden = !sortOn || plotOn || clustersOn || asked === "";
+      catNote.hidden = catBar.hidden;
+      if (catBar.hidden) return;
+      const want = catKey();
+      if (want !== sortedFor) {
+        sortedFor = want;
+        sorted = null;
+        catNote.textContent = "Reading this search's categories…";
+        const forKey = want;
+        void hitCategories({ kind, query: asked }).then(
+          (r) => {
+            if (sortedFor !== forKey) return;
+            sorted = r;
+            if (document.activeElement !== catInput) catInput.value = r.categories.join(", ");
+            drawRows();
+          },
+          (e) => {
+            if (sortedFor === forKey) catNote.textContent = `Could not read the categories: ${errorText(e)}`;
+          },
+        );
+        return;
+      }
+      if (sorted === null) return;
+      const was = catShow.value || "all";
+      catShow.replaceChildren(h("option", { value: "all", textContent: "Every line" }), h("option", { value: "none", textContent: "Not sorted yet" }), ...sorted.categories.map((c) => h("option", { value: c, textContent: `Only «${c}»` })));
+      catShow.value = [...catShow.options].some((o) => o.value === was) ? was : "all";
+      catNote.textContent = categoriesLine(kept(), sorted);
+    };
+    const saveCats = () => {
+      if (sorted === null) return;
+      const next = parseCategories(catInput.value);
+      if (next.join("\n") === sorted.categories.join("\n")) return;
+      const forKey = sortedFor;
+      void setHitCategories({ kind, query: asked, categories: next }).then(
+        (r) => {
+          if (sortedFor !== forKey) return;
+          sorted = r;
+          drawRows();
+        },
+        (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+      );
+    };
+    catInput.onkeydown = (e) => {
+      if (e.key === "Enter" && !e.isComposing) {
+        e.preventDefault();
+        saveCats();
+      }
+    };
+    catInput.onblur = saveCats;
+    catShow.onchange = () => drawRows();
+    /** A row's category picker; a choice is kept at once. */
+    const categoryPicker = (hit: Hit): HTMLElement => {
+      const pick = h("select", { className: "cc-cat", title: "This line's category" }, h("option", { value: "", textContent: "–" }), ...(sorted?.categories ?? []).map((c) => h("option", { value: c, textContent: c })));
+      pick.setAttribute("aria-label", "Category");
+      pick.value = categoryOf(hit);
+      pick.onclick = (e) => e.stopPropagation();
+      pick.onkeydown = (e) => e.stopPropagation();
+      pick.onchange = () => {
+        const forKey = sortedFor;
+        void setHitCategory({ kind, query: asked, segmentId: hit.segmentId, at: hit.at, category: pick.value }).then(
+          (r) => {
+            if (sortedFor !== forKey) return;
+            sorted = r;
+            if (sorted !== null) catNote.textContent = categoriesLine(kept(), sorted);
+          },
+          (e) => showToast({ tone: "error", lines: [errorText(e)] }),
+        );
+      };
+      return pick;
+    };
+    sortToggle.onclick = () => {
+      sortOn = !sortOn;
+      sortToggle.setAttribute("aria-pressed", String(sortOn));
+      sortToggle.classList.toggle("active", sortOn);
+      drawRows();
+    };
+    const sampled = (): Hit[] => {
+      const k = chosen();
       return thinTo > 0 ? thin(k, thinTo, `${kind}|${asked}|${nearInput.value}`) : k;
     };
     /** The lines as shown: thinned when asked, with tags when they have them and Tags is on. */
@@ -365,6 +463,7 @@ export const concordancePanel: PanelDef = {
       sorter.hidden = on || plotOn;
       thinner.hidden = on || plotOn;
       nearBar.hidden = on || plotOn;
+      sortToggle.hidden = on || plotOn;
       copyExamples.hidden = on || plotOn;
       saveClipsButton.hidden = on || plotOn;
     };
@@ -377,6 +476,7 @@ export const concordancePanel: PanelDef = {
       sorter.hidden = on;
       thinner.hidden = on;
       nearBar.hidden = on;
+      sortToggle.hidden = on;
       copyExamples.hidden = on;
       saveClipsButton.hidden = on;
       plotSorter.hidden = !on;
@@ -408,6 +508,7 @@ export const concordancePanel: PanelDef = {
         (nearOn() && hits.length > 0 ? nearLine(near, hits.length, nearInput.value, Number(nearWindow.value), nearSide.value as NearSide) : "") +
         (thinned ? thinLine(thinTo, near, nearOn() ? near : total) : "");
       tagsToggle.hidden = !hasTags(hits);
+      drawCats();
       // The word the lines are sorted by is marked, as concordancers colour it.
       const mark = sortedWord(sortBy);
       const context = (text: string, side: "left" | "right"): HTMLElement => {
@@ -448,7 +549,8 @@ export const concordancePanel: PanelDef = {
           play.disabled = hit.startMs === null;
           const row = h(
             "div",
-            { className: "cc-row", role: "listitem", tabIndex: 0, title: `${hit.textTitle}: open this segment`, dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },
+            { className: sortOn && sorted !== null ? "cc-row cc-row-cat" : "cc-row", role: "listitem", tabIndex: 0, title: `${hit.textTitle}: open this segment`, dir: isRtl(keyword(hit)) ? "rtl" : "ltr" },
+            ...(sortOn && sorted !== null && sorted.categories.length > 0 ? [categoryPicker(hit)] : []),
             play,
             context(clip(left(hit), CONTEXT, "left"), "left"),
             h("span", { className: "cc-key", textContent: keyword(hit) }),
@@ -647,7 +749,7 @@ export const concordancePanel: PanelDef = {
         .then((pairs) => {
           // With translations on, each line's translation goes along as it shows.
           const shown = underOn ? (h: Hit) => under.get(h.textId)?.get(h.segmentId) ?? null : undefined;
-          return writeHtml(kwicHtml(lines, 40, shown), asTsv(lines, new Map(pairs), shown, speakerOf(lines, trackNames.names)));
+          return writeHtml(kwicHtml(lines, 40, shown), asTsv(lines, new Map(pairs), shown, speakerOf(lines, trackNames.names), sortOn && sorted !== null && sorted.categories.length > 0 ? categoryOf : null));
         })
         .then(
         () =>
@@ -681,6 +783,8 @@ export const concordancePanel: PanelDef = {
       hits = [];
       total = 0;
       nearInput.value = "";
+      sorted = null;
+      sortedFor = "";
       plot = null;
       asked = "";
       exactFor = null;
@@ -696,7 +800,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, copy, copyExamples, saveClipsButton), nearBar, chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, plotByPicker, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, underToggle, sortToggle, copy, copyExamples, saveClipsButton), nearBar, catBar, catNote, chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */

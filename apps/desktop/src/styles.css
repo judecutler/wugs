@@ -1210,6 +1210,10 @@ body::before {
 .cc-plot-mark { position: absolute; top: 2px; bottom: 2px; width: 2px; background: var(--accent); }
 .cc-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "play left key right" ". meta meta meta"; align-items: baseline; column-gap: 6px; padding: 4px; border-radius: var(--radius-sm); cursor: pointer; font-family: var(--font-ipa, inherit); }
 .cc-row:hover, .cc-row:focus-visible { background: var(--accent-soft); outline: none; }
+.cc-row.cc-row-cat { grid-template-columns: auto 24px minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "cat play left key right" ". . meta meta meta"; }
+.cc-row.cc-row-cat .cc-under { grid-column: 3 / -1; }
+.cc-cat { grid-area: cat; font-size: var(--text-xs); max-width: 9em; font-family: var(--font-ui, inherit); }
+.cc-cats-input { flex: 1; min-width: 12em; }
 /* Media bin cards (roadmap 66). */
 .bin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; padding: 4px 0; }
 .bin-card { display: flex; flex-direction: column; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); cursor: grab; }

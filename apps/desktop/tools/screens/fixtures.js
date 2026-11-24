@@ -669,6 +669,20 @@ const LEXICON = [
         { textId: "t-greet", textTitle: "Greetings at the market", segmentId: "g07", tierId: "tier-utt", startMs: 12000, endMs: 13600, words: ["senu", "paki", "nikani"], at: 2, breakdown: "ni-kani", glosses: "1SG-count" },
       ],
     }),
+    // A search's categories, kept in the page for the probe.
+    hit_categories: () => window.__WUGS_CATS__ ?? { categories: [], lines: [] },
+    set_hit_categories: ({ categories }) => {
+      window.__WUGS_CATS__ = { categories, lines: window.__WUGS_CATS__?.lines ?? [] };
+      return window.__WUGS_CATS__;
+    },
+    set_hit_category: ({ segmentId, at, category }) => {
+      const cats = window.__WUGS_CATS__ ?? { categories: [], lines: [] };
+      const key = `${segmentId}:${at}`;
+      const lines = cats.lines.filter(([k]) => k !== key);
+      if (category !== "") lines.push([key, category]);
+      window.__WUGS_CATS__ = { categories: cats.categories, lines };
+      return window.__WUGS_CATS__;
+    },
     // Concordance lines saved as clips: the request kept for the probe.
     save_hit_clips: ({ query, hits, folder }) => {
       window.__WUGS_HITCLIPS__ = { query, hits };
