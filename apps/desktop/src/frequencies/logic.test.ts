@@ -102,8 +102,11 @@ test("DP: a column, a sort with the core vocabulary first, and a note", async ()
   assert.match(spreadNote(rows), /0 in step with each text's size/u);
   assert.equal(spreadNote([{ item: "x", count: 1, texts: 1 }]), "");
   const tsv = asTsv(rows, 21).split("\n");
-  assert.equal(tsv[0], "rank\titem\tcount\tper 1000 words\ttexts\tDP");
-  assert.equal(tsv[4], "4\td\t2\t95\t1\t");
+  assert.equal(tsv[0], "rank\titem\tcount\tper 1000 words\ttexts\tDP\tadjusted frequency");
+  assert.equal(tsv[4], "4\td\t2\t95\t1\t\t–");
+  assert.equal(tsv[1], "1\ta\t9\t429\t1\t0.90\t0.9");
+  // Adjusted for spread: c (6 × 0.9 = 5.4) and b (3.6) before a, crowded into one text (0.9).
+  assert.deepEqual(sortRows(rows, "adjusted").map((r) => r.item), ["c", "b", "a", "d"]);
 });
 
 test("Add all says how many words it adds, and asks once", () => {

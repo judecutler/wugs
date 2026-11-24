@@ -34,7 +34,7 @@ export function unlabelledNote(f: Frequencies, kind: "lemma" | "tag"): string {
   return ` ${n.toLocaleString("en")} ${n === 1 ? "word has" : "words have"} no ${what} yet: tag and parse its text in the Sentence panel, or ${how}.`;
 }
 
-export type FreqSort = "count" | "alpha" | "ending" | "texts" | "spread";
+export type FreqSort = "count" | "alpha" | "ending" | "texts" | "spread" | "adjusted";
 
 export const FREQ_SORTS: { id: FreqSort; label: string }[] = [
   { id: "count", label: "Most frequent first" },
@@ -42,10 +42,20 @@ export const FREQ_SORTS: { id: FreqSort; label: string }[] = [
   { id: "ending", label: "By ending (reverse list)" },
   { id: "texts", label: "In most texts first" },
   { id: "spread", label: "Most evenly spread first" },
+  { id: "adjusted", label: "By frequency adjusted for spread" },
 ];
 
 /** Whether any row has a spread to show (two texts or more were counted). */
 export const hasSpread = (rows: readonly FrequencyRow[]): boolean => rows.some((r) => typeof r.dp === "number");
+
+/** Frequency adjusted for dispersion: the count times 1 − DP, so a word spread over every text keeps its count and one crowded into a single text loses it (the measure frequency dictionaries rank by); null without a DP. */
+export const adjusted = (r: FrequencyRow): number | null => (typeof r.dp === "number" ? r.count * (1 - r.dp) : null);
+
+/** The adjusted frequency as the table prints it. */
+export const adjustedCell = (r: FrequencyRow): string => {
+  const a = adjusted(r);
+  return a === null ? "–" : a.toFixed(1);
+};
 
 /** A row's DP as the table prints it. */
 export const dpCell = (dp: number | null | undefined): string => (typeof dp === "number" ? dp.toFixed(2) : "");
@@ -72,6 +82,7 @@ export function sortRows<R extends FrequencyRow>(rows: readonly R[], by: FreqSor
   if (by === "texts") return [...rows].sort((a, b) => b.texts - a.texts || b.count - a.count);
   // The core vocabulary first: evenly spread, then frequent; rows with no DP last.
   if (by === "spread") return [...rows].sort((a, b) => (a.dp ?? 2) - (b.dp ?? 2) || b.count - a.count);
+  if (by === "adjusted") return [...rows].sort((a, b) => (adjusted(b) ?? -1) - (adjusted(a) ?? -1) || b.count - a.count);
   if (by === "ending") {
     const keyed = rows.map((r) => ({ r, k: reversed(r.item) }));
     return keyed.sort((a, b) => collator.compare(a.k, b.k) || collator.compare(a.r.item, b.r.item)).map((x) => x.r);
@@ -168,8 +179,8 @@ export function asTsv(rows: readonly RankedRow[], tokens: number, item = "item")
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
   const lexicon = rows.some((r) => r.lexicon !== undefined);
   const spread = hasSpread(rows);
-  const head = `rank\t${clean(item)}\tcount\tper 1000 words\ttexts${spread ? "\tDP" : ""}${lexicon ? "\tin lexicon" : ""}`;
-  return [head, ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts), ...(spread ? [dpCell(r.dp)] : []), ...(lexicon ? [lexiconCell(r.lexicon)] : [])].join("\t"))].join("\n");
+  const head = `rank\t${clean(item)}\tcount\tper 1000 words\ttexts${spread ? "\tDP\tadjusted frequency" : ""}${lexicon ? "\tin lexicon" : ""}`;
+  return [head, ...rows.map((r) => [String(r.rank), clean(r.item), String(r.count), perThousand(r.count, tokens), String(r.texts), ...(spread ? [dpCell(r.dp), adjustedCell(r)] : []), ...(lexicon ? [lexiconCell(r.lexicon)] : [])].join("\t"))].join("\n");
 }
 
 /** Lexical richness of a word list: type/token ratio, Guiraud's index
