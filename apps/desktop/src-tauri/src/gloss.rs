@@ -88,6 +88,8 @@ pub struct WordView {
     pub others_unanalysed: usize,
     /// Validator findings on this word or its morphs (warnings, never blocks).
     pub findings: Vec<String>,
+    /// Its part-of-speech tag from the sentence's tagging (UPOS, else XPOS), when it has one.
+    pub tag: Option<String>,
 }
 
 /// Work from another device that the current analysis leaves out (a hidden
@@ -253,6 +255,15 @@ fn view(p: &Project, segment_id: &str) -> Result<GlossView, String> {
         forms.push(p.proj.field_str(tok, "form")?.unwrap_or_default());
     }
     let unanalysed = p.unanalysed_counts(&forms)?;
+    // Tags from a tagger, a treebank or CHAT's %mor, read once for the sentence.
+    let tags: std::collections::HashMap<String, String> = if p.proj.field(segment_id, "analysis")?.is_some() {
+        wugs_conllu::tree::rows(p, segment_id)?.rows.into_iter().filter_map(|r| {
+            let t = if r.upos.is_empty() { r.xpos } else { r.upos };
+            (!t.is_empty()).then_some((r.token, t))
+        }).collect()
+    } else {
+        Default::default()
+    };
     let mut words = Vec::with_capacity(tokens.len());
     for ((tok, form), unanalysed) in tokens.iter().zip(forms).zip(unanalysed) {
         let mut morphs = Vec::new();
@@ -278,7 +289,7 @@ fn view(p: &Project, segment_id: &str) -> Result<GlossView, String> {
             .filter(|f| f.target == *tok || morphs.iter().any(|m| m.id == f.target))
             .map(|f| format!("{}: {}", f.code, f.message))
             .collect();
-        words.push(WordView { id: tok.clone(), form, morphs, suggestions, others_unanalysed, findings: mine });
+        words.push(WordView { id: tok.clone(), form, morphs, suggestions, others_unanalysed, findings: mine, tag: tags.get(tok).cloned() });
     }
     let mut hidden: Vec<HiddenView> = Vec::new();
     for h in p.proj.hidden_edits(segment_id)? {

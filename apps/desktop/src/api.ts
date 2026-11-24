@@ -223,6 +223,8 @@ export type WordView = {
   othersUnanalysed: number;
   /** Validator findings on this word or its morphs. Warnings only. */
   findings: string[];
+  /** Its part-of-speech tag from the sentence's tagging (UPOS, else XPOS), when it has one. */
+  tag?: string | null;
 };
 
 /** Edits from another device on a word or morph the current analysis leaves out. */

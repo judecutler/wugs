@@ -390,6 +390,11 @@ mod tests {
         // The corpus tools now see lemmas and tags.
         let lemma = crate::cqp::run(&mut s, "[lemma=\"be\" & upos=\"AUX\"]", None).unwrap();
         assert_eq!(lemma.total, 1);
+        // The Gloss panel's words carry the tags, for the Interlinear tab's category line.
+        let detail = crate::session::get_text(&mut s, &text).unwrap();
+        let seg = detail.segments.iter().find(|x| x.content.starts_with("what")).unwrap().id.clone();
+        let view = crate::gloss::gloss_get(&mut s, &text, &seg).unwrap();
+        assert_eq!(view.words.iter().map(|w| w.tag.clone().unwrap_or_default()).collect::<Vec<_>>(), vec!["PRON", "AUX", "PRON"]);
         // Reading again keeps what is there.
         let again = read(&mut s, &text).unwrap();
         assert_eq!((again.read, again.kept), (0, 2));

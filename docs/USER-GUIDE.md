@@ -518,7 +518,7 @@ The **Interlinear** tab, beside Gloss, shows the selected text the way you would
 - Click a sentence, or move to it with the arrow keys and press Enter, to open it in the Gloss panel.
 - Click ▶ to hear a sentence that has times.
 - Click **Read along** to hear the whole text from its recording: each sentence is marked as it is heard and kept in view, a good way to proofread a transcription against the speaker. Click **Stop** to stop.
-- **Categories** adds a line under the glosses with each word's part of speech, taken from its root's lexicon entry (FLEx's Word Cat. line). A word whose root is not linked to an entry, or whose entry has no category, shows nothing there.
+- **Categories** adds a line under the glosses with each word's part of speech, taken from its root's lexicon entry (FLEx's Word Cat. line). If there is no entry category, the line shows the word's tag from the sentence's tagging instead: a tagger in the Sentence panel, a CoNLL-U or TEI file, or CHAT's `%mor`. A sentence that is tagged but not glossed then also shows its words with their tags. A word with neither shows nothing there.
 
 Click **Abbreviations** to list every grammatical abbreviation the text's glosses use (`SG`, `PST`, `3` in `3SG`), the list a paper prints with its examples. Each one has a field for what it means:
 
