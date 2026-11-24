@@ -217,6 +217,8 @@ export type LexiconMatch = { lexeme: string; sense: string; lemma: string; gloss
 type SegmentArgs = { textId: string; segmentId: string };
 
 /** The project's sentences most like this one, best first, with their translations. */
+/** What was done in the project day by day (the op log), newest first. */
+export const workLog = (args: { offsetMinutes: number; days: number }) => invoke<import("./progress/worklog").Day[]>("work_log", args);
 export const likeSentences = (args: { segmentId: string }) => invoke<import("./gloss/like").Like[]>("like_sentences", args);
 export const glossGet = (args: SegmentArgs) => invoke<GlossView>("gloss_get", args);
 export const glossTokenize = (args: SegmentArgs & { forms: string[] }) => invoke<GlossEdit>("gloss_tokenize", args);

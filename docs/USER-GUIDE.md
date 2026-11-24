@@ -991,6 +991,8 @@ It also says how long the sentences are in words, and how many morphs a glossed 
 
 Under the table, **Vocabulary growth** draws how many different words have come up against the running words, reading the texts in the order they were made (a dashed line where each text starts). A curve still climbing steeply means each new recording still brings many new words; a flattening one means most words of these kinds of text are in, and it may be time to record other genres. The sentence under it compares how many new words per 100 the first and the last tenth brought.
 
+Last, **Day by day** lists what was done on each of the latest 60 days with any work: segments made, sentences transcribed and translated, words analysed, glosses typed, lexicon entries and senses added, notes, texts and entries imported, segments a machine wrote, and how many devices worked that day. Each thing counts once a day however often it was edited, so retyping a sentence five times is one sentence. Work done by hand is kept apart from imports and machine suggestions. The line above sums the last seven days, ready for a field diary, a weekly note to a supervisor or a grant report; **Copy table** copies every day. wugs reads it from the project's own history, so it covers every device that has synced, and nothing extra is stored.
+
 ### See the affixes in their slots
 
 The **Affixes** panel reads every glossed word in the project and lists its affixes and clitics the way a grammar's morphology chapter does. In Tongues, press **Ctrl+K** and choose **Show Affixes**.

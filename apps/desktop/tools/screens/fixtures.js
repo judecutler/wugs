@@ -1191,6 +1191,12 @@ const LEXICON = [
       };
     },
     // Two speakers of a CHAT-style transcript: a child and her mother.
+    // Three days of work: today's glossing, an earlier day's transcribing and an import.
+    work_log: () => {
+      const iso = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+      const day = (date, over) => ({ date, segments: 0, transcribed: 0, translated: 0, analysed: 0, glossed: 0, entries: 0, senses: 0, notes: 0, importedTexts: 0, importedEntries: 0, machine: 0, ops: 40, devices: 1, ...over });
+      return [day(iso(0), { analysed: 24, glossed: 61, entries: 5, senses: 6 }), day(iso(2), { segments: 18, transcribed: 18, translated: 11, notes: 2 }), day(iso(12), { importedTexts: 3, devices: 2 })];
+    },
     speaker_lengths: () => [
       { tier: "tier-mot", name: "MOT", texts: 2, utterances: 48, words: 211, types: 96, longest: 11, analysed: 48, morphemes: 262, mtld: 52.4 },
       { tier: "tier-chi", name: "CHI", texts: 2, utterances: 41, words: 83, types: 37, longest: 4, analysed: 30, morphemes: 71, mtld: null },
