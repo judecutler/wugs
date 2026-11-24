@@ -542,6 +542,12 @@ fn orthography_convert(s: State<SessionThread>, profile: String, tier_id: String
     s.run(move |s| orthography::convert(s, &profile, &tier_id, text_id, &column, ignore_case, &target))
 }
 
+/// Where Glottolog places a language and its nearest languages, for a grammar sketch's locator map.
+#[tauri::command(async)]
+fn glottolog_place(glottocode: String) -> Option<glottolog::Place> {
+    glottolog::place(&glottocode, 8)
+}
+
 /// Glottolog's languages and dialects a typed name or code fits, best first.
 #[tauri::command(async)]
 fn glottolog_find(query: String) -> Vec<glottolog::Languoid> {
@@ -2177,6 +2183,7 @@ pub fn run() {
             morphosyntax_choose_spacy,
             morphosyntax_choose_stanza,
             glottolog_find,
+            glottolog_place,
             typology_profile,
             typology_map,
             phoible_compare,
