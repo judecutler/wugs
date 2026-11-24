@@ -369,6 +369,13 @@ fn people_consent_and_languages_reach_the_metadata() {
     let lang = olac.child("dc:language").unwrap();
     assert_eq!((lang.text.as_str(), lang.attr("olac:code")), ("Turkish", Some("tur")));
 
+    // The project's own title wins once it is set.
+    f.project.set_setting(wugs_seal::PROJECT_TITLE, "Turkish market speech").unwrap();
+    let bag2 = temp_dir("bag-titled");
+    seal(&f.project, &bag2, &SealOptions::default()).unwrap();
+    let olac2 = wugs_xml::parse(&read(&bag2, "data/metadata/olac.xml")).unwrap();
+    assert_eq!(olac2.child("dc:title").unwrap().text, "Turkish market speech");
+
     let access = json::parse(&read(&bag, "data/metadata/access.json")).unwrap();
     let list = |k: &str| match access.get(k) {
         Some(Value::Arr(a)) => a.clone(),

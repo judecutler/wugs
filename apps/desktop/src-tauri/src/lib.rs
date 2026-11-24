@@ -1985,6 +1985,27 @@ fn shift_track(s: State<SessionThread>, text_id: String, tier_id: String, delta_
     s.run(move |s| rough_align::shift(s, &text_id, &tier_id, delta_ms, &expect))
 }
 
+/// The project's own title (the `project-title` setting; empty when not set): sealed packages and archive records carry it.
+#[tauri::command(async)]
+fn project_title(s: State<SessionThread>) -> Result<String, String> {
+    s.run(|s| Ok(session::project(s)?.setting(wugs_seal::PROJECT_TITLE)?.unwrap_or_default()))
+}
+
+#[tauri::command(async)]
+fn set_project_title(s: State<SessionThread>, title: String) -> Result<(), String> {
+    s.run(move |s| {
+        let p = session::project(s)?;
+        let title = p.proj.nfc(title.split_whitespace().collect::<Vec<_>>().join(" ").as_str());
+        if title.chars().count() > 300 {
+            return Err("A project title is kept up to 300 characters.".into());
+        }
+        if p.setting(wugs_seal::PROJECT_TITLE)?.unwrap_or_default() != title {
+            p.set_setting(wugs_seal::PROJECT_TITLE, &title)?;
+        }
+        Ok(())
+    })
+}
+
 #[tauri::command(async)]
 fn set_tier(s: State<SessionThread>, tier_id: String, name: String, language: String) -> Result<(), String> {
     s.run(move |s| session::set_tier(s, &tier_id, &name, &language))
@@ -2793,6 +2814,8 @@ pub fn run() {
             rough_untime,
             shift_track,
             set_tier,
+            project_title,
+            set_project_title,
             export_unimorph,
             domain_suggestions,
             import_alignments,
