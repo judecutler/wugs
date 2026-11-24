@@ -92,6 +92,7 @@ export const SHORTCUTS: { where: string; keys: [string, string][] }[] = [
       ["Shift+Z", "Fit the whole recording"],
       ["S", "Split the selected segment at the playhead"],
       ["M", "Merge the selected segment with the next"],
+      ["Enter (while playing)", "Tap to segment: the first press marks a start, each next press makes a segment up to it"],
       ["[ / ]", "Move the start edge 10 ms earlier / later"],
       ["Shift+[ / Shift+]", "Move the end edge 10 ms earlier / later"],
       ["Delete or Backspace", "Delete the selected segment (asks first)"],

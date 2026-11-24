@@ -1176,6 +1176,25 @@ def main():
             run.page.wait_for_timeout(300)
             run.shot("state-feedback-sent")
 
+            # Tap to segment: Enter while playing marks a start, then makes a segment.
+            run.front("timeline", "Timeline")
+            run.page.evaluate("window.__WUGS_CALLS__.length = 0")
+            run.page.locator(".panel-timeline .tl-wrap").focus()
+            run.page.keyboard.press("Home")
+            run.page.keyboard.press("Space")
+            run.page.wait_for_timeout(500)
+            if run.page.evaluate("async () => (await import('/src/playback.ts')).isPlaying()"):
+                run.page.keyboard.press("Enter")
+                run.page.wait_for_timeout(900)
+                run.page.keyboard.press("Enter")
+                run.page.wait_for_timeout(300)
+                run.page.keyboard.press("Space")
+                if "add_segment" not in run.page.evaluate("window.__WUGS_CALLS__"):
+                    failures.append("Tap to segment: two presses of Enter while playing made no segment")
+            else:
+                print("  (headless playback did not start; tap to segment not checked)")
+            run.page.keyboard.press("Escape")
+            run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Help behind another tab, so pressing Help makes the wug jump.
             run.front("timeline", "Timeline")
             run.page.get_by_role("button", name="Help", exact=True).click()
