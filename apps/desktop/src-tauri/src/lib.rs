@@ -54,6 +54,7 @@ pub mod notes_overview;
 pub mod growth;
 pub mod wordsketch;
 pub mod soundchanges;
+pub mod cognates;
 pub mod compare;
 pub mod phoible;
 pub mod word_order;
@@ -427,6 +428,18 @@ fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory,
 #[tauri::command(async)]
 fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option<String>) -> Result<sounds::SoundWords, String> {
     s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
+}
+
+/// The project's cognate judgements (src/cognates.rs).
+#[tauri::command(async)]
+fn cognates(s: State<SessionThread>) -> Result<String, String> {
+    s.run(cognates::get)
+}
+
+/// Keeps the project's cognate judgements, returning them as kept.
+#[tauri::command(async)]
+fn set_cognates(s: State<SessionThread>, table: String) -> Result<String, String> {
+    s.run(move |session| cognates::set(session, &table))
 }
 
 /// Word order counted from the parsed sentences, by WALS feature (src/word_order.rs).
@@ -2090,6 +2103,8 @@ pub fn run() {
             glottolog_find,
             typology_profile,
             phoible_compare,
+            cognates,
+            set_cognates,
             word_order,
             typology_answers,
             orthography_get,

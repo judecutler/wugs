@@ -665,7 +665,12 @@ def main():
             if "11 forms of 2 languages" not in " ".join(run.toasts()):
                 failures.append("Compare word lists did not report what it read")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
+            # A judgement: click Kelani's word for "I" to mark it cognate.
+            run.page.locator(".panel-compare .cmp-table button.cmp-form", has_text="nii").click()
+            run.page.wait_for_timeout(200)
             run.shot("state-compare", run.page.locator(".panel-compare"))
+            if "Kelani: 2 of 2 judged concepts cognate" not in run.page.locator(".panel-compare .cmp-cognacy").inner_text():
+                failures.append("Compare word lists did not count the cognate judgements")
             if "Kelani" not in run.page.locator(".panel-compare .cmp-table thead").inner_text():
                 failures.append("Compare word lists did not add a column for the loaded language")
             if "look alike" not in run.page.locator(".panel-compare .cmp-line").inner_text():
