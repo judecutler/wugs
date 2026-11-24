@@ -1159,6 +1159,7 @@ const LEXICON = [
       return { text: null, lines: [`${titles.length + random} new texts from ${wiki}.wikipedia.org, 40 sentences.`] };
     },
     corpus_tracks: () => [{ id: "tier-utt", name: "utterance" }, { id: "tier-ipa", name: "IPA" }],
+    speaker_values: () => [["sex", [["female", 1], ["male", 1]]]],
     metadata_values: () => [
       { key: "genre", values: [["narrative", 2], ["procedural", 1]] },
       { key: "speaker", values: [["A. Speaker (synthetic)", 3]] },

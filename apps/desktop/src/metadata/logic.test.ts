@@ -58,3 +58,11 @@ test("details with a value every text shares are not offered", () => {
   assert.equal(whereWords({ key: "text_genre", value: "news" }), "texts whose text genre is «news»");
   assert.equal(whereWords({ key: "", value: "", tier: "t1", trackName: "CHI" }), "the «CHI» track");
 });
+
+test("a speaker's detail is a scope of its own", async () => {
+  const { parseScope, speakerOptions, speakerValue, whereWords } = await import("./logic.ts");
+  const scope = parseScope(speakerValue("sex", "female"));
+  assert.deepEqual(scope, { textId: null, within: { key: "sex", value: "female", speaker: true } });
+  assert.equal(whereWords(scope.within!), "speakers whose sex is «female»");
+  assert.deepEqual(speakerOptions([["sex", [["female", 2], ["male", 1]]]]).map((o) => o.label), ["Sex: female (2 tracks)", "Sex: male (1 track)"]);
+});

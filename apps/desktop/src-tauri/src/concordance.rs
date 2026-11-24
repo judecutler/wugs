@@ -166,18 +166,22 @@ pub(crate) fn tests_word_counts(session: &mut Session) -> Vec<usize> {
 /// with `metadata::key_of`) is exactly `value`, and/or only the segments of
 /// one track (`tier`: a speaker's track, as CHAT files have one per
 /// speaker). An empty key picks no texts by detail.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
 pub struct Where {
     pub key: String,
     pub value: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
+    /// `key` and `value` name a detail of the tracks' speakers (People
+    /// panel) rather than of the texts: the tracks whose speaker has it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub speaker: bool,
 }
 
 impl Where {
     /// Texts whose detail `key` is `value`.
     pub fn detail(key: &str, value: &str) -> Where {
-        Where { key: key.into(), value: value.into(), tier: None }
+        Where { key: key.into(), value: value.into(), ..Where::default() }
     }
 }
 
@@ -207,14 +211,31 @@ impl Scope {
         self.text.is_none() && self.r#where.is_none()
     }
 
-    /// The one track it reads, if it names one.
-    pub(crate) fn tier(&self) -> Option<&str> {
-        self.r#where.as_ref().and_then(|w| w.tier.as_deref())
+    /// The texts it keeps, worked out once: None keeps every text.
+    /// The tracks it keeps: the one it names, or those whose speaker has
+    /// the detail it names; None keeps every track.
+    pub(crate) fn tiers(&self, p: &Project) -> Result<Option<std::collections::HashSet<String>>, String> {
+        let Some(w) = self.r#where.as_ref() else { return Ok(None) };
+        if let Some(t) = &w.tier {
+            return Ok(Some(std::iter::once(t.clone()).collect()));
+        }
+        if !w.speaker {
+            return Ok(None);
+        }
+        let key = wugs_core::metadata::key_of(&w.key).ok_or_else(|| format!("«{}» is not a detail's name", w.key))?;
+        let value = p.proj.nfc(w.value.trim());
+        let mut out = std::collections::HashSet::new();
+        for t in p.proj.entities_of_kind("tier")? {
+            let Some(person) = p.proj.field_text(&t, "speaker")? else { continue };
+            if p.person_details(&person)?.iter().any(|(k, v)| *k == key && p.proj.nfc(v.trim()) == value) {
+                out.insert(t);
+            }
+        }
+        Ok(Some(out))
     }
 
-    /// The texts it keeps, worked out once: None keeps every text.
     pub(crate) fn picked(&self, p: &Project) -> Result<Option<std::collections::HashSet<String>>, String> {
-        let Some(w) = self.r#where.as_ref().filter(|w| !w.key.is_empty()) else { return Ok(None) };
+        let Some(w) = self.r#where.as_ref().filter(|w| !w.key.is_empty() && !w.speaker) else { return Ok(None) };
         let key = wugs_core::metadata::key_of(&w.key).ok_or_else(|| format!("«{}» is not a detail's name", w.key))?;
         let value = p.proj.nfc(w.value.trim());
         let mut out = std::collections::HashSet::new();
@@ -231,7 +252,7 @@ impl Scope {
 
     /// Whether a segment of `text` on `tier` is inside, worked out once.
     pub(crate) fn member(&self, p: &Project) -> Result<Member, String> {
-        Ok(Member { text: self.text.clone(), picked: self.picked(p)?, tier: self.tier().map(str::to_string) })
+        Ok(Member { text: self.text.clone(), picked: self.picked(p)?, tiers: self.tiers(p)? })
     }
 }
 
@@ -239,12 +260,12 @@ impl Scope {
 pub(crate) struct Member {
     text: Option<String>,
     picked: Option<std::collections::HashSet<String>>,
-    tier: Option<String>,
+    tiers: Option<std::collections::HashSet<String>>,
 }
 
 impl Member {
     pub(crate) fn has(&self, text: &str, tier: &str) -> bool {
-        self.text.as_deref().is_none_or(|t| t == text) && self.picked.as_ref().is_none_or(|set| set.contains(text)) && self.tier.as_deref().is_none_or(|t| t == tier)
+        self.text.as_deref().is_none_or(|t| t == text) && self.picked.as_ref().is_none_or(|set| set.contains(text)) && self.tiers.as_ref().is_none_or(|set| set.contains(tier))
     }
 }
 
@@ -285,9 +306,9 @@ pub(crate) fn each_segment(
     let picked = scope.picked(p)?;
     let keeps = |text: &str| picked.as_ref().is_none_or(|set| set.contains(text));
     let (mut translation_tiers, mut transcription_tiers) = corpus_tiers(p)?;
-    if let Some(only) = scope.tier() {
-        translation_tiers.retain(|t| t == only);
-        transcription_tiers.retain(|t| t == only);
+    if let Some(only) = scope.tiers(p)? {
+        translation_tiers.retain(|t| only.contains(t));
+        transcription_tiers.retain(|t| only.contains(t));
     }
     let mut titles: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut title_of = |text: &str| -> Result<String, String> {
@@ -351,6 +372,34 @@ pub struct Track {
 
 /// The live transcription tracks, by name: what a corpus tool can be
 /// narrowed to (one speaker's track).
+/// The details of the people who speak on transcription tracks, each value
+/// with how many tracks it picks: for the scope pickers' "Speakers by detail".
+pub fn speaker_values(session: &mut Session) -> Result<Vec<(String, Vec<(String, usize)>)>, String> {
+    let p = project(session)?;
+    let (_, transcription) = corpus_tiers(p)?;
+    let mut by_key: std::collections::BTreeMap<String, std::collections::BTreeMap<String, usize>> = Default::default();
+    for t in transcription {
+        let Some(person) = p.proj.field_text(&t, "speaker")? else { continue };
+        if p.proj.is_tombstoned(&t)? || p.proj.is_tombstoned(&person)? {
+            continue;
+        }
+        for (k, v) in p.person_details(&person)? {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                *by_key.entry(k).or_default().entry(v).or_default() += 1;
+            }
+        }
+    }
+    Ok(by_key
+        .into_iter()
+        .map(|(k, vals)| {
+            let mut v: Vec<(String, usize)> = vals.into_iter().collect();
+            v.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+            (k, v)
+        })
+        .collect())
+}
+
 pub fn tracks(session: &mut Session) -> Result<Vec<Track>, String> {
     let p = project(session)?;
     let (_, transcription) = corpus_tiers(p)?;
@@ -580,5 +629,31 @@ mod tests {
         let g = |p: &str, t: &str| glob(&wugs_model::fold_key(p).chars().collect::<Vec<_>>(), &wugs_model::fold_key(t).chars().collect::<Vec<_>>());
         assert!(g("istanbul", "İstanbul"));
         assert!(g("ışık", "Işık"));
+    }
+
+    #[test]
+    fn a_speakers_detail_picks_their_tracks() {
+        let dir = std::env::temp_dir().join(format!("wugs-cc-speaker-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir, "tester").unwrap();
+        let p = project(&mut s).unwrap();
+        let person = p.add_named_person("Jude", &[]).unwrap();
+        p.set_person_detail(&person, "sex", "female").unwrap();
+        let utt = crate::session::utterance_tier(p).unwrap();
+        p.set_tier_speaker(&utt, Some(&person)).unwrap();
+        let count = |s: &mut Session, value: &str| {
+            let scope = Scope::of(None, Some(Where { key: "sex".into(), value: value.into(), speaker: true, ..Where::default() }));
+            let mut n = 0;
+            each_segment(project(s).unwrap(), Read::Words, &scope, |seg| {
+                n += seg.words.len();
+                Ok(())
+            })
+            .unwrap();
+            n
+        };
+        assert!(count(&mut s, "female") > 0, "her track's words");
+        assert_eq!(count(&mut s, "male"), 0, "no male speaker");
+        assert_eq!(speaker_values(&mut s).unwrap(), vec![("sex".to_string(), vec![("female".to_string(), 1)])]);
+        std::fs::remove_dir_all(&dir).ok();
     }
 }

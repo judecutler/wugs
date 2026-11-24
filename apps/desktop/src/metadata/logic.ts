@@ -87,7 +87,7 @@ export function importLines(r: MetaImport): string[] {
 /** Texts picked by a detail: those whose `key` is exactly `value`. */
 /** A part of the corpus: texts whose detail `key` is `value` (an empty key
  * picks none by detail), and/or one track's segments (`tier`, named `trackName`). */
-export type Where = { key: string; value: string; tier?: string; trackName?: string };
+export type Where = { key: string; value: string; tier?: string; trackName?: string; /** The key and value are a detail of the tracks' speakers (People panel), not of the texts. */ speaker?: boolean };
 /** One detail's values across the project, most texts first. */
 export type MetaValues = { key: string; values: [string, number][] };
 /** What a corpus tool reads: one text, the texts a detail picks, or (neither) all. */
@@ -98,6 +98,17 @@ export const MAX_VALUES = 40;
 
 const WHERE = "where:";
 const TRACK = "track:";
+const SPEAKER = "speaker:";
+
+/** A scope picker's option value for the tracks whose speaker has a detail. */
+export function speakerValue(key: string, value: string): string {
+  return SPEAKER + JSON.stringify([key, value]);
+}
+
+/** The scope picker's "Speakers by detail" options: each detail's values, with how many tracks each picks. */
+export function speakerOptions(values: readonly [string, [string, number][]][]): { value: string; label: string }[] {
+  return values.flatMap(([key, vals]) => vals.slice(0, MAX_VALUES).map(([v, n]) => ({ value: speakerValue(key, v), label: `${label(key)}: ${v} (${n} ${n === 1 ? "track" : "tracks"})` })));
+}
 
 /** A scope picker's option value for one track. */
 export function trackValue(id: string, name: string): string {
@@ -115,6 +126,15 @@ export function parseScope(value: string): Scope {
     try {
       const [id, name] = JSON.parse(value.slice(TRACK.length)) as [unknown, unknown];
       if (typeof id === "string" && typeof name === "string") return { textId: null, within: { key: "", value: "", tier: id, trackName: name } };
+    } catch {
+      // As below: the whole project.
+    }
+    return { textId: null, within: null };
+  }
+  if (value.startsWith(SPEAKER)) {
+    try {
+      const [key, v] = JSON.parse(value.slice(SPEAKER.length)) as [unknown, unknown];
+      if (typeof key === "string" && typeof v === "string") return { textId: null, within: { key, value: v, speaker: true } };
     } catch {
       // As below: the whole project.
     }
@@ -140,6 +160,7 @@ export function whereLabel(w: Where, texts: number): string {
 /** The picked texts in a sentence: `texts whose genre is news`. */
 export function whereWords(w: Where): string {
   if (w.tier !== undefined) return `the «${w.trackName ?? w.tier}» track`;
+  if (w.speaker === true) return `speakers whose ${label(w.key).toLowerCase()} is «${w.value}»`;
   return `texts whose ${label(w.key).toLowerCase()} is «${w.value}»`;
 }
 

@@ -1213,6 +1213,8 @@ Use details to study part of a corpus. In **Frequencies**, **Collocates** and **
 
 When the project has more than one transcription track, the same list also offers **One track**. A CHAT file brings a track per speaker, so you can count only the child's words (`CHI`), find their collocates, or have Keywords compare the child's words with everyone else's. A track holds no translations, so with a track picked, **Translations** finds nothing. A lemma or tag row opened from Frequencies runs its CQP query on every track, as CQP queries have no condition for tracks.
 
+When tracks name their speakers (double-click a track's name on the Timeline and pick someone from the People panel), the list also offers **Speakers by detail**: every detail of those speakers, such as **Sex: female** or **Village: Huya**, picks the tracks of the speakers who have it. Use it to count the words of women and men apart, or to have Keywords compare one village's speakers with the rest.
+
 ### Publish the dictionary and examples as CLDF
 
 Click **Publish as CLDF…** and choose a folder. wugs writes a folder `wugs-cldf-<date>` holding a CLDF Dictionary dataset: the CSV tables and metadata that pycldf, Zenodo, Dictionaria and other CLLD sites read.

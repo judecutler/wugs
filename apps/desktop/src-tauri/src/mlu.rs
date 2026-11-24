@@ -200,7 +200,7 @@ mod tests {
         // The corpus tools narrowed to one speaker's track.
         let tracks = crate::concordance::tracks(&mut s).unwrap();
         let chi_track = tracks.iter().find(|t| t.name == "CHI").unwrap().id.clone();
-        let only_chi = crate::concordance::Scope::of(None, Some(crate::concordance::Where { key: String::new(), value: String::new(), tier: Some(chi_track) }));
+        let only_chi = crate::concordance::Scope::of(None, Some(crate::concordance::Where { tier: Some(chi_track), ..Default::default() }));
         let all = crate::concordance::concordance_in(&mut s, "doggie", crate::concordance::Kind::Word, crate::concordance::Match::Exact, &crate::concordance::Scope::all()).unwrap();
         let theirs = crate::concordance::concordance_in(&mut s, "doggie", crate::concordance::Kind::Word, crate::concordance::Match::Exact, &only_chi).unwrap();
         assert_eq!((all.total, theirs.total), (2, 1), "the mother's doggie is not the child's");

@@ -114,3 +114,8 @@ test("Add all says how many words it adds, and asks once", () => {
   assert.equal(addedLine(2, 3).endsWith("1 were in the lexicon already or repeated a word."), true);
   assert.equal(addedLine(0, 2), "Every word was in the lexicon already.");
 });
+
+test("a speaker's scope adds no text condition to a CQP query", async () => {
+  const { cqpFor } = await import("./logic.ts");
+  assert.equal(cqpFor("lemma", "go", { key: "sex", value: "female", speaker: true }), '[lemma="go"]');
+});

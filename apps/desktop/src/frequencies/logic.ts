@@ -19,10 +19,10 @@ export type Frequencies = { rows: FrequencyRow[]; tokens: number; types: number;
 export const cqpLiteral = (value: string): string => value.replace(/[\\.+*?()|[\]{}^$#&\-~]/gu, (c) => `\\${c}`).replace(/"/gu, '\\"');
 
 /** The CQP query whose lines a lemma or tag row counts, limited to the texts a detail picks. */
-export function cqpFor(kind: "lemma" | "tag", item: string, within: { key: string; value: string } | null): string {
+export function cqpFor(kind: "lemma" | "tag", item: string, within: { key: string; value: string; speaker?: boolean } | null): string {
   const q = `[${kind === "lemma" ? "lemma" : "upos"}="${cqpLiteral(item)}"]`;
-  // A track picks no texts, and CQP has no word for tracks: the query reads every track.
-  return within === null || within.key === "" ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
+  // A track or a speaker's detail picks no texts, and CQP has no word for tracks: the query reads every track.
+  return within === null || within.key === "" || within.speaker === true ? q : `${q} :: match.text_${within.key}="${cqpLiteral(within.value)}"`;
 }
 
 /** The note under a lemma or tag list: words not yet lemmatised or tagged. */
