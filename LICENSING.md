@@ -34,6 +34,7 @@ Some kits ship reference lists made by others, kept as separate files under thei
 
 - `kits/tongues/concepts/*.jsonl`: concept lists from Concepticon (Max Planck Institute for Evolutionary Anthropology), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Source and changes: `kits/tongues/concepts/README.md`.
 - `kits/tongues/semdom/semdom-v4-en.jsonl`: SIL Semantic Domains v4, © SIL Global, [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Source and changes: `kits/tongues/semdom/README.md`. The desktop app embeds it and shows the attribution wherever it offers the list.
+- `datasets/phoible/inventories.tsv`: PHOIBLE 2.0's phoneme inventories (Moran & McCloy, eds., 2019), [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). Source and changes: `datasets/phoible/README.md`. The Sounds panel credits it wherever it shows a comparison.
 
 ## Contributing
 

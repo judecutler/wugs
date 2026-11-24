@@ -1040,6 +1040,14 @@ const LEXICON = [
       { source: "Tadmor-2009-100", name: "Leipzig-Jakarta (100)", citation: "Tadmor 2009, via Concepticon", count: 100, listId: null },
     ],
     concept_lists: () => [listSummary],
+    phoible_compare: () => ({
+      name: "Kelani",
+      own: [{ id: "9001", source: "upsid", name: "Kelani", phonemes: ["p", "b", "t", "d", "k", "ɡ", "ʔ", "m", "n", "ŋ", "s", "h", "l", "ɾ", "w", "j", "t̠ʃ", "a", "e", "i", "o", "u", "ə"] }],
+      comparedWith: "Austronesian languages",
+      relatives: 48,
+      shares: [["a", 48], ["i", 48], ["u", 47], ["k", 47], ["m", 47], ["n", 46], ["t", 45], ["p", 44], ["ŋ", 44], ["s", 43], ["l", 41], ["ʔ", 33], ["ə", 27], ["ɓ", 2], ["ǃ", 0]].map(([phoneme, languages]) => ({ phoneme, languages })),
+      edition: "PHOIBLE 2.0 (CC BY-SA 3.0)",
+    }),
     compare_read: ({ path }) => ({
       name: path.split("/").pop(),
       columns: ["DOCULECT", "CONCEPT", "FORM"],

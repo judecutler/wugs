@@ -693,6 +693,13 @@ A sound is a letter with every diacritic and modifier written after it, so `tʰ`
 
 **Minimal pairs** lists every pair of sounds that two words tell apart, such as `p ~ b` for `pata` and `bata`, best attested first. Click a pair of sounds to see its words, and click a word to open its lines in the Concordance. Choose a sound to see only the pairs it is in. **Copy pairs** copies the words as a table. In a large corpus the 20,000 commonest word types are read.
 
+**Compared with PHOIBLE** sets the sounds of the track beside [PHOIBLE](https://phoible.org), a collection of about 3,000 phoneme inventories. It needs the project's Glottocode (the Language row of the Texts panel's Import and export). Press **Compare with PHOIBLE**:
+
+- When PHOIBLE has an inventory of the language (choose one when it has several), the panel lists the phonemes it gives that these transcriptions have not shown yet, and the sounds here that it does not list. The first may be sounds not yet recorded, written another way, or missing from this variety; the second may be allophones, loans, another analysis or slips.
+- It also lists the sounds most of the language's relatives have (half or more of its Glottolog family, or of its macroarea when PHOIBLE has fewer than three of the family) that these transcriptions lack, and the sounds here that fewer than one relative in twenty has.
+
+Sounds are matched as written, apart from tie bars, so write affricates with a tie bar (`t͡ʃ`) for them to count as one sound. Hover over a sound for its share among the relatives. Nothing is sent anywhere: PHOIBLE's inventories come with the app.
+
 **Environments** compares where two sounds occur, to test whether they are separate phonemes or allophones of one. Choose the two sounds, or press **Environments** beside a pair of sounds under Minimal pairs. The line under them says what the counts suggest:
 
 - If the two share an environment (the same sound before and after, such as `a_a`, with `#` for the edge of a word), they contrast there or vary freely, and minimal pairs tell which.

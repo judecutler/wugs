@@ -7,10 +7,11 @@
 // those are usually spelling slips. Each sound opens the Concordance on the
 // words that hold it.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, soundWords } from "../api";
+import { errorText, phoibleCompare, projectLanguage, soundWords } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { clustersNote, consonantClusters, gapsNote, positions, shapes, share, type Cluster, type Shape, type Where } from "../sounds/shapes";
+import { againstRelatives, checkInventory, phoibleLine, shareOf, type PhoibleCompared } from "../sounds/phoible";
 import { syllableNote, syllableTypes, type SyllableType } from "../sounds/syllables";
 import { distributionNote, envLabel, environments, environmentsTsv, type NeighbourRow } from "../sounds/environments";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
@@ -53,6 +54,11 @@ export const soundsPanel: PanelDef = {
     /** The two sounds whose environments are compared (null: the two commonest). */
     let envA: string | null = null;
     let envB: string | null = null;
+    /** PHOIBLE, once asked for: its comparison, or why there is none. */
+    let phoible: PhoibleCompared | null = null;
+    let phoibleNote = "";
+    let phoibleBusy = false;
+    let phoibleInv = 0;
 
     const shownText = (): { id: string; title: string } | null => {
       const s = getState();
@@ -199,6 +205,78 @@ export const soundsPanel: PanelDef = {
           h("table", { className: "fq-table sd-where" }, h("thead", {}, h("tr", {}, ...["Sound", "Word-initial", "Inside", "Word-final", "Alone"].map((t) => h("th", { textContent: t })))), h("tbody", {}, ...rows)),
         ),
       ];
+    };
+
+    const askPhoible = async () => {
+      phoibleBusy = true;
+      paint();
+      try {
+        const lang = await projectLanguage();
+        if (lang.glottocode.trim() === "") {
+          phoible = null;
+          phoibleNote = "Give the project's Glottocode first, in the Language row of the Texts panel's Import and export.";
+        } else {
+          phoible = await phoibleCompare({ glottocode: lang.glottocode.trim() });
+          phoibleInv = 0;
+          phoibleNote = "";
+        }
+      } catch (e) {
+        phoible = null;
+        phoibleNote = errorText(e);
+      }
+      phoibleBusy = false;
+      paint();
+    };
+
+    const phoibleSection = (l: Loaded): HTMLElement[] => {
+      const ask = h("button", { type: "button", disabled: phoibleBusy, textContent: phoibleBusy ? "Comparing…" : phoible === null ? "Compare with PHOIBLE" : "Compare again", title: "Set these sounds beside PHOIBLE's inventories of the project's language and its relatives" });
+      ask.onclick = () => void askPhoible();
+      const head = [h("h4", { className: "sd-h", textContent: "Compared with PHOIBLE" }), h("div", { className: "sd-bar" }, ask)];
+      if (phoible === null) return [...head, h("p", { className: "note sd-phoible-note", textContent: phoibleNote || "See which phonemes PHOIBLE lists for the language that these transcriptions have not shown yet, and which sounds here are rare among its relatives." })];
+      const c = phoible;
+      const ours = l.sounds;
+      const chips = (sounds: readonly string[], title: (x: string) => string) => h("div", { className: "sd-list" }, ...sounds.map((x) => h("span", { className: "sd-shape ipa", title: title(x), textContent: x })));
+      const out: HTMLElement[] = [...head, h("p", { className: "note sd-phoible-note", textContent: phoibleLine(c) })];
+      if (c.own.length > 0) {
+        const inv = c.own[Math.min(phoibleInv, c.own.length - 1)]!;
+        if (c.own.length > 1) {
+          const which = h("select");
+          which.setAttribute("aria-label", "Inventory");
+          c.own.forEach((x, i) => which.append(new Option(`${x.source.toUpperCase()}: ${x.name}, ${x.phonemes.length} phonemes`, String(i), false, i === phoibleInv)));
+          which.onchange = () => {
+            phoibleInv = Number(which.value);
+            paint();
+          };
+          out.push(h("div", { className: "sd-bar" }, which));
+        }
+        const check = checkInventory(ours, inv.phonemes);
+        out.push(
+          h("p", { className: "note", textContent: `${inv.source.toUpperCase()} lists ${inv.phonemes.length} phonemes; ${check.inBoth.length} of them are in these transcriptions.` }),
+          ...(check.notFound.length === 0 ? [] : [h("p", { className: "note", textContent: "Listed there but not in these transcriptions yet (not elicited, written another way, or not in this variety):" }), chips(check.notFound, () => "In PHOIBLE's inventory, not found here")]),
+          ...(check.notListed.length === 0 ? [] : [h("p", { className: "note", textContent: "Here but not listed there (allophones, loans, another analysis, or slips):" }), chips(check.notListed, (x) => `«${x}» is in these transcriptions but not in PHOIBLE's inventory`)]),
+        );
+      }
+      if (c.relatives > 0) {
+        const r = againstRelatives(ours, c);
+        out.push(
+          h("p", { className: "note", textContent: r.missing.length === 0 ? `Every sound most ${c.comparedWith} have is here.` : `Most ${c.comparedWith} have these, but these transcriptions do not:` }),
+          chips(
+            r.missing.map((x) => x.phoneme),
+            (x) => `${shareOf(r.missing.find((m) => m.phoneme === x)!.languages, c.relatives)} languages`,
+          ),
+          ...(r.rare.length === 0
+            ? []
+            : [
+                h("p", { className: "note", textContent: `Here, but rare among ${c.comparedWith} (under 5%): worth a second listen, or a feature of this language.` }),
+                chips(
+                  r.rare.map((x) => x.sound),
+                  (x) => `${shareOf(r.rare.find((m) => m.sound === x)!.languages, c.relatives)} languages`,
+                ),
+              ]),
+        );
+      }
+      out.push(h("p", { className: "note sd-credit", textContent: `From ${c.edition}, phoible.org. Moran, Steven & McCloy, Daniel (eds.) 2019. PHOIBLE 2.0. Jena: Max Planck Institute for the Science of Human History.` }));
+      return out;
     };
 
     const envSection = (l: Loaded): HTMLElement[] => {
@@ -383,6 +461,7 @@ export const soundsPanel: PanelDef = {
         ...[...c.others].flatMap(([group, sounds]) => listed(group, sounds)),
         ...pairsSection(loaded),
         ...envSection(loaded),
+        ...phoibleSection(loaded),
         ...whereSection(loaded),
         ...listed("Not on the IPA chart", c.unplaced.map((u) => u.sound), [...new Set(c.unplaced.map((u) => u.why))].join("; ").replace(/^./u, (x) => x.toUpperCase()) + ". Often a spelling slip, or a spelling rather than IPA."),
       );
@@ -401,6 +480,8 @@ export const soundsPanel: PanelDef = {
         track = null;
         onlyThisText = false;
         loaded = null;
+        phoible = null;
+        phoibleNote = "";
       }
       const wanted = `${s.info.projectId}|${dataGeneration()}|${onlyThisText ? (s.text?.id ?? "") : ""}`;
       if (wanted === key) return;
