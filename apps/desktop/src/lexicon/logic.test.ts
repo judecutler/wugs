@@ -92,6 +92,15 @@ test("the entry list can show the entries still to record or illustrate", () => 
   assert.equal(showLabel(rows, LIST_SHOWS.find((s) => s.id === "sound")!), "Needs a recording (2)");
 });
 
+test("the entry list can show the entries in no semantic domain", () => {
+  const rows = [
+    { glosses: ["dog"], posOfSpeech: "n", used: true, domains: true },
+    { glosses: ["eat"], posOfSpeech: "v", used: true, domains: false },
+  ];
+  assert.deepEqual(rows.map((r) => shows(r, "domain")), [false, true]);
+  assert.equal(showLabel(rows, LIST_SHOWS.find((s) => s.id === "domain")!), "Needs a semantic domain (1)");
+});
+
 test("a lexicon table import is reported in words", () => {
   const r = { entries: 2, senses: 3, unchanged: 1, ambiguous: ["lari"], noLemma: 1, columns: ["Headword → lemma", "English → gloss"], ignored: ["Colour"], domains: 0, domainsUnmatched: [], examples: 0 };
   assert.deepEqual(tableImportLines(r), [

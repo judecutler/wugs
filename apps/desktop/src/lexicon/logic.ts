@@ -99,8 +99,8 @@ export function relatedName(r: { otherLemma: string; otherHomograph: number | nu
 }
 
 /** Which entries the list shows: every one, or those with work left to do. */
-export type ListShow = "all" | "gloss" | "category" | "sound" | "example" | "unused" | "loans" | `pos:${string}`;
-export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean; borrowedFrom?: string; heard?: boolean; examples?: boolean };
+export type ListShow = "all" | "gloss" | "category" | "sound" | "example" | "domain" | "unused" | "loans" | `pos:${string}`;
+export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean; borrowedFrom?: string; heard?: boolean; examples?: boolean; domains?: boolean };
 
 export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; done: string }[] = [
   { id: "all", label: "Every entry", title: "List every entry", done: "No entries match." },
@@ -108,6 +108,7 @@ export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; 
   { id: "category", label: "Needs a category", title: "Entries with no category (part of speech) yet", done: "Every entry found has a category." },
   { id: "sound", label: "Needs a recording", title: "Entries with no pronunciation heard in a recording yet: a list to take to the next recording session (Print… makes it a sheet)", done: "Every entry found has a recording." },
   { id: "example", label: "Needs an example", title: "Entries with a sense that has no example sentence yet", done: "Every sense of the entries found has an example." },
+  { id: "domain", label: "Needs a semantic domain", title: "Entries with a sense in no semantic domain yet: the gap in a dictionary's Words by topic, and a list for the Semantic domains tab in Elicit", done: "Every sense of the entries found is in a semantic domain." },
   { id: "unused", label: "Not in any text", title: "Entries no glossed word in a text is linked to yet", done: "Every entry found is linked from a text." },
   { id: "loans", label: "Loanwords", title: "Entries marked as borrowed from another language", done: "No entry found is marked as a loanword." },
 ];
@@ -119,6 +120,7 @@ export function shows(r: ListRow, show: ListShow): boolean {
   if (show === "category") return r.posOfSpeech.trim() === "";
   if (show === "sound") return r.heard !== true;
   if (show === "example") return r.examples !== true;
+  if (show === "domain") return r.domains !== true;
   if (show === "unused") return !r.used;
   if (show === "loans") return (r.borrowedFrom ?? "").trim() !== "";
   return true;
