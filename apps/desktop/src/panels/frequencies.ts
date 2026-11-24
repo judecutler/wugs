@@ -11,7 +11,7 @@ import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { spreadReading } from "../concordance/plot";
 import { decades, zipfFit, zipfLine, zipfPoints } from "../frequencies/zipf";
-import { ADD_AT_ONCE, addedLine, addLabel, asTsv, dpCell, hasSpread, spreadNote, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
+import { ADD_AT_ONCE, addedLine, addLabel, asTsv, dpCell, hasSpread, spreadNote, cqpFor, unlabelledNote, filterRows, inTexts, rangeNote, TEXT_RANGES, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast, touchLexicon } from "../store";
 import { askConcordance } from "./concordance";
@@ -64,6 +64,8 @@ export const frequenciesPanel: PanelDef = {
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy the list as a table to paste into a spreadsheet" });
     const recount = h("button", { type: "button", textContent: "Recount", title: "Count again (the list counts when the panel opens, the project syncs or texts change)" });
     const count = h("p", { className: "note fq-count" });
+    const range = h("select", { className: "fq-range", title: "List only what is met in at least this many texts: words the texts share rather than one text's names; with 3 or 4 words in a row, lexical bundles" }, ...TEXT_RANGES.map((r) => h("option", { value: String(r.min), textContent: r.label })));
+    range.setAttribute("aria-label", "In how many texts");
     const missingOnly = h("input", { type: "checkbox" });
     const missingBox = h("label", { className: "fq-missing", title: "List only the words no lexicon entry or form is spelled as" }, missingOnly, " Only words not in the lexicon");
     // Every shown word not in the lexicon as an entry, after a second click.
@@ -241,7 +243,7 @@ export const frequenciesPanel: PanelDef = {
     /** Words carry the lexicon column (single transcription words only). */
     const marked = () => rankedRows.some((r) => r.lexicon !== undefined);
     const shownRows = () => {
-      const rows = filterRows(rankedRows, filter.value);
+      const rows = inTexts(filterRows(rankedRows, filter.value), Number(range.value));
       return sortRows(marked() && missingOnly.checked ? notInLexicon(rows) : rows, sortBy);
     };
 
@@ -277,7 +279,7 @@ export const frequenciesPanel: PanelDef = {
       // Richness is a property of a whole word list, not of n-grams, morphs or tags.
       const rich = !ngrams() && (kind === "word" || kind === "translation") ? richness(data) : "";
       drawZipf();
-      count.textContent = summary(data, noun()) + rich + perWord + spreadNote(rankedRows) + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
+      count.textContent = summary(data, noun()) + rich + perWord + spreadNote(rankedRows) + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + rangeNote(rows.length, Number(range.value), ngrams() ? size : 1) + cut + ` Counted at ${countedAt}.`;
       const withLexicon = marked();
       missingBox.hidden = !withLexicon;
       // Words never broken into morphs either: a glossed word's root is what belongs in the lexicon (Checks adds those).
@@ -408,6 +410,7 @@ export const frequenciesPanel: PanelDef = {
     };
     filter.oninput = drawRows;
     missingOnly.onchange = drawRows;
+    range.onchange = drawRows;
     recount.onclick = () => void load();
     copy.onclick = () => {
       if (data === null || rankedRows.length === 0) return;
@@ -440,6 +443,7 @@ export const frequenciesPanel: PanelDef = {
         scope = "";
         filter.value = "";
         missingOnly.checked = false;
+        range.value = "1";
         data = null;
         trendKey = null;
         trends = null;
@@ -447,7 +451,7 @@ export const frequenciesPanel: PanelDef = {
       drawChips();
       drawScopes();
       drawSizer();
-      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, missingBox, addAll), count, zipf, over, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, range, missingBox, addAll), count, zipf, over, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };

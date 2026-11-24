@@ -568,6 +568,14 @@ def main():
             run.shot("state-frequencies", run.page.locator(".panel-frequencies"))
             if run.page.locator(".panel-frequencies .fq-table tbody tr").count() == 0:
                 failures.append("the frequency list showed no rows")
+            # Only what is met in several texts.
+            before = run.page.locator(".panel-frequencies .fq-table tbody tr").count()
+            run.page.locator(".panel-frequencies .fq-range").select_option("3")
+            run.page.wait_for_timeout(200)
+            after = run.page.locator(".panel-frequencies .fq-table tbody tr").count()
+            if not (0 < after < before) or "met in 3 texts or more" not in run.page.locator(".panel-frequencies .fq-count").inner_text():
+                failures.append(f"In 3+ texts did not narrow the list ({before} to {after})")
+            run.page.locator(".panel-frequencies .fq-range").select_option("1")
             # One speaker's track among the places to count.
             if run.page.locator(".panel-frequencies select.fq-scope optgroup[label='One track'] option").count() != 2:
                 failures.append("The scope picker did not offer each track")

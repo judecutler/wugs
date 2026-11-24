@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addedLine, addLabel, asTsv, filterRows, lexiconCell, lexiconNote, notInLexicon, perThousand, richness, ranked, reversed, sortRows, summary } from "./logic.ts";
+import { addedLine, addLabel, asTsv, filterRows, inTexts, rangeNote, TEXT_RANGES, lexiconCell, lexiconNote, notInLexicon, perThousand, richness, ranked, reversed, sortRows, summary } from "./logic.ts";
 
 const rows = [
   { item: "kesi", count: 5, texts: 1 },
@@ -118,4 +118,14 @@ test("Add all says how many words it adds, and asks once", () => {
 test("a speaker's scope adds no text condition to a CQP query", async () => {
   const { cqpFor } = await import("./logic.ts");
   assert.equal(cqpFor("lemma", "go", { key: "sex", value: "female", speaker: true }), '[lemma="go"]');
+});
+
+test("rows met in at least so many texts", () => {
+  const rows = [{ item: "of the", count: 40, texts: 9 }, { item: "Lake Nyasa", count: 30, texts: 1 }, { item: "in the", count: 20, texts: 5 }];
+  assert.deepEqual(inTexts(rows, 1).map((r) => r.item), ["of the", "Lake Nyasa", "in the"]);
+  assert.deepEqual(inTexts(rows, 5).map((r) => r.item), ["of the", "in the"]);
+  assert.equal(rangeNote(2, 1, 4), "");
+  assert.equal(rangeNote(2, 5, 1), " 2 are met in 5 texts or more.");
+  assert.equal(rangeNote(1, 5, 4), " 1 is met in 5 texts or more (lexical bundles, as Biber counts them).");
+  assert.equal(TEXT_RANGES[0]!.min, 1);
 });
