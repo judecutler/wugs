@@ -1562,6 +1562,21 @@ impl Project {
     /// The recording a text was transcribed from (`source` on the text, a
     /// ref), or none. A person's choice, so a resolving write; in the
     /// text's own scope, since it is part of the text.
+    /// A text's title, NFC with spaces collapsed; resolving. None when it already reads so.
+    pub fn set_text_title(&mut self, text: &str, title: &str) -> Result<Option<CommitResult>, String> {
+        self.require(text, "text")?;
+        let title = self.proj.nfc(&title.split_whitespace().collect::<Vec<_>>().join(" "));
+        if title.is_empty() {
+            return Err("a title needs some text".into());
+        }
+        if self.proj.field_str(text, "title")?.as_deref() == Some(title.as_str()) {
+            return Ok(None);
+        }
+        let mut t = self.intent("set-text-title").resolving();
+        t.set("text", text, text, "title", Value::str(&title))?;
+        t.commit().map(Some)
+    }
+
     pub fn set_text_source(&mut self, text: &str, source: Option<&str>) -> Result<CommitResult, String> {
         self.require(text, "text")?;
         if let Some(s) = source {

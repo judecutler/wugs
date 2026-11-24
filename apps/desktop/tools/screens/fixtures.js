@@ -1330,6 +1330,7 @@ const LEXICON = [
       ],
       falling: [{ item: "ŋai", total: 40, rates: [19.5, 14.1, null, 6.6, 3.2], tau: -1 }],
     }),
+    import_saymore: () => ({ sessions: 3, transcribed: 2, empty: 1, recordings: 3, details: 12, failed: [], text: null }),
     export_text: ({ textId }) => {
       (window.__WUGS_EXPORTED__ ??= []).push(textId);
       return { path: `/tmp/out/${textId}.eaf`, notes: [] };

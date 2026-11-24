@@ -20,7 +20,8 @@ import { readerDetails, readerGlossary, readerHtml, type GlossedWord, type Reade
 import { emptyState, h } from "../dom";
 import { attempt, getState, refreshAll, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { readGlossingLines, tierGlossingLines, type TierGlossing } from "../elan/glossing";
-import { batchLines, exportedAllLines, type BatchResult } from "../drop/logic";
+import { batchLines, exportedAllLines, saymoreLines, type BatchResult } from "../drop/logic";
+import { importSaymore } from "../api";
 import { alignLine, pairNote, toWrite, writtenLine, type Alignment } from "../align/logic";
 import { alignPreview, alignWrite } from "../api";
 import { loanSources, tableImportLines } from "../lexicon/logic";
@@ -253,6 +254,19 @@ async function exportAll(texts: { id: string; title: string }[]) {
       }
     }
     showToast({ tone: failed.length > 0 ? "warn" : "info", lines: exportedAllLines(saved, texts.length, folder, failed, notes) });
+  });
+}
+
+/** A SayMore project's sessions, each as a text with its recording and details. */
+async function importSaymoreProject() {
+  const folder = await chooseFolder("Choose the SayMore project's folder (the one holding Sessions)");
+  if (folder === null) return;
+  await work("saymore", async () => {
+    const r = await importSaymore({ folder });
+    showToast({ tone: r.failed.length > 0 ? "warn" : "info", lines: saymoreLines(r) });
+    await reloadTexts();
+    if (r.text !== null) await selectText(r.text);
+    await refreshAll();
   });
 }
 
@@ -862,6 +876,13 @@ export const textsPanel: PanelDef = {
             title: "A dictionary kept in Excel or Google Sheets (.csv or .tsv): a row per sense, with a word column and a gloss column. Rows already in the lexicon are skipped, so the same table twice adds nothing",
             disabled: busy !== null,
             onclick: () => void importLexTable(),
+          }),
+          h("button", {
+            type: "button",
+            textContent: busy === "saymore" ? "Reading SayMore…" : "Import a SayMore project…",
+            title: "Every session of a SayMore project as a text: its ELAN transcription, its recording and its date, place, genre and speakers",
+            disabled: busy !== null,
+            onclick: () => void importSaymoreProject(),
           }),
           h("button", {
             type: "button",
