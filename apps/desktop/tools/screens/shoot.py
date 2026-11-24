@@ -847,6 +847,11 @@ def main():
             run.shot("state-checks-leipzig", run.page.locator(".panel-checks"))
             if "Use «PL» for all 7" not in run.page.locator(".panel-checks").inner_text() or "Use «go.out» for all 3" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not offer the Leipzig fixes")
+            bare = run.page.locator(".panel-checks .ck-title", has_text="Morphs without a gloss")
+            bare.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
+            run.shot("state-checks-unglossed", run.page.locator(".panel-checks"))
+            if run.page.locator(".panel-checks .ck-fill").first.input_value() != "PST" or "8 morphs have no gloss yet" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not list the morphs without a gloss with the gloss they have elsewhere")
             broken = run.page.locator(".panel-checks .ck-title", has_text="Words broken up more than one way")
             broken.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
             run.shot("state-checks-breakdowns", run.page.locator(".panel-checks"))

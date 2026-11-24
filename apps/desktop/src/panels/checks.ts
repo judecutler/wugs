@@ -4,7 +4,7 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { glossForms, glossRegloss, archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSegmentations, glossUseBreakdown, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { glossFill, glossUnglossedMorphs, type Unglossed, glossForms, glossRegloss, archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSegmentations, glossUseBreakdown, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, duplicateSentences, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { leipzigIssues, leipzigLine, type LeipzigIssue } from "../checks/leipzig";
 import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
@@ -43,6 +43,9 @@ export const checksPanel: PanelDef = {
     let twice: Duplicates | null = null;
     let breakdowns: Segmented[] | null = null;
     let leipzig: { issues: LeipzigIssue[]; forms: number } | null = null;
+    let bare: Unglossed[] | null = null;
+    /** What is typed in each unglossed morph's field, by key and type. */
+    const fillDrafts = new Map<string, string>();
     let gaps: { without: number; fillable: number } | null = null;
     let trees: { sentences: TreeProblem[]; total: number; annotated: number } | null = null;
     let showAllChars = false;
@@ -56,9 +59,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null), glossSegmentations().catch(() => null), glossForms().catch(() => null)]).then(
-        ([r, m, c, w, g, t, d, k, l, tm, ar, du, bd, gf]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null), duplicateSentences().catch(() => null), glossSegmentations().catch(() => null), glossForms().catch(() => null), glossUnglossedMorphs().catch(() => null)]).then(
+        ([r, m, c, w, g, t, d, k, l, tm, ar, du, bd, gf, ug]) => {
           if (mine !== seq) return;
+          bare = ug;
           leipzig = gf === null ? null : { issues: leipzigIssues(gf), forms: gf.length };
           breakdowns = bd;
           twice = du;
@@ -126,6 +130,56 @@ export const checksPanel: PanelDef = {
       armed = null;
       await refreshAll();
       load();
+    };
+
+    const fill = async (u: Unglossed, gloss: string) => {
+      busy = true;
+      paint();
+      try {
+        const n = await glossFill({ key: u.key, kind: u.kind, gloss });
+        showToast({ tone: "info", lines: [`Glossed ${n} ${n === 1 ? "morph" : "morphs"} «${marked({ surface: u.surface, type: u.kind as MorphType })}» as «${gloss.trim()}».`] });
+        fillDrafts.delete(`${u.key}\u0001${u.kind}`);
+      } catch (e) {
+        showToast({ tone: "error", lines: [errorText(e)] });
+      }
+      busy = false;
+      armed = null;
+      await refreshAll();
+      load();
+    };
+
+    /** Morphs with no gloss yet: an example printed now would show «?» under them. */
+    const bareSection = (): HTMLElement[] => {
+      if (bare === null) return [];
+      const total = bare.reduce((n, u) => n + u.count, 0);
+      const line = bare.length === 0 ? "Every morph has a gloss." : `${total} ${total === 1 ? "morph has" : "morphs have"} no gloss yet (${bare.length} ${bare.length === 1 ? "spelling" : "spellings"}); a glossed example would show «?» under ${total === 1 ? "it" : "them"}. Type a gloss and press the button to gloss every one of a spelling at once.`;
+      const card = (u: Unglossed): HTMLElement => {
+        const k = `${u.key}\u0001${u.kind}`;
+        const id = `fill\u0001${k}`;
+        const shownMorph = marked({ surface: u.surface, type: u.kind as MorphType });
+        const field = h("input", { className: "ck-fill", value: fillDrafts.get(k) ?? u.elsewhere[0]?.[0] ?? "", placeholder: "Gloss", spellcheck: false, disabled: busy });
+        field.setAttribute("aria-label", `Gloss for ${shownMorph}`);
+        field.oninput = () => fillDrafts.set(k, field.value);
+        const go = h("button", { type: "button", className: armed === id ? "danger" : "", disabled: busy, textContent: armed === id ? `Gloss ${u.count}: sure?` : `Gloss all ${u.count}`, title: `Give every unglossed «${shownMorph}» (${u.kind}) the gloss typed beside it` });
+        go.onclick = () => {
+          if (field.value.trim() === "") {
+            field.focus();
+            return;
+          }
+          if (armed !== id) {
+            fillDrafts.set(k, field.value);
+            armed = id;
+            paint();
+            return;
+          }
+          void fill(u, field.value);
+        };
+        const show = h("button", { type: "button", className: "ck-show", textContent: `in «${u.textTitle || "(untitled)"}»`, title: "Open a sentence with this morph" });
+        show.onclick = () => selectSegment({ textId: u.textId, tierId: u.tierId, segmentId: u.segmentId });
+        const elsewhere = u.elsewhere.length === 0 ? null : h("p", { className: "note", textContent: `Glossed elsewhere as ${u.elsewhere.slice(0, 4).map(([g, n]) => `«${g}» (${n})`).join(", ")}.` });
+        return h("li", { className: "ck-card" }, h("div", { className: "ck-head" }, h("span", { className: "ck-morph", textContent: shownMorph }), h("span", { className: "ck-kind", textContent: u.kind }), h("span", { className: "ck-count", textContent: `× ${u.count}` }), show), elsewhere, h("div", { className: "ck-bar" }, field, go));
+      };
+      return [h("h3", { className: "ck-title", textContent: "Morphs without a gloss" }), h("p", { className: "note", textContent: line }), h("ul", { className: "ck-list" }, ...bare.slice(0, 100).map(card))];
     };
 
     const leipzigSection = (): HTMLElement[] => {
@@ -599,6 +653,7 @@ export const checksPanel: PanelDef = {
         h("ul", { className: "ck-list" }, ...rows.map(card)),
         ...breakdownsSection(),
         ...leipzigSection(),
+        ...bareSection(),
         h("h3", { className: "ck-title", textContent: "Not in the lexicon" }),
         h("div", { className: "ck-bar" }, h("p", { className: "note", textContent: missingSummary(missing) }), missing.length > 1 ? addAll : null),
         h("ul", { className: "ck-list" }, ...missing.map(missingCard)),

@@ -958,6 +958,11 @@ const LEXICON = [
       { gloss: "go out", count: 3, affixes: 0, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "u01" },
     ],
     gloss_regloss: () => 7,
+    gloss_unglossed_morphs: () => [
+      { surface: "ra", key: "ra", kind: "suffix", count: 6, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03", elsewhere: [["PST", 14]] },
+      { surface: "haru", key: "haru", kind: "root", count: 2, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "u01", elsewhere: [] },
+    ],
+    gloss_fill: () => 6,
     gloss_settle_drift: (a) => (a.useLexicon ? 3 : 1),
     topics_overview: () => ({
       topics: [
