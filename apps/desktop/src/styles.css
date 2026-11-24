@@ -1087,6 +1087,14 @@ body::before {
 .pg-chart .curve { fill: none; stroke: var(--accent); stroke-width: 2; }
 .pg-chart .tick, .pg-chart .axis { font-size: 10px; fill: var(--muted); }
 .panel-soundchanges .sca-top { display: flex; gap: 12px; flex-wrap: wrap; }
+.panel-sentences { overflow: auto; }
+.panel-sentences .se-prompts { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.panel-sentences .se-row { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 6px 8px; background: var(--surface-raised); display: grid; gap: 4px; }
+.panel-sentences .se-done { opacity: 0.85; }
+.panel-sentences .se-num { color: var(--muted); margin-right: 6px; }
+.panel-sentences .se-answer { font-family: var(--font-ipa); width: 100%; box-sizing: border-box; }
+.panel-sentences .se-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.panel-sentences .se-chip { font-family: var(--font-ipa); }
 .panel-wordorder { overflow: auto; }
 .panel-wordorder .wo-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 .panel-wordorder .wo-card { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 8px 10px; background: var(--surface-raised); }

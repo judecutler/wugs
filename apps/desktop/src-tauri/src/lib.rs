@@ -56,6 +56,7 @@ pub mod wordsketch;
 pub mod soundchanges;
 pub mod audacity;
 pub mod cognates;
+pub mod sentences;
 pub mod compare;
 pub mod phoible;
 pub mod word_order;
@@ -429,6 +430,30 @@ fn character_inventory(s: State<SessionThread>) -> Result<characters::Inventory,
 #[tauri::command(async)]
 fn sound_words(s: State<SessionThread>, tier_id: Option<String>, text_id: Option<String>) -> Result<sounds::SoundWords, String> {
     s.run(move |s| sounds::sound_words(s, tier_id.as_deref(), text_id))
+}
+
+/// The project's prompt lists for sentence elicitation (src/sentences.rs).
+#[tauri::command(async)]
+fn sentence_lists(s: State<SessionThread>) -> Result<Vec<sentences::PromptList>, String> {
+    s.run(sentences::lists)
+}
+
+/// Keeps a prompt list read from a text or table file.
+#[tauri::command(async)]
+fn sentence_list_import(s: State<SessionThread>, path: String) -> Result<sentences::PromptList, String> {
+    s.run(move |session| sentences::import(session, std::path::Path::new(&path)))
+}
+
+/// A prompt list with each prompt's answers.
+#[tauri::command(async)]
+fn sentence_list_view(s: State<SessionThread>, list: String) -> Result<sentences::PromptView, String> {
+    s.run(move |session| sentences::view(session, &list))
+}
+
+/// Writes an answer to a prompt as a sentence with the prompt as its translation.
+#[tauri::command(async)]
+fn sentence_answer(s: State<SessionThread>, list: String, prompt: String, sentence: String) -> Result<sentences::PromptView, String> {
+    s.run(move |session| sentences::answer(session, &list, &prompt, &sentence))
 }
 
 /// The project's cognate judgements (src/cognates.rs).
@@ -2105,6 +2130,10 @@ pub fn run() {
             typology_profile,
             phoible_compare,
             cognates,
+            sentence_lists,
+            sentence_list_import,
+            sentence_list_view,
+            sentence_answer,
             set_cognates,
             word_order,
             typology_answers,

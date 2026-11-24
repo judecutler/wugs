@@ -50,6 +50,7 @@ PANELS = [
     ("notes", "Notes"),
     ("wordsketch", "Word sketch"),
     ("wordorder", "Word order"),
+    ("sentences", "Elicit sentences"),
     ("soundchanges", "Sound changes"),
     ("compare", "Compare word lists"),
     ("orthography", "Orthography"),
@@ -640,6 +641,18 @@ def main():
             run.shot("state-wordsketch", run.page.locator(".panel-wordsketch"))
             if "Objects of «eat»" not in run.page.locator(".panel-wordsketch").inner_text():
                 failures.append("Word sketch did not name the objects")
+            # Elicit sentences: answer a prompt; focus moves to the next.
+            run.front("sentences", "Elicit sentences")
+            field = run.page.locator(".panel-sentences input.se-answer[data-prompt='2']")
+            field.wait_for()
+            field.fill("wiripa kani nani")
+            field.press("Enter")
+            run.page.wait_for_timeout(300)
+            run.shot("state-sentences", run.page.locator(".panel-sentences"))
+            if "2 of 4 prompts answered" not in run.page.locator(".panel-sentences .se-line").inner_text():
+                failures.append("Elicit sentences did not count the new answer")
+            if run.page.evaluate("document.activeElement && document.activeElement.dataset.prompt") != "3":
+                failures.append("Elicit sentences did not move to the next prompt")
             # Word order: WALS orders counted in the parsed sentences.
             run.front("wordorder", "Word order")
             run.page.locator(".panel-wordorder .wo-card").first.wait_for()

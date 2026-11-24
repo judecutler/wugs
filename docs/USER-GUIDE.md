@@ -573,6 +573,16 @@ Each word becomes a lexicon entry in that domain. The field keeps focus for the 
 
 Above the list, a line says how many words the project holds in how many domains, and each domain shows how many words it has. To work through the domains in order, as a Rapid Word Collection session does, click **Next empty domain**: it opens the next domain in the outline that has no words yet. Tick **Only domains with no words yet** to list just those.
 
+### Elicit sentences from a list of prompts
+
+The **Elicit sentences** panel works through a questionnaire: sentences in a language you share with the speaker (such as a valency or tense–aspect questionnaire, or your own list) to say in the language you are documenting. Open it with **Ctrl+K**, **Show Elicit sentences**.
+
+1. Press **Load prompts…** and choose the list. It can be a `.txt` with one sentence a line, or a CSV or tab-separated table with a header. The prompt column is named prompt, sentence, stimulus, english, translation, text, question or item, and is otherwise the first column that is not numbers. An id or number column keeps each prompt's own number. The list is kept with the project. Loading a file of the same name again replaces its prompts and keeps the answers.
+2. Type the answer under a prompt (typing shortcuts work here) and press **Enter**. The cursor moves to the next prompt without an answer.
+3. Each answer is saved as a sentence of the list's own text, named after the list, with the prompt as its translation. Open it in the Gloss panel by clicking it, to gloss it like any other sentence. A prompt can have several answers (another way to say it, another speaker); type the next one under the first.
+
+The line at the top counts the prompts answered. **Only prompts to do** hides the rest. Since the answers are ordinary sentences, they appear in the Concordance, the exports and the Interlinear tab; record the session and line the sentences up on the Timeline to hear them.
+
 ## Record people and consent
 
 The **People** panel records who speaks in your recordings and what each person agreed to. It is optional.
