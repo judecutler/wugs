@@ -230,3 +230,12 @@ test("the abbreviations the sketch's glosses use come before the first chapter",
   assert.match(html, /<td class="gl">xyz<\/td><td><p class="todo">\[meaning\]<\/p><\/td>/);
   assert.ok(!grammarSketch(base).includes("<h2>Abbreviations</h2>"));
 });
+
+test("the morphology chapter gives Greenberg's indices when the affixes were counted", () => {
+  const html = grammarSketch({ ...base, indices: { words: 200, morphs: 520, roots: 210, prefixes: 40, suffixes: 250, infixes: 0, clitics: 20, single: 30 } });
+  const at = html.indexOf("<h2>4. Morphology</h2>");
+  assert.ok(html.indexOf("2.60 morphs a word: synthetic", at) > at);
+  assert.match(html, /<td>Suffixing<\/td><td>S\/W<\/td><td>1\.25<\/td>/);
+  // Without them, the texts' own count of morphs a word.
+  assert.match(grammarSketch(base), /8 words\), Greenberg's index of synthesis/);
+});
