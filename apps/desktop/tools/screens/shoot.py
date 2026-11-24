@@ -672,6 +672,13 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+            # A line opened to the sentences around it.
+            run.page.locator(".panel-concordance .cc-row .cc-more").first.click()
+            run.page.locator(".panel-concordance .cc-around-me").first.wait_for()
+            run.shot("state-concordance-around", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance .cc-around p").count() < 2:
+                failures.append("the opened line showed no sentences around it")
+            run.page.locator(".panel-concordance .cc-row .cc-more").first.click()
             # Near: only the lines with ŋai right next to the match.
             run.page.fill(".panel-concordance .cc-near-word", "ŋai")
             run.page.select_option(".panel-concordance .cc-near select >> nth=0", "1")
