@@ -7,7 +7,7 @@ import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { marks, per1000, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
-import { asTsv, clip, countLine, hasTags, isRtl, keyword, left, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
+import { asTsv, clip, countLine, hasTags, isRtl, keyword, left, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { hear, playButton } from "../hear/hear";
 import { provide } from "../palette/registry";
@@ -152,8 +152,13 @@ export const concordancePanel: PanelDef = {
     tagsToggle.setAttribute("aria-pressed", String(tagsOn));
     tagsToggle.classList.toggle("active", tagsOn);
     tagsToggle.hidden = true;
-    /** The lines as shown: with tags when they have them and Tags is on. */
-    const shownHits = (): Hit[] => (tagsOn ? hits.map(withTags) : hits);
+    /** Thinned to a random sample of this many lines (0: every line). */
+    let thinTo = 0;
+    const thinner = h("select", { className: "cc-sort cc-thin", title: "Show a random sample of the lines, the same each time for the same query (CQPweb's thin)" }, h("option", { value: "0", textContent: "Every line" }), ...THIN_SIZES.map((n) => h("option", { value: String(n), textContent: `${n} at random` })));
+    thinner.setAttribute("aria-label", "Lines shown");
+    const sampled = (): Hit[] => (thinTo > 0 ? thin(hits, thinTo, `${kind}|${asked}`) : hits);
+    /** The lines as shown: thinned when asked, with tags when they have them and Tags is on. */
+    const shownHits = (): Hit[] => (tagsOn ? sampled().map(withTags) : sampled());
     const count = h("p", { className: "note cc-count" });
     const rows = h("div", { className: "cc-rows", role: "list" });
 
@@ -271,6 +276,7 @@ export const concordancePanel: PanelDef = {
       sizePicker.hidden = !on;
       sidePicker.hidden = !on;
       sorter.hidden = on || plotOn;
+      thinner.hidden = on || plotOn;
       copyExamples.hidden = on || plotOn;
     };
 
@@ -280,6 +286,7 @@ export const concordancePanel: PanelDef = {
       plotToggle.setAttribute("aria-pressed", String(on));
       plotToggle.classList.toggle("active", on);
       sorter.hidden = on;
+      thinner.hidden = on;
       copyExamples.hidden = on;
       plotSorter.hidden = !on;
     };
@@ -301,7 +308,8 @@ export const concordancePanel: PanelDef = {
       const texts = new Set(hits.map((x) => x.textId)).size;
       const scoped = exactFor !== null && exactFor.query === asked && exactFor.kind === kind ? exactFor : null;
       const only = [scoped?.text ? `«${scoped.text.title}»` : null, scoped?.within ? whereWords(scoped.within) : null].filter((x) => x !== null);
-      count.textContent = countLine(hits.length, total, texts) + (only.length > 0 ? ` Only in ${only.join(", among ")}.` : "");
+      const thinned = thinTo > 0 && hits.length > thinTo;
+      count.textContent = countLine(hits.length, total, texts) + (only.length > 0 ? ` Only in ${only.join(", among ")}.` : "") + (thinned ? thinLine(thinTo, hits.length, total) : "");
       tagsToggle.hidden = !hasTags(hits);
       rows.replaceChildren(
         ...sortHits(shownHits(), sortBy).map((hit) => {
@@ -396,10 +404,14 @@ export const concordancePanel: PanelDef = {
       sortBy = sorter.value as SortBy;
       drawRows();
     };
+    thinner.onchange = () => {
+      thinTo = Number(thinner.value);
+      drawRows();
+    };
     copyExamples.onclick = () => {
       if (hits.length === 0) return;
       copyExamples.disabled = true;
-      void copyAsExamples(sortHits(hits, sortBy))
+      void copyAsExamples(sortHits(sampled(), sortBy))
         .catch((e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }))
         .finally(() => {
           copyExamples.disabled = false;
@@ -496,7 +508,7 @@ export const concordancePanel: PanelDef = {
       drawRows();
       setPlot(plotOn);
       setClusters(clustersOn);
-      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, plotSorter, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, copy, copyExamples), chips, count, rows);
+      el.replaceChildren(h("div", { className: "cc-bar" }, input, sorter, thinner, plotSorter, sizePicker, sidePicker, plotToggle, clusterToggle, tagsToggle, copy, copyExamples), chips, count, rows);
       take();
     };
     /** A query asked for from another panel replaces the one typed here. */
