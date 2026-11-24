@@ -758,7 +758,7 @@ A change brought back from Praat replaces another device's edit to the same segm
 
 All of these are in the **Texts** panel, under **Import and export**.
 
-### Import files from other tools
+### Import files from ELAN, FLEx, Praat and other tools
 
 1. Click **Import a file…**.
 2. Choose the file.
