@@ -20,6 +20,7 @@ import { readerDetails, readerGlossary, readerHtml, type GlossedWord, type Reade
 import { emptyState, h } from "../dom";
 import { attempt, getState, refreshAll, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { readGlossingLines, tierGlossingLines, type TierGlossing } from "../elan/glossing";
+import { batchLines, type BatchResult } from "../drop/logic";
 import { loanSources, tableImportLines } from "../lexicon/logic";
 import { sliced, type PanelDef } from "./panel";
 import { provide } from "../palette/registry";
@@ -109,10 +110,16 @@ async function importOne() {
       { name: "ELAN, FLEx, Praat, Toolbox, CoNLL-U, TEI, tables of sentences, CHAT, EXMARaLDA, subtitles, Audacity labels, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "csv", "tsv", "xlsx", "xls", "ods", "srt", "vtt", "cha", "exb", "txt"] },
       { name: "All files", extensions: ["*"] },
     ],
+    multiple: true,
   });
-  if (typeof path !== "string") return;
+  const paths = typeof path === "string" ? [path] : Array.isArray(path) ? path : [];
+  if (paths.length === 0) return;
+  if (paths.length > 1) {
+    await importMany(paths);
+    return;
+  }
   await work("import", async () => {
-    const r = await importFile({ path });
+    const r = await importFile({ path: paths[0]! });
     // The report first: a failed refresh below must not hide that the import worked.
     showToast({ tone: "info", lines: [`Imported ${r.format}.`, ...r.lines] });
     if (r.lexicon) touchLexicon();
@@ -128,6 +135,33 @@ async function importOne() {
         if (g !== undefined) showToast({ tone: "info", lines: [`Imported ${r.format}.`, ...r.lines, ...tierGlossingLines(g)], action: { label: "Read as glossing", run: () => void readGlossingOf(text, g) } });
       });
     }
+  });
+}
+
+/** Several files picked at once: one after another, with progress, and one report. */
+async function importMany(paths: readonly string[]) {
+  await work("import", async () => {
+    const results: BatchResult[] = [];
+    let lexicon = false;
+    let last: string | null = null;
+    for (const [i, path] of paths.entries()) {
+      const name = path.split(/[\\/]/u).pop() ?? path;
+      showToast({ tone: "info", lines: [`Importing ${i + 1} of ${paths.length}: «${name}»…`] });
+      try {
+        const r = await importFile({ path });
+        results.push({ name, format: r.format, error: null });
+        lexicon ||= r.lexicon;
+        last = r.text ?? last;
+      } catch (e) {
+        results.push({ name, format: null, error: errorText(e) });
+      }
+    }
+    showToast({ tone: results.some((r) => r.error !== null) ? "warn" : "info", lines: batchLines(results) });
+    if (lexicon) touchLexicon();
+    await attempt(async () => {
+      await reloadTexts();
+      if (last !== null) await selectText(last);
+    });
   });
 }
 

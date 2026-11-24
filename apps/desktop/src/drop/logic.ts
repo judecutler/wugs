@@ -84,6 +84,23 @@ export function outcomeLines(name: string, outcome: Outcome): string[] {
   }
 }
 
+/** One file of several imported at once: its format, or why it was not. */
+export type BatchResult = { name: string; format: string | null; error: string | null };
+
+/** The report for several files imported at once: how many of each format,
+ * then each that failed (the first five, then how many more). */
+export function batchLines(results: readonly BatchResult[]): string[] {
+  const ok = results.filter((r) => r.error === null);
+  const byFormat = new Map<string, number>();
+  for (const r of ok) byFormat.set(r.format ?? "file", (byFormat.get(r.format ?? "file") ?? 0) + 1);
+  const formats = [...byFormat].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([f, n]) => `${n} ${f}`);
+  const lines = [`Imported ${ok.length} of ${plural(results.length, "file", "files")}${formats.length > 0 ? `: ${formats.join(", ")}` : ""}.`];
+  const failed = results.filter((r) => r.error !== null);
+  for (const r of failed.slice(0, 5)) lines.push(`«${r.name}» was not imported: ${r.error}`);
+  if (failed.length > 5) lines.push(`${plural(failed.length - 5, "more file was", "more files were")} not imported.`);
+  return lines;
+}
+
 export const projectChangedReason = "another project was opened after it was dropped.";
 export const projectClosedReason = "the project it was dropped into is no longer open.";
 
