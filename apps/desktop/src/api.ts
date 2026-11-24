@@ -75,7 +75,7 @@ export const frequencies = (args: { kind: import("./concordance/logic").FreqKind
   invoke<import("./frequencies/logic").Frequencies>("frequencies", args);
 export const collocates = (args: { node: string; kind: "word" | "translation" | "lemma"; left: number; right: number; minTogether: number; textId: string | null; within?: import("./metadata/logic").Where | null }) =>
   invoke<import("./collocates/logic").Collocates>("collocates", args);
-export const similarWords = (args: { word: string; kind: "word" | "translation"; window: number; minFreq: number; textId: string | null; within?: import("./metadata/logic").Where | null }) =>
+export const similarWords = (args: { word: string; kind: "word" | "translation" | "lemma"; window: number; minFreq: number; textId: string | null; within?: import("./metadata/logic").Where | null }) =>
   invoke<import("./similar/logic").Similar>("similar_words", args);
 export const keywords = (args: { kind: import("./keywords/logic").KeywordKind; textId: string | null; within?: import("./metadata/logic").Where | null; againstText?: string | null; against?: import("./metadata/logic").Where | null; minCount: number; size?: number }) => invoke<import("./keywords/logic").Keywords>("keywords", args);
 /** One sentence's words, tags and dependency tree (src-tauri/src/sentence.rs); a correction returns it whole. */
