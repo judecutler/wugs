@@ -125,6 +125,27 @@ fn nt_is_a_sense_note_and_goes_back_out_with_edits() {
 }
 
 #[test]
+fn et_and_bw_say_where_a_word_comes_from() {
+    let (root, mut p) = temp_project();
+    let db = "\\_sh v3.0  400  MDF 4.0\n\n\\lx kabayo\n\\ps n\n\\ge horse\n\\et < Sp. caballo\n\\bw Spanish\n\n\\lx asu\n\\ps n\n\\ge dog\n";
+    let r = import_toolbox(&mut p, db).unwrap();
+    assert!(r.markers_kept_verbatim.0.is_empty(), "{:?}", r.markers_kept_verbatim.0);
+    let kabayo = lexeme(&p, "kabayo", None);
+    assert_eq!(s(&p, &kabayo, "etymology").as_deref(), Some("< Sp. caballo"));
+    assert_eq!(s(&p, &kabayo, "borrowed-from").as_deref(), Some("Spanish"));
+    let out = export_toolbox(&p).unwrap();
+    assert!(out.contains("\\lx kabayo\n\\ps n\n\\ge horse\n\\et < Sp. caballo\n\\bw Spanish\n"), "lines keep their place: {out}");
+    // Typed in wugs: written at the end of the record; emptied: no line.
+    let asu = lexeme(&p, "asu", None);
+    p.set_lexeme_field(&asu, "borrowed-from", "Malay").unwrap();
+    p.set_lexeme_field(&kabayo, "borrowed-from", "").unwrap();
+    let out = export_toolbox(&p).unwrap();
+    assert!(out.contains("\\lx asu\n\\ps n\n\\ge dog\n\\bw Malay\n"), "{out}");
+    assert!(!out.contains("\\bw Spanish"), "{out}");
+    fs::remove_dir_all(root).ok();
+}
+
+#[test]
 fn mdf_markers_map_to_the_lexicon() {
     let (root, mut p) = temp_project();
     import_toolbox(&mut p, DB).unwrap();

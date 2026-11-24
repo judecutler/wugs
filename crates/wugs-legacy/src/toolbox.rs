@@ -53,6 +53,8 @@ enum Carried {
     Synonym,
     Antonym,
     Compare,
+    Etymology,
+    Borrowed,
 }
 
 /// The MDF subset wugs carries: marker, meaning, and the field it lands in.
@@ -73,6 +75,8 @@ const MDF: &[(&str, Carried, &str)] = &[
     ("sy", Carried::Synonym, "relation"),
     ("an", Carried::Antonym, "relation"),
     ("cf", Carried::Compare, "relation"),
+    ("et", Carried::Etymology, "etymology"),
+    ("bw", Carried::Borrowed, "borrowed-from"),
 ];
 
 /// A relation line's type, as wugs names it.
@@ -155,6 +159,9 @@ struct EntryIn {
     lemma: String,
     homograph: Option<(f64, String)>,
     citation: Option<String>,
+    /// `\et` and `\bw`, the first of each.
+    etymology: Option<String>,
+    borrowed: Option<String>,
     block: Vec<Item>,
     senses: Vec<SenseIn>,
     /// Other forms in record order: (surface, `form` kind: `variant` for `\va`, `allomorph` for `\a`).
@@ -364,6 +371,8 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
         lemma: lemma.clone(),
         homograph: None,
         citation: None,
+        etymology: None,
+        borrowed: None,
         block: Vec::new(),
         senses: Vec::new(),
         variants: Vec::new(),
@@ -389,6 +398,14 @@ fn parse_entry(rec: &[Field], occ: &mut Occurrences, report: &mut ToolboxReport)
             }
             Some((Carried::Citation, _)) if e.citation.is_none() => {
                 e.citation = Some(f.value.clone());
+                Some(Owner::Lexeme)
+            }
+            Some((Carried::Etymology, _)) if e.etymology.is_none() && !f.value.trim().is_empty() => {
+                e.etymology = Some(f.value.clone());
+                Some(Owner::Lexeme)
+            }
+            Some((Carried::Borrowed, _)) if e.borrowed.is_none() && !f.value.trim().is_empty() => {
+                e.borrowed = Some(f.value.trim().to_string());
                 Some(Owner::Lexeme)
             }
             Some((Carried::SenseNo, _)) => {
@@ -522,6 +539,12 @@ fn create_entry(project: &mut Project, e: EntryIn, record: usize, report: &mut T
     }
     if let Some(c) = &e.citation {
         fields.push(("citation", Value::str(c)));
+    }
+    if let Some(x) = &e.etymology {
+        fields.push(("etymology", Value::str(x)));
+    }
+    if let Some(x) = &e.borrowed {
+        fields.push(("borrowed-from", Value::str(x)));
     }
     let lex = e.id.clone();
     t.create_with_id("lexeme", &lex, SCOPE_LEXICON, fields);
@@ -679,6 +702,8 @@ impl Writer<'_> {
             // A cleared translation writes no empty \xe line.
             Carried::ExampleTranslation => opt_str(self.project, owner, field)?.filter(|t| !t.is_empty()),
             Carried::Phonetic => opt_str(self.project, owner, field)?.filter(|t| !t.is_empty()),
+            // An emptied etymology or source language writes no line.
+            Carried::Etymology | Carried::Borrowed => opt_str(self.project, owner, field)?.filter(|t| !t.trim().is_empty()),
             Carried::Synonym | Carried::Antonym | Carried::Compare => self.related(owner)?,
             _ => opt_str(self.project, owner, field)?,
         })
@@ -818,5 +843,8 @@ fn export_entry(project: &Project, lex: &str) -> Result<Vec<Field>, String> {
         };
         w.emit_new(c, &r.id)?;
     }
+    // An origin added in wugs, at the end of the record as MDF writes it.
+    w.emit_new(Carried::Etymology, lex)?;
+    w.emit_new(Carried::Borrowed, lex)?;
     Ok(w.out)
 }
