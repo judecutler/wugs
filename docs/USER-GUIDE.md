@@ -1297,6 +1297,12 @@ Choose the tagger under **Tagger…**. **Automatic** uses UDPipe on this compute
 
 Only sentences with no tags yet are sent. Sentences you corrected or imported with tags keep theirs. For words you already split in the Gloss panel, the tags are added to your words and your glosses stay. A sentence whose words you split differently from the tagger is left alone, and wugs tells you how many. Check the result: a tagger's guess is a start, not an answer.
 
+### See which words keep company with a word
+
+The **Collocates** panel (a tab beside Search in Scrolls; in Tongues, open it with **Find an action**) lists the words met near a word: type it (or a pattern such as `walk*`) and press **Enter**. Choose how many words before and after it to look at (a window never crosses a sentence), a minimum number of times together, **Words** or **Translations**, and where to look. Each row gives how often the two are near each other, the collocate's own frequency, and the scores corpus tools use: log-likelihood (below zero when the two meet less than chance would have it), mutual information, and logDice, Sketch Engine's score that can be compared between corpora of different sizes. Sort by any of them. Click a row to read the word in context in the Concordance; **Copy table** copies every score.
+
+To compare two words, type the second in **Compare with another word** and press **Enter**. The list then holds the collocates of either word with each one's logDice and the number of times together, as Sketch Engine's word sketch difference does without needing parsed sentences. Collocates typical of the first word come first (shaded blue), then those both use alike (within one logDice), then those typical of the second (shaded sand). Comparing near-synonyms (*strong* and *powerful*), two spellings of one word, or a word and its translation shows how their use differs. Clear the field to see one word again.
+
 ### Sketch a word's grammatical company
 
 Once sentences are parsed, the **Word sketch** panel shows a lemma's company by grammatical relation, as Sketch Engine's word sketches do: the objects and subjects of a verb, the adjectives and determiners of a noun, the verbs a noun is the object of. It is a tab beside Search in Scrolls; in Tongues press **Ctrl+K** and choose **Show Word sketch**.

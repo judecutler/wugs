@@ -1246,6 +1246,7 @@ body::before {
 .fq-table th:nth-child(6), .fq-table td.fq-lexicon { text-align: left; white-space: nowrap; }
 .co-table th:nth-child(n+2) { text-align: right; }
 .co-node { flex: 1; font-family: var(--font-ipa); }
+.co-versus { flex: 1; min-width: 10em; font-family: var(--font-ipa); }
 .co-neg { color: var(--muted); }
 .panel-collocates select, .panel-keywords select { max-width: 100%; }
 .kw-table th:nth-child(n+2) { text-align: right; }

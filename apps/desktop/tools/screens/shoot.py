@@ -565,6 +565,14 @@ def main():
             run.shot("state-collocates", run.page.locator(".panel-collocates"))
             if run.page.locator(".panel-collocates .co-table tbody tr").count() == 0:
                 failures.append("collocates showed no rows")
+            # Two words' collocates side by side.
+            run.page.locator(".panel-collocates .co-versus").fill("kesi")
+            run.page.locator(".panel-collocates .co-versus").press("Enter")
+            run.page.wait_for_timeout(400)
+            run.shot("state-collocates-compare", run.page.locator(".panel-collocates"))
+            if run.page.locator(".panel-collocates .ws-lean-b").count() != 1 or "against «kesi»" not in run.page.locator(".panel-collocates .fq-count").inner_text():
+                failures.append("Collocates did not compare two words")
+            run.page.locator(".panel-collocates .co-versus").fill("")
             # Similar words (Scrolls): the words used in the same company.
             run.front("similar", "Similar words")
             run.page.locator(".panel-similar .co-node").fill("kesi")

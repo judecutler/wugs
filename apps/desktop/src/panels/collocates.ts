@@ -5,7 +5,7 @@
 import { fillScopes, scopeOf } from "../metadata/scope";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { collocates, errorText } from "../api";
-import { asTsv, COLLOCATE_SORTS, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates } from "../collocates/logic";
+import { asTsv, COLLOCATE_SORTS, compareCollocates, compareLine, compareTsv, leansTo, score, sortCollocates, SPANS, summary, type CollocateSort, type Collocates, type CompareRow } from "../collocates/logic";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
@@ -37,10 +37,14 @@ export const collocatesPanel: PanelDef = {
     let scope = "";
     let data: Collocates | null = null;
     let asked = "";
+    /** The second word and its collocates, while comparing two words. */
+    let other: { word: string; data: Collocates; rows: CompareRow[] } | null = null;
     let seq = 0;
     const node = h("input", { type: "search", className: "co-node", placeholder: "A word, or a pattern like walk*", spellcheck: false });
     node.setAttribute("aria-label", "Word to find collocates of");
     const go = h("button", { type: "button", className: "primary", textContent: "Find collocates" });
+    const versus = h("input", { type: "search", className: "co-versus", placeholder: "Compare with another word", spellcheck: false, title: "Set two words' collocates side by side, as Sketch Engine's word sketch difference does: strong against powerful, or two spellings of one word" });
+    versus.setAttribute("aria-label", "Compare with");
     const left = picker("Words before", "How many words before it to look at", SPANS, 5, (n) => `${n} before`);
     const right = picker("Words after", "How many words after it to look at", SPANS, 5, (n) => `${n} after`);
     const min = picker("Minimum together", "Leave out words met together fewer times than this", MINIMUMS, 2, (n) => (n === 1 ? "Every pair" : `Together ${n}+ times`));
@@ -72,11 +76,61 @@ export const collocatesPanel: PanelDef = {
       scope = fillScopes(scopePicker, scope, drawScopes);
     };
 
+    const drawCompare = (a: Collocates, b: { word: string; data: Collocates; rows: CompareRow[] }) => {
+      const rows = b.rows;
+      note.textContent = compareLine(asked, b.word, a, b.data, rows) + (rows.length > DRAWN ? ` The first ${DRAWN} are drawn (Copy table has them all).` : "");
+      table.className = "fq-table co-table ws-diff";
+      sorter.hidden = true;
+      const head = h(
+        "tr",
+        {},
+        ...[
+          ["Collocate", ""],
+          [`«${asked}»`, `logDice with «${asked}» (– when it is no collocate of it)`],
+          [`«${b.word}»`, `logDice with «${b.word}»`],
+          ["Difference", "The first logDice less the second: high for collocates of the first word, low for the second's"],
+        ].map(([t, tip]) => h("th", { textContent: t, scope: "col", title: tip })),
+      );
+      const sc = scopeOf(scope);
+      const text = sc.textId === null ? null : { id: sc.textId, title: scopePicker.selectedOptions[0]?.textContent ?? "" };
+      const cell = (r: CompareRow["a"]) => (r === null ? "–" : `${score(r.logDice)} (${r.together})`);
+      table.replaceChildren(
+        h("thead", {}, head),
+        h(
+          "tbody",
+          {},
+          ...rows.slice(0, DRAWN).map((r) => {
+            const lean = leansTo(r);
+            const word = lean === "b" ? b.word : asked;
+            const tr = h(
+              "tr",
+              { tabIndex: 0, className: lean === "both" ? "" : `ws-lean-${lean}`, title: `logDice (times together). Read «${word}» in context in the Concordance` },
+              h("td", { className: "fq-item", textContent: r.item }),
+              h("td", { className: "fq-num", textContent: cell(r.a) }),
+              h("td", { className: "fq-num", textContent: cell(r.b) }),
+              h("td", { className: "fq-num", textContent: score(r.diff) }),
+            );
+            tr.onclick = () => askConcordance(word, kind, text, false, sc.within);
+            tr.onkeydown = (e) => {
+              if (e.key === "Enter") askConcordance(word, kind, text, false, sc.within);
+            };
+            return tr;
+          }),
+        ),
+      );
+    };
+
     const drawRows = () => {
       if (data === null) {
         table.replaceChildren();
         return;
       }
+      if (other !== null) {
+        drawCompare(data, other);
+        return;
+      }
+      table.className = "fq-table co-table";
+      sorter.hidden = false;
       const rows = sortCollocates(data.rows, sortBy);
       const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn (Copy table has them all).` : "";
       note.textContent = summary(asked, data, Number(left.value), Number(right.value)) + cut;
@@ -130,6 +184,7 @@ export const collocatesPanel: PanelDef = {
       const query = node.value.trim();
       const mine = ++seq;
       data = null;
+      other = null;
       table.replaceChildren();
       if (query === "") {
         note.textContent = "Type a word to see which words keep it company, scored the way AntConc and Sketch Engine score collocations.";
@@ -137,10 +192,13 @@ export const collocatesPanel: PanelDef = {
       }
       note.textContent = "Counting…";
       try {
-        const r = await collocates({ node: query, kind, left: Number(left.value), right: Number(right.value), minTogether: Number(min.value), textId: scopeOf(scope).textId, within: scopeOf(scope).within });
+        const ask = (word: string) => collocates({ node: word, kind, left: Number(left.value), right: Number(right.value), minTogether: Number(min.value), textId: scopeOf(scope).textId, within: scopeOf(scope).within });
+        const second = versus.value.trim();
+        const [r, r2] = await Promise.all([ask(query), second === "" ? Promise.resolve(null) : ask(second)]);
         if (mine !== seq) return;
         data = r;
         asked = query;
+        other = r2 === null ? null : { word: second, data: r2, rows: compareCollocates(r.rows, r2.rows) };
         drawRows();
       } catch (e) {
         if (mine !== seq) return;
@@ -149,12 +207,16 @@ export const collocatesPanel: PanelDef = {
     }
 
     go.onclick = () => void load();
-    node.onkeydown = (e) => {
+    node.onkeydown = versus.onkeydown = (e) => {
       if (e.key === "Enter" && !e.isComposing) {
         e.preventDefault();
         void load();
       }
     };
+    // Clearing the second word (its × or emptied by hand) goes back to one word's list.
+    versus.addEventListener("search", () => {
+      if (versus.value === "") void load();
+    });
     for (const s of [left, right, min]) s.onchange = () => void load();
     scopePicker.onchange = () => {
       scope = scopePicker.value;
@@ -165,6 +227,14 @@ export const collocatesPanel: PanelDef = {
       drawRows();
     };
     copy.onclick = () => {
+      if (data !== null && other !== null) {
+        const rows = other.rows;
+        void writeText(compareTsv(asked, other.word, rows)).then(
+          () => showToast({ tone: "info", lines: [`Copied ${rows.length} rows. Paste them into a spreadsheet.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+        return;
+      }
       if (data === null || data.rows.length === 0) return;
       const rows = sortCollocates(data.rows, sortBy);
       void writeText(asTsv(rows)).then(
@@ -194,12 +264,14 @@ export const collocatesPanel: PanelDef = {
       if (!sameProject) {
         scope = "";
         node.value = "";
+        versus.value = "";
         data = null;
+        other = null;
       }
       drawChips();
       drawScopes();
       el.replaceChildren(
-        h("div", { className: "cc-bar" }, node, go),
+        h("div", { className: "cc-bar" }, node, go, versus),
         chips,
         h("div", { className: "cc-bar" }, left, right, min, scopePicker),
         h("div", { className: "cc-bar" }, sorter, copy),

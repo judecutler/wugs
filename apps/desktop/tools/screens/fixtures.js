@@ -994,7 +994,10 @@ const LEXICON = [
       node: node === "" ? 0 : 23,
       tokens: 65,
       types: 5,
-      rows: [
+      rows: node === "kesi" ? [
+        { item: "ŋai", together: 3, left: 2, right: 1, freq: 19, logLikelihood: 4.1, mutualInformation: 1.1, logDice: 10.6, tScore: 1.2 },
+        { item: "mopa", together: 5, left: 0, right: 5, freq: 6, logLikelihood: 12.3, mutualInformation: 2.6, logDice: 12.1, tScore: 1.9 },
+      ] : [
         { item: "ŋai", together: 14, left: 2, right: 12, freq: 19, logLikelihood: 31.42, mutualInformation: 2.11, logDice: 11.11, tScore: 1.2 },
         { item: "kesi", together: 6, left: 6, right: 0, freq: 11, logLikelihood: 9.87, mutualInformation: 1.53, logDice: 10.53, tScore: 1.2 },
         { item: "toruma", together: 4, left: 1, right: 3, freq: 7, logLikelihood: 5.02, mutualInformation: 1.48, logDice: 10.48, tScore: 1.2 },
