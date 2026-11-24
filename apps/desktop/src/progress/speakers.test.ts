@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { brownStage, isChild, mluMorphemes, mluWords, speakerCells, speakersNote, speakersTsv, type SpeakerRow } from "./speakers.ts";
 
-const row = (over: Partial<SpeakerRow>): SpeakerRow => ({ tier: "t", name: "CHI", texts: 1, utterances: 4, words: 10, types: 6, longest: 4, analysed: 4, morphemes: 9, ...over });
+const row = (over: Partial<SpeakerRow>): SpeakerRow => ({ tier: "t", name: "CHI", texts: 1, utterances: 4, words: 10, types: 6, longest: 4, analysed: 4, morphemes: 9, mtld: null, ...over });
 
 test("MLU in words and in morphemes", () => {
   assert.equal(mluWords(row({})), 2.5);
@@ -32,5 +32,6 @@ test("note and table", () => {
   assert.match(speakersNote([row({ analysed: 0, morphemes: 0 })]), /Gloss the sentences/u);
   assert.equal(speakersNote([]), "");
   const tsv = speakersTsv([row({})]);
-  assert.equal(tsv.split("\n")[1], "CHI\t1\t4\t10\t2.50\t2.25\tII\t4\t6");
+  assert.equal(tsv.split("\n")[1], "CHI\t1\t4\t10\t2.50\t2.25\tII\t4\t6\t–");
+  assert.equal(speakerCells(row({ mtld: 47.25 }))[9], "47.3");
 });

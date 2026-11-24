@@ -1135,8 +1135,8 @@ const LEXICON = [
     },
     // Two speakers of a CHAT-style transcript: a child and her mother.
     speaker_lengths: () => [
-      { tier: "tier-mot", name: "MOT", texts: 2, utterances: 48, words: 211, types: 96, longest: 11, analysed: 48, morphemes: 262 },
-      { tier: "tier-chi", name: "CHI", texts: 2, utterances: 41, words: 83, types: 37, longest: 4, analysed: 30, morphemes: 71 },
+      { tier: "tier-mot", name: "MOT", texts: 2, utterances: 48, words: 211, types: 96, longest: 11, analysed: 48, morphemes: 262, mtld: 52.4 },
+      { tier: "tier-chi", name: "CHI", texts: 2, utterances: 41, words: 83, types: 37, longest: 4, analysed: 30, morphemes: 71, mtld: null },
     ],
     vocabulary_growth: () => {
       // A synthetic curve that flattens: 317 running words over three texts.
