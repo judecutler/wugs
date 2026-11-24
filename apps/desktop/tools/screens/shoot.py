@@ -703,6 +703,10 @@ def main():
             run.shot("state-sounds-where", run.page.locator(".panel-sounds"))
             if run.page.locator(".panel-sounds .sd-shape").count() < 3:
                 failures.append("Sounds did not show word shapes")
+            run.page.locator(".panel-sounds .sd-syllable-note").scroll_into_view_if_needed()
+            run.shot("state-sounds-syllables", run.page.locator(".panel-sounds"))
+            if "consonants before the vowel" not in run.page.locator(".panel-sounds .sd-syllable-note").inner_text():
+                failures.append("Sounds did not give the syllable template")
             # Orthography: a practical spelling previewed as IPA.
             run.front("orthography", "Orthography")
             run.page.locator(".panel-orthography .or-grid").wait_for()

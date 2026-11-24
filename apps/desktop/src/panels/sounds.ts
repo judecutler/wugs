@@ -11,6 +11,7 @@ import { errorText, soundWords } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { clustersNote, consonantClusters, gapsNote, positions, shapes, share, type Cluster, type Shape, type Where } from "../sounds/shapes";
+import { syllableNote, syllableTypes, type SyllableType } from "../sounds/syllables";
 import { distributionNote, envLabel, environments, environmentsTsv, type NeighbourRow } from "../sounds/environments";
 import { contrastLabel, contrastsOf, minimalPairs, pairsNote, pairsTable, WORDS_READ, type Contrast } from "../sounds/pairs";
 import { chart, defaultTrack, gridOf, HEIGHT_NAMES, inventory, MANNER_NAMES, PLACE_NAMES, placeOf, soundsNote, vowelXY, type Chart, type Sound } from "../sounds/ipa";
@@ -26,7 +27,7 @@ const PAD = 26;
 /** Room on the left for unrounded vowels with several spellings (i ĩ iː). */
 const PADX = 72;
 
-type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[]; clusters: Cluster[]; clustersNote: string; words: { word: string; count: number }[] };
+type Loaded = { tracks: { id: string; name: string; words: number }[]; sounds: Sound[]; chart: Chart; running: number; omitted: number; types: number; pairs: Contrast[]; where: Where[]; shapes: Shape[]; clusters: Cluster[]; clustersNote: string; words: { word: string; count: number }[]; syllables: SyllableType[] };
 
 const clustersOf = (words: readonly { word: string; count: number }[]) => {
   const clusters = consonantClusters(words);
@@ -69,7 +70,7 @@ export const soundsPanel: PanelDef = {
         }
         if (mine !== seq) return;
         const sounds = inventory(r.words);
-        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words), where: positions(r.words, sounds.map((x) => x.sound)), shapes: shapes(r.words), ...clustersOf(r.words), words: r.words };
+        loaded = { tracks: r.tracks, sounds, chart: chart(sounds), running: r.running, omitted: r.omitted, types: r.words.length, pairs: minimalPairs(r.words), where: positions(r.words, sounds.map((x) => x.sound)), shapes: shapes(r.words), ...clustersOf(r.words), words: r.words, syllables: syllableTypes(r.words) };
         problem = null;
       } catch (e) {
         if (mine !== seq) return;
@@ -164,6 +165,16 @@ export const soundsPanel: PanelDef = {
       ];
     };
 
+    const syllableSection = (l: Loaded): HTMLElement[] => {
+      const total = l.syllables.reduce((n, x) => n + x.count, 0);
+      const chips = l.syllables.slice(0, 16).map((x) => h("span", { className: "sd-shape sd-syllable", title: `e.g. «${x.example}»` }, h("strong", { textContent: x.shape }), ` ${share(x.count, total)}`));
+      return [
+        h("h4", { className: "sd-h", textContent: "Syllables" }),
+        h("p", { className: "note sd-syllable-note", textContent: `${syllableNote(l.syllables)} Words are cut so the next syllable starts with the longest run of consonants that starts a word somewhere.` }),
+        h("div", { className: "sd-list" }, ...chips),
+      ];
+    };
+
     const whereSection = (l: Loaded): HTMLElement[] => {
       if (l.where.length === 0) return [];
       const cell = (n: number, total: number) => h("td", { className: `num${n === 0 ? " sd-gap" : ""}`, textContent: n === 0 ? "–" : share(n, total), title: n.toLocaleString() });
@@ -178,6 +189,7 @@ export const soundsPanel: PanelDef = {
         h("h4", { className: "sd-h", textContent: "Word shapes" }),
         h("p", { className: "note", textContent: "Each word as consonants (C) and vowels (V), by share of running words. ? is a letter the chart does not place." }),
         h("div", { className: "sd-list" }, ...shapeChips),
+        ...syllableSection(l),
         ...clusterSection(l),
         h("h4", { className: "sd-h", textContent: "Where sounds occur" }),
         ...(gaps === "" ? [] : [h("p", { className: "note", textContent: gaps })]),
