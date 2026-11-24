@@ -38,6 +38,7 @@ PANELS = [
     ("concordance", "Concordance"),
     ("frequencies", "Frequencies"),
     ("collocates", "Collocates"),
+    ("similar", "Similar words"),
     ("keywords", "Keywords"),
     ("checks", "Checks"),
     ("vowels", "Vowel space"),
@@ -499,6 +500,14 @@ def main():
             run.shot("state-collocates", run.page.locator(".panel-collocates"))
             if run.page.locator(".panel-collocates .co-table tbody tr").count() == 0:
                 failures.append("collocates showed no rows")
+            # Similar words (Scrolls): the words used in the same company.
+            run.front("similar", "Similar words")
+            run.page.locator(".panel-similar .co-node").fill("kesi")
+            run.page.locator(".panel-similar .co-node").press("Enter")
+            run.page.locator(".panel-similar .sm-table tbody tr").first.wait_for()
+            run.shot("state-similar", run.page.locator(".panel-similar"))
+            if run.page.locator(".panel-similar .sm-table tbody tr").count() != 4:
+                failures.append("Similar words did not list the fixture's four words")
             # Keywords (Scrolls): a text's words against the rest.
             run.front("keywords", "Keywords")
             run.page.wait_for_timeout(400)

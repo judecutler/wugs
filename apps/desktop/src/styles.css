@@ -1518,3 +1518,9 @@ body::before {
 .tx-shortcuts-table { font-family: var(--font-ipa); width: 100%; max-width: 28em; }
 .tx-shortcuts-actions { display: flex; gap: 6px; }
 .welcome-recent { display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline; justify-content: center; }
+
+/* Similar words */
+.sm-score { white-space: nowrap; }
+.sm-track { display: inline-block; width: 48px; height: 6px; margin-right: 6px; background: var(--line); border-radius: 3px; vertical-align: middle; overflow: hidden; }
+.sm-bar { display: block; height: 100%; background: var(--accent-bright); }
+.sm-shared { color: var(--muted); font-family: var(--font-ipa); }

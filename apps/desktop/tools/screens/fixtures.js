@@ -896,6 +896,18 @@ const LEXICON = [
       const rows = all.filter((r) => (r.logLikelihood >= 0 ? r.focus : r.reference) >= (minCount ?? 1));
       return { focusTokens: c, referenceTokens: d, types: 6, omitted: 0, critical: 9.14, rows };
     },
+    similar_words: ({ word }) => ({
+      word: word.toLowerCase(),
+      freq: word === "" ? 0 : 12,
+      tokens: 317,
+      compared: 41,
+      rows: [
+        { item: "mopa", similarity: 0.71, freq: 9, shared: ["tela", "ni-kani", "ŋai"] },
+        { item: "toɾu", similarity: 0.58, freq: 11, shared: ["tela", "wiripa"] },
+        { item: "liwa", similarity: 0.42, freq: 6, shared: ["ŋai", "sele"] },
+        { item: "kanu", similarity: 0.19, freq: 14, shared: ["wiripa"] },
+      ],
+    }),
     collocates: ({ node }) => ({
       node: node === "" ? 0 : 23,
       tokens: 65,

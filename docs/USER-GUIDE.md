@@ -1162,6 +1162,12 @@ Once sentences are parsed, the **Word sketch** panel shows a lemma's company by 
 
 Type a lemma and press **Sketch**. Each relation is a box with the words found in it, how often (**n**) and their logDice, Sketch Engine's association score (14 when the two always come together, lower the more each also turns up apart), strongest first. Click a word to see the lines with both in the Concordance. Only parsed sentences count, punctuation is left out, and **Copy table** copies every relation and word.
 
+### Find words used alike
+
+The **Similar words** panel lists the words used in the same company as a word, as Sketch Engine's Thesaurus does, but from the plain text, so it needs no tagger or parser: type `dog` and words such as `cat` come first because both are found before `sleeps` and after `the`. The words found are candidates for synonyms, antonyms and words of one class (days, colours, verbs of motion) to check in the Concordance. Open it from Settings (Closed panels) or with **Find an action**.
+
+Type a word and press **Enter**. Each word is described by the words within the **window** either side of it in the same segment (1 or 2 finds words of one grammatical class, 5 words of one topic), weighted by how much more often than chance they occur together (positive pointwise mutual information), and two words are as similar as those descriptions (their cosine, 1 when the company is the same). **Similarity** is that score, **Shared contexts** the words around both that count most. Only words met at least the chosen number of times are compared. Choose **Words** or **Translations**, and where to look as in Collocates. Click a row to read that word in the Concordance; **Copy table** copies the list. On a corpus of a few thousand words the list is only a hint: the method needs many contexts.
+
 ## Count words, morphs and glosses
 
 The **Frequencies** panel lists the words of the project with how often each occurs, most frequent first. It is a tab beside Search in Scrolls; in Tongues, press **Ctrl+K** and choose **Show Frequencies**.

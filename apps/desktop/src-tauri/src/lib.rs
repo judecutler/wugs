@@ -13,6 +13,7 @@ pub mod archive_sheet;
 pub mod typing;
 pub mod dispersion;
 pub mod collocates;
+pub mod similar;
 pub mod frequencies;
 pub mod keywords;
 pub mod conflicts;
@@ -297,6 +298,12 @@ fn keywords(s: State<SessionThread>, kind: concordance::Kind, text_id: Option<St
 #[tauri::command(async)]
 fn collocates(s: State<SessionThread>, node: String, kind: concordance::Kind, left: usize, right: usize, min_together: usize, text_id: Option<String>, within: Option<concordance::Where>) -> Result<collocates::Collocates, String> {
     s.run(move |s| collocates::collocates(s, &node, kind, left, right, min_together, &concordance::Scope::of(text_id, within)))
+}
+
+/// The words used in the same contexts as a word (src/similar.rs).
+#[tauri::command(async)]
+fn similar_words(s: State<SessionThread>, word: String, kind: concordance::Kind, window: usize, min_freq: usize, text_id: Option<String>, within: Option<concordance::Where>) -> Result<similar::Similar, String> {
+    s.run(move |s| similar::similar(s, &word, kind, window, min_freq, &concordance::Scope::of(text_id, within)))
 }
 
 /// Remember which recording a text was transcribed from, or forget it (roadmap 72).
@@ -2230,6 +2237,7 @@ pub fn run() {
             media_overview,
             frequencies,
             collocates,
+            similar_words,
             keywords,
             get_text,
             create_text,
