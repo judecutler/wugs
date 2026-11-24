@@ -57,6 +57,21 @@ export function exportable(s: Summary, includeFlagged: boolean): number {
   return s.ready + (includeFlagged ? s.recordedNo + s.restricted : 0);
 }
 
+export type Dataset = { ready: number; recordedNo: number; restricted: number; untimed: number; noRecording: number; unchecked: number };
+
+/** One line on what a speech dataset export would hold, in words. */
+export function datasetLine(d: Dataset): string {
+  const all = d.ready + d.recordedNo + d.restricted;
+  const out = d.recordedNo + d.restricted;
+  const head = all === 0 ? "No transcribed segments with times and a recording yet." : out === 0 ? `${count(all, "transcribed segment")} ready to export.` : `${count(all, "transcribed segment")}: ${d.ready} ready, ${out} left out unless you include them.`;
+  const extra = [
+    d.untimed > 0 ? `${count(d.untimed, "transcribed segment")} without times` : null,
+    d.noRecording > 0 ? `${count(d.noRecording, "segment")} in texts with no recording picked` : null,
+    d.unchecked > 0 ? `${count(d.unchecked, "machine suggestion")} not checked yet` : null,
+  ].filter((x) => x !== null);
+  return extra.length === 0 ? head : `${head} Not exported: ${extra.join("; ")}.`;
+}
+
 /** One line on what can be exported now and what is left out, in words. */
 export function correctionsLine(s: Summary): string {
   const checked = s.ready + s.recordedNo + s.restricted;

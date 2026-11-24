@@ -277,6 +277,10 @@ wugs writes a folder named `wugs-corrections-<date>` with one audio clip per seg
 
 By default, wugs leaves out clips that your People records speak against, such as a recorded "No" for AI use or a restricted access level. To include them anyway, select **Include them**. The datasheet records your choice.
 
+### Export a speech dataset
+
+**Speech dataset**, under Share corrections, exports every segment a person transcribed, with its sound, as data to train or test a speech recognizer on your language. Click **Export N clips…** and choose a folder outside the project. wugs writes `wugs-speech-<date>` in the layout speech toolkits read (Kaldi, ESPnet, k2/icefall, Hugging Face's audio folders): a 16 kHz clip per segment in `wav/`, `wav.scp`, `text` (the transcription), `utt2spk` and `spk2utt` (each transcription track counts as a speaker, so name tracks after people), `utt2dur`, `utt2text` (the text it comes from), `utt2consent`, `restricted`, a `metadata.csv` and a README datasheet. A segment needs times and a text with its recording picked; a transcription that is still an unchecked machine suggestion is left out, since a dataset must hold what people wrote. As with corrections, clips your People records speak against (no AI use, or a restricted level) are left out unless you tick the box to include them, and the README says what the records say about every clip. When you train, split by speaker or by text, never by clip.
+
 ## Gloss
 
 The **Gloss** panel shows one segment as interlinear glossed text, in Leipzig style. Select a segment on the Timeline or in Transcribe to gloss it.

@@ -45,6 +45,7 @@ pub mod field_sessions;
 pub mod plaintext;
 pub mod replace;
 pub mod website;
+pub mod speech_dataset;
 pub mod spelling;
 pub mod stylometry;
 pub mod subtitles;
@@ -1934,6 +1935,31 @@ fn corrections_export(s: State<SessionThread>, id: State<Identity>, folder: Stri
     corrections::write(&jobs, &sum, std::path::Path::new(&folder), &corrections::date_or_today(&date))
 }
 
+/// What a speech dataset export would hold now.
+#[tauri::command(async)]
+fn speech_dataset_summary(s: State<SessionThread>, id: State<Identity>) -> Result<speech_dataset::Summary, String> {
+    let key = id.key().ok();
+    s.run(move |s| {
+        let guest = session::is_guest(s, key.as_deref())?;
+        speech_dataset::summary(s, guest)
+    })
+}
+
+/// Export every transcribed, timed segment as a speech dataset in a new
+/// folder inside `folder`; the cutting runs off the session thread.
+#[tauri::command]
+async fn speech_dataset_export(s: State<'_, SessionThread>, id: State<'_, Identity>, folder: String, flagged: bool, date: String) -> Result<speech_dataset::Exported, String> {
+    let key = id.key().ok();
+    let into = std::path::PathBuf::from(&folder);
+    let (jobs, sum) = s.run(move |s| {
+        interchange::outside_project(s, std::path::Path::new(&folder))?;
+        let guest = session::is_guest(s, key.as_deref())?;
+        speech_dataset::prepare(s, guest, flagged)
+    })?;
+    let date = corrections::date_or_today(&date);
+    tauri::async_runtime::spawn_blocking(move || speech_dataset::write(&jobs, &sum, &into, &date)).await.map_err(|e| e.to_string())?
+}
+
 /// The start of `assist_suggest`'s refusal when the model changed under a run.
 const CHANGED: &str = "Phone transcription now uses ";
 
@@ -2336,6 +2362,8 @@ pub fn run() {
             gloss_apply_all,
             gloss_word_types,
             likely_meanings,
+            speech_dataset_summary,
+            speech_dataset_export,
             recording_levels,
             export_spelling,
             save_hit_clips,

@@ -766,6 +766,10 @@ export const correctionsSummary = () => invoke<CorrectionsSummary>("corrections_
 /** `flagged`: also include clips the project's records speak against (a recorded no, a restricted level). */
 /** `date`: today on this computer's calendar (YYYY-MM-DD), which names the folder. */
 export const correctionsExport = (args: { folder: string; flagged: boolean; date: string }) => invoke<CorrectionsExported>("corrections_export", args);
+export type DatasetSummary = { ready: number; recordedNo: number; restricted: number; untimed: number; noRecording: number; unchecked: number; partial: string | null };
+export const speechDatasetSummary = () => invoke<DatasetSummary>("speech_dataset_summary");
+/** Every transcribed, timed segment as a Kaldi-style speech dataset; `flagged` as for corrections. */
+export const speechDatasetExport = (args: { folder: string; flagged: boolean; date: string }) => invoke<CorrectionsExported>("speech_dataset_export", args);
 /** How assist_suggest says the model changed under the caller. */
 export const MODEL_CHANGED = "Phone transcription now uses ";
 
