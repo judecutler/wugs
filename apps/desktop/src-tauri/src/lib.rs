@@ -44,6 +44,7 @@ pub mod field_sessions;
 pub mod plaintext;
 pub mod replace;
 pub mod website;
+pub mod spelling;
 pub mod stylometry;
 pub mod subtitles;
 pub mod table_text;
@@ -1398,6 +1399,12 @@ fn export_flashcards(s: State<SessionThread>, folder: String, date: String, incl
     s.run(move |s| flashcards::export_flashcards(s, std::path::Path::new(&folder), &date, include_restricted))
 }
 
+/// A Hunspell spelling dictionary of the language (`spelling.rs`).
+#[tauri::command(async)]
+fn export_spelling(s: State<SessionThread>, folder: String, date: String) -> Result<spelling::Spelling, String> {
+    s.run(move |s| spelling::export_spelling(s, std::path::Path::new(&folder), &date))
+}
+
 /// Every sentence a find and replace would change, before and after.
 #[tauri::command(async)]
 fn replace_preview(s: State<SessionThread>, find: replace::Find) -> Result<replace::Preview, String> {
@@ -2318,6 +2325,7 @@ pub fn run() {
             gloss_apply_all,
             gloss_word_types,
             likely_meanings,
+            export_spelling,
             save_hit_clips,
             texts_alike,
             gloss_break_all,

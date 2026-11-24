@@ -78,3 +78,12 @@ test("catalogue sheet lines", () => {
   assert.equal(lines[1], "1 text has no recording linked here, so no file name or length.");
   assert.equal(lines[2], "2 texts are not open; the access column says so.");
 });
+
+test("the toast after a spelling dictionary was saved", async () => {
+  const { spellingLines } = await import("./logic.ts");
+  const lines = spellingLines({ path: "/x/wugs-spelling-2026-11-24", words: 120, fromLexicon: 40, once: 7, code: "und" });
+  assert.match(lines[0]!, /^Saved a spelling dictionary of 120 words in \/x\/wugs-spelling-2026-11-24: und\.dic and und\.aff/);
+  assert.match(lines[1]!, /ISO 639-3 code/);
+  assert.match(lines[2]!, /^7 words met only once/);
+  assert.equal(spellingLines({ path: "p", words: 1, fromLexicon: 1, once: 0, code: "kan" }).length, 1);
+});

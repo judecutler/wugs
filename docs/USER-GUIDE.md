@@ -1031,6 +1031,10 @@ Press **Flashcards…** beside **Dictionary to print…** to turn the lexicon in
 
 In Anki, copy the files in `sounds/` into Anki's media folder first (in Anki, **Tools > Check Media > View Files**), then choose **File > Import** and pick `anki.txt`. Each card carries its entry's id, so when you import a newer `anki.txt` later, Anki updates the cards you already have and keeps your progress. Entries with no gloss yet are left out, and the message says how many. Sounds from recordings that are not open are left out unless you tick **Include texts that are not open**.
 
+### A spell checker for the language
+
+Press **Spelling dictionary…** beside **Flashcards…** to give the community a spell checker. wugs writes a folder `wugs-spelling-<date>` with a Hunspell dictionary, the spell checker inside LibreOffice, Firefox, Thunderbird and many other programs: `<code>.dic` and `<code>.aff`, named after the language's ISO 639-3 code from the Language row (`und` until it has one). It holds the lexicon's headwords and other forms (not affixes such as `-ler`) and every word the texts use at least twice; words met only once and not in the lexicon are left out, since many are slips. A word the texts ever write in lower case goes in in lower case (the spell checker allows a capital at the start of a sentence), and a word always written with a capital, such as a name, keeps it. `words.tsv` beside them is a plain list of every word with its uses, for programs that take a word list, and the README says how to install the dictionary. Make it again as the lexicon and texts grow.
+
 ### Start a grammar sketch
 
 Press **Grammar sketch…** beside **Dictionary to print…**. wugs writes one HTML file with a grammar's usual chapters, filled with what the project already knows, for you to open in Word or LibreOffice and go on writing:

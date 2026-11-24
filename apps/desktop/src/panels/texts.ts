@@ -6,8 +6,8 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { corpusLines, dictionaryLines, flashcardLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
+import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { corpusLines, dictionaryLines, flashcardLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
 import { EXAMPLE_FORMATS, type Example, type ExampleFormat } from "../gloss/example";
@@ -323,6 +323,15 @@ async function exportCards() {
   await work("flashcards", async () => {
     const r = await exportFlashcards({ folder, date: localDay(new Date()), includeRestricted });
     showToast({ tone: "info", lines: flashcardLines(r) });
+  });
+}
+
+async function exportSpellingFiles() {
+  const folder = await chooseFolder("Choose where the spelling dictionary goes");
+  if (folder === null) return;
+  await work("spelling", async () => {
+    const r = await exportSpelling({ folder, date: localDay(new Date()) });
+    showToast({ tone: "info", lines: spellingLines(r) });
   });
 }
 
@@ -662,6 +671,13 @@ export const textsPanel: PanelDef = {
             title: "Every glossed entry as a flashcard for learners: Anki (each word asked both ways, with its sound when a pronunciation is heard in an open recording) and Quizlet. Importing a newer set into Anki updates the cards and keeps progress",
             disabled: busy !== null,
             onclick: () => void exportCards(),
+          }),
+          h("button", {
+            type: "button",
+            textContent: busy === "spelling" ? "Making…" : "Spelling dictionary…",
+            title: "A spell checker for the language: the lexicon's words and every word the texts use twice or more, as a Hunspell dictionary for LibreOffice, Firefox and other programs, with a plain word list",
+            disabled: busy !== null,
+            onclick: () => void exportSpellingFiles(),
           }),
         ),
         h(
