@@ -6,8 +6,8 @@ import { defaultTrack } from "../sounds/ipa";
 import { toGrid } from "../orthography/logic";
 import { SOURCES } from "../typology/logic";
 import { marked, slotChart, slotLabel } from "../affixes/logic";
-import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
-import { CARD_ORDERS, corpusLines, dictionaryLines, flashcardLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
+import { abbreviationMeanings, createText, errorText, exportArchiveSheet, exportCldf, exportFlashcards, exportParallel, exportSpelling, exportWebsite, exportCorpus, exportDictionary, exportLexicon, exportLexiconTable, exportText, importLexiconTable, glossGet, glottologFind, importFile, projectLanguage, saveDocument, textMetadata, sealProject, setProjectLanguage, wikipediaImport, type LexiconFormat, type TextDetail, type TextFormat } from "../api";
+import { CARD_ORDERS, corpusLines, dictionaryLines, flashcardLines, parallelLines, spellingLines, sheetLines, glottocodeProblem, isoProblem, languoidLine, pickedLanguage, publishedLines, siteLines, worthLooking, type Language, type Languoid } from "../cldf/logic";
 import { glossed, numbering, textDocument } from "../gloss/document";
 import { sentencesOf } from "../interlinear/logic";
 import { abbreviationList, abbreviationsOf } from "../gloss/abbreviations";
@@ -328,6 +328,15 @@ async function exportCards() {
     const order = (CARD_ORDERS.find((o) => o.id === cardOrder) ?? CARD_ORDERS[0]!).order;
     const r = await exportFlashcards({ folder, date: localDay(new Date()), includeRestricted, order });
     showToast({ tone: "info", lines: flashcardLines(r) });
+  });
+}
+
+async function exportParallelCorpus() {
+  const folder = await chooseFolder("Choose where the parallel corpus goes");
+  if (folder === null) return;
+  await work("parallel", async () => {
+    const r = await exportParallel({ folder, date: localDay(new Date()), includeRestricted });
+    showToast({ tone: r.restrictedLeftOut > 0 ? "warn" : "info", lines: parallelLines(r) });
   });
 }
 
@@ -796,6 +805,13 @@ export const textsPanel: PanelDef = {
             disabled: busy !== null,
             onclick: () => void exportSpellingFiles(),
           }),
+          h("button", {
+            type: "button",
+            textContent: busy === "parallel" ? "Making…" : "Parallel corpus…",
+            title: "Every translated sentence beside its translation, for machine translation and alignment: a table, the two sides line for line (Moses, OPUS) and TMX for translation memories. Texts that are not open are left out unless the box below is ticked",
+            disabled: busy !== null,
+            onclick: () => void exportParallelCorpus(),
+          }),
         ),
         h(
           "div",
@@ -890,6 +906,7 @@ export const textsPanel: PanelDef = {
             },
             { id: "texts:dictionary", title: "Print the dictionary", group: "Publish", words: ["lexicon", "html", "print", "word list"], run: () => void exportDict() },
             { id: "texts:flashcards", title: "Make flashcards for learners", group: "Publish", words: ["anki", "quizlet", "learn", "vocabulary"], run: () => void exportCards() },
+            { id: "texts:parallel", title: "Save a parallel corpus (sentences and translations)", group: "Publish", words: ["machine translation", "mt", "tmx", "moses", "opus", "bitext", "aligned"], run: () => void exportParallelCorpus() },
             { id: "texts:spelling", title: "Save a spelling dictionary (spell checker)", group: "Publish", words: ["hunspell", "libreoffice", "firefox", "spellcheck", "orthography"], run: () => void exportSpellingFiles() },
             { id: "texts:website", title: "Publish as a website", group: "Publish", words: ["community", "web", "app", "site", "share"], run: () => void publishSite() },
             { id: "texts:cldf", title: "Publish as CLDF", group: "Publish", words: ["dataset", "cldf", "zenodo", "data paper"], run: () => void publishCldf() },
