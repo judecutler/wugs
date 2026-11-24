@@ -22,7 +22,7 @@ import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
 import { domainsOf, loansLine, categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
-import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, paradigmSheet, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
+import { attestedForms, attestedLine, axesOf, fillable, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, paradigmSheet, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
 import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry, takeWantedList } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { checklistSheet } from "../lexicon/checklist";
@@ -867,11 +867,11 @@ export const lexiconPanel: PanelDef = {
                 ),
               ),
             );
-      return h("section", { className: "lx-paradigm" }, head, form, table, others, attestedBlock(e, pd));
+      return h("section", { className: "lx-paradigm" }, head, form, table, others, attestedBlock(e, pd, t));
     }
 
     /** The word forms of the entry its glossed words show, to fill the grid from. */
-    function attestedBlock(e: EntryView, pd: ParadigmView) {
+    function attestedBlock(e: EntryView, pd: ParadigmView, t: Template) {
       const at = attested?.lexeme === e.id ? attested : null;
       if (at === null) {
         const b = h("button", {
@@ -887,10 +887,26 @@ export const lexiconPanel: PanelDef = {
       if (at.lines === null) return h("p", { className: "note", textContent: "Finding the entry's forms in the texts…" });
       const held = [...pd.cells.flatMap((c) => c.forms), ...pd.others].map((f) => f.form);
       const forms = attestedForms(at.lines, held);
+      // Forms whose glosses name one empty cell of this template (1SG, 3PL…).
+      const fills = fillable(t, pd.cells, forms);
+      const fillButton =
+        fills.length === 0
+          ? null
+          : h("button", {
+              type: "button",
+              className: "lx-pdg-fill",
+              textContent: fills.length === 1 ? "Put 1 form into its empty cell" : `Put ${fills.length} forms into their empty cells`,
+              title: `Each form whose glosses name one cell of «${t.label}» (such as 1SG or 3PL) goes into that cell when it is empty: ${fills.map((f) => `${f.form} → ${cellLabel(t, f.features)}`).join(", ")}`,
+              onclick: () => {
+                for (const f of fills) void run(() => lexiconFillCell({ id: e.id, formId: null, features: f.features, surface: f.form, axes: axesOf(t) }), false, t);
+                showToast({ tone: "info", lines: [`Put ${fills.length === 1 ? "1 form" : `${fills.length} forms`} from the texts into the grid by their glosses. Check them; × takes one out.`] });
+              },
+            });
       return h(
         "div",
         { className: "lx-pdg-attested" },
         h("p", { className: "note", textContent: attestedLine(forms, at.lines.length, at.total) }),
+        fillButton,
         forms.length === 0
           ? null
           : h(

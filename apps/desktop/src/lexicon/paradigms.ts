@@ -229,6 +229,53 @@ export function attestedLine(forms: readonly Attested[], lines: number, total: n
   return `${kinds} of this entry in the texts${more}.${gap}`;
 }
 
+/** A gloss line's grammatical parts in upper case, person digits apart:
+ * `1SG-count-PST` gives 1, SG, PST. Lower-case meanings are left out. */
+export function grammaticalParts(glosses: string): Set<string> {
+  const out = new Set<string>();
+  for (const piece of glosses.split(/[\s\-=~.:;<>]+/u)) {
+    if (piece === "" || /\p{Ll}/u.test(piece)) continue;
+    const m = /^(\d)?(.*)$/u.exec(piece)!;
+    if (m[1] !== undefined) out.add(m[1]);
+    if (m[2] !== "") out.add(m[2]!.toUpperCase());
+  }
+  return out;
+}
+
+/** The template cell a word's glosses name: one value of each axis among its
+ * grammatical parts, and only one (a gloss with both SG and PL names none). */
+export function cellOf(t: Template, glosses: string | null): Features | null {
+  if (glosses === null) return null;
+  const parts = grammaticalParts(glosses);
+  const pick = (a: Axis): string | null => {
+    const hit = a.values.filter((v) => parts.has(v.value.toUpperCase()));
+    return hit.length === 1 ? hit[0]!.value : null;
+  };
+  const row = pick(t.rows);
+  if (row === null) return null;
+  if (t.cols === null) return cellFeatures(t, row, null);
+  const col = pick(t.cols);
+  return col === null ? null : cellFeatures(t, row, col);
+}
+
+/** Attested forms that can go into an empty cell of the grid: not in the
+ * paradigm yet, their glosses naming one cell, that cell empty, and the
+ * commonest form when two name the same cell. */
+export function fillable<C extends CellLike>(t: Template, cells: C[], forms: readonly Attested[]): { form: string; features: Features }[] {
+  const taken = new Set(cells.filter((c) => c.forms.length > 0).map((c) => JSON.stringify(Object.entries(c.features).sort())));
+  const out: { form: string; features: Features }[] = [];
+  for (const f of forms) {
+    if (f.inGrid) continue;
+    const features = cellOf(t, f.glosses);
+    if (features === null) continue;
+    const key = JSON.stringify(Object.entries(features).sort());
+    if (taken.has(key)) continue;
+    taken.add(key);
+    out.push({ form: f.form, features });
+  }
+  return out;
+}
+
 /** The paradigm as a table for a paper, in the format Copy example uses:
  * an HTML table (with the same as tab-separated text beside it) for Word
  * and Google Docs, a LaTeX `tabular`, or columns lined up with spaces. */
