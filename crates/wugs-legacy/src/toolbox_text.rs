@@ -128,6 +128,8 @@ pub(crate) struct Morph {
     pub(crate) gloss: String,
     /// The one lexicon sense with this root's form and gloss, found before the txn.
     pub(crate) sense: Option<String>,
+    /// Its part of speech from a `\ps` line under the morphs, kept as `x.toolbox.ps`.
+    pub(crate) ps: String,
 }
 
 pub(crate) struct Sentence {
@@ -169,8 +171,8 @@ fn ms(v: &str) -> Option<f64> {
     (secs.is_finite() && secs >= 0.0).then_some(secs * 1000.0)
 }
 
-/// One bundle: a `\tx` line and the `\mb` / `\ge` lines under it.
-fn bundle(tx: &str, mb: Option<&str>, ge: Option<&str>) -> Vec<(String, Vec<Morph>)> {
+/// One bundle: a `\tx` line and the `\mb` / `\ge` / `\ps` lines under it.
+fn bundle(tx: &str, mb: Option<&str>, ge: Option<&str>, ps: Option<&str>) -> Vec<(String, Vec<Morph>)> {
     let words = columns(tx);
     let word_starts: Vec<usize> = words.iter().map(|w| w.0).collect();
     let mut out: Vec<(String, Vec<Morph>)> = words.iter().map(|w| (w.1.clone(), Vec::new())).collect();
@@ -185,7 +187,15 @@ fn bundle(tx: &str, mb: Option<&str>, ge: Option<&str>) -> Vec<(String, Vec<Morp
             }
         }
     }
-    for ((col, written), gloss) in morphs.iter().zip(glosses) {
+    let mut parts: Vec<Vec<String>> = vec![Vec::new(); morphs.len()];
+    if let Some(ps) = ps {
+        for (col, x) in columns(ps) {
+            if !morphs.is_empty() {
+                parts[under(&morph_starts, col)].push(x);
+            }
+        }
+    }
+    for (((col, written), gloss), ps) in morphs.iter().zip(glosses).zip(parts) {
         if words.is_empty() {
             break;
         }
@@ -193,7 +203,8 @@ fn bundle(tx: &str, mb: Option<&str>, ge: Option<&str>) -> Vec<(String, Vec<Morp
         // Toolbox writes *** for a morph it could not gloss.
         let gloss = gloss.into_iter().filter(|g| g != "***").collect::<Vec<_>>().join(" ");
         let gloss = gloss.trim_matches(|c| matches!(c, '-' | '=')).to_string();
-        out[under(&word_starts, *col)].1.push(Morph { surface, kind, gloss, sense: None });
+        let ps = ps.into_iter().filter(|x| x != "***").collect::<Vec<_>>().join(" ");
+        out[under(&word_starts, *col)].1.push(Morph { surface, kind, gloss, sense: None, ps });
     }
     out
 }
@@ -210,12 +221,14 @@ fn parse(input: &str, fallback_title: &str, report: &mut TextReport) -> Vec<Text
     let mut pending_tx: Option<&str> = None;
     let mut pending_mb: Option<&str> = None;
     let mut pending_ge: Option<&str> = None;
-    let flush_bundle = |s: &mut Option<Sentence>, tx: &mut Option<&str>, mb: &mut Option<&str>, ge: &mut Option<&str>| {
+    let mut pending_ps: Option<&str> = None;
+    let flush_bundle = |s: &mut Option<Sentence>, tx: &mut Option<&str>, mb: &mut Option<&str>, ge: &mut Option<&str>, ps: &mut Option<&str>| {
         if let (Some(sent), Some(t)) = (s.as_mut(), tx.take()) {
-            sent.words.extend(bundle(t, mb.take(), ge.take()));
+            sent.words.extend(bundle(t, mb.take(), ge.take(), ps.take()));
         }
         *mb = None;
         *ge = None;
+        *ps = None;
     };
     let finish = |s: Option<Sentence>, texts: &mut Vec<Text>| {
         if let Some(s) = s {
@@ -230,22 +243,23 @@ fn parse(input: &str, fallback_title: &str, report: &mut TextReport) -> Vec<Text
         match m {
             "_sh" | "_DateStampHasFourDigitYear" => {}
             "id" => {
-                flush_bundle(&mut current, &mut pending_tx, &mut pending_mb, &mut pending_ge);
+                flush_bundle(&mut current, &mut pending_tx, &mut pending_mb, &mut pending_ge, &mut pending_ps);
                 finish(current.take(), &mut texts);
                 texts.push(Text { title: if value.is_empty() { fallback_title.to_string() } else { value.to_string() }, sentences: Vec::new() });
             }
             "ref" => {
-                flush_bundle(&mut current, &mut pending_tx, &mut pending_mb, &mut pending_ge);
+                flush_bundle(&mut current, &mut pending_tx, &mut pending_mb, &mut pending_ge, &mut pending_ps);
                 finish(current.take(), &mut texts);
                 current = Some(Sentence { reference: value.to_string(), words: Vec::new(), translation: String::new(), notes: Vec::new(), start: None, end: None });
             }
             _ if current.is_none() => report.not_carried.add(m),
             "tx" => {
-                flush_bundle(&mut current, &mut pending_tx, &mut pending_mb, &mut pending_ge);
+                flush_bundle(&mut current, &mut pending_tx, &mut pending_mb, &mut pending_ge, &mut pending_ps);
                 pending_tx = Some(line);
             }
             "mb" if pending_tx.is_some() && pending_mb.is_none() => pending_mb = Some(line),
             "ge" if pending_mb.is_some() && pending_ge.is_none() => pending_ge = Some(line),
+            "ps" if pending_mb.is_some() && pending_ps.is_none() => pending_ps = Some(line),
             "ft" => {
                 let s = current.as_mut().unwrap();
                 if !value.is_empty() {
@@ -267,7 +281,7 @@ fn parse(input: &str, fallback_title: &str, report: &mut TextReport) -> Vec<Text
             other => report.not_carried.add(other),
         }
     }
-    flush_bundle(&mut current, &mut pending_tx, &mut pending_mb, &mut pending_ge);
+    flush_bundle(&mut current, &mut pending_tx, &mut pending_mb, &mut pending_ge, &mut pending_ps);
     finish(current.take(), &mut texts);
     texts.retain(|t| !t.sentences.is_empty());
     texts
@@ -381,6 +395,9 @@ pub(crate) fn write_texts(p: &mut Project, texts: Vec<Text>, tier: &str, transla
                             report.linked += 1;
                         }
                     }
+                    if !m.ps.is_empty() {
+                        fields.push(("x.toolbox.ps", Value::str(&m.ps)));
+                    }
                     t.create("morph", "mor", &tid, fields);
                     report.morphs += 1;
                 }
@@ -453,8 +470,9 @@ pub fn export_toolbox_text(p: &Project, title: &str, sentences: &[(String, Optio
             out.push_str(&format!("\\ELANBegin {}\n\\ELANEnd {}\n", hms(a), hms(b)));
         }
         let tokens = p.proj.members(seg)?;
-        let (mut tx, mut mb, mut ge) = (Vec::new(), Vec::new(), Vec::new());
+        let (mut tx, mut mb, mut ge, mut ps) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
         let mut analysed = false;
+        let mut any_ps = false;
         if tokens.is_empty() {
             for w in p.proj.field_str(seg, "content")?.unwrap_or_default().split_whitespace() {
                 tx.push((w.to_string(), shown(w) + 1));
@@ -468,23 +486,27 @@ pub fn export_toolbox_text(p: &Project, title: &str, sentences: &[(String, Optio
                 let surface = marked(&p.proj.field_str(&m, "surface")?.unwrap_or_default(), &kind);
                 let gloss = p.proj.field_str(&m, "gloss")?.unwrap_or_default();
                 let gloss = if gloss.is_empty() { "***".to_string() } else { marked(&gloss, &kind) };
-                let w = shown(&surface).max(shown(&gloss)) + 1;
-                cells.push((surface, gloss, w));
+                let part = p.proj.field_str(&m, "x.toolbox.ps")?.unwrap_or_default();
+                any_ps |= !part.is_empty();
+                let w = shown(&surface).max(shown(&gloss)).max(shown(&part)) + 1;
+                cells.push((surface, gloss, part, w));
                 analysed = true;
             }
-            let inner: usize = cells.iter().map(|c| c.2).sum();
+            let inner: usize = cells.iter().map(|c| c.3).sum();
             let word_w = (shown(&form) + 1).max(inner);
             tx.push((form, word_w));
             // The last morph takes up the slack, so the next word's morphs start under it.
             let n = cells.len();
-            for (i, (surface, gloss, w)) in cells.into_iter().enumerate() {
+            for (i, (surface, gloss, part, w)) in cells.into_iter().enumerate() {
                 let w = if i + 1 == n { w + word_w - inner } else { w };
                 mb.push((surface, w));
                 ge.push((gloss, w));
+                ps.push((if part.is_empty() { "***".to_string() } else { part }, w));
             }
             if n == 0 {
                 mb.push((String::new(), word_w));
                 ge.push((String::new(), word_w));
+                ps.push((String::new(), word_w));
             }
         }
         out.push_str(&aligned("tx", &tx));
@@ -494,6 +516,10 @@ pub fn export_toolbox_text(p: &Project, title: &str, sentences: &[(String, Optio
             out.push('\n');
             out.push_str(&aligned("ge", &ge));
             out.push('\n');
+            if any_ps {
+                out.push_str(&aligned("ps", &ps));
+                out.push('\n');
+            }
         }
         if let Some(t) = translation.as_deref().filter(|t| !t.trim().is_empty()) {
             out.push_str(&format!("\\ft {}\n", t.trim()));

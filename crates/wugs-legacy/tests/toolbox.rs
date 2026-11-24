@@ -437,7 +437,7 @@ fn interlinear_texts_come_in_word_by_word() {
     let r = import_toolbox_text(&mut p, TEXT, "sample-text", &utt, Some(&tr)).unwrap();
     assert_eq!((r.texts.len(), r.sentences, r.words, r.morphs), (2, 3, 7, 9));
     assert_eq!((r.translations, r.notes, r.timed, r.linked), (2, 1, 1, 2));
-    assert_eq!(r.not_carried.0.get("ps"), Some(&1), "{:?}", r.not_carried.0);
+    assert_eq!(r.not_carried.0.get("ps"), None, "a \\ps line under the morphs is carried: {:?}", r.not_carried.0);
     let title = |t: &str| p.proj.field_str(t, "title").unwrap().unwrap();
     assert_eq!((title(&r.texts[0]).as_str(), title(&r.texts[1]).as_str()), ("Counting", "Market"));
     let segs: Vec<String> = p.proj.ordered_children("text", &r.texts[0], "segment").unwrap().into_iter().filter(|s| p.proj.field_str(s, "tier").unwrap().as_deref() == Some(utt.as_str())).collect();
@@ -459,13 +459,16 @@ fn interlinear_texts_come_in_word_by_word() {
         })
         .collect();
     assert_eq!(morphs, vec![("kani".into(), "root".into(), "count".into(), Some(count.clone())), ("ma".into(), "clitic".into(), "FOC".into(), None)]);
+    // Each morph keeps its part of speech from the \\ps line.
+    let first: Vec<String> = p.proj.members(&segs[0]).unwrap().iter().flat_map(|t| p.proj.members(t).unwrap()).map(|m| p.proj.field_str(&m, "x.toolbox.ps").unwrap().unwrap_or_default()).collect();
+    assert_eq!(first, ["pro-", "v", "num"]);
     // The translation pairs with its sentence.
     let tr_segs = p.proj.children_by_ref("parent", &segs[0], "segment").unwrap();
     assert_eq!(content(&tr_segs[0]), "I count one.");
     // Back out as Toolbox writes it, morphs and glosses under their words.
     let sentences: Vec<(String, Option<String>)> = segs.iter().map(|s| (s.clone(), p.proj.children_by_ref("parent", s, "segment").unwrap().first().map(|t| content(t)))).collect();
     let out = wugs_legacy::toolbox_text::export_toolbox_text(&p, "Counting", &sentences).unwrap();
-    assert!(out.contains("\\ref Counting.001\n\\ELANBegin 00:00:01.250\n\\ELANEnd 00:00:03.900\n\\tx nikani     ŋai\n\\mb ni-  kani  ŋai\n\\ge 1SG- count one\n\\ft I count one.\n\\nt Speaker counts on her fingers.\n"), "{out}");
+    assert!(out.contains("\\ref Counting.001\n\\ELANBegin 00:00:01.250\n\\ELANEnd 00:00:03.900\n\\tx nikani     ŋai\n\\mb ni-  kani  ŋai\n\\ge 1SG- count one\n\\ps pro- v     num\n\\ft I count one.\n\\nt Speaker counts on her fingers.\n"), "{out}");
     assert!(out.contains("\\tx kanima     toru kesi\n\\mb kani  =ma  toru kesi\n\\ge count =FOC two  three\n"), "{out}");
     // A fresh project reads the export back to the same words, morphs and glosses.
     let (root2, mut q) = temp_project();
