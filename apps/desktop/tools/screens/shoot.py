@@ -1119,6 +1119,10 @@ def main():
             run.shot("state-mlu-age", run.page.locator(".panel-progress .pg-speakers"))
             if run.page.locator(".panel-progress .pg-age-dot").count() != 3 or "rose from" not in run.page.locator(".panel-progress .pg-speakers").inner_text():
                 failures.append("Progress did not chart the child's MLU by age")
+            brown = run.page.locator(".panel-progress .pg-brown")
+            brown.scroll_into_view_if_needed()
+            if brown.locator("tbody tr").count() != 14 or "Last to appear" not in run.page.locator(".panel-progress .pg-speakers").inner_text():
+                failures.append("Progress did not list Brown's morphemes")
             # The work log, day by day.
             work = run.page.locator(".panel-progress .pg-work")
             work.scroll_into_view_if_needed()

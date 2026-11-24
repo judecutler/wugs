@@ -1108,6 +1108,10 @@ Under the table, **Vocabulary growth** draws how many different words have come 
 
 Last, **Day by day** lists what was done on each of the latest 60 days with any work: segments made, sentences transcribed and translated, words analysed, glosses typed, lexicon entries and senses added, notes, texts and entries imported, segments a machine wrote, and how many devices worked that day. Each thing counts once a day however often it was edited, so retyping a sentence five times is one sentence. Work done by hand is kept apart from imports and machine suggestions. The line above sums the last seven days, ready for a field diary, a weekly note to a supervisor or a grant report; **Copy table** copies every day. wugs reads it from the project's own history, so it covers every device that has synced, and nothing extra is stored.
 
+
+### Brown's morphemes
+
+When CHAT transcripts carry the `%mor` tier, **Brown's morphemes** under the Speakers table counts Brown's (1973) fourteen grammatical morphemes for one track (pick it from the menu), session by session (text by text), as CLAN's KIDEVAL does: the *-ing* progressive, *in*, *on*, the plural, the irregular past, the possessive *'s*, the copula and auxiliary in full and contracted, the articles, the regular past *-ed*, and the regular and irregular third person singular. It shows when each first appears, and the note names the ones that appeared last. The counts are uses: Brown's mastery is 90% use where a morpheme is required, and `%mor` does not mark where one was required, so that needs a reading of the transcripts. The counts read English MOR codes. **Copy table** copies them.
 ### See the affixes in their slots
 
 The **Affixes** panel reads every glossed word in the project and lists its affixes and clitics the way a grammar's morphology chapter does. In Tongues, press **Ctrl+K** and choose **Show Affixes**.

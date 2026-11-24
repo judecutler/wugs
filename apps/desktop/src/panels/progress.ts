@@ -2,7 +2,7 @@
 // report, a deposit form or a supervisor (src-tauri/src/progress.rs). Words
 // and sums in ../progress/logic.ts. Read-only; a row opens its text.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { projectLanguage, saveDocument, consentGaps, lexiconList, errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog, worldLand } from "../api";
+import { brownMorphemes, projectLanguage, saveDocument, consentGaps, lexiconList, errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog, worldLand } from "../api";
 import { placesNote, textPlaces } from "../progress/places";
 import { corpusDescription } from "../progress/description";
 import { open as pickFolder } from "@tauri-apps/plugin-dialog";
@@ -13,6 +13,7 @@ import { mapView } from "../typology/map";
 import { dayLabel, workColumns, worklogLine, worklogTsv, type Day } from "../progress/worklog";
 import { localDay } from "../dates";
 import { hasPeople, isChild, speakerCells, speakerColumns, speakersNote, speakersTsv, type SpeakerRow } from "../progress/speakers";
+import { brownNote, brownRows, brownTsv, type BrownTrack } from "../progress/brown";
 import { ageLabel, agePoints, ageNote, ageTicks, ageTsv, inMorphemes, plotted } from "../progress/mluage";
 import { standalone } from "./vowels";
 import { growthNote, growthPath, ticks, type Box, type Growth } from "../progress/growth";
@@ -84,6 +85,9 @@ export const progressPanel: PanelDef = {
     let speakers: SpeakerRow[] = [];
     /** The track whose MLU is charted over age. */
     let ageTrack: string | null = null;
+    /** Brown's morphemes per track and session, and the track shown. */
+    let brown: BrownTrack[] = [];
+    let brownTrack: string | null = null;
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every text's figures and the totals, to paste into a spreadsheet or a report" });
     const recount = h("button", { type: "button", textContent: "Count again" });
     const describe = h("button", { type: "button", textContent: "Describe the corpus…", title: "Save a description of the collection for a data paper, an archive deposit or a report: its contents, annotation, speakers and access, with places left to write" });
@@ -289,7 +293,33 @@ export const progressPanel: PanelDef = {
         h("thead", {}, h("tr", {}, ...speakerColumns(speakers).map((c, i) => h("th", { textContent: c, className: i < textCol ? "txt" : "" })))),
         h("tbody", {}, ...speakers.map((r) => h("tr", {}, ...speakerCells(r, people).map((c, i) => h("td", { textContent: c, className: i < textCol ? "" : "num" }))))),
       );
-      speakersBox.replaceChildren(h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Speakers" }), copySpeakers), h("div", { className: "pg-rows" }, t), h("p", { className: "note", textContent: speakersNote(speakers) }), ...ageChart());
+      speakersBox.replaceChildren(h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Speakers" }), copySpeakers), h("div", { className: "pg-rows" }, t), h("p", { className: "note", textContent: speakersNote(speakers) }), ...ageChart(), ...brownTable());
+    };
+
+    /** Brown's fourteen morphemes session by session, for tracks with CHAT's %mor. */
+    const brownTable = (): Node[] => {
+      if (brown.length === 0) return [];
+      const t = brown.find((b) => b.tier === brownTrack) ?? brown.find((b) => isChild(b.name)) ?? brown[0]!;
+      brownTrack = t.tier;
+      const picker = h("select", { className: "pg-brown-track", title: "Whose morphemes to list" }, ...brown.map((b) => h("option", { value: b.tier, textContent: b.name || "(no name)", selected: b.tier === t.tier })));
+      picker.setAttribute("aria-label", "Track");
+      picker.onchange = () => {
+        brownTrack = picker.value;
+        drawSpeakers();
+      };
+      const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy each morpheme's uses session by session" });
+      copy.onclick = () =>
+        void writeText(brownTsv(t)).then(
+          () => showToast({ tone: "info", lines: [`Copied Brown's morphemes for ${t.name || "the track"}.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      const table = h(
+        "table",
+        { className: "pg-table pg-brown" },
+        h("thead", {}, h("tr", {}, h("th", { textContent: "Morpheme" }), ...t.sessions.map((s) => h("th", { textContent: s.title, title: `${s.utterances} utterances with %mor` })), h("th", { textContent: "All" }))),
+        h("tbody", {}, ...brownRows(t).map((r) => h("tr", { className: r.total === 0 ? "pg-brown-none" : "" }, h("th", { scope: "row", textContent: r.morpheme }), ...r.counts.map((c) => h("td", { textContent: c === 0 ? "·" : String(c) })), h("td", { textContent: String(r.total) })))),
+      );
+      return [h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Brown's morphemes" }), picker, copy), h("div", { className: "pg-rows" }, table), h("p", { className: "note", textContent: brownNote(t) })];
     };
 
     /** MLU session by session against the speaker's age, for tracks with an age in two texts or more. */
@@ -385,6 +415,17 @@ export const progressPanel: PanelDef = {
           if (mine !== seq) return;
           work = [];
           workBox.replaceChildren();
+        },
+      );
+      brownMorphemes().then(
+        (r) => {
+          if (mine !== seq) return;
+          brown = r;
+          drawSpeakers();
+        },
+        () => {
+          if (mine !== seq) return;
+          brown = [];
         },
       );
       speakerLengths().then(

@@ -4,6 +4,7 @@ pub mod capability;
 pub mod clips;
 pub mod collexemes;
 pub mod capture;
+pub mod brown;
 pub mod chat;
 pub mod chat_mor;
 pub mod exmaralda;
@@ -430,6 +431,12 @@ fn distinctive_collexemes(s: State<SessionThread>, first: String, first_slot: us
 #[tauri::command(async)]
 fn phon_pairs(s: State<SessionThread>) -> Result<phon_accuracy::PhonPairs, String> {
     s.run(phon_accuracy::pairs)
+}
+
+/// Brown's fourteen morphemes in CHAT's %mor, by track and text (src/brown.rs).
+#[tauri::command(async)]
+fn brown_morphemes(s: State<SessionThread>) -> Result<Vec<brown::BrownTrack>, String> {
+    s.run(brown::brown)
 }
 
 /// The words used in the same contexts as a word (src/similar.rs).
@@ -2840,6 +2847,7 @@ pub fn run() {
             similar_words,
             collexemes,
             phon_pairs,
+            brown_morphemes,
             distinctive_collexemes,
             keywords,
             tier_glossing,
