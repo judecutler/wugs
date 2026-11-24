@@ -455,6 +455,7 @@ const LEXICON = [
     kits: [
       { kit: tongues, bundled: true },
       ...(window.__WUGS_SCREENS__.scrolls ? [{ kit: window.__WUGS_SCREENS__.scrolls, bundled: true }] : []),
+      ...(window.__WUGS_SCREENS__.glyphs ? [{ kit: window.__WUGS_SCREENS__.glyphs, bundled: true }] : []),
       { kit: sprint, bundled: false },
     ],
     broken: [{ file: "old-transcription.toml", problems: ["line 14, column 1: unknown section [scripts]; kits cannot carry scripts", "line 3, column 6: id must be letters, digits, dots and dashes"] }],

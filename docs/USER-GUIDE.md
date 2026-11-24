@@ -34,9 +34,9 @@ The first time you open it, a short tour shows what each panel is for. Press **E
 
 The tutorial is an ordinary project kept in wugs's own folder on this computer. Change anything you like. It is never mixed into your own projects.
 
-## Switch between Tongues and Scrolls
+## Switch between Tongues, Scrolls and Glyphs
 
-wugs comes with two kits: **Tongues** for fieldwork (recordings, transcription, glossing, the dictionary) and **Scrolls** for corpus work (every occurrence in context, searching, glossing sentences). Click the kit's name at the top left, such as **Tongues**, and choose the other kit.
+wugs comes with three kits: **Tongues** for fieldwork (recordings, transcription, glossing, the dictionary), **Scrolls** for corpus work (every occurrence in context, searching, glossing sentences) and **Glyphs** for historical work (sound changes over the lexicon, word lists compared with other languages, the signs of a script). Click the kit's name at the top left, such as **Tongues**, and choose another kit.
 
 Your project stays open and nothing in it changes. Only the panels and their arrangement change, and each kit remembers its own arrangement. You can also press **Ctrl+K** and type "switch". **Manage kits…** in the same menu opens the Kits panel, where you can make your own kit.
 

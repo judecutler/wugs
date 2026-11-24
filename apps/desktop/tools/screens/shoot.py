@@ -143,7 +143,7 @@ THEME = None
 def init_script(auto_open):
     flag = "true" if auto_open else "false"
     return (
-        f"window.__WUGS_SCREENS__ = {{ autoOpen: {flag}, theme: {json.dumps(THEME)}, kit: {json.dumps(bundled_kit())}, scrolls: {json.dumps(bundled_kit('scrolls'))}, land: {json.dumps((HERE.parents[3] / "datasets" / "naturalearth" / "land-110m.path").read_text().strip())} }};\n"
+        f"window.__WUGS_SCREENS__ = {{ autoOpen: {flag}, theme: {json.dumps(THEME)}, kit: {json.dumps(bundled_kit())}, scrolls: {json.dumps(bundled_kit('scrolls'))}, glyphs: {json.dumps(bundled_kit('glyphs'))}, land: {json.dumps((HERE.parents[3] / "datasets" / "naturalearth" / "land-110m.path").read_text().strip())} }};\n"
         + (HERE / "fixtures.js").read_text()
         + "\n"
         + (HERE / "mock-tauri.js").read_text()
@@ -469,6 +469,14 @@ def main():
             run.page.click(".kit-switcher")
             run.page.wait_for_timeout(200)
             run.shot("state-kit-switcher")
+            # Glyphs, the historical kit, opens its own tools.
+            run.page.locator(".menu-list [role=menuitemradio]", has_text="Glyphs").click()
+            run.page.wait_for_timeout(900)
+            run.shot("state-glyphs")
+            if run.page.locator(".panel-soundchanges").count() == 0:
+                failures.append("Glyphs did not open the Sound changes panel")
+            run.page.click(".kit-switcher")
+            run.page.wait_for_timeout(200)
             run.page.locator(".menu-list [role=menuitemradio]", has_text="Scrolls").click()
             run.page.wait_for_timeout(900)
             run.shot("state-scrolls")
