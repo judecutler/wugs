@@ -510,6 +510,12 @@ def main():
             run.shot("state-concordance", run.page.locator(".panel-concordance"))
             if run.page.locator(".panel-concordance .cc-row").count() == 0:
                 failures.append("the concordance showed no rows")
+            # Thinning a short concordance keeps every line.
+            before = run.page.locator(".panel-concordance .cc-row").count()
+            run.page.select_option(".panel-concordance .cc-thin", "50")
+            if run.page.locator(".panel-concordance .cc-row").count() != before:
+                failures.append("thinning a short concordance dropped lines")
+            run.page.select_option(".panel-concordance .cc-thin", "0")
             # The lines' sentences as numbered examples for a paper.
             run.page.locator(".panel-concordance .cc-bar button", has_text="Copy as examples").click()
             run.page.wait_for_timeout(800)

@@ -121,3 +121,36 @@ export function withTags(h: Hit): Hit {
 
 /** Right-to-left scripts (Hebrew, Arabic, Syriac, Thaana, N'Ko …): the row is laid out from the right. */
 export const isRtl = (s: string): boolean => /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]/u.test(s);
+
+/** Sample sizes a concordance can be thinned to. */
+export const THIN_SIZES = [50, 100, 250, 500] as const;
+
+/** A random sample of `n` lines that the same `seed` always gives again
+ * (CQPweb's and Sketch Engine's "thin"), kept in the order found. */
+export function thin(hits: readonly Hit[], n: number, seed: string): Hit[] {
+  if (n <= 0 || hits.length <= n) return [...hits];
+  // FNV-1a of the seed, then mulberry32.
+  let s = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) s = Math.imul(s ^ seed.charCodeAt(i), 0x01000193);
+  const next = () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const idx = hits.map((_, i) => i);
+  for (let i = 0; i < n; i++) {
+    const j = i + Math.floor(next() * (idx.length - i));
+    [idx[i], idx[j]] = [idx[j]!, idx[i]!];
+  }
+  return idx
+    .slice(0, n)
+    .sort((a, b) => a - b)
+    .map((i) => hits[i]!);
+}
+
+/** Said after the count line when the lines are thinned. */
+export function thinLine(shown: number, read: number, total: number): string {
+  const of = read < total ? `the first ${read.toLocaleString()} found` : `${read.toLocaleString()} lines`;
+  return ` Thinned to ${shown.toLocaleString()} at random of ${of}; the same query gives the same ${shown.toLocaleString()}.`;
+}

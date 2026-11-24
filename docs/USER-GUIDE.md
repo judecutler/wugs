@@ -984,6 +984,8 @@ The **Concordance** panel lists every place a word is used, one line per occurre
 
 Click a line to open its segment on the Timeline and in Transcribe and Gloss. Click ▶ to play it. **Copy rows** copies every line as a table you can paste into a spreadsheet. A morph or gloss line also shows the whole word's analysis under it.
 
+When a search finds too many lines to read, choose **50**, **100**, **250** or **500 at random** beside the sort (instead of **Every line**) to look at a sample, as CQPweb's "thin" does. The sample keeps the lines in their order and spreads over the whole result. The same search always gives the same sample, so a count you report from it can be checked. Copy rows and Copy as examples copy the sample. Only the first 2000 lines found are sampled, and the count line says so.
+
 **Copy as examples** copies the sentences the lines come from, each once and in the order shown, as numbered glossed examples with their translations, ready to paste into a paper. It uses the format last chosen for **Copy example** in the Gloss panel (Word or Google Docs, LaTeX gb4e or ExPex, or plain text). A line from a translation brings the sentence it translates. At most 50 sentences are copied at once.
 
 **Clusters** (AntConc's Clusters tool) counts the word sequences that hold what you searched for: choose how many words (2 to 5) and whether the item comes first, last or anywhere in them. `kani` with 2 words, item first, lists `kani ŋai`, `kani haru` and so on, commonest first, with how many lines and texts each is in. Click a cluster to see its lines. Clusters are counted over the lines found (at most 2000); **Copy rows** copies them as a table.
