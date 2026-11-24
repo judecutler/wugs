@@ -1,7 +1,8 @@
 // The transcription loop (TONGUES-UI build order step 3): one tier's
 // segments in time order, the selected one editable in place. Enter saves
 // and plays the next, so hearing and typing never leave the keyboard.
-import { assistSuggest, characterInventory, editSegmentContent, errorText, setTypingShortcuts, soundWords, type SegmentRow, type TierRow } from "../api";
+import { open as pickFile } from "@tauri-apps/plugin-dialog";
+import { assistSuggest, characterInventory, editSegmentContent, errorText, projectLanguage, saveDocument, setTypingShortcuts, soundWords, type SegmentRow, type TierRow } from "../api";
 import { suggestable, tint, tintTitle } from "../assist/logic";
 import { emptyState, h } from "../dom";
 import * as playback from "../playback";
@@ -11,7 +12,7 @@ import { IPA_GROUPS, projectGroup, type IpaGroup } from "../transcribe/ipa";
 import { countWords, didYouMean, spellIndex, type SpellIndex } from "../checks/spelling";
 import { forms, tokenize } from "../gloss/tokenizer";
 import { matchCase, replaceWord } from "../transcribe/spell";
-import { EXAMPLE_TABLE, parseShortcuts, shortcutsLine } from "../transcribe/shortcuts";
+import { EXAMPLE_TABLE, keymanId, keymanSource, parseShortcuts, shortcutsLine } from "../transcribe/shortcuts";
 import { loadShortcuts, rememberShortcuts, shortcutCount, shortcutTable, typeWithShortcuts } from "../typing";
 import { createFieldController, type FieldController } from "../transcribe/field";
 import { preview as xsampaPreview, xsampaToIpa, XSAMPA_KEY } from "../transcribe/xsampa";
@@ -76,6 +77,28 @@ export const transcribePanel: PanelDef = {
             (e) => showToast({ tone: "error", lines: [errorText(e)] }),
           ),
       });
+      const keyman = h("button", {
+        type: "button",
+        textContent: "Make a Keyman keyboard…",
+        title: "Save the saved shortcuts as a Keyman keyboard source (.kmn), so the same letters type the same way in Word, the browser and on phones",
+        disabled: shortcutCount() === 0,
+        onclick: () =>
+          void (async () => {
+            const lang = await projectLanguage().catch(() => null);
+            const name = lang?.name ?? "";
+            const { source, left } = keymanSource(parseShortcuts(shortcutTable()).shortcuts, name);
+            const folder = await pickFile({ directory: true, title: "Where should the keyboard go?" });
+            if (typeof folder !== "string") return;
+            try {
+              const r = await saveDocument({ folder, title: keymanId(name), extension: "kmn", contents: source });
+              const lines = [`Saved the keyboard as ${r.path}. Open it in Keyman Developer and build it to install it anywhere Keyman runs.`];
+              if (left.length > 0) lines.push(`Left out, as their last character is not on a keyboard: ${left.map((s) => s.from).join(", ")}.`);
+              showToast({ tone: left.length > 0 ? "warn" : "info", lines });
+            } catch (e) {
+              showToast({ tone: "error", lines: [errorText(e)] });
+            }
+          })(),
+      });
       const example =
         shortcutTable().trim() === ""
           ? h("button", { type: "button", textContent: "Start from an example", onclick: () => { area.value = EXAMPLE_TABLE; show(); area.focus(); } })
@@ -84,7 +107,7 @@ export const transcribePanel: PanelDef = {
         h("p", { className: "note", textContent: `${shortcutsLine(shortcutCount())} A line each: what you type, a space, and what it becomes. It changes as soon as the last character is typed, wherever the language is typed: transcriptions, breakdowns, headwords and elicited words.` }),
         area,
         problems,
-        h("div", { className: "tx-shortcuts-actions" }, save, example),
+        h("div", { className: "tx-shortcuts-actions" }, save, keyman, example),
       );
     };
     shortcutsToggle.onclick = () => {
