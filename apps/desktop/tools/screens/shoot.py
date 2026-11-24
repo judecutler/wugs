@@ -49,6 +49,7 @@ PANELS = [
     ("wordtypes", "Words to gloss"),
     ("notes", "Notes"),
     ("wordsketch", "Word sketch"),
+    ("wordorder", "Word order"),
     ("soundchanges", "Sound changes"),
     ("compare", "Compare word lists"),
     ("orthography", "Orthography"),
@@ -639,6 +640,13 @@ def main():
             run.shot("state-wordsketch", run.page.locator(".panel-wordsketch"))
             if "Objects of «eat»" not in run.page.locator(".panel-wordsketch").inner_text():
                 failures.append("Word sketch did not name the objects")
+            # Word order: WALS orders counted in the parsed sentences.
+            run.front("wordorder", "Word order")
+            run.page.locator(".panel-wordorder .wo-card").first.wait_for()
+            run.shot("state-wordorder", run.page.locator(".panel-wordorder"))
+            text = run.page.locator(".panel-wordorder").inner_text()
+            if "Use SOV as the answer" not in text or "Too few to tell" not in text:
+                failures.append("Word order did not suggest SOV or hold back on too few")
             # Sound changes: example rules over the lexicon's headwords.
             run.front("soundchanges", "Sound changes")
             run.page.locator(".panel-soundchanges button", has_text="Example rules").click()

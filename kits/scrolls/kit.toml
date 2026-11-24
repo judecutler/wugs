@@ -29,6 +29,7 @@ enabled = [
   "collocates",                    # which words keep company with a word
   "keywords",                      # which words set a text apart from the others
   "wordsketch",                    # a lemma's subjects, objects and modifiers, from the dependency trees
+  "wordorder",                     # WALS word orders counted in the parsed sentences; not placed
   "search",
   "gloss",                         # morph analysis of one sentence
   "sentence",                      # one sentence's tags and dependency tree, to correct

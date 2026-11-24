@@ -1040,6 +1040,19 @@ const LEXICON = [
       { source: "Tadmor-2009-100", name: "Leipzig-Jakarta (100)", citation: "Tadmor 2009, via Concepticon", count: 100, listId: null },
     ],
     concept_lists: () => [listSummary],
+    word_order: () => {
+      const ex = (sentence) => ({ textId: "t-count", tierId: "tier-utt", segmentId: "u02", sentence });
+      const o = (label, code, count, sentence = null) => ({ label, code, count, example: sentence === null ? null : ex(sentence) });
+      return {
+        parsed: 120,
+        patterns: [
+          { id: "81A", title: "Order of subject, object and verb", orders: [o("SOV", "1", 31, "nani wiripa kani"), o("SVO", "2", 3, "nani kani wiripa"), o("VSO", "3", 0), o("VOS", "4", 0), o("OVS", "5", 1, "wiripa kani nani"), o("OSV", "6", 0)] },
+          { id: "83A", title: "Order of object and verb", orders: [o("OV", "1", 52, "wiripa kani"), o("VO", "2", 6, "kani wiripa")] },
+          { id: "85A", title: "Order of adposition and noun phrase", orders: [o("Postpositions", "1", 18, "tela ri"), o("Prepositions", "2", 14, "ri tela")] },
+          { id: "87A", title: "Order of adjective and noun", orders: [o("Adjective-Noun", "1", 2, "kesi tela"), o("Noun-Adjective", "2", 1, "tela kesi")] },
+        ],
+      };
+    },
     phoible_compare: () => ({
       name: "Kelani",
       own: [{ id: "9001", source: "upsid", name: "Kelani", phonemes: ["p", "b", "t", "d", "k", "ɡ", "ʔ", "m", "n", "ŋ", "s", "h", "l", "ɾ", "w", "j", "t̠ʃ", "a", "e", "i", "o", "u", "ə"] }],
