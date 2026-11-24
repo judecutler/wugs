@@ -753,6 +753,10 @@ def main():
             result = run.page.locator(".panel-durations .du-result")
             if result.count() != 1 or "Welch" not in (result.text_content() or ""):
                 failures.append("Durations: two labels with several segments each were not compared")
+            run.page.locator(".panel-durations .du-rate").scroll_into_view_if_needed()
+            run.shot("state-durations-rate", run.page.locator(".panel-durations"))
+            if "syllables a second" not in run.page.locator(".panel-durations .du-rate").inner_text():
+                failures.append("Durations did not give the speaking rate")
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); await st.selectText('t-count'); st.selectSegment(window.__keptSelection); }")
             run.page.wait_for_timeout(300)
             # Vowel space trajectories: each label's arrow from 20% to 80%, the diphthong's long.

@@ -708,6 +708,8 @@ Segment the recording one sound, syllable or word to a segment and type a label 
 
 **Show** leaves labels with few segments out of the plot. **Copy table** copies the summary, and **Copy every segment** copies one row per segment (label, start, end, duration) for R or a spreadsheet. **Save picture…** saves the plot as an SVG file.
 
+Under the comparison, **Speaking rate** reads the same track as running speech: the articulation rate (syllables a second inside the segments, pauses left out), the median and range per segment, and the speech rate with the pauses between segments. A syllable is counted for each vowel the Sounds panel finds, so it is read best from an IPA track; a long vowel counts once, a diphthong written as two vowels twice, and a segment with no vowel wugs can read is left out and counted.
+
 ### Compare two transcriptions of one recording
 
 The **Agreement** panel compares two transcription tracks of the text on screen segment by segment: two people's transcriptions of the same recording (inter-annotator agreement), a machine track against the one a person corrected, or a converted IPA track against a hand transcription. Open it from Settings (Closed panels) or with **Find an action**. To compare two annotators, give each a track on the Timeline (**Add track**), or import an ELAN file that holds both annotators' tiers.
