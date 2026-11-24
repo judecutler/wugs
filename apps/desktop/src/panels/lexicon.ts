@@ -7,7 +7,7 @@
 // template and returned whole by every form edit.
 import {
   concordance, domainsList, domainsLoadSil, errorText, lexiconAdd, lexiconAddAllomorph, lexiconAddSense, lexiconClearPicture, lexiconSetPicture, lexiconDeleteAllomorph, lexiconAssignDomain, lexiconDelete, lexiconDeleteSense, lexiconEntry,
-  deleteParadigmTemplate, lexiconDeleteForm, lexiconFillCell, lexiconMerge, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
+  deleteParadigmTemplate, domainSuggestions, lexiconDeleteForm, lexiconFillCell, lexiconMerge, paradigmTemplates, saveParadigmTemplate, lexiconList, lexiconNumberHomographs, lexiconParadigm, lexiconSetField, lexiconSetHomograph, lexiconSetSenseGloss,
   lexiconSetSenseText, lexiconUnassignDomain, lexiconAddExample, lexiconExampleFrom, lexiconSetExample, lexiconDeleteExample,
   lexiconAddPronunciation, lexiconSetPronunciation, lexiconPronunciationAudio, lexiconDeletePronunciation, lexiconAddRelation, lexiconDeleteRelation,
   saveDocument,
@@ -1268,6 +1268,30 @@ export const lexiconPanel: PanelDef = {
       if (st.kind === "open" && st.text?.id === hit.textId) selectSegment({ textId: hit.textId, tierId: hit.tierId, segmentId: hit.segmentId });
     }
 
+    /** The domains each gloss suggests, asked once per gloss and project data. */
+    const suggestedFor = new Map<string, { id: string; code: string; label: string }[] | "asking">();
+    let suggestedGen = -1;
+    function suggestionsOf(gloss: string): { id: string; code: string; label: string }[] {
+      if (suggestedGen !== dataGeneration()) {
+        suggestedFor.clear();
+        suggestedGen = dataGeneration();
+      }
+      const key = gloss.trim();
+      if (key === "") return [];
+      const got = suggestedFor.get(key);
+      if (got === "asking") return [];
+      if (got !== undefined) return got;
+      suggestedFor.set(key, "asking");
+      domainSuggestions({ gloss: key }).then(
+        (list) => {
+          suggestedFor.set(key, list);
+          if (list.length > 0 && picker !== null) keepFocus(drawEditor);
+        },
+        () => suggestedFor.set(key, []),
+      );
+      return [];
+    }
+
     function pickerBlock(s: SenseView) {
       const all = domains ?? [];
       if (all.length === 0) {
@@ -1343,10 +1367,34 @@ export const lexiconPanel: PanelDef = {
         ),
       );
       const active = hits[p.active];
+      // With nothing typed yet, the domains whose SIL example words include the gloss.
+      const offered = p.query.trim() === "" ? suggestionsOf(s.gloss).filter((d) => !have.has(d.id)) : [];
+      const suggestions =
+        offered.length === 0
+          ? null
+          : h(
+              "p",
+              { className: "lx-dom-suggest" },
+              h("span", { className: "note", textContent: `For «${s.gloss.trim()}»: ` }),
+              ...offered.map((d) =>
+                h("button", {
+                  type: "button",
+                  className: "chip",
+                  textContent: `${d.code} ${d.label}`,
+                  title: "SIL lists this word as an example of this domain. Click to put the sense in it.",
+                  onmousedown: (ev: MouseEvent) => ev.preventDefault(),
+                  onclick: () => {
+                    const item = all.find((x) => x.id === d.id);
+                    if (item !== undefined) assign(item);
+                  },
+                }),
+              ),
+            );
       return h(
         "div",
         { className: "lx-picker" },
         input,
+        suggestions,
         h("ul", { className: "lx-options" }, ...(options.length === 0 ? [h("li", { className: "empty", textContent: "No domain matches." })] : options)),
         active === undefined || active.description === "" ? null : h("p", { className: "note lx-desc", textContent: active.description }),
         h("p", { className: "note lx-attr", textContent: ATTRIBUTION }),

@@ -599,6 +599,8 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .lx-sense { border-top: 1px solid var(--line); padding: 6px 0; display: flex; flex-direction: column; gap: 4px; }
 .lx-def textarea { width: 100%; font: inherit; font-size: var(--text-sm); resize: vertical; }
 .lx-domains { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.lx-dom-suggest { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 6px 0; }
+.lx-dom-suggest .chip { font-size: var(--text-xs); padding: 2px 10px; border-radius: 999px; }
 .lx-forms { display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
 .lx-pron { display: inline-flex; align-items: center; gap: 2px; font-family: var(--font-ipa); }
 .lx-chip { display: inline-flex; align-items: center; gap: 2px; font-size: var(--text-xs); padding: 2px 2px 2px 10px; border-radius: 999px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent-bright) 35%, transparent); }

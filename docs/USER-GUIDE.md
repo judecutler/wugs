@@ -589,6 +589,8 @@ Examples go out with the lexicon: in LIFT files (FLEx's `<example>` with its tra
 
 Each domain shows as a chip on the sense. Click its remove button to take it off.
 
+Before you type, the picker suggests domains for the sense's gloss: those whose SIL elicitation questions list that word as an example (a sense glossed `dog` is offered the domain for dogs). Click one to put the sense in it. The suggestions are a shortcut only, and nothing is assigned until you click.
+
 ## Elicit words
 
 The **Elicit** panel collects words with a speaker in two ways. Every answer becomes a lexicon entry, so you never copy a word list over by hand.

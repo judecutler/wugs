@@ -37,6 +37,7 @@ pub mod imdi;
 pub mod rough_align;
 pub mod unimorph;
 pub mod wav_info;
+pub mod domain_suggest;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -1962,6 +1963,11 @@ async fn rough_time(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_i
 }
 
 #[tauri::command(async)]
+fn domain_suggestions(s: State<SessionThread>, gloss: String) -> Result<Vec<domain_suggest::Suggested>, String> {
+    s.run(move |s| domain_suggest::suggested(s, &gloss))
+}
+
+#[tauri::command(async)]
 fn export_unimorph(s: State<SessionThread>, folder: String, date: String) -> Result<unimorph::UniMorph, String> {
     s.run(move |s| unimorph::export(s, std::path::Path::new(&folder), &date))
 }
@@ -2768,6 +2774,7 @@ pub fn run() {
             rough_time,
             rough_untime,
             export_unimorph,
+            domain_suggestions,
             add_tier,
             gloss_get,
             gloss_tokenize,

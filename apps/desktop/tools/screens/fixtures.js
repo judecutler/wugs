@@ -1363,6 +1363,7 @@ const LEXICON = [
     },
     delete_paradigm_template: ({ id }) => (paradigmTemplatesFixture = paradigmTemplatesFixture.filter((t) => t.id !== id)),
     domains_list: () => DOMAINS,
+    domain_suggestions: ({ gloss }) => (gloss ? [{ id: "dom-8.1.1.2", code: "8.1.1.2", label: "Ordinal numbers" }, { id: "dom-1.3", code: "1.3", label: "Water" }] : []),
     typing_shortcuts: () => ";n ŋ\nb' ɓ\n;e ɛ",
     set_typing_shortcuts: ({ table }) => table,
     concept_lists_bundled: () => [
