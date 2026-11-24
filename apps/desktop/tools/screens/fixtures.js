@@ -1336,6 +1336,7 @@ const LEXICON = [
     rough_time: () => ({ tier: "tier-utt", tierName: "utterance", sentences: 3, spans: 3, states: [] }),
     rough_untime: () => null,
     set_tier: () => null,
+    set_tier_speaker: () => null,
     project_title: () => "Kanu documentation project",
     set_project_title: () => null,
     shift_track: ({ deltaMs }) => ({ tier: "tier-utt", tierName: "utterance", sentences: 5, spans: 0, states: [] }),

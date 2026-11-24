@@ -4,7 +4,7 @@
 // tier gutter, the editing buttons (Auto-segment, Split, Merge, Undo, Redo)
 // and the perf toggle.
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { addTier, errorText, setTier, importMedia, linkRecording, listSources, measureTrack, peaksInfo, saveClips, saveDocument, type SourceRow, type TierTemplate } from "../api";
+import { addTier, errorText, peopleCommand, setTier, setTierSpeaker, importMedia, linkRecording, listSources, measureTrack, peaksInfo, saveClips, saveDocument, type SourceRow, type TierTemplate } from "../api";
 import { clipsLines, measuredLines, trackToMeasure } from "../measure/logic";
 import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
@@ -520,12 +520,23 @@ export const timelinePanel: PanelDef = {
       const tier = s.kind === "open" ? s.text?.tiers.find((t) => t.id === tierId) : undefined;
       const name = h("input", { value: tier?.name ?? "", ariaLabel: "Track name", className: "tl-edit-name" });
       const lang = h("input", { value: tier?.language ?? "", placeholder: "language (en, es, tpi…)", ariaLabel: "The language this track is in: a code such as en, or a Glottocode", className: "tl-edit-lang", size: 10 });
+      const speaker = h("select", { className: "tl-edit-speaker", ariaLabel: "Who speaks on this track (People panel)" }, h("option", { value: "", textContent: "no one named" }));
+      const was = tier?.speaker ?? "";
+      peopleCommand("people_view").then(
+        (v) => {
+          for (const p of v.people.filter((p) => !p.deleted)) speaker.append(h("option", { value: p.id, textContent: p.name }));
+          speaker.value = was;
+        },
+        () => {},
+      );
       const close = () => {
         trackRow.hidden = true;
         trackRow.replaceChildren();
       };
       const save = () => {
-        void setTier({ tierId, name: name.value, language: lang.value }).then(
+        void setTier({ tierId, name: name.value, language: lang.value })
+          .then(() => (speaker.value === was ? null : setTierSpeaker({ tierId, person: speaker.value === "" ? null : speaker.value })))
+          .then(
           async () => {
             close();
             await refreshText();
@@ -544,9 +555,11 @@ export const timelinePanel: PanelDef = {
         name,
         h("span", { textContent: "in the language" }),
         lang,
+        h("span", { textContent: "spoken by" }),
+        speaker,
         h("button", { type: "button", textContent: "Save", onclick: save }),
         h("button", { type: "button", textContent: "Cancel", onclick: close }),
-        h("span", { className: "note", textContent: "The language is what exports name this track's text by (TEI, CoNLL-U, the parallel corpus, CLDF)." }),
+        h("span", { className: "note", textContent: "The language is what exports name this track's text by (TEI, CoNLL-U, the parallel corpus, CLDF). The speaker is someone in the People panel; their details (such as sex) go with the speech dataset." }),
       );
       trackRow.hidden = false;
       name.focus();

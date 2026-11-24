@@ -41,6 +41,17 @@ pub struct Job {
     wav: PathBuf,
     speaker: String,
     title: String,
+    /// `m` or `f` from the track's speaker's `sex` detail (People panel), for Kaldi's `spk2gender`.
+    gender: Option<char>,
+}
+
+/// A `sex` detail as Kaldi's `spk2gender` letter, when it says one of the two.
+pub fn gender_of(sex: &str) -> Option<char> {
+    match sex.trim().to_lowercase().as_str() {
+        "m" | "male" | "man" | "masculine" | "boy" | "h" | "homme" | "hombre" | "masculino" => Some('m'),
+        "f" | "female" | "woman" | "feminine" | "girl" | "femme" | "mujer" | "femenino" => Some('f'),
+        _ => None,
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -109,6 +120,7 @@ pub fn prepare(s: &mut Session, guest: bool, include_flagged: bool) -> Result<(V
     let mut jobs = Vec::new();
     let mut names: BTreeMap<String, String> = BTreeMap::new();
     let mut titles: BTreeMap<String, String> = BTreeMap::new();
+    let mut genders: BTreeMap<String, Option<char>> = BTreeMap::new();
     let mut wavs: BTreeMap<String, Option<PathBuf>> = BTreeMap::new();
     for clip in t.clips {
         if flagged(&clip) && !include_flagged {
@@ -122,11 +134,16 @@ pub fn prepare(s: &mut Session, guest: bool, include_flagged: bool) -> Result<(V
         if !names.contains_key(&clip.tier) {
             let name = p.proj.field_str(&clip.tier, "name")?.unwrap_or_default();
             names.insert(clip.tier.clone(), speaker_id(&name, &clip.tier));
+            let gender = match p.proj.field_text(&clip.tier, "speaker")? {
+                Some(person) => p.person_details(&person)?.into_iter().find(|(k, _)| k == "sex").and_then(|(_, v)| gender_of(&v)),
+                None => None,
+            };
+            genders.insert(clip.tier.clone(), gender);
         }
         if !titles.contains_key(&clip.text) {
             titles.insert(clip.text.clone(), p.proj.field_str(&clip.text, "title")?.unwrap_or_default());
         }
-        jobs.push(Job { speaker: names[&clip.tier].clone(), title: titles[&clip.text].clone(), clip, wav });
+        jobs.push(Job { speaker: names[&clip.tier].clone(), title: titles[&clip.text].clone(), gender: genders[&clip.tier], clip, wav });
     }
     let (segment, _) = crate::orthography::segmenter(p)?;
     let mut words: BTreeMap<String, String> = BTreeMap::new();
@@ -165,6 +182,7 @@ pub fn write(jobs: &[Job], sum: &Summary, lexicon: &Lexicon, parent: &Path, toda
     }
     let mut tables: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     let mut spk2utt: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut spk2gender: BTreeMap<String, char> = BTreeMap::new();
     let mut metadata = vec!["file_name,transcription,speaker,text".to_string()];
     let (mut written, mut failed, mut problems) = (0, 0, Vec::new());
     let (mut yes, mut unrecorded, mut no, mut restricted, mut seconds) = (0, 0, 0, 0, 0.0);
@@ -200,6 +218,9 @@ pub fn write(jobs: &[Job], sum: &Summary, lexicon: &Lexicon, parent: &Path, toda
             tables.entry(table).or_default().push(format!("{utt} {value}"));
         }
         spk2utt.entry(job.speaker.clone()).or_default().push(utt.clone());
+        if let Some(g) = job.gender {
+            spk2gender.insert(job.speaker.clone(), g);
+        }
         if c.restricted {
             restricted += 1;
             tables.entry("restricted").or_default().push(utt.clone());
@@ -234,6 +255,7 @@ Kaldi-style tables, one line per clip, keyed by `<speaker>-<segment id>` and sor
 - `lexicon.txt`: every word of the transcriptions and its sounds, separated by spaces, as the project's orthography profile cuts them (else letter by letter, with marks kept on their letter)\n\
 - `wav.scp`, `text` (the transcription, on one line), `utt2spk`, `spk2utt`, `utt2dur` (seconds)\n\
 - `utt2text`: the title of the text it comes from\n\
+- `spk2gender` (when tracks name their speaker in wugs and the People panel gives their sex): `m` or `f` per speaker\n\
 - `utt2consent`: what consent records say about AI use (`recorded-yes`, `not-recorded`, `recorded-no`, or `unknown`)\n\
 - `restricted`: clips whose text or recording has a restricted or community access level\n\
 - `metadata.csv`: file name, transcription, speaker and text, as Hugging Face's `audiofolder` reads it\n\n\
@@ -259,6 +281,10 @@ The `wav` folder and `lexicon.txt` are laid out as the Montreal Forced Aligner r
         }).collect();
         fs::write(folder.join("spk2utt"), spk.join("\n") + "\n").map_err(|e| format!("spk2utt: {e}"))?;
         fs::write(folder.join("metadata.csv"), metadata.join("\n") + "\n").map_err(|e| format!("metadata.csv: {e}"))?;
+        if !spk2gender.is_empty() {
+            let lines: String = spk2gender.iter().map(|(s, g)| format!("{s} {g}\n")).collect();
+            fs::write(folder.join("spk2gender"), lines).map_err(|e| format!("spk2gender: {e}"))?;
+        }
         let dict: String = lexicon.iter().map(|(w, p)| format!("{w}\t{p}\n")).collect();
         fs::write(folder.join("lexicon.txt"), dict).map_err(|e| format!("lexicon.txt: {e}"))?;
         fs::write(folder.join("README.md"), &readme).map_err(|e| format!("README.md: {e}"))
@@ -288,6 +314,12 @@ mod tests {
         let sum = summary(&mut s, false).unwrap();
         assert_eq!(sum.ready, 2, "the two transcribed utterances, not the empty one or translations: {sum:?}");
         assert_eq!((sum.recorded_no, sum.restricted, sum.partial.is_none()), (0, 0, true));
+        // The utterance track's speaker, a woman by the People panel's details.
+        let p = session::project(&mut s).unwrap();
+        let person = p.add_named_person("Jude", &[]).unwrap();
+        p.set_person_detail(&person, "sex", "female").unwrap();
+        let utt = session::utterance_tier(p).unwrap();
+        p.set_tier_speaker(&utt, Some(&person)).unwrap();
         let (jobs, sum, lexicon) = prepare(&mut s, false, false).unwrap();
         assert!(lexicon.iter().any(|(w, p)| w == "θɹiː" && p == "θ ɹ iː"), "{lexicon:?}");
         let out = dir.join("out");
@@ -304,6 +336,9 @@ mod tests {
         let lab = folder.join(first).with_extension("lab");
         assert!(["wʌn tuː θɹiː\n", "fɔɹ faɪv\n"].contains(&fs::read_to_string(&lab).unwrap().as_str()), "a .lab beside each clip");
         assert!(fs::read_to_string(folder.join("lexicon.txt")).unwrap().contains("faɪv\tf a ɪ v\n"));
+        let gender = fs::read_to_string(folder.join("spk2gender")).unwrap();
+        assert!(gender.ends_with(" f\n") && gender.lines().count() == 1, "{gender}");
+        assert_eq!((gender_of("Male"), gender_of("mujer"), gender_of("other")), (Some('m'), Some('f'), None));
         let spk = fs::read_to_string(folder.join("spk2utt")).unwrap();
         assert_eq!(spk.lines().count(), 1, "one track: {spk}");
         assert!(fs::read_to_string(folder.join("metadata.csv")).unwrap().starts_with("file_name,transcription,speaker,text\n\"wav/"));
