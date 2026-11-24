@@ -1347,7 +1347,7 @@ const LEXICON = [
       const points = [];
       for (let t = 0; t <= 317; t += 8) points.push({ tokens: t, types: Math.round(2.5 * t ** 0.6) });
       points.push({ tokens: 317, types: Math.round(2.5 * 317 ** 0.6) });
-      return { points, tokens: 317, types: Math.round(2.5 * 317 ** 0.6), texts: [{ title: "Counting to ten", at: 0 }, { title: "The fox and the well", at: 65 }, { title: "Greetings at the market", at: 279 }] };
+      return { points, tokens: 317, types: Math.round(2.5 * 317 ** 0.6), texts: [{ title: "Counting to ten", at: 0 }, { title: "The fox and the well", at: 65 }, { title: "Greetings at the market", at: 279 }], once: 58, twice: 19 };
     },
     project_progress: () => ({
       texts: [
