@@ -332,3 +332,29 @@ fn a_recording_is_named_for_elan_and_the_file_reimports_onto_itself() {
     assert_eq!(entity_counts(&p), before);
     fs::remove_dir_all(root).ok();
 }
+
+#[test]
+fn a_tiers_language_goes_in_and_out() {
+    // ELAN 4+ writes the language of a tier as LANG_REF, declared once in the header.
+    let eaf = SAMPLE.replacen("<TIER ", "<TIER LANG_REF=\"tpi\" ", 1).replacen(
+        "<CONSTRAINT",
+        "<LANGUAGE LANG_DEF=\"http://cdb.iso.org/lg/CDB-00131624-001\" LANG_ID=\"tpi\" LANG_LABEL=\"Tok Pisin (tpi)\"/>\n    <CONSTRAINT",
+        1,
+    );
+    assert!(eaf.contains("LANG_REF=\"tpi\"") && eaf.contains("<LANGUAGE"), "the fixture took the language");
+    let (root, mut p) = temp_project();
+    let report = import_eaf(&mut p, &eaf, "T").unwrap();
+    let tier = p.proj.entities_of_kind("tier").unwrap().into_iter().find(|t| p.proj.field_text(t, "language").unwrap().is_some()).expect("a tier with its language");
+    assert_eq!(p.proj.field_text(&tier, "language").unwrap().as_deref(), Some("tpi"));
+    let out = export_eaf(&p, &report.text).unwrap();
+    let doc = xml::parse(&out).unwrap();
+    assert_eq!(doc.children_named("TIER").filter(|t| t.attr("LANG_REF") == Some("tpi")).count(), 1);
+    let lang = doc.children_named("LANGUAGE").next().expect("declared once");
+    assert_eq!((lang.attr("LANG_LABEL"), lang.attr("LANG_DEF")), (Some("Tok Pisin (tpi)"), Some("http://cdb.iso.org/lg/CDB-00131624-001")));
+    // LANGUAGE comes after the types and before the constraints, as the schema orders them.
+    let names: Vec<&str> = doc.children.iter().map(|c| c.name.as_str()).collect();
+    let at = |n: &str| names.iter().position(|x| *x == n).unwrap();
+    assert!(names.iter().rposition(|x| *x == "LINGUISTIC_TYPE").unwrap() < at("LANGUAGE") && at("LANGUAGE") < at("CONSTRAINT"));
+    assert_eq!(canon(&out), canon(&eaf), "and the rest is as before");
+    fs::remove_dir_all(root).ok();
+}
