@@ -1294,6 +1294,10 @@ body::before {
 .cc-more[aria-expanded="true"] { color: var(--accent); }
 .cc-around { grid-column: 2 / -1; margin: 4px 0 2px; padding: 4px 8px; border-left: 2px solid var(--line); font-size: var(--text-sm); cursor: auto; }
 .cc-around p { margin: 2px 0; color: var(--muted); }
+.cc-cross-table { border-collapse: collapse; font-size: var(--text-sm); margin: 4px 0; }
+.cc-cross-table th, .cc-cross-table td { padding: 2px 8px; border-bottom: 1px solid var(--line); text-align: right; font-variant-numeric: tabular-nums; }
+.cc-cross-table th[scope="row"], .cc-cross-table thead th:first-child { text-align: left; }
+.cc-cross[hidden] { display: none; }
 .cc-around p.cc-around-me { color: inherit; font-weight: 600; }
 .play-seg:disabled { opacity: 0.4; cursor: default; }
 .cc-left { grid-area: left; text-align: right; color: var(--chrome-ink); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; direction: rtl; unicode-bidi: plaintext; }
