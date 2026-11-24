@@ -68,6 +68,19 @@ test("the glossed words' slots become a position-class chart", () => {
   assert.doesNotMatch(grammarSketch(base), /Position classes/);
 });
 
+test("glosses written more than one way get an allomorphy section after the chart", () => {
+  const html = grammarSketch({
+    ...base,
+    slots: [{ label: "Root", affixes: [] }, { label: "+1", affixes: ["-si PL", "-su PL"] }],
+    allomorphs: [{ gloss: "PL", forms: [{ form: "-si", uses: 9, next: "e, i (front vowels)", vowel: "e, i (front vowels)" }, { form: "-su", uses: 6, next: "u, o (back vowels)", vowel: "u, o (back vowels)" }], note: "The stem's last vowel keeps the forms apart." }],
+  });
+  assert.match(html, /<h3>4\.4 Allomorphy<\/h3>/);
+  assert.match(html, /<th colspan="4" class="gl">PL<\/th>/);
+  assert.match(html, /<td class="ipa">-su<\/td><td>6<\/td><td class="ipa">u, o \(back vowels\)<\/td>/);
+  assert.match(html, /<p>The stem&#39;s last vowel|<p>The stem's last vowel keeps the forms apart\.<\/p>/);
+  assert.doesNotMatch(grammarSketch(base), /Allomorphy/);
+});
+
 test("an empty project still gives a sketch with places to write", () => {
   const html = grammarSketch({ ...base, language: { name: "", glottocode: "", iso: "" }, words: [], graphemes: [], morphemes: [], features: [], texts: [], entries: 0 });
   assert.match(html, /A grammar sketch of the language/);
