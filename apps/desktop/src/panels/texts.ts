@@ -45,6 +45,7 @@ const TEXT_FORMATS: [TextFormat, string][] = [
   ["srt", "Subtitles for a video, SubRip (.srt)"],
   ["vtt", "Subtitles for the web, WebVTT (.vtt)"],
   ["audacity", "Audacity labels (.txt)"],
+  ["chat", "CHAT for CLAN, CHILDES and TalkBank (.cha)"],
 ];
 const LEXICON_FORMATS: [LexiconFormat | "table", string][] = [
   ["lift", "LIFT (FLEx, WeSay)"],
@@ -102,7 +103,7 @@ async function importOne() {
   const path = await pickFile({
     title: "Import a file from ELAN, FLEx, Praat, Toolbox, CoNLL-U or TEI, or plain text",
     filters: [
-      { name: "ELAN, FLEx, Praat, Toolbox, CoNLL-U, TEI, tables of sentences, subtitles, Audacity labels, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "csv", "tsv", "xlsx", "xls", "ods", "srt", "vtt", "txt"] },
+      { name: "ELAN, FLEx, Praat, Toolbox, CoNLL-U, TEI, tables of sentences, CHAT, subtitles, Audacity labels, plain text", extensions: ["eaf", "flextext", "lift", "TextGrid", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "csv", "tsv", "xlsx", "xls", "ods", "srt", "vtt", "cha", "txt"] },
       { name: "All files", extensions: ["*"] },
     ],
   });
