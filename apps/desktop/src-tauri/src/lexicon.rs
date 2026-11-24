@@ -460,6 +460,45 @@ pub fn lexicon_add(session: &mut Session, lemma: &str, gloss: &str) -> Result<En
     edit(p, &lex, &res)
 }
 
+/// The most words one call makes entries of.
+pub const MAX_WORDS: usize = 5000;
+
+/// Each word not spelled as any entry or form yet made an entry with one
+/// empty sense to gloss, in one txn (`import_lexicon_rows`); repeats (by
+/// lookup key) once. Returns how many entries were made.
+pub fn lexicon_add_words(session: &mut Session, words: &[String]) -> Result<usize, String> {
+    if words.len() > MAX_WORDS {
+        return Err(format!("At most {MAX_WORDS} words can be added at once; filter the list first."));
+    }
+    let p = project(session)?;
+    let mut seen = std::collections::HashSet::new();
+    let mut rows = Vec::new();
+    for w in words {
+        let lemma = w.trim();
+        let key = wugs_model::lexicon_key(lemma);
+        if lemma.is_empty() || key.is_empty() || !seen.insert(key.clone()) || crate::consistency::known(p, &key)? {
+            continue;
+        }
+        rows.push(wugs_core::LexiconRow {
+            lemma: lemma.to_string(),
+            homograph: None,
+            category: String::new(),
+            citation: String::new(),
+            gloss: String::new(),
+            glosses: Vec::new(),
+            definition: String::new(),
+            usage: String::new(),
+            domains: Vec::new(),
+            example: String::new(),
+            example_translation: String::new(),
+        });
+    }
+    if rows.is_empty() {
+        return Ok(0);
+    }
+    Ok(p.import_lexicon_rows(&rows)?.0.entries)
+}
+
 pub fn lexicon_set_field(session: &mut Session, id: &str, field: &str, value: &str) -> Result<EntryEdit, String> {
     let p = project(session)?;
     // An entry's notes and etymology are collaborative text, like a sense's definition.
@@ -1039,6 +1078,22 @@ pub fn lexicon_delete_form(session: &mut Session, id: &str, form: &str, axes: &[
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn words_become_entries_once_and_known_ones_are_skipped() {
+        let dir = std::env::temp_dir().join(format!("wugs-add-words-{}", wugs_model::ulid()));
+        let mut s: crate::session::Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let before = super::lexicon_list(&mut s, "").unwrap().len();
+        let words = ["wʌn", "ndizi", "Ndizi", "  ", "kisu"].map(String::from);
+        assert_eq!(super::lexicon_add_words(&mut s, &words).unwrap(), 2);
+        assert_eq!(super::lexicon_list(&mut s, "").unwrap().len(), before + 2);
+        let row = super::lexicon_list(&mut s, "ndizi").unwrap().remove(0);
+        assert_eq!(row.lemma, "ndizi");
+        assert_eq!(super::lexicon_add_words(&mut s, &words).unwrap(), 0, "a second run adds nothing");
+        drop(s);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn senses_take_their_first_use_as_an_example() {
         let dir = std::env::temp_dir().join(format!("wugs-ex-from-texts-{}", wugs_model::ulid()));

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asTsv, filterRows, lexiconCell, lexiconNote, notInLexicon, perThousand, richness, ranked, reversed, sortRows, summary } from "./logic.ts";
+import { addedLine, addLabel, asTsv, filterRows, lexiconCell, lexiconNote, notInLexicon, perThousand, richness, ranked, reversed, sortRows, summary } from "./logic.ts";
 
 const rows = [
   { item: "kesi", count: 5, texts: 1 },
@@ -104,4 +104,13 @@ test("DP: a column, a sort with the core vocabulary first, and a note", async ()
   const tsv = asTsv(rows, 21).split("\n");
   assert.equal(tsv[0], "rank\titem\tcount\tper 1000 words\ttexts\tDP");
   assert.equal(tsv[4], "4\td\t2\t95\t1\t");
+});
+
+test("Add all says how many words it adds, and asks once", () => {
+  assert.equal(addLabel(12, false), "Add the 12 words not in the lexicon");
+  assert.equal(addLabel(1, true), "Add 1 word as entries? Click again");
+  assert.equal(addLabel(9000, false), "Add the 5,000 words not in the lexicon");
+  assert.equal(addedLine(3, 3), "Made 3 entries, each with an empty sense to gloss in the Lexicon panel (Needs a gloss lists them).");
+  assert.equal(addedLine(2, 3).endsWith("1 were in the lexicon already or repeated a word."), true);
+  assert.equal(addedLine(0, 2), "Every word was in the lexicon already.");
 });
