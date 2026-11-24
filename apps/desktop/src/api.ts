@@ -216,6 +216,8 @@ export type LexiconMatch = { lexeme: string; sense: string; lemma: string; gloss
 
 type SegmentArgs = { textId: string; segmentId: string };
 
+/** The project's sentences most like this one, best first, with their translations. */
+export const likeSentences = (args: { segmentId: string }) => invoke<import("./gloss/like").Like[]>("like_sentences", args);
 export const glossGet = (args: SegmentArgs) => invoke<GlossView>("gloss_get", args);
 export const glossTokenize = (args: SegmentArgs & { forms: string[] }) => invoke<GlossEdit>("gloss_tokenize", args);
 /** Unchanged words keep their analysis; the notes say how many analysed words did not. */

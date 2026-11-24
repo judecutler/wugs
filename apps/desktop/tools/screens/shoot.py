@@ -703,6 +703,12 @@ def main():
             if "SG singular · XYZ ?" not in run.page.locator(".panel-gloss .gl-hint:not(:empty)").first.inner_text():
                 failures.append("the gloss hint did not explain SG and flag XYZ")
             cell.press("Escape")
+            # Sentences like this one, with their translations, under the notes.
+            like = run.page.locator(".panel-gloss .gl-like")
+            like.scroll_into_view_if_needed()
+            run.shot("state-gloss-like", run.page.locator(".panel-gloss"))
+            if like.locator(".gl-like-row").count() != 2 or "Then I counted one by one." not in like.inner_text():
+                failures.append("the Gloss panel did not list sentences like this one")
             # Interlinear: only the sentences still to gloss, and Next to gloss.
             run.front("interlinear", "Interlinear")
             run.page.wait_for_timeout(600)

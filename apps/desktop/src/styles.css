@@ -560,6 +560,15 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .gl-free-input { flex: 1; min-width: 0; font-size: 14px; }
 .gl-notes { border-top: 1px solid var(--line); margin-top: 4px; display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
 .gl-notes .gl-free-input { font-size: 13px; }
+.gl-like { border-top: 1px solid var(--line); margin-top: 4px; display: flex; flex-direction: column; gap: 3px; padding-bottom: 4px; }
+.gl-like-head { display: flex; align-items: baseline; gap: 8px; }
+.gl-like-head h3 { margin: 4px 0 0; }
+.gl-like-toggle { font-size: var(--text-sm); }
+.gl-like-row { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; text-align: left; background: none; border: none; border-radius: var(--radius-sm); padding: 3px 6px; cursor: pointer; color: var(--ink); }
+.gl-like-row:hover, .gl-like-row:focus-visible { background: var(--accent-soft); }
+.gl-like-text { font-family: var(--font-ipa); grid-column: 1; }
+.gl-like-tr { grid-column: 1; color: var(--muted); font-style: italic; font-size: var(--text-sm); }
+.gl-like-where { grid-column: 2; grid-row: 1; color: var(--muted); font-size: var(--text-sm); }
 
 .panel-lexicon { display: flex; flex-direction: column; gap: 6px; }
 .panel-lexicon input[type="search"] { width: 100%; }
