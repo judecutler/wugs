@@ -841,6 +841,12 @@ def main():
             run.shot("state-speakers", run.page.locator(".panel-progress .pg-speakers"))
             if "2.37 (30 of 41)" not in spk.inner_text() or "II" not in spk.inner_text():
                 failures.append(f"Progress did not give the child's MLU and stage: {spk.inner_text()}")
+            # The work log, day by day.
+            work = run.page.locator(".panel-progress .pg-work")
+            work.scroll_into_view_if_needed()
+            run.shot("state-worklog", work)
+            if "61 glosses" not in work.inner_text() or run.page.locator(".panel-progress .pg-work-table tbody tr").count() != 3:
+                failures.append(f"Progress did not show the work day by day: {work.inner_text()[:200]}")
             # Word sketch: a lemma's company by relation.
             run.front("wordsketch", "Word sketch")
             run.page.locator(".panel-wordsketch .ws-lemma:not(.ws-versus)").fill("eat")

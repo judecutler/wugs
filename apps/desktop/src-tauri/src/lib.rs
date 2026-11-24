@@ -6,6 +6,7 @@ pub mod capture;
 pub mod chat;
 pub mod exmaralda;
 pub mod like_sentences;
+pub mod worklog;
 pub mod mlu;
 pub mod wikipedia;
 pub mod characters;
@@ -210,6 +211,12 @@ fn gloss_consistency(s: State<SessionThread>) -> Result<Vec<consistency::Inconsi
 #[tauri::command(async)]
 fn gloss_unify(s: State<SessionThread>, key: String, kind: String, from: String, to: String) -> Result<usize, String> {
     s.run(move |s| consistency::unify(s, &key, &kind, &from, &to))
+}
+
+/// What was done in the project day by day, read from the op log.
+#[tauri::command(async)]
+fn work_log(s: State<SessionThread>, offset_minutes: i32, days: usize) -> Result<Vec<worklog::Day>, String> {
+    s.run(move |s| worklog::worklog(s, offset_minutes, days))
 }
 
 /// The project's sentences most like this one, with their translations.
@@ -2336,6 +2343,7 @@ pub fn run() {
             gloss_unify,
             gloss_segmentations,
             like_sentences,
+            work_log,
             gloss_use_breakdown,
             gloss_missing,
             gloss_sense_drift,

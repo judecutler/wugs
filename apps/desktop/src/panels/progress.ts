@@ -2,7 +2,9 @@
 // report, a deposit form or a supervisor (src-tauri/src/progress.rs). Words
 // and sums in ../progress/logic.ts. Read-only; a row opens its text.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, projectProgress, speakerLengths, vocabularyGrowth } from "../api";
+import { errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog } from "../api";
+import { dayLabel, workColumns, worklogLine, worklogTsv, type Day } from "../progress/worklog";
+import { localDay } from "../dates";
 import { SPEAKER_COLUMNS, speakerCells, speakersNote, speakersTsv, type SpeakerRow } from "../progress/speakers";
 import { growthNote, growthPath, ticks, type Box, type Growth } from "../progress/growth";
 import { composition, compositionNote, compositionTsv, detailKeys, keyLabel, wordShare } from "../progress/composition";
@@ -26,6 +28,8 @@ export const progressPanel: PanelDef = {
     let detail = "";
     const makeUp = h("div", { className: "pg-makeup" });
     const growthBox = h("div", { className: "pg-growth" });
+    const workBox = h("div", { className: "pg-work" });
+    let work: Day[] = [];
     const speakersBox = h("div", { className: "pg-speakers" });
     let speakers: SpeakerRow[] = [];
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every text's figures and the totals, to paste into a spreadsheet or a report" });
@@ -161,8 +165,39 @@ export const progressPanel: PanelDef = {
       speakersBox.replaceChildren(h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Speakers" }), copySpeakers), h("div", { className: "pg-rows" }, t), h("p", { className: "note", textContent: speakersNote(speakers) }));
     };
 
+    /** The work log: the latest days with any work, newest first. */
+    const drawWork = () => {
+      const cols = workColumns(work);
+      const copyWork = h("button", { type: "button", textContent: "Copy table", title: "Copy every day's figures, to paste into a field diary, a spreadsheet or a report" });
+      copyWork.onclick = () =>
+        void writeText(worklogTsv(work)).then(
+          () => showToast({ tone: "info", lines: [`Copied ${work.length === 1 ? "one day" : `${work.length} days`}.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      copyWork.disabled = work.length === 0;
+      const t = h(
+        "table",
+        { className: "pg-table pg-work-table" },
+        h("thead", {}, h("tr", {}, h("th", { textContent: "Day" }), ...cols.map((c) => h("th", { textContent: c.label, title: c.title })), h("th", { textContent: "Devices", title: "How many devices wrote that day" }))),
+        h("tbody", {}, ...work.map((d) => h("tr", {}, h("td", { textContent: dayLabel(d.date) }), ...cols.map((c) => h("td", { className: "num", textContent: d[c.key] === 0 ? "" : d[c.key].toLocaleString("en") })), h("td", { className: "num", textContent: String(d.devices) })))),
+      );
+      workBox.replaceChildren(h("div", { className: "pg-speakers-head" }, h("h3", { className: "pg-head", textContent: "Day by day" }), copyWork), h("p", { className: "note", textContent: worklogLine(work, localDay(new Date())) }), ...(work.length === 0 ? [] : [h("div", { className: "pg-rows" }, t)]));
+    };
+
     async function load() {
       const mine = ++seq;
+      workLog({ offsetMinutes: -new Date().getTimezoneOffset(), days: 60 }).then(
+        (r) => {
+          if (mine !== seq) return;
+          work = r;
+          drawWork();
+        },
+        () => {
+          if (mine !== seq) return;
+          work = [];
+          workBox.replaceChildren();
+        },
+      );
       speakerLengths().then(
         (r) => {
           if (mine !== seq) return;
@@ -210,6 +245,7 @@ export const progressPanel: PanelDef = {
 
     const unprovide = provide("progress", () => [
       { id: "progress:copy", title: "Copy the progress table", group: "Progress", words: ["report", "grant", "statistics", "hours", "how much"], run: () => copy.click() },
+      { id: "progress:days", title: "Show what was done day by day", group: "Progress", words: ["work log", "diary", "journal", "today", "this week", "report"], run: () => workBox.scrollIntoView({ block: "start" }) },
       { id: "progress:speakers", title: "Show each speaker's mean length of utterance", group: "Progress", words: ["MLU", "child", "acquisition", "Brown", "utterance length", "CHILDES"], run: () => speakersBox.scrollIntoView({ block: "start" }) },
     ]);
 
@@ -224,7 +260,7 @@ export const progressPanel: PanelDef = {
         el.replaceChildren(emptyState("Progress", "Open a project to see how far it has come.", "The wug is keeping score."));
         return;
       }
-      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, makeUp, speakersBox, growthBox);
+      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, makeUp, speakersBox, growthBox, workBox);
       void load();
     };
     return { element: el, render, dispose: unprovide };

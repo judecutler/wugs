@@ -306,7 +306,11 @@ pub(crate) fn write_wav(path: &Path, audio: &[f32]) -> Result<(), String> {
 
 /// Today's date in UTC as `YYYY-MM-DD` (civil-from-days, Hinnant).
 pub fn today() -> String {
-    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) as i64;
+    date_of_secs(std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) as i64)
+}
+
+/// The calendar day (`YYYY-MM-DD`, proleptic Gregorian) of a moment in seconds since 1970.
+pub fn date_of_secs(secs: i64) -> String {
     let z = secs.div_euclid(86_400) + 719_468;
     let era = z.div_euclid(146_097);
     let doe = z - era * 146_097;
