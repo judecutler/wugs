@@ -28,6 +28,9 @@ fn a_bundled_list_loads_and_tracks_answers_and_skips() {
         ("concepticon:Swadesh-1955-100", 100),
         ("concepticon:Swadesh-1952-200", 200),
         ("concepticon:Tadmor-2009-100", 100),
+        ("concepticon:Holman-2008-40", 40),
+        ("concepticon:Starostin-1991-110", 110),
+        ("concepticon:Dolgopolsky-1964-15", 15),
     ]);
     assert!(lists.iter().all(|l| l.list_id.is_none()));
     let loaded = elicit::concept_list_load(&mut s, "concepticon:Tadmor-2009-100").unwrap();
