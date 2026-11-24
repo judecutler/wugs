@@ -1734,7 +1734,7 @@ body::before {
 .lx-match .lx-match-off td { opacity: .5; }
 
 /* Timeline: Shift times. */
-.tl-shift { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: var(--text-sm); flex-wrap: wrap; }
-.tl-shift[hidden] { display: none; }
+.tl-shift, .tl-track-row { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: var(--text-sm); flex-wrap: wrap; }
+.tl-shift[hidden], .tl-track-row[hidden] { display: none; }
 .tl-shift-ms { width: 7em; }
 .tl-track-row .tl-edit-name { width: 12em; }

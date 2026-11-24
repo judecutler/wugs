@@ -504,7 +504,7 @@ export const timelinePanel: PanelDef = {
     }
 
     /** A row under the transport for a track's name and language. */
-    const trackRow = h("div", { className: "tl-shift tl-track-row" });
+    const trackRow = h("div", { className: "tl-track-row" });
     trackRow.hidden = true;
 
     /** A track's name and language as fields: Enter or Save writes them. */
