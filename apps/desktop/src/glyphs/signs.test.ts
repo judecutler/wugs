@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { entropy, placeShare, scriptNote, signPairs, signsOf, signsTsv, signTable } from "./signs.ts";
+import { alternations, entropy, placeShare, scriptNote, signPairs, signsOf, signsTsv, signTable } from "./signs.ts";
 
 test("a word's signs: letters with their marks, or a transliteration's pieces", () => {
   assert.deepEqual(signsOf("ŋáta.", "letters"), ["ŋ", "á", "t", "a"]);
@@ -39,4 +39,11 @@ test("entropy: a fixed order leaves nothing to guess, any order leaves it all", 
   const free = entropy(["aa", "ab", "ba", "bb"].map((word) => ({ word, count: 5 })), "letters");
   assert.ok(free.conditional > 0.9 * free.h1, `${free.conditional} of ${free.h1}`);
   assert.equal(scriptNote(entropy([], "letters")), "");
+});
+
+test("last signs that alternate after the same beginning", () => {
+  const words = ["ko-no-so", "ko-no-si", "pa-i-to", "pa-i-ti", "ru-ki-to", "da-mi", "da-mo"].map((word) => ({ word, count: 1 }));
+  assert.deepEqual(alternations(words, "pieces"), [], "each pair after one beginning only: not yet a pattern");
+  const more = alternations([...words, ...["ka-ti", "ka-to", "e-ti", "e-to"].map((word) => ({ word, count: 1 }))], "pieces");
+  assert.deepEqual(more[0], { a: "ti", b: "to", stems: 3, examples: [["pa-i-ti", "pa-i-to"], ["ka-ti", "ka-to"], ["e-ti", "e-to"]] });
 });

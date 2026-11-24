@@ -986,6 +986,7 @@ The **Signs** panel (open it with **Ctrl+K**, **Show Signs**) asks of a script t
 - It gives the entropy of a sign, and how much less is left to guess when the sign before is known (Rao et al. 2009). Writing that records a language falls between a fixed sequence and signs in any order.
 - The table gives each sign's count, the words it is in, and how often it stands first, inside, last, or alone in a word. Signs that only end words are often endings or vowels; signs that stand alone may be words or determinatives. Click a sign to see its lines in the Concordance.
 - **Signs in a row** lists the commonest pairs inside words.
+- **Endings that alternate** lists pairs of last signs found after the same beginning in two words or more (`pa-i-to` beside `pa-i-ti`). Alice Kober noticed such "triplets" in Linear B. In a syllabary, signs that alternate this way often share a consonant or a vowel, which gives the first lines of a grid of signs. Hover over a pair for its words.
 - **Copy table** copies the inventory.
 
 ### Test sound changes and phonological rules

@@ -5,7 +5,7 @@
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, soundWords } from "../api";
 import { emptyState, h } from "../dom";
-import { entropy, placeShare, scriptNote, signPairs, signsTsv, signTable, type SignMode, type SignRow } from "../glyphs/signs";
+import { alternations, entropy, placeShare, scriptNote, signPairs, signsTsv, signTable, type SignMode, type SignRow } from "../glyphs/signs";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
@@ -99,13 +99,22 @@ export const signsPanel: PanelDef = {
         ),
       );
       const pairs = signPairs(l.words, mode, 40);
+      const alts = alternations(l.words, mode, 30);
+      const join = (a: string, b: string) => (mode === "pieces" ? `${a}-${b}` : `${a}${b}`);
       el.replaceChildren(
         bar,
         h("p", { className: "note sg-note", textContent: scriptNote(e) }),
         h("div", { className: "sd-scroll" }, table),
         h("h4", { className: "sd-h", textContent: "Signs in a row" }),
         h("p", { className: "note", textContent: "The commonest two signs written together inside a word: in a syllabary or a script with signs for sounds, these are the language's sound sequences; a pair that always comes together may be one unit." }),
-        h("div", { className: "sd-list sg-pairs" }, ...pairs.map((p) => h("span", { className: "sd-shape", title: `${p.count.toLocaleString()} times` }, h("strong", { textContent: mode === "pieces" ? `${p.first}-${p.second}` : `${p.first}${p.second}` }), ` ${p.count.toLocaleString()}`))),
+        h("div", { className: "sd-list sg-pairs" }, ...pairs.map((p) => h("span", { className: "sd-shape", title: `${p.count.toLocaleString()} times` }, h("strong", { textContent: join(p.first, p.second) }), ` ${p.count.toLocaleString()}`))),
+        h("h4", { className: "sd-h", textContent: "Endings that alternate" }),
+        h("p", { className: "note", textContent: alts.length === 0 ? "No two last signs alternate after two or more beginnings yet." : "Last signs found after the same beginning in two or more words, as Alice Kober found in Linear B: in a syllabary, signs that alternate this way often share a consonant (or a vowel), the first lines of a grid of signs." }),
+        h(
+          "div",
+          { className: "sd-list sg-alts" },
+          ...alts.map((a) => h("span", { className: "sd-shape", title: a.examples.map(([x, y]) => `${x} ~ ${y}`).join("; ") }, h("strong", { textContent: `${a.a} ~ ${a.b}` }), ` ${a.stems} ${a.stems === 1 ? "beginning" : "beginnings"}`)),
+        ),
       );
     };
 
