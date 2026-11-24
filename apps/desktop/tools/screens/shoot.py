@@ -1219,6 +1219,15 @@ def main():
             run.shot("state-durations-rate", run.page.locator(".panel-durations"))
             if "syllables a second" not in run.page.locator(".panel-durations .du-rate").inner_text():
                 failures.append("Durations did not give the speaking rate")
+            # Rhythm from a phone track: the fox story with an aligner's phones.
+            run.page.evaluate("async () => { window.__WUGS_PHONES__ = true; const st = await import('/src/store.ts'); await st.selectText('t-count'); await st.selectText('t-fox'); }")
+            run.page.locator(".panel-durations select").first.select_option("tier-phones")
+            run.page.locator(".panel-durations .du-rhythm").wait_for()
+            run.page.locator(".panel-durations .du-rhythm").scroll_into_view_if_needed()
+            run.shot("state-durations-rhythm", run.page.locator(".panel-durations"))
+            if "nPVI of the vowels" not in run.page.locator(".panel-durations .du-rhythm").inner_text() or "%V" not in run.page.locator(".panel-durations .du-rhythm").inner_text():
+                failures.append("Durations did not measure the rhythm of a phone track")
+            run.page.evaluate("window.__WUGS_PHONES__ = false")
             run.page.evaluate("async () => { const st = await import('/src/store.ts'); await st.selectText('t-count'); st.selectSegment(window.__keptSelection); }")
             run.page.wait_for_timeout(300)
             # Vowel space trajectories: each label's arrow from 20% to 80%, the diphthong's long.

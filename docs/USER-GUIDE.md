@@ -825,6 +825,16 @@ Segment the recording one sound, syllable or word to a segment and type a label 
 
 Under the comparison, **Speaking rate** reads the same track as running speech: the articulation rate (syllables a second inside the segments, pauses left out), the median and range per segment, and the speech rate with the pauses between segments. A syllable is counted for each vowel the Sounds panel finds, so it is read best from an IPA track; a long vowel counts once, a diphthong written as two vowels twice, and a segment with no vowel wugs can read is left out and counted.
 
+### Rhythm measures from a phone track
+
+When the track holds one sound a segment, **Rhythm** appears under Speaking rate. Such a track comes from a forced aligner (the «phones (aligned)» track that **Bring back alignments…** makes in Speech assist) or from segmenting vowels and consonants by hand. Neighbouring vowels join into one vocalic interval and neighbouring consonants into one consonantal interval. A pause, a silence label such as `sil`, or a segment that is not one sound ends a stretch of speech. From the intervals it gives:
+
+- **%V**, **ΔV** and **ΔC** (Ramus, Nespor and Mehler 1999): the share of time in vowels, and how much vocalic and consonantal intervals vary in length.
+- **VarcoV** and **VarcoC** (Dellwo 2006): that variation over the mean, so fast and slow speech can be compared.
+- **nPVI** of the vowels and **rPVI** of the consonants (Grabe and Low 2002): how much each interval differs from the next of its kind in the same stretch.
+
+So-called stress-timed languages such as English and Dutch tend to have a lower %V and a higher nPVI (often above 50). So-called syllable-timed languages such as Spanish and Yoruba tend to have a higher %V and a lower nPVI (often below 45). The measures depend on speech rate and speaking style, so compare speakers and languages recorded the same way. At least 10 vocalic and 10 consonantal intervals are needed. **Copy intervals** copies every interval with its stretch, kind and length.
+
 ### Compare two transcriptions of one recording
 
 The **Agreement** panel compares two transcription tracks of the text on screen segment by segment: two people's transcriptions of the same recording (inter-annotator agreement), a machine track against the one a person corrected, or a converted IPA track against a hand transcription. Open it from Settings (Closed panels) or with **Find an action**. To compare two annotators, give each a track on the Timeline (**Add track**), or import an ELAN file that holds both annotators' tiers.
