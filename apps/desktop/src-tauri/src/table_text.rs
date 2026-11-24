@@ -148,6 +148,80 @@ fn numeric(cells: &[&str]) -> bool {
     !non_empty.is_empty() && non_empty.iter().all(|c| c.chars().all(|ch| ch.is_ascii_digit() || matches!(ch, '.' | ':' | ',' | '-' | '+')))
 }
 
+/// Spreadsheet files read as tables, by extension.
+pub const SPREADSHEETS: [&str; 5] = ["xlsx", "xlsm", "xlsb", "xls", "ods"];
+/// The largest table file read.
+const MAX_TABLE_FILE: u64 = 50_000_000;
+/// Rows read from a spreadsheet's sheet.
+const MAX_SHEET_ROWS: usize = 200_000;
+
+/// Whether a path names a spreadsheet (Excel or OpenDocument).
+pub fn is_spreadsheet(path: &std::path::Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| SPREADSHEETS.iter().any(|x| e.eq_ignore_ascii_case(x)))
+}
+
+/// A table file's text and whether it is tab-separated: a spreadsheet's
+/// first sheet with anything in it, as tab-separated text (each cell's tabs
+/// and line breaks as spaces, whole numbers without `.0`), else the file
+/// decoded as UTF-8/16 or Windows-1252, tab-separated when its extension is
+/// one of `tab_extensions`.
+pub fn read_table(path: &std::path::Path, tab_extensions: &[&str]) -> Result<(String, bool), String> {
+    let size = std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.len();
+    if size > MAX_TABLE_FILE {
+        return Err(format!("a table is at most {} MB", MAX_TABLE_FILE / 1_000_000));
+    }
+    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    if is_spreadsheet(path) {
+        return Ok((spreadsheet_text(bytes, &path.display().to_string())?, true));
+    }
+    let text = crate::interchange::windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes);
+    let tabs = path.extension().and_then(|e| e.to_str()).is_some_and(|e| tab_extensions.iter().any(|x| e.eq_ignore_ascii_case(x)));
+    Ok((text, tabs))
+}
+
+/// The first sheet with a filled cell, as tab-separated text; the kind of
+/// spreadsheet is told from the bytes, `name` only names it in errors.
+pub fn spreadsheet_text(bytes: Vec<u8>, name: &str) -> Result<String, String> {
+    use calamine::{open_workbook_auto_from_rs, Data, Reader};
+    let mut book = open_workbook_auto_from_rs(std::io::Cursor::new(bytes)).map_err(|e| format!("{name}: not a spreadsheet wugs can read ({e})"))?;
+    let cell = |d: &Data| -> String {
+        let s = match d {
+            Data::Empty => String::new(),
+            Data::Float(f) if f.fract() == 0.0 && f.abs() < 1e15 => format!("{}", *f as i64),
+            // A date cell as a date (YYYY-MM-DD, with the time when it has one), not Excel's day count.
+            Data::DateTime(t) if t.is_datetime() => {
+                let (y, mo, d, h, mi, sec, _) = t.to_ymd_hms_milli();
+                if (h, mi, sec) == (0, 0, 0) {
+                    format!("{y:04}-{mo:02}-{d:02}")
+                } else {
+                    format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{sec:02}")
+                }
+            }
+            // OpenDocument writes dates as ISO text: the same shape as Excel's above.
+            Data::DateTimeIso(iso) => iso.replacen('T', " ", 1),
+            other => other.to_string(),
+        };
+        s.replace(['\t', '\r', '\n'], " ").trim().to_string()
+    };
+    for sheet in book.sheet_names().to_vec() {
+        let Ok(range) = book.worksheet_range(&sheet) else { continue };
+        let mut lines: Vec<String> = Vec::new();
+        for row in range.rows().take(MAX_SHEET_ROWS) {
+            let mut cells: Vec<String> = row.iter().map(cell).collect();
+            while cells.last().is_some_and(String::is_empty) {
+                cells.pop();
+            }
+            lines.push(cells.join("\t"));
+        }
+        if lines.iter().any(|l| !l.is_empty()) {
+            // Rows before the first filled one are not the header.
+            let first = lines.iter().position(|l| !l.is_empty()).unwrap_or(0);
+            return Ok(lines[first..].join("\n") + "\n");
+        }
+    }
+    Err(format!("{name}: no sheet has anything in it"))
+}
+
 /// A table's header (trimmed, as written) and its rows, each padded to
 /// the header's length, line breaks in a cell as spaces, empty rows left
 /// out. The separator is found as `parse` documents it.
@@ -339,6 +413,24 @@ pub fn export(p: &wugs_core::Project, segments: &[String]) -> Result<String, Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spreadsheets_read_as_tab_separated_tables() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tables");
+        for name in ["lexicon.xlsx", "lexicon.ods"] {
+            let (text, tabs) = read_table(&dir.join(name), &[]).unwrap();
+            assert!(tabs, "{name}");
+            let (header, rows, _) = records(&text, tabs).unwrap();
+            assert_eq!(header, ["Headword", "Gloss", "Category", "Number", "Recorded"], "{name}: the empty sheet and row skipped");
+            assert_eq!(rows[0], ["kuri", "dog", "noun", "12", "2026-03-12"], "{name}: a whole number without .0, a date as a date");
+            assert_eq!(rows[1], ["mopa", "sleep deeply", "verb", "3.5", "2026-03-13 14:05:00"], "{name}: a tab inside a cell, a date with its time");
+            assert_eq!(rows[2][1], "house home", "{name}: a line break inside a cell");
+            assert_eq!(rows.len(), 3, "{name}");
+        }
+        assert!(is_spreadsheet(std::path::Path::new("a/B.XLSX")));
+        assert!(!is_spreadsheet(std::path::Path::new("b.csv")));
+        assert!(read_table(&dir.join("README.md"), &["md"]).unwrap().1, "a text file by its extension");
+    }
 
     #[test]
     fn finds_the_text_and_keeps_the_rest() {

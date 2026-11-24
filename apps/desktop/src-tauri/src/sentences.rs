@@ -201,12 +201,10 @@ pub fn lists(session: &mut Session) -> Result<Vec<PromptList>, String> {
 /// Keeps a prompt list read from a file under its name (the file's stem);
 /// loading the same name again replaces its prompts, answers stay.
 pub fn import(session: &mut Session, path: &std::path::Path) -> Result<PromptList, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if bytes.len() > 5_000_000 {
+    if std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.len() > 5_000_000 {
         return Err("a prompt file is at most 5 MB".into());
     }
-    let text = crate::interchange::windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes);
-    let tabs = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("tsv") || e.eq_ignore_ascii_case("tab"));
+    let (text, tabs) = crate::table_text::read_table(path, &["tsv", "tab"])?;
     let p = project(session)?;
     let prompts: Vec<Prompt> = read_prompts(&p.proj.nfc(&text), tabs)?;
     let name = path.file_stem().map(|s| s.to_string_lossy().trim().to_string()).filter(|s| !s.is_empty()).unwrap_or_else(|| "Sentences".into());

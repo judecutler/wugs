@@ -19,7 +19,7 @@ export function dragAction(drag: { files: boolean; dock: boolean; editable: bool
 }
 
 const RECORDINGS = new Set(["wav", "wave", "m4a", "mp4", "aac", "mp3", "flac", "ogg", "oga", "aif", "aiff", "aifc"]);
-const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "txt", "csv", "tsv", "tab", "srt", "vtt"]);
+const FILES = new Set(["eaf", "flextext", "lift", "textgrid", "db", "sfm", "lex", "conllu", "conll", "xml", "tei", "txt", "csv", "tsv", "tab", "xlsx", "xls", "xlsm", "ods", "srt", "vtt"]);
 
 /** Pieces of this size keep memory flat for a two-hour WAV and the progress moving. */
 export const CHUNK_BYTES = 8 * 1024 * 1024;
@@ -88,4 +88,4 @@ export const projectChangedReason = "another project was opened after it was dro
 export const projectClosedReason = "the project it was dropped into is no longer open.";
 
 export const unsupportedReason =
-  "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF), ELAN, FLEx, Praat, Toolbox, CoNLL-U and TEI files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex, .conllu, .xml), tables of sentences (.csv, .tsv) and plain text (.txt).";
+  "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF), ELAN, FLEx, Praat, Toolbox, CoNLL-U and TEI files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex, .conllu, .xml), tables of sentences (.csv, .tsv, .xlsx, .ods) and plain text (.txt).";

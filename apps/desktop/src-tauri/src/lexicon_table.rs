@@ -100,12 +100,10 @@ fn columns(header: &[String]) -> Result<Columns, String> {
 
 /// Read a lexicon table (CSV, tab-separated or Excel's text export).
 pub fn import(session: &mut Session, path: &Path) -> Result<TableImport, String> {
-    let bytes = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    if bytes.len() > MAX_BYTES {
+    if std::fs::metadata(path).map_err(|e| format!("{}: {e}", path.display()))?.len() > MAX_BYTES as u64 {
         return Err("a lexicon table is at most 20 MB".into());
     }
-    let text = crate::interchange::windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes);
-    let tabs = path.extension().is_some_and(|e| ["tsv", "tab", "txt"].iter().any(|x| e.eq_ignore_ascii_case(x)));
+    let (text, tabs) = crate::table_text::read_table(path, &["tsv", "tab", "txt"])?;
     let (header, rows, _) = crate::table_text::records(&text, tabs)?;
     let c = columns(&header)?;
     let cell = |r: &Vec<String>, i: Option<usize>| i.and_then(|i| r.get(i)).map(|s| s.trim().to_string()).unwrap_or_default();

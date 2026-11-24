@@ -121,6 +121,8 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "db" | "sfm" | "lex" => return Some(Format::Toolbox),
         "csv" => return Some(Format::Table { tabs: false }),
         "tsv" | "tab" => return Some(Format::Table { tabs: true }),
+        // An Excel or OpenDocument sheet comes in as tab-separated text.
+        x if crate::table_text::SPREADSHEETS.contains(&x) => return Some(Format::Table { tabs: true }),
         "conllu" | "conll" => return Some(Format::Conllu),
         "tei" => return Some(Format::Tei),
         "srt" => return Some(Format::Subtitles { vtt: false }),
@@ -336,7 +338,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, a .csv/.tsv table of sentences, .srt or .vtt subtitles, or a plain .txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, a .csv/.tsv/.xlsx/.ods table of sentences, .srt or .vtt subtitles, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
@@ -346,6 +348,7 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
         Format::TextGrid | Format::Toolbox | Format::ToolboxText => wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?,
+        Format::Table { .. } if crate::table_text::is_spreadsheet(named) => crate::table_text::spreadsheet_text(bytes.clone(), file_name)?,
         Format::Table { .. } => windows_1252(wugs_legacy::decode(&bytes).map_err(|e| e.to_string())?, &bytes),
     };
     let input = input.trim_start_matches('\u{feff}');
@@ -1643,6 +1646,8 @@ mod tests {
         assert_eq!(detect(Path::new("handout.txt"), "(1) ni-kani \u{14b}ai\n    1SG-count one\n    'I count one.'\n".as_bytes()), Some(Format::GlossedExamples));
         assert_eq!(detect(Path::new("sheet.txt"), b"text\tspeaker\nhello\tMaria\n"), Some(Format::Table { tabs: true }), "Excel's Unicode text");
         assert_eq!(detect(Path::new("corpus.CSV"), b"a,b\n"), Some(Format::Table { tabs: false }));
+        assert_eq!(detect(Path::new("Sentences.XLSX"), b"PK\x03\x04"), Some(Format::Table { tabs: true }), "a spreadsheet's sheet");
+        assert_eq!(detect(Path::new("list.ods"), b"PK\x03\x04"), Some(Format::Table { tabs: true }));
         assert_eq!(detect(Path::new("story.txt"), b"Kesi mopa toru.\tThe dog came home.\nToru mopa.\tIt ran.\n"), Some(Format::PlainText), "sentence-tab-translation lines are a story");
         assert_eq!(windows_1252("\u{93}Caf\u{e9}\u{94} \u{85} \u{80}".into(), b"\x93Caf\xe9\x94 \x85 \x80"), "\u{201c}Café\u{201d} … €");
         assert_eq!(detect(Path::new("notes.md"), b"hello"), None);
