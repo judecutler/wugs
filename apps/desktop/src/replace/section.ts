@@ -48,6 +48,8 @@ export function replaceSection(findInput: HTMLInputElement): ReplaceSection {
   const whole = box("Whole words");
   const matchCase = box("Match case");
   const onlyThis = box("Only the text on screen");
+  const regex = box("As a pattern");
+  regex.label.title = "Read what to find as a regular expression: [aeiou] any vowel, (k)a a group that $1 (or ${1} before a letter) puts back in the replacement, ^ and $ the start and end";
   const note = h("p", { className: "rp-note", role: "status" });
   const list = h("ul", { className: "rp-changes" });
   const all = h("input", { type: "checkbox", checked: true, title: "Tick or untick every sentence" });
@@ -59,7 +61,7 @@ export function replaceSection(findInput: HTMLInputElement): ReplaceSection {
     { className: "rp" },
     withInput,
     h("div", { className: "scopes" }, ...trackChips),
-    h("div", { className: "rp-options" }, whole.label, matchCase.label, onlyThis.label),
+    h("div", { className: "rp-options" }, whole.label, matchCase.label, onlyThis.label, regex.label),
     note,
     list,
     foot,
@@ -73,7 +75,7 @@ export function replaceSection(findInput: HTMLInputElement): ReplaceSection {
   const find = (): Find => {
     const s = getState();
     const text = onlyThis.input.checked && s.kind === "open" ? (s.text?.id ?? null) : null;
-    return { find: findInput.value, with: withInput.value, track, wholeWord: whole.input.checked, matchCase: matchCase.input.checked, text };
+    return { find: findInput.value, with: withInput.value, track, wholeWord: whole.input.checked, matchCase: matchCase.input.checked, text, regex: regex.input.checked };
   };
   const paintFoot = () => {
     go.textContent = replaceLabel(ticked.size, nounOfTrack(track));
@@ -170,6 +172,7 @@ export function replaceSection(findInput: HTMLInputElement): ReplaceSection {
       whole.input.checked = false;
       matchCase.input.checked = false;
       onlyThis.input.checked = false;
+      regex.input.checked = false;
       paintTracks();
       show({ changes: [], total: 0 });
     },

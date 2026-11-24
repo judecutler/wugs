@@ -39,6 +39,10 @@ pub struct Find {
     pub match_case: bool,
     /// One text, or every text.
     pub text: Option<String>,
+    /// Read `find` as a regular expression (Rust's `regex` syntax) and
+    /// `with` with `$1` / `${name}` standing for its groups.
+    #[serde(default)]
+    pub regex: bool,
 }
 
 /// One sentence that would change.
@@ -75,11 +79,18 @@ pub struct Part {
     pub added: String,
 }
 
-fn parts(re: &Regex, before: &str, with: &str) -> Vec<Part> {
+fn parts(re: &Regex, before: &str, with: &str, expand: bool) -> Vec<Part> {
     let mut out = Vec::new();
     let mut at = 0;
-    for m in re.find_iter(before) {
-        out.push(Part { keep: before[at..m.start()].into(), removed: m.as_str().into(), added: with.into() });
+    for caps in re.captures_iter(before) {
+        let m = caps.get(0).expect("group 0");
+        let mut added = String::new();
+        if expand {
+            caps.expand(with, &mut added);
+        } else {
+            added.push_str(with);
+        }
+        out.push(Part { keep: before[at..m.start()].into(), removed: m.as_str().into(), added });
         at = m.end();
     }
     out.push(Part { keep: before[at..].into(), ..Part::default() });
@@ -101,6 +112,14 @@ fn pattern(f: &Find, nfc: &dyn Fn(&str) -> String) -> Result<Regex, String> {
     if find.is_empty() {
         return Err("Type what to find.".into());
     }
+    if f.regex {
+        let source = if f.whole_word { format!(r"\b(?:{find})\b") } else { find.clone() };
+        let re = RegexBuilder::new(&source).case_insensitive(!f.match_case).size_limit(1 << 20).build().map_err(|e| format!("That pattern does not read as a regular expression: {}", e.to_string().lines().last().unwrap_or_default().trim()))?;
+        if re.is_match("") {
+            return Err("That pattern also matches nothing at all (as `x*` does), so it would insert text everywhere; make it match at least one character.".into());
+        }
+        return Ok(re);
+    }
     let escaped = regex::escape(&find);
     // `\b` only at an edge that is a word character: `-ra` as a whole word
     // means `ra` after a hyphen, and a `\b` before the hyphen would need a
@@ -118,6 +137,8 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
     let nfc = |x: &str| p.proj.nfc(x);
     let re = pattern(f, &nfc)?;
     let with = nfc(&f.with);
+    // A pattern's `$1` stands for its group; typed text is replaced as it is.
+    let swap = |v: &str| if f.regex { re.replace_all(v, with.as_str()).into_owned() } else { re.replace_all(v, NoExpand(&with)).into_owned() };
     if with.contains(['\n', '\r']) {
         return Err("A replacement cannot hold a line break.".into());
     }
@@ -140,7 +161,7 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
                 if count == 0 {
                     continue;
                 }
-                let after = re.replace_all(&value, NoExpand(&with)).into_owned();
+                let after = swap(&value);
                 if after == value || after.trim().is_empty() {
                     continue;
                 }
@@ -155,7 +176,7 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
                         after,
                         count,
                         glossed: false,
-                        parts: parts(&re, &value, &with),
+                        parts: parts(&re, &value, &with, f.regex),
                         field: Some(field.to_string()),
                     });
                 }
@@ -177,7 +198,7 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
                     if count == 0 {
                         continue;
                     }
-                    let after = re.replace_all(&value, NoExpand(&with)).into_owned();
+                    let after = swap(&value);
                     if after == value || after.trim().is_empty() {
                         continue;
                     }
@@ -192,7 +213,7 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
                             after,
                             count,
                             glossed: false,
-                            parts: parts(&re, &value, &with),
+                            parts: parts(&re, &value, &with, f.regex),
                             field: Some("gloss".into()),
                         });
                     }
@@ -215,7 +236,7 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
             if count == 0 {
                 continue;
             }
-            let after = re.replace_all(&seg.content, NoExpand(&with)).into_owned();
+            let after = swap(&seg.content);
             if after == seg.content {
                 continue;
             }
@@ -231,7 +252,7 @@ pub fn preview(s: &mut Session, f: &Find) -> Result<Preview, String> {
                     after,
                     count,
                     glossed,
-                    parts: parts(&re, &seg.content, &with),
+                    parts: parts(&re, &seg.content, &with, f.regex),
                     field: None,
                 });
             }
@@ -296,7 +317,7 @@ mod tests {
     use super::*;
 
     fn find(f: &str, w: &str) -> Find {
-        Find { find: f.into(), with: w.into(), track: Track::Transcription, whole_word: false, match_case: false, text: None }
+        Find { find: f.into(), with: w.into(), track: Track::Transcription, whole_word: false, match_case: false, text: None, regex: false }
     }
 
     #[test]
@@ -356,6 +377,15 @@ mod tests {
         assert!(ra.changes.iter().any(|c| c.after == "kɛ -la kɛra"), "{:?}", ra.changes);
         // Pattern syntax is text: a dot is a dot, `$1` is written as is.
         assert_eq!(preview(&mut s, &find(".", "$1")).unwrap().total, 0);
+        // As a pattern: groups come back by `$1`, word edges by Whole words.
+        let swapped = preview(&mut s, &Find { regex: true, ..find("(kɛ) (-ra)", "$2 $1") }).unwrap();
+        assert!(swapped.changes.iter().any(|c| c.after == "-ra kɛ kɛra"), "{:?}", swapped.changes);
+        let part = swapped.changes.iter().find(|c| c.after == "-ra kɛ kɛra").unwrap();
+        assert_eq!(part.parts[0].added, "-ra kɛ", "the preview shows the expanded text");
+        let vowels = preview(&mut s, &Find { regex: true, whole_word: true, ..find("kɛ(r)a", "ka${1}a") }).unwrap();
+        assert!(vowels.changes.iter().any(|c| c.after == "kɛ -ra kara"), "{:?}", vowels.changes);
+        assert!(preview(&mut s, &Find { regex: true, ..find("x*", "y") }).unwrap_err().contains("matches nothing"));
+        assert!(preview(&mut s, &Find { regex: true, ..find("(", "y") }).unwrap_err().contains("does not read"));
         // The tutorial's first sentence is glossed: it is flagged.
         assert!(all.changes.iter().any(|c| c.before == "wʌn tuː θɹiː" && c.glossed));
         // Apply, then a sentence edited meanwhile is skipped by the undo.
