@@ -1398,6 +1398,17 @@ def main():
                 failures.append(f"Make a Keyman keyboard did not save the shortcuts as a .kmn: {str(saved)[:200]}")
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             run.page.locator(".panel-transcribe button", has_text="Shortcuts").click()
+            # Word completion: the commonest project word the typed start begins.
+            tx = run.page.locator(".panel-transcribe .tx-field")
+            tx.click()
+            tx.press("End")
+            tx.type(" kanu")
+            run.page.locator(".panel-transcribe .tx-complete").wait_for()
+            run.shot("state-transcribe-complete", run.page.locator(".panel-transcribe"))
+            tx.press("ArrowRight")
+            if not tx.input_value().endswith(" kanula"):
+                failures.append(f"→ did not take the completion: {tx.input_value()}")
+            tx.press("Escape")
             run.front("elicit", "Elicit")
             # Semantic domains: how many words each holds, and the next one still empty.
             run.page.locator(".panel-elicit button", has_text="Semantic domains").click()
