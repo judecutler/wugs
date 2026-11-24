@@ -905,6 +905,14 @@ Sounds are matched as written, apart from tie bars, so write affricates with a t
 
 Click any of these sounds for a map of which of the compared languages have it in their PHOIBLE inventory: a dot per language at its Glottolog place, the project's language ringed, as the Typology panel's maps draw them. Click it again to close the map. **Save map…** saves it as an SVG file.
 
+**Against the target (PhonBank %mod and %pho)** appears when imported CHAT transcripts carry PhonBank's two tiers: `%mod`, the form the speaker was aiming at, and `%pho`, what they actually said, both in IPA. Each target word is lined up sound by sound with the word that was said. The table gives, for each speaker and session (text), and for all sessions together:
+- **PCC**: percent consonants correct (Shriberg and Kwiatkowski 1982), the usual measure in child phonology and speech pathology;
+- **PVC**: percent vowels correct;
+- **PPC**: percent phonemes correct;
+- **Words right**: the share of words said exactly as the target.
+
+A sound left out counts as wrong. An added sound is not counted, but it does make its word wrong. Under the table, **Commonest changes of** lists one speaker's substitutions and deletions (`ɡ→d 12`, `l→∅ 8`), the patterns a phonological process analysis starts from. **Copy table** copies the scores.
+
 **Environments** compares where two sounds occur, to test whether they are separate phonemes or allophones of one. Choose the two sounds, or press **Environments** beside a pair of sounds under Minimal pairs. The line under them says what the counts suggest:
 
 - If the two share an environment (the same sound before and after, such as `a_a`, with `#` for the edge of a word), they contrast there or vary freely, and minimal pairs tell which.

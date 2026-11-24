@@ -66,6 +66,7 @@ pub mod media_bin;
 pub mod metadata;
 pub mod morphosyntax;
 pub mod people;
+pub mod phon_accuracy;
 pub mod field_sessions;
 pub mod plaintext;
 pub mod replace;
@@ -423,6 +424,12 @@ fn collexemes(s: State<SessionThread>, query: String, slot: usize, lemma: bool, 
 #[allow(clippy::too_many_arguments)]
 fn distinctive_collexemes(s: State<SessionThread>, first: String, first_slot: usize, second: String, second_slot: usize, lemma: bool, text_id: Option<String>) -> Result<collexemes::Distinctive, String> {
     s.run(move |s| collexemes::distinctive(s, &first, first_slot, &second, second_slot, lemma, text_id.as_deref().filter(|t| !t.is_empty())))
+}
+
+/// PhonBank's %mod and %pho tiers, paired per utterance (src/phon_accuracy.rs).
+#[tauri::command(async)]
+fn phon_pairs(s: State<SessionThread>) -> Result<phon_accuracy::PhonPairs, String> {
+    s.run(phon_accuracy::pairs)
 }
 
 /// The words used in the same contexts as a word (src/similar.rs).
@@ -2832,6 +2839,7 @@ pub fn run() {
             collocates,
             similar_words,
             collexemes,
+            phon_pairs,
             distinctive_collexemes,
             keywords,
             tier_glossing,

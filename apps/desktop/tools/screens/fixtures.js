@@ -1196,6 +1196,15 @@ const LEXICON = [
         { item: "liwa", first: 0, second: 6, strength: -2.6 },
       ],
     }),
+    phon_pairs: () => ({
+      tracks: [["tier-chi", "CHI"]],
+      omitted: 0,
+      pairs: [
+        { track: "tier-chi", text: "t-c1", title: "Bath time", segment: "c1", target: "bɔl", actual: "bɑ" },
+        { track: "tier-chi", text: "t-c1", title: "Bath time", segment: "c2", target: "dɔɡi", actual: "dɔdi" },
+        { track: "tier-chi", text: "t-c2", title: "In the park", segment: "c3", target: "bɔl dɔɡi", actual: "bɔl dɔɡi" },
+      ],
+    }),
     gloss_still_to_gloss: () => ["u03", "u10"],
     // Sentences like the one on screen, with a translation for the first.
     like_sentences: ({ segmentId }) =>
