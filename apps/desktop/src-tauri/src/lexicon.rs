@@ -34,6 +34,10 @@ pub struct EntryRow {
     pub used: bool,
     /// The language a loanword came from ("" for none).
     pub borrowed_from: String,
+    /// A pronunciation of it is heard in a live recording.
+    pub heard: bool,
+    /// Every sense has an example sentence (false with no senses).
+    pub examples: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -310,15 +314,20 @@ pub fn lexicon_list(session: &mut Session, query: &str) -> Result<Vec<EntryRow>,
         let lemma = str_field(p, &id, "lemma")?;
         let mut glosses = Vec::new();
         let mut used = false;
-        for s in senses(p, &id)? {
-            glosses.push(str_field(p, &s, "gloss")?);
-            used = used || linked_in_a_text(p, &s)?;
+        let mut examples = true;
+        let sense_ids = senses(p, &id)?;
+        for s in &sense_ids {
+            glosses.push(str_field(p, s, "gloss")?);
+            used = used || linked_in_a_text(p, s)?;
+            examples = examples && !p.examples(s)?.is_empty();
         }
+        let examples = examples && !sense_ids.is_empty();
         let hit = q.is_empty()
             || fold_key(&p.proj.nfc(&lemma)).contains(&q)
             || glosses.iter().any(|g| fold_key(&p.proj.nfc(g)).contains(&q));
         if hit {
-            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, borrowed_from: str_field(p, &id, "borrowed-from")?, id, lemma, glosses, used });
+            let heard = p.pronunciations(&id)?.iter().filter_map(|pr| pr.audio.as_ref()).any(|a| p.proj.is_tombstoned(&a.source).map(|dead| !dead).unwrap_or(false));
+            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, borrowed_from: str_field(p, &id, "borrowed-from")?, id, lemma, glosses, used, heard, examples });
         }
     }
     rows.sort_by_cached_key(|r| (fold_key(&r.lemma), r.homograph, r.id.clone()));
@@ -1040,6 +1049,13 @@ mod tests {
         assert_eq!(ex.sentence, "wʌn tuː θɹiː");
         assert!(!ex.translation.is_empty() && ex.from.is_some(), "{ex:?}");
         assert_eq!(super::example_gaps(&mut s).unwrap().fillable, 0, "a second run adds nothing");
+        // The list now says the entry has its examples, and that it is not heard yet.
+        let row = super::lexicon_list(&mut s, "wʌn").unwrap().remove(0);
+        assert!(row.examples && !row.heard, "{row:?}");
+        let text = crate::session::list_texts(&mut s).unwrap()[0].id.clone();
+        let seg = crate::session::get_text(&mut s, &text).unwrap().segments.into_iter().find(|g| g.content.starts_with("wʌn")).unwrap().id;
+        super::lexicon_add_pronunciation(&mut s, &wan, "", Some(&seg)).unwrap();
+        assert!(super::lexicon_list(&mut s, "wʌn").unwrap()[0].heard, "a pronunciation heard in the recording counts");
         assert_eq!(super::examples_from_texts(&mut s).unwrap(), 0);
         std::fs::remove_dir_all(&dir).ok();
     }

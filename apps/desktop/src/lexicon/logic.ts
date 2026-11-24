@@ -99,13 +99,15 @@ export function relatedName(r: { otherLemma: string; otherHomograph: number | nu
 }
 
 /** Which entries the list shows: every one, or those with work left to do. */
-export type ListShow = "all" | "gloss" | "category" | "unused" | "loans" | `pos:${string}`;
-export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean; borrowedFrom?: string };
+export type ListShow = "all" | "gloss" | "category" | "sound" | "example" | "unused" | "loans" | `pos:${string}`;
+export type ListRow = { glosses: readonly string[]; posOfSpeech: string; used: boolean; borrowedFrom?: string; heard?: boolean; examples?: boolean };
 
 export const LIST_SHOWS: readonly { id: ListShow; label: string; title: string; done: string }[] = [
   { id: "all", label: "Every entry", title: "List every entry", done: "No entries match." },
   { id: "gloss", label: "Needs a gloss", title: "Entries with a sense that has no gloss yet, such as words added from the Frequencies list", done: "Every entry found has a gloss." },
   { id: "category", label: "Needs a category", title: "Entries with no category (part of speech) yet", done: "Every entry found has a category." },
+  { id: "sound", label: "Needs a recording", title: "Entries with no pronunciation heard in a recording yet: a list to take to the next recording session (Print… makes it a sheet)", done: "Every entry found has a recording." },
+  { id: "example", label: "Needs an example", title: "Entries with a sense that has no example sentence yet", done: "Every sense of the entries found has an example." },
   { id: "unused", label: "Not in any text", title: "Entries no glossed word in a text is linked to yet", done: "Every entry found is linked from a text." },
   { id: "loans", label: "Loanwords", title: "Entries marked as borrowed from another language", done: "No entry found is marked as a loanword." },
 ];
@@ -115,6 +117,8 @@ export function shows(r: ListRow, show: ListShow): boolean {
   if (show.startsWith("pos:")) return r.posOfSpeech.trim() === show.slice(4);
   if (show === "gloss") return r.glosses.length === 0 || r.glosses.some((g) => g.trim() === "");
   if (show === "category") return r.posOfSpeech.trim() === "";
+  if (show === "sound") return r.heard !== true;
+  if (show === "example") return r.examples !== true;
   if (show === "unused") return !r.used;
   if (show === "loans") return (r.borrowedFrom ?? "").trim() !== "";
   return true;
