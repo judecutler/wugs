@@ -30,6 +30,7 @@ test("a website export says what it holds and what was left out", () => {
   assert.match(lines[2]!, /^1 timed sentence has no sound/u);
   assert.equal(lines[3], "1 text that is not open was left out.");
   assert.match(siteLines({ path: "/x", texts: 0, sentences: 0, entries: 4, clips: 0, restrictedLeftOut: 0, clipsMissing: 0 })[0]!, /: a dictionary of 4 entries\./u);
+  assert.ok(siteLines({ path: "/x", texts: 1, sentences: 3, entries: 0, clips: 0, restrictedLeftOut: 0, clipsMissing: 0, pages: 2 }).includes("Each line marked on a page image shows its piece of the page, from 2 pages in the pages folder."));
   const said = siteLines({ path: "/x", texts: 1, sentences: 3, entries: 4, clips: 5, restrictedLeftOut: 0, clipsMissing: 0, headwordClips: 2 });
   assert.deepEqual(said.slice(1, 3), ["3 sentences play from their recording.", "2 dictionary headwords play as they are said."]);
 });

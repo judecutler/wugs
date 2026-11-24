@@ -7,6 +7,7 @@
 //! page. Texts that are not open are left out unless chosen, and notes
 //! (the linguist's own remarks) are never published.
 
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -31,6 +32,8 @@ pub struct Site {
     pub headword_clips: usize,
     /// Dictionary senses shown with their picture.
     pub pictures: usize,
+    /// Page images copied for the texts' marked lines.
+    pub pages: usize,
 }
 
 fn esc(s: &str) -> String {
@@ -95,7 +98,7 @@ a { color: #00718a; } h1 { font-size: 1.9em; margin: .2em 0; } .front, .details 
 figure.where { margin: 1em 0; } figure.where img { width: 100%; max-width: 32em; display: block; border: 1px solid #e0d6b6; } figure.where figcaption { color: #555; font-size: .9em; }
 nav { margin-bottom: 1em; } ul.texts { list-style: none; padding: 0; } ul.texts li { margin: .6em 0; } ul.texts .count { color: #666; font-size: .9em; }
 ol.sentences { list-style: none; padding: 0; } ol.sentences li { display: grid; grid-template-columns: 2.4em 2em 1fr; gap: 0 .4em; padding: .6em 0; border-bottom: 1px solid #eee6cc; }
-.n { color: #888; text-align: right; } .body { grid-column: 3; } .tx { font-size: 1.1em; margin: 0; }
+.n { color: #888; text-align: right; } .body { grid-column: 3; } .tx { font-size: 1.1em; margin: 0; } .crop { max-width: 40em; background-repeat: no-repeat; border: 1px solid #ccc; border-radius: 3px; margin: .2em 0 .4em; }
 .igt { display: flex; flex-wrap: wrap; gap: .2em 1.1em; margin: .3em 0; } .w { display: inline-flex; flex-direction: column; } .m { font-style: italic; } .g { font-size: .92em; }
 .sc { font-variant: small-caps; } .ft { margin: .2em 0 0; color: #333; }
 button.play { grid-column: 2; align-self: start; border: 1px solid #00718a; color: #00718a; background: none; border-radius: 50%; width: 1.8em; height: 1.8em; cursor: pointer; font-size: .9em; padding: 0; }
@@ -208,7 +211,7 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
     let name = if lang.name.is_empty() { "Texts and dictionary".to_string() } else { format!("{}: texts and dictionary", lang.name) };
     let lang_attr = if lang.iso.is_empty() { String::new() } else { format!(" lang=\"{}\"", esc(&lang.iso)) };
     let footer = format!("Made with wugs on {}.", esc(&date));
-    let mut site = Site { path: String::new(), texts: 0, sentences: 0, entries: 0, clips: 0, restricted_left_out: 0, clips_missing: 0, headword_clips: 0, pictures: 0 };
+    let mut site = Site { path: String::new(), texts: 0, sentences: 0, entries: 0, clips: 0, restricted_left_out: 0, clips_missing: 0, headword_clips: 0, pictures: 0, pages: 0 };
     let mut files: Vec<(String, String)> = vec![("style.css".into(), STYLE.trim_start().to_string())];
     let mut clips: Vec<Clip> = Vec::new();
     let mut pictures: Vec<(String, String)> = Vec::new();
@@ -251,6 +254,25 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
             body.push_str(&format!("<p class=\"details\">{}</p>\n", d.join(" · ")));
         }
         body.push_str("<ol class=\"sentences\">\n");
+        // The text's page images that are here, copied as files, with their sizes for the crops.
+        let mut page_files: HashMap<String, (String, u32, u32)> = HashMap::new();
+        for (k, page) in p.text_pages(text)?.iter().enumerate() {
+            let Some(blob) = p.proj.field_str(page, "blob")? else { continue };
+            let Some(path) = wugs_blob::parse_ref(&blob).map(|hex| p.root.join("blobs").join(hex)).filter(|f| f.is_file()) else { continue };
+            let head = {
+                use std::io::Read;
+                let mut buf = vec![0u8; 256 * 1024];
+                let n = fs::File::open(&path).and_then(|mut f| f.read(&mut buf)).unwrap_or(0);
+                buf.truncate(n);
+                buf
+            };
+            if let Some((w, h)) = crate::facsimile::image_size(&head) {
+                let label = p.proj.field_str(page, "label")?.unwrap_or_default();
+                let file = format!("pages/{n}-{}.{}", k + 1, crate::lexicon::picture_ext(&label));
+                pictures.push((file.clone(), blob));
+                page_files.insert(page.clone(), (file, w, h));
+            }
+        }
         for (i, seg) in segments.iter().enumerate() {
             let content = p.proj.field_str(seg, "content")?.unwrap_or_default();
             body.push_str(&format!("<li id=\"s{}\"><span class=\"n\">{}</span>", i + 1, i + 1));
@@ -266,6 +288,21 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
                 _ => {}
             }
             body.push_str("<div class=\"body\">");
+            // The line's piece of its page, when it is marked on one.
+            if let Some(r) = p.segment_region(seg)? {
+                if let Some((file, w, h)) = page_files.get(&r.source) {
+                    let pos = |start: f64, side: f64| if side >= 1.0 { 0.0 } else { start / (1.0 - side) * 100.0 };
+                    body.push_str(&format!(
+                        "<div class=\"crop\" role=\"img\" aria-label=\"Sentence {} on its page\" style=\"background-image:url('{file}');background-size:{:.3}% auto;background-position:{:.3}% {:.3}%;aspect-ratio:{} / {}\"></div>",
+                        i + 1,
+                        100.0 / r.w,
+                        pos(r.x, r.w),
+                        pos(r.y, r.h),
+                        ((r.w * *w as f64).round() as u64).max(1),
+                        ((r.h * *h as f64).round() as u64).max(1)
+                    ));
+                }
+            }
             body.push_str(&format!("<p class=\"tx\">{}</p>", esc(&content)));
             let mut words = Vec::new();
             for tok in p.proj.members(seg)? {
@@ -299,7 +336,7 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
         Ok((_, html, d)) => {
             site.entries = d.entries;
             headwords = d.headwords;
-            pictures = d.picture_files;
+            pictures.extend(d.picture_files);
             site.headword_clips = d.clips.len();
             for c in d.clips {
                 clips.push(Clip { file: c.file, blob: c.blob, start: c.start, end: c.end });
@@ -398,8 +435,10 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
             let hex = wugs_blob::parse_ref(&c.blob).ok_or_else(|| format!("malformed blob ref {:?}", c.blob))?;
             cut_clip(&p.root.join("blobs").join(hex), c.start, c.end, &scratch.join(&c.file)).map_err(|e| format!("{}: {e}", c.file))?;
         }
-        if !pictures.is_empty() {
-            fs::create_dir(scratch.join("pictures")).map_err(|e| format!("pictures: {e}"))?;
+        for dir in ["pictures", "pages"] {
+            if pictures.iter().any(|(f, _)| f.starts_with(&format!("{dir}/"))) {
+                fs::create_dir(scratch.join(dir)).map_err(|e| format!("{dir}: {e}"))?;
+            }
         }
         for (file, blob) in &pictures {
             let hex = wugs_blob::parse_ref(blob).ok_or_else(|| format!("malformed blob ref {blob:?}"))?;
@@ -412,7 +451,8 @@ pub fn export_website(s: &mut Session, folder: &Path, date: &str, include_restri
         return Err(e);
     }
     site.clips = clips.len();
-    site.pictures = pictures.len();
+    site.pictures = pictures.iter().filter(|(f, _)| f.starts_with("pictures/")).count();
+    site.pages = pictures.len() - site.pictures;
     site.path = out.display().to_string();
     Ok(site)
 }
@@ -444,6 +484,12 @@ mod tests {
         let entry = crate::lexicon::lexicon_list(&mut s, "").unwrap().into_iter().find(|r| r.lemma == "wʌn").unwrap().id;
         let e = crate::lexicon::lexicon_add_pronunciation(&mut s, &entry, "ˈwʌn", Some(&seg.id)).unwrap().entry.unwrap();
         assert_eq!(e.pronunciations[0].audio.as_ref().map(|a| a.start_ms), seg.start_ms, "heard in the segment's span");
+        // The first line marked on a page image: its crop goes out with the page.
+        let png = dir.join("page.png");
+        fs::write(&png, [&[0x89u8, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0x0d, 0x49, 0x48, 0x44, 0x52, 0, 0, 0x07, 0xd0, 0, 0, 0x0b, 0xb8][..], &[0u8; 40]].concat()).unwrap();
+        let v = crate::facsimile::add_page(&mut s, &text, png.to_str().unwrap()).unwrap();
+        let area = crate::facsimile::Area { source: v.pages[0].source.clone(), x: 0.1, y: 0.5, w: 0.5, h: 0.1 };
+        crate::facsimile::set_area(&mut s, &text, &seg.id, Some(area)).unwrap();
         let closed = export_website(&mut s, &out, "2026-11-23", false, true).unwrap();
         assert_eq!((closed.texts, closed.restricted_left_out), (0, 1), "{closed:?}");
         assert!(fs::read_to_string(Path::new(&closed.path).join("index.html")).unwrap().contains("dictionary.html"));
@@ -460,6 +506,8 @@ mod tests {
         assert!(std::fs::read_to_string(root.join("sw.js")).unwrap().contains("map.svg"));
         let text = fs::read_to_string(root.join("text-1.html")).unwrap();
         assert!(text.contains("<p class=\"tx\">wʌn tuː θɹiː</p>"), "{text}");
+        assert!(text.contains("<div class=\"crop\" role=\"img\" aria-label=\"Sentence 1 on its page\" style=\"background-image:url('pages/1-1.png');background-size:200.000% auto;background-position:20.000% 55.556%;aspect-ratio:1000 / 300\"></div>"), "{text}");
+        assert!(root.join("pages/1-1.png").is_file() && site.pages == 1, "{site:?}");
         assert!(text.contains("<button class=\"play\" data-src=\"audio/1-1.wav\""), "{text}");
         assert!(text.contains("class=\"ft\">‘"), "the translation is shown: {text}");
         assert!(root.join("audio/1-1.wav").is_file() && root.join("style.css").is_file() && root.join("dictionary.html").is_file());

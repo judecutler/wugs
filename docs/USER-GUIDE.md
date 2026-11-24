@@ -1171,6 +1171,7 @@ Press **Publish as a website…** to make a folder of web pages from your texts 
 - When the project has a Glottocode (the Language row above), the first page also shows a small map of where Glottolog places the language, with its nearest languages as grey dots, and names four of them.
 - Each text shows its sentences one by one: the sentence, each glossed word's morphs and glosses under it, and the translation.
 - With **With sound clips** ticked, a ▶ beside each timed sentence plays it, cut from the text's recording.
+- A sentence marked on a page image in the Facsimile panel shows its piece of the page above it, so readers see the original line beside the reading; the page images go in a `pages` folder.
 - The dictionary is the same page **Dictionary to print…** makes.
 - Put on a web host (any address that starts with `https://`), the site works as an app: on a phone, the browser offers **Add to Home Screen** or **Install**, and the site opens like any app, under the language's name. The first visit keeps every page, the search and the pictures on the phone, and each sound once it has played, so the site still works with no connection. A newer export replaces what was kept the next time a reader opens it online. Opened from a file or a USB stick, the site works as before, without the offline part. The app's icon is the wug; to use your own, replace `icon-192.png` and `icon-512.png` in the folder with square PNG pictures of those sizes.
 
