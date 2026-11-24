@@ -35,6 +35,7 @@ enabled = [
   "gloss",                         # morph analysis of one sentence
   "sentence",                      # one sentence's tags and dependency tree, to correct
   "interlinear",                   # the whole text, glossed, sentence by sentence
+  "topics",                        # sentences filed under grammar topics, copied as numbered examples; not placed
   "lexicon",                       # the corpus vocabulary
   "transcribe",                    # read and correct the text sentence by sentence
 ]

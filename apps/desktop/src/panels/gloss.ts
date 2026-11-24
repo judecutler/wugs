@@ -3,7 +3,7 @@
 // translation line up under the transcription. The project's earlier analyses
 // are one keypress away: Enter on an empty word accepts the ghost suggestion.
 import {
-  abbreviationMeanings, addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize, likelyMeanings, likeSentences,
+  abbreviationMeanings, addSegment, glossAddTopic, glossRemoveTopic, topicsOverview, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize, likelyMeanings, likeSentences,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
@@ -29,6 +29,25 @@ import { dataGeneration, getSelection, getState, refreshConflicts, refreshText, 
 import { createComposition, formatRange, imeBusy } from "../transcribe/logic";
 import { hear, playButton } from "../hear/hear";
 import type { PanelDef, PanelView } from "./panel";
+import { topicSuggestions } from "../topics/logic";
+
+// The project's topic names, read once per project and data generation, for the Topics row's suggestions.
+let knownTopics: { key: string; names: string[] } = { key: "", names: [] };
+const topicList = h("datalist", { id: "gl-topic-names" });
+async function loadTopicNames(on: readonly string[]): Promise<void> {
+  const s = getState();
+  if (s.kind !== "open") return;
+  const key = `${s.info.projectId}|${dataGeneration()}`;
+  if (knownTopics.key !== key) {
+    try {
+      const t = await topicsOverview();
+      knownTopics = { key, names: t.topics.map((x) => x.name) };
+    } catch {
+      return;
+    }
+  }
+  topicList.replaceChildren(...topicSuggestions(knownTopics.names, on, "").map((n) => h("option", { value: n })));
+}
 
 const LANG_KEY = "wugs.gloss-lang";
 
@@ -745,6 +764,48 @@ export const glossPanel: PanelDef = {
       return box;
     }
 
+    /** The grammar topics the sentence is filed under, as chips, and a field that files it under
+     * another (the project's topics offered as it is typed); the Topics panel gathers them. */
+    function topicsBlock(v: GlossView): HTMLElement {
+      const at = ids();
+      const topics = v.topics ?? [];
+      const box = h("div", { className: "gl-topics" }, h("h3", { textContent: "Topics" }));
+      if (at === null) return box;
+      const chips = h(
+        "div",
+        { className: "gl-topic-chips" },
+        ...topics.map((name) =>
+          h(
+            "span",
+            { className: "gl-topic" },
+            name,
+            h("button", { type: "button", className: "gl-topic-off", textContent: "×", title: `Take this sentence off «${name}»`, ariaLabel: `Take this sentence off ${name}`, onclick: () => void run(() => glossRemoveTopic({ ...at, name })) }),
+          ),
+        ),
+      );
+      const cell = `topic:${v.segmentId}`;
+      const input = h("input", { className: "gl-free-input gl-topic-input", value: drafts.get(cell) ?? "", spellcheck: false, placeholder: topics.length === 0 ? "File this sentence under a topic for your grammar (negation, relative clauses…)" : "Another topic" });
+      input.dataset.cell = cell;
+      input.setAttribute("list", topicList.id);
+      input.setAttribute("aria-label", "File under a topic");
+      input.oninput = () => drafts.set(cell, input.value);
+      input.onkeydown = (ev) => {
+        if (imeBusy(ev, composition.active)) return;
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          const name = input.value.trim();
+          drafts.delete(cell);
+          if (name !== "") void run(() => glossAddTopic({ ...at, name }));
+        } else if (ev.key === "Escape") {
+          drafts.delete(cell);
+          input.value = "";
+        }
+      };
+      void loadTopicNames(topics);
+      box.append(chips, input, topicList);
+      return box;
+    }
+
     /** The sentences most like the one on screen, asked once per sentence and change. */
     function likeBlock(sel: NonNullable<ReturnType<typeof selected>>): HTMLElement {
       const want = `${sel.segment.id}|${dataGeneration()}|${likeOpen}`;
@@ -892,7 +953,7 @@ export const glossPanel: PanelDef = {
         body.push(h("div", { className: "gl-notice gl-hidden-words" }, h("span", { textContent: "Edits from another device on words no longer in this segment:" }), ...hiddenWords.map((x) => restoreButton(x, "word"))));
       }
       if (v.words.length > 0) body.push(h("div", { className: "gl-igt" }, ...v.words.map((w) => wordColumn(w, v))));
-      el.replaceChildren(head, transcription, ...body, translationBlock(sel), notesBlock(v), likeBlock(sel));
+      el.replaceChildren(head, transcription, ...body, translationBlock(sel), notesBlock(v), topicsBlock(v), likeBlock(sel));
 
       if (pending !== null) applyPending(v);
       else if (keep !== null && keep.cell !== "") {

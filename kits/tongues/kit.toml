@@ -32,6 +32,7 @@ enabled = [                        # Conflicts, Devices and Kits are platform pa
   "interlinear",                   # the whole text as interlinear glossed text, to read through
   "wordtypes",                     # words to gloss: each unanalysed word form analysed once for all its uses; not placed
   "notes",                         # every note on sentences and entries, the questions for the next session; not placed
+  "topics",                        # sentences filed under grammar topics, copied as numbered examples; not placed
   "lexicon",
   "elicit",
   "search",

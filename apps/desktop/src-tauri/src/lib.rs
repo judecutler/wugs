@@ -24,6 +24,7 @@ pub mod similar;
 pub mod frequencies;
 pub mod keywords;
 pub mod elan_glossing;
+pub mod topics;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -1036,6 +1037,28 @@ fn gloss_apply_all(s: State<SessionThread>, text_id: String, segment_id: String,
 #[tauri::command(async)]
 fn gloss_set(s: State<SessionThread>, text_id: String, segment_id: String, morph_id: String, gloss: String, lang: Option<String>) -> Result<GlossEdit, String> {
     s.run(move |s| gloss::gloss_set(s, &text_id, &segment_id, &morph_id, &gloss, lang.as_deref()))
+}
+
+#[tauri::command(async)]
+fn gloss_add_topic(s: State<SessionThread>, text_id: String, segment_id: String, name: String) -> Result<GlossEdit, String> {
+    s.run(move |s| gloss::gloss_add_topic(s, &text_id, &segment_id, &name))
+}
+
+#[tauri::command(async)]
+fn gloss_remove_topic(s: State<SessionThread>, text_id: String, segment_id: String, name: String) -> Result<GlossEdit, String> {
+    s.run(move |s| gloss::gloss_remove_topic(s, &text_id, &segment_id, &name))
+}
+
+/// Every topic with its sentences (`topics.rs`).
+#[tauri::command(async)]
+fn topics_overview(s: State<SessionThread>) -> Result<topics::Topics, String> {
+    s.run(topics::overview)
+}
+
+/// Rename a topic everywhere, or fold it into another.
+#[tauri::command(async)]
+fn rename_topic(s: State<SessionThread>, from: String, to: String) -> Result<topics::Topics, String> {
+    s.run(move |s| topics::rename(s, &from, &to))
 }
 
 #[tauri::command(async)]
@@ -2560,6 +2583,10 @@ pub fn run() {
             gloss_set,
             gloss_pick_sense,
             gloss_add_note,
+            gloss_add_topic,
+            gloss_remove_topic,
+            topics_overview,
+            rename_topic,
             gloss_set_note,
             gloss_add_lexeme,
             gloss_lexicon,

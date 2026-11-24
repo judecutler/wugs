@@ -985,13 +985,15 @@ pub fn search(session: &mut Session, query: &str, scope: SearchScope) -> Result<
     let p = project(session)?;
     let mut rows = Vec::new();
     for mut hit in p.proj.search(query, scope.kinds(), SEARCH_LIMIT)? {
-        // A note on a sentence is found as that sentence, its field `note`.
+        // A note on a sentence is found as that sentence, its field `note`;
+        // a grammar topic it is filed under, its field `topic`.
         if hit.kind == "annotation" {
+            let kind = p.proj.field_str(&hit.target, "kind")?.unwrap_or_default();
             match p.proj.field_str(&hit.target, "target")? {
-                Some(seg) if p.proj.field_str(&hit.target, "kind")?.as_deref() == Some("note") && p.proj.entity_kind(&seg)?.as_deref() == Some("segment") && !p.proj.is_tombstoned(&seg)? => {
+                Some(seg) if (kind == "note" || kind == wugs_core::topics::TOPIC_KIND) && p.proj.entity_kind(&seg)?.as_deref() == Some("segment") && !p.proj.is_tombstoned(&seg)? => {
                     hit.target = seg;
                     hit.kind = "segment".into();
-                    hit.field = "note".into();
+                    hit.field = kind;
                 }
                 _ => continue,
             }

@@ -206,7 +206,7 @@ export type HiddenEdit = { parent: string; member: string; label: string; fields
 export type Alternative = { parent: string; members: string[]; surfaces: string[]; glosses: string[] };
 
 /** `readsAs`: the words as the transcription spells them (a CoNLL-U multi-word token as one), to tell whether it changed. */
-export type GlossView = { segmentId: string; words: WordView[]; readsAs: string[]; hidden: HiddenEdit[]; alternatives: Alternative[]; segmentNotes: NoteView[] };
+export type GlossView = { segmentId: string; words: WordView[]; readsAs: string[]; hidden: HiddenEdit[]; alternatives: Alternative[]; segmentNotes: NoteView[]; topics: string[] };
 /** A note on a sentence (an Annotation of kind `note`). */
 export type NoteView = { id: string; body: string };
 /** Every edit answers with the segment's fresh view, and notes worth a toast. */
@@ -243,6 +243,10 @@ export const glossApplyType = (args: { form: string; morphs: MorphSpec[] }) => i
 /** `lang` null sets the primary gloss, a tag sets `gloss:<tag>`. */
 export const glossSet = (args: SegmentArgs & { morphId: string; gloss: string; lang: string | null }) => invoke<GlossEdit>("gloss_set", args);
 /** Add a note to the sentence; retype one (empty deletes it). */
+export const glossAddTopic = (args: SegmentArgs & { name: string }) => invoke<GlossEdit>("gloss_add_topic", args);
+export const glossRemoveTopic = (args: SegmentArgs & { name: string }) => invoke<GlossEdit>("gloss_remove_topic", args);
+export const topicsOverview = () => invoke<import("./topics/logic").Topics>("topics_overview");
+export const renameTopic = (from: string, to: string) => invoke<import("./topics/logic").Topics>("rename_topic", { from, to });
 export const glossAddNote = (args: SegmentArgs & { body: string }) => invoke<GlossEdit>("gloss_add_note", args);
 export const glossSetNote = (args: SegmentArgs & { noteId: string; body: string }) => invoke<GlossEdit>("gloss_set_note", args);
 export const glossPickSense = (args: SegmentArgs & { morphId: string; senseId: string; gloss: string }) => invoke<GlossEdit>("gloss_pick_sense", args);

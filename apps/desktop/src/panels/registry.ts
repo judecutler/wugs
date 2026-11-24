@@ -29,6 +29,7 @@ import { progressPanel } from "./progress";
 import { affixesPanel } from "./affixes";
 import { wordTypesPanel } from "./wordtypes";
 import { notesPanel } from "./notes";
+import { topicsPanel } from "./topics";
 import { wordSketchPanel } from "./wordsketch";
 import { wordOrderPanel } from "./wordorder";
 import { sentencesPanel } from "./sentences";
@@ -75,6 +76,7 @@ export const PANELS = {
   affixes: affixesPanel,
   wordtypes: wordTypesPanel,
   notes: notesPanel,
+  topics: topicsPanel,
   wordsketch: wordSketchPanel,
   wordorder: wordOrderPanel,
   sentences: sentencesPanel,

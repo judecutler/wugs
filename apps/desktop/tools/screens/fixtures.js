@@ -195,6 +195,7 @@
         hidden: [],
         alternatives: [],
         segmentNotes: [],
+        topics: [],
       };
     }
     return {
@@ -230,6 +231,7 @@
       hidden: [],
       alternatives: [],
       segmentNotes: segmentId === "u01" ? [{ id: "ann_1", body: "Speaker counts on her fingers here; check «ŋai» with her." }] : [],
+      topics: segmentId === "u01" ? ["Numerals", "Person prefixes"] : [],
     };
   };
 
@@ -951,6 +953,18 @@ const LEXICON = [
       { senseId: "sense-lx-tela1-0", entryId: "lx-tela1", headword: "tela", homograph: 1, senseGloss: "river", textGloss: "stream", count: 3, first: { gloss: "stream", count: 3, textId: "t-fox", textTitle: "The fox and the well", tierId: "tier-utt", segmentId: "f03" } },
     ],
     gloss_settle_drift: (a) => (a.useLexicon ? 3 : 1),
+    topics_overview: () => ({
+      topics: [
+        { name: "Numerals", sentences: [
+          { textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", content: "nikani ŋai toɾuma kesi", translation: "I count one, two, three", start: 0 },
+          { textId: "t-fox", textTitle: "The fox and the well", segmentId: "f03", tierId: "tier-utt", content: "pelu ŋai haru", translation: "the fox found one stone", start: 4200 },
+        ] },
+        { name: "Person prefixes", sentences: [
+          { textId: "t-count", textTitle: "Counting to ten", segmentId: "u01", tierId: "tier-utt", content: "nikani ŋai toɾuma kesi", translation: "I count one, two, three", start: 0 },
+        ] },
+      ],
+    }),
+    rename_topic: () => ({ topics: [] }),
     all_notes: () => ({
       sentences: [
         { noteId: "n1", body: "Is wu- the third person or a plural? Ask again.", textId: "t-count", textTitle: "Counting to ten", tierId: "tier-utt", segmentId: "u01", content: "wu no" },
@@ -1155,6 +1169,8 @@ const LEXICON = [
     // What the translations suggest an unanalysed word means.
     likely_meanings: ({ forms }) => forms.map((f) => (f === "tekal" ? [{ word: "walks", together: 3, of: 4, dice: 0.71 }, { word: "away", together: 2, of: 4, dice: 0.4 }] : [])),
     gloss_add_note: glossEdit,
+    gloss_add_topic: glossEdit,
+    gloss_remove_topic: glossEdit,
     gloss_set_note: glossEdit,
     sentence_check_status: () => checkStatus(),
     sentence_mark_checked: ({ segmentIds }) => {
