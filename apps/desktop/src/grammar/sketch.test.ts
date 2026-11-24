@@ -103,3 +103,12 @@ test("the lexicon, the profile and the typology answers become the sketch's tabl
     ],
   );
 });
+
+test("word orders counted in the trees open the syntax chapter", () => {
+  const o = (label: string, code: string, count: number) => ({ label, code, count, example: null });
+  const html = grammarSketch({ ...base, order: { parsed: 80, patterns: [{ id: "83A", title: "Order of object and verb", orders: [o("OV", "1", 40), o("VO", "2", 2)] }, { id: "86A", title: "Order of genitive and noun", orders: [o("Genitive-Noun", "1", 0), o("Noun-Genitive", "2", 0)] }] } });
+  assert.match(html, /<h3>5\.1 Word order<\/h3><p>Counted in 80 parsed sentences/);
+  assert.match(html, /<tr><td>Order of object and verb \(WALS 83A\)<\/td><td>OV 40, VO 2<\/td><td>OV<\/td><\/tr><\/table>/);
+  assert.doesNotMatch(html, /genitive and noun/, "a construction never found is left out");
+  assert.match(html, /class="todo">\[Check these against the examples/);
+});
