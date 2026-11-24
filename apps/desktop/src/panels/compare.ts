@@ -6,9 +6,10 @@
 // changes. Rules in ../compare/logic.ts.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
-import { compareRead, conceptLists, conceptListView, errorText, projectLanguage, type ListSummary } from "../api";
+import { cognates, compareRead, conceptLists, setCognates, conceptListView, errorText, projectLanguage, type ListSummary } from "../api";
 import { correspondenceLine, correspondences, correspondenceTsv } from "../compare/correspondences";
-import { CLOSE, compareLine, compareRows, edictorTsv, languagesOf, type OtherForm, type OurConcept, type Row } from "../compare/logic";
+import { cognacy, cognacyLine, edictorWithCognates, judgeKey, judgementOf, judgementsText, nextJudgement, parseJudgements, type Judgement } from "../compare/cognates";
+import { CLOSE, compareLine, compareRows, languagesOf, type OtherForm, type OurConcept, type Row } from "../compare/logic";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
@@ -34,6 +35,19 @@ export const comparePanel: PanelDef = {
     const answered = h("label", { title: "List only the concepts the project has an answer for" }, answeredBox, " Only answered concepts");
     const copy = h("button", { type: "button", textContent: "Copy for EDICTOR", title: "Copy every form, yours and theirs, as an EDICTOR/LingPy wordlist (ID, DOCULECT, CONCEPT, FORM, TOKENS)" });
     const line = h("p", { className: "note cmp-line" });
+    /** Cognate judgements, kept with the project (src-tauri/src/cognates.rs). */
+    let judged = new Map<string, Judgement>();
+    let saving: Promise<unknown> = Promise.resolve();
+    const cognacyBox = h("div", { className: "note cmp-cognacy" });
+    const judge = (r: Row, language: string, form: string) => {
+      const key = judgeKey(language, r.concept.gloss, form);
+      const next = nextJudgement(judged.get(key));
+      if (next === undefined) judged.delete(key);
+      else judged.set(key, next);
+      draw();
+      const table = judgementsText(judged);
+      saving = saving.then(() => setCognates({ table }).catch((e) => showToast({ tone: "error", lines: [`Could not keep the judgement: ${errorText(e)}`] })));
+    };
     const table = h("table", { className: "fq-table cmp-table" });
     // Sound correspondences with one language at a time.
     const corrLang = h("select", { className: "cmp-corr-lang", title: "Which language to align with the project's words" });
@@ -62,19 +76,32 @@ export const comparePanel: PanelDef = {
       clear.disabled = forms.length === 0;
       copy.disabled = forms.length === 0;
       const shown = answeredBox.checked ? rows.filter((r) => r.ours.length > 0) : rows;
-      const cell = (cells: { form: string; similarity: number | null }[] | undefined) =>
+      const words = { y: "judged cognate", n: "judged not cognate" } as const;
+      const cell = (r: Row, language: string) =>
         h(
           "td",
           { className: "ipa" },
-          ...(cells ?? []).map((c) =>
-            h(
-              "span",
-              { className: `cmp-form${(c.similarity ?? 0) >= CLOSE ? " cmp-close" : ""}`, title: c.similarity === null ? "" : `${Math.round(c.similarity * 100)}% alike, by sounds` },
+          ...(r.others.get(language) ?? []).map((c) => {
+            const mark = judgementOf(judged, r, language, c.form);
+            const alike = c.similarity === null ? "" : `${Math.round(c.similarity * 100)}% alike, by sounds`;
+            const b = h(
+              "button",
+              {
+                type: "button",
+                className: `cmp-form${(c.similarity ?? 0) >= CLOSE ? " cmp-close" : ""}${mark === undefined ? "" : ` cmp-${mark}`}`,
+                disabled: r.ours.length === 0,
+                title: r.ours.length === 0 ? "No answer of the project's to judge it against" : `${alike}${alike === "" ? "" : "; "}${mark === undefined ? "not judged" : words[mark]}. Click: cognate, not cognate, not judged.`,
+              },
+              mark === "y" ? "✓ " : mark === "n" ? "✗ " : "",
               c.form,
               c.similarity === null ? "" : h("small", { textContent: ` ${Math.round(c.similarity * 100)}%` }),
-            ),
-          ),
+            );
+            b.onclick = () => judge(r, language, c.form);
+            return b;
+          }),
         );
+      const shares = cognacy(rows, langs, judged);
+      cognacyBox.replaceChildren(...(shares.some((c) => c.judged > 0) ? shares.map((c) => h("div", { textContent: cognacyLine(c) })) : []));
       table.replaceChildren(
         h("thead", {}, h("tr", {}, h("th", { scope: "col", textContent: "#" }), h("th", { scope: "col", textContent: "Concept" }), h("th", { scope: "col", textContent: "This project" }), ...langs.map((l) => h("th", { scope: "col", textContent: l })))),
         h(
@@ -87,7 +114,7 @@ export const comparePanel: PanelDef = {
               h("td", { className: "num", textContent: String(r.concept.number) }),
               h("td", { textContent: r.concept.gloss }),
               h("td", { className: "ipa cmp-ours", textContent: r.ours.join(", ") }),
-              ...langs.map((l) => cell(r.others.get(l))),
+              ...langs.map((l) => cell(r, l)),
             ),
           ),
         ),
@@ -176,7 +203,7 @@ export const comparePanel: PanelDef = {
     };
     copy.onclick = async () => {
       const lang = await projectLanguage().catch(() => null);
-      void writeText(edictorTsv(rows, lang?.name ?? "")).then(
+      void writeText(edictorWithCognates(rows, lang?.name ?? "", judged)).then(
         () => showToast({ tone: "info", lines: ["Copied the word lists as an EDICTOR file. Paste it into a .tsv file and open it at edictor.org, or read it with LingPy."] }),
         (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
       );
@@ -199,7 +226,15 @@ export const comparePanel: PanelDef = {
       if (!sameProject) {
         forms = [];
         listId = "";
-        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, h("div", { className: "cmp-rows" }, table, corrBlock));
+        el.replaceChildren(h("div", { className: "cc-bar" }, picker, load, clear, answered, copy), line, cognacyBox, h("div", { className: "cmp-rows" }, table, corrBlock));
+        judged = new Map();
+        void cognates().then(
+          (t) => {
+            judged = parseJudgements(t);
+            draw();
+          },
+          () => undefined,
+        );
       }
       void conceptLists().then(
         (l) => {

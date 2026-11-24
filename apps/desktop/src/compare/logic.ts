@@ -76,22 +76,27 @@ export function compareLine(rows: readonly Row[], languages: readonly string[], 
   const unmatched = new Set(forms.filter((f) => !keys.has(conceptKey(f.concept))).map((f) => conceptKey(f.concept))).size;
   const close = rows.reduce((n, r) => n + [...r.others.values()].flat().filter((c) => (c.similarity ?? 0) >= CLOSE).length, 0);
   const langs = `${languages.length} ${languages.length === 1 ? "language" : "languages"}`;
-  return `${langs} beside your answers, ${matched.size} forms matched to a concept; ${close} look alike (two sounds in three or more).${unmatched > 0 ? ` ${unmatched} of their concepts are not in this list.` : ""} Alike is not cognate: judge them in EDICTOR or by hand.`;
+  return `${langs} beside your answers, ${matched.size} forms matched to a concept; ${close} look alike (two sounds in three or more).${unmatched > 0 ? ` ${unmatched} of their concepts are not in this list.` : ""} Alike is not cognate: click a form to judge it cognate, not cognate or not yet.`;
 }
 
-/** The whole table as an EDICTOR/LingPy wordlist: the project's answers under its own language, then each other language's forms. */
-export function edictorTsv(rows: readonly Row[], ourLanguage: string): string {
-  const out = ["ID\tDOCULECT\tCONCEPT\tFORM\tTOKENS"];
+/** The whole table as an EDICTOR/LingPy wordlist: the project's answers
+ * under its own language, then each other language's forms. With `cogid`
+ * (the cognate set of a form; `language` null for the project's own) a
+ * COGID column is added. */
+export function edictorTsv(rows: readonly Row[], ourLanguage: string, cogid?: (row: Row, language: string | null, form: string) => number): string {
+  const out = [`ID\tDOCULECT\tCONCEPT\tFORM\tTOKENS${cogid === undefined ? "" : "\tCOGID"}`];
   let id = 0;
   const clean = (s: string) => s.replace(/[\t\r\n]+/gu, " ");
-  const add = (lang: string, concept: string, form: string) => {
+  const add = (r: Row, lang: string | null, concept: string, form: string) => {
     id += 1;
-    out.push([id, clean(lang), clean(concept), clean(form), sounds(form.replace(/[-=]/gu, "")).join(" ")].join("\t"));
+    const cells = [id, clean(lang ?? (ourLanguage || "This project")), clean(concept), clean(form), sounds(form.replace(/[-=]/gu, "")).join(" ")];
+    if (cogid !== undefined) cells.push(cogid(r, lang, form));
+    out.push(cells.join("\t"));
   };
   for (const r of rows) {
     const concept = r.concept.concepticonGloss || r.concept.gloss;
-    for (const f of r.ours) add(ourLanguage || "This project", concept, f);
-    for (const [lang, cells] of r.others) for (const c of cells) add(lang, concept, c.form);
+    for (const f of r.ours) add(r, null, concept, f);
+    for (const [lang, cells] of r.others) for (const c of cells) add(r, lang, concept, c.form);
   }
   return out.join("\n") + "\n";
 }

@@ -1040,6 +1040,8 @@ const LEXICON = [
       { source: "Tadmor-2009-100", name: "Leipzig-Jakarta (100)", citation: "Tadmor 2009, via Concepticon", count: 100, listId: null },
     ],
     concept_lists: () => [listSummary],
+    cognates: () => "y\tKelani\tone\tŋaːi",
+    set_cognates: ({ table }) => table,
     word_order: () => {
       const ex = (sentence) => ({ textId: "t-count", tierId: "tier-utt", segmentId: "u02", sentence });
       const o = (label, code, count, sentence = null) => ({ label, code, count, example: sentence === null ? null : ex(sentence) });

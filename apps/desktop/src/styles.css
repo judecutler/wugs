@@ -1097,7 +1097,12 @@ body::before {
 .panel-compare { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .panel-compare .cmp-rows { overflow: auto; min-height: 0; flex: 1 1 auto; }
 .panel-compare .cmp-table td { vertical-align: top; }
-.panel-compare .cmp-form { display: inline-block; margin-right: 8px; white-space: nowrap; }
+.panel-compare .cmp-form { display: inline-block; margin: 0 6px 2px 0; white-space: nowrap; font: inherit; padding: 1px 4px; background: none; border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; color: inherit; }
+.panel-compare .cmp-form:hover:not(:disabled) { border-color: var(--line); }
+.panel-compare .cmp-form:disabled { cursor: default; }
+.panel-compare .cmp-y { background: var(--accent-soft); border-color: var(--accent); }
+.panel-compare .cmp-n { text-decoration: line-through; color: var(--muted); }
+.panel-compare .cmp-cognacy:empty { display: none; }
 .panel-compare .cmp-form small { color: var(--muted); font-family: var(--font-ui); }
 .panel-compare .cmp-close { font-weight: 600; border-bottom: 2px solid var(--accent-bright); }
 .panel-compare .cmp-ours { font-weight: 600; }
