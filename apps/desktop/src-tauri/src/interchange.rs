@@ -837,6 +837,8 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     // An ELAN file names its recording; when it is here and the text has none yet, the caller takes it.
     let recording = match (format, &text) {
         (Format::Elan, Some(t)) if p.text_recording(t)?.is_none() => elan_media(Path::new(path), input),
+        (Format::Chat, Some(t)) if p.text_recording(t)?.is_none() => chat_media(Path::new(path), input),
+        (Format::Exmaralda, Some(t)) if p.text_recording(t)?.is_none() => exb_media(Path::new(path), input),
         _ => None,
     };
     Ok(Imported { format: format.name().into(), text, lexicon, lines, recording })
@@ -965,6 +967,61 @@ pub(crate) fn elan_media(eaf: &Path, input: &str) -> Option<PathBuf> {
             }
         }
         if let Some(name) = url.rsplit(['/', '\\']).next().and_then(percent_decode).filter(|n| !n.is_empty() && n != "." && n != "..") {
+            tries.push(dir.join(name));
+        }
+        if let Some(found) = tries.into_iter().find(|p| p.is_file() && is_audio(p)) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// A CHAT file's `@Media:` recording (`name, audio`: the name without its
+/// extension), found beside the file with any extension wugs imports. A
+/// `video` media line is not followed.
+pub(crate) fn chat_media(cha: &Path, input: &str) -> Option<PathBuf> {
+    let line = input.lines().find_map(|l| l.strip_prefix("@Media:"))?;
+    let mut parts = line.split(',').map(str::trim);
+    let name = parts.next()?.trim_matches('"');
+    if name.is_empty() || name.contains(['/', '\\']) || name == ".." || parts.next().is_some_and(|k| k.eq_ignore_ascii_case("video")) {
+        return None;
+    }
+    let dir = cha.parent().unwrap_or(Path::new("."));
+    let with_ext = dir.join(name);
+    if with_ext.is_file() && with_ext.extension().and_then(|x| x.to_str()).is_some_and(crate::drops::is_recording_extension) {
+        return Some(with_ext);
+    }
+    ["wav", "mp3", "m4a", "flac", "ogg", "aif", "aiff", "mp4", "aac", "wave", "oga", "aifc"].iter().map(|x| dir.join(format!("{name}.{x}"))).find(|p| p.is_file())
+}
+
+/// An EXMARaLDA transcription's `<referenced-file url>`: absolute, relative
+/// to the file's folder, or by name beside it.
+pub(crate) fn exb_media(exb: &Path, input: &str) -> Option<PathBuf> {
+    let root = wugs_xml::parse(input).ok()?;
+    fn find<'a>(n: &'a wugs_xml::XmlNode, out: &mut Vec<&'a str>) {
+        if n.name == "referenced-file" {
+            if let Some((_, v)) = n.attrs.iter().find(|(k, _)| k == "url") {
+                out.push(v);
+            }
+        }
+        for c in &n.children {
+            find(c, out);
+        }
+    }
+    let mut urls = Vec::new();
+    find(&root, &mut urls);
+    let dir = exb.parent().unwrap_or(Path::new("."));
+    let is_audio = |p: &Path| p.extension().and_then(|x| x.to_str()).is_some_and(crate::drops::is_recording_extension);
+    for url in urls {
+        let mut tries = Vec::new();
+        if let Some(p) = url_path(url) {
+            tries.push(p);
+        } else if let Some(rel) = percent_decode(url) {
+            if !rel.is_empty() && !Path::new(&rel).is_absolute() && !rel.split(['/', '\\']).any(|x| x == "..") {
+                tries.push(dir.join(rel));
+            }
+        }
+        if let Some(name) = url.rsplit(['/', '\\']).next().and_then(percent_decode).filter(|n| !n.is_empty() && n != "..") {
             tries.push(dir.join(name));
         }
         if let Some(found) = tries.into_iter().find(|p| p.is_file() && is_audio(p)) {
@@ -1536,6 +1593,24 @@ mod tests {
         assert_eq!(elan_media(&eaf, &doc("")), None);
         assert_eq!(url_path("file:///C:/a%20b/c.wav"), Some(PathBuf::from("C:/a b/c.wav")));
         assert_eq!(url_path("file:///home/a/c.wav"), Some(PathBuf::from("/home/a/c.wav")));
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn chat_and_exmaralda_files_find_their_recordings() {
+        let dir = std::env::temp_dir().join(format!("wugs-media-find-{}", wugs_model::ulid()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("synth.mp3"), b"ID3").unwrap();
+        fs::write(dir.join("stall.wav"), b"RIFF").unwrap();
+        let cha = dir.join("synth.cha");
+        assert_eq!(chat_media(&cha, "@UTF8\n@Media:\tsynth, audio\n"), Some(dir.join("synth.mp3")));
+        assert_eq!(chat_media(&cha, "@Media:\tsynth, video\n"), None);
+        assert_eq!(chat_media(&cha, "@Media:\t../synth, audio\n"), None);
+        assert_eq!(chat_media(&cha, "@Begin\n"), None);
+        let exb = dir.join("stall.exb");
+        assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url="stall.wav"/></meta-information></head></basic-transcription>"#), Some(dir.join("stall.wav")));
+        assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url="file:///elsewhere/stall.wav"/></meta-information></head></basic-transcription>"#), Some(dir.join("stall.wav")));
+        assert_eq!(exb_media(&exb, r#"<basic-transcription><head><meta-information><referenced-file url=""/></meta-information></head></basic-transcription>"#), None);
         fs::remove_dir_all(&dir).ok();
     }
 
