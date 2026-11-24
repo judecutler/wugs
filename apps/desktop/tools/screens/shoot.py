@@ -833,6 +833,14 @@ def main():
                 failures.append("Sound changes did not run the example rules")
             if run.page.locator(".panel-soundchanges .sca-table tbody tr").count() == 0:
                 failures.append("Sound changes listed no changed word")
+            # Typed words with their attested forms: how many the rules get right.
+            run.page.locator(".panel-soundchanges select.sca-source").select_option("typed")
+            run.page.locator(".panel-soundchanges textarea.sca-words").fill("kapa > kab\nsatu > hat\npiti > pid\nmoke > mog")
+            run.page.wait_for_timeout(500)
+            run.shot("state-soundchanges-expected", run.page.locator(".panel-soundchanges"))
+            if "out as expected" not in run.page.locator(".panel-soundchanges .sca-line").inner_text() or run.page.locator(".panel-soundchanges tr.sca-miss").count() == 0:
+                failures.append("Sound changes did not check typed words against their expected forms")
+            run.page.locator(".panel-soundchanges select.sca-source").select_option("lexicon")
             # Compare word lists: another language's list beside the answers.
             run.front("compare", "Compare word lists")
             run.page.evaluate("window.__WUGS_PICK__ = ['/tmp/kelani-moru.tsv']")

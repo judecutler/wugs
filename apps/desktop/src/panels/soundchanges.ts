@@ -8,7 +8,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, lexiconList, setSoundChanges, soundChanges } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
-import { derivationsTsv, derive, EXAMPLE_RULES, parseRules, resultLine, wordsOf, type Derivation } from "../soundchange/sca";
+import { derivationsTsv, derive, EXAMPLE_RULES, expectedLine, pairsOf, parseRules, resultLine, type Derivation } from "../soundchange/sca";
 import { dataGeneration, getState, lexiconRevision, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -23,6 +23,7 @@ export const soundChangesPanel: PanelDef = {
     let headwords: string[] = [];
     let kept = "";
     let derivations: Derivation[] = [];
+    let expected: (string | null)[] = [];
     let timer: number | undefined;
 
     const rulesField = h("textarea", { className: "sca-rules", spellcheck: false, rows: 10, placeholder: "V = a e i o u\np t k > b d g / V_V" });
@@ -30,7 +31,7 @@ export const soundChangesPanel: PanelDef = {
     const problems = h("ul", { className: "sca-problems" });
     const source = h("select", { className: "sca-source", title: "Which words the rules run over" }, h("option", { value: "lexicon", textContent: "The lexicon's headwords" }), h("option", { value: "typed", textContent: "Words typed here" }));
     source.setAttribute("aria-label", "Words");
-    const wordsField = h("textarea", { className: "sca-words", spellcheck: false, rows: 4, placeholder: "One word a line, or several on a line" });
+    const wordsField = h("textarea", { className: "sca-words", spellcheck: false, rows: 4, placeholder: "One word a line, or several on a line; kapa > kaba to check a word against its attested form" });
     wordsField.setAttribute("aria-label", "Words to run");
     wordsField.hidden = true;
     const changedBox = h("input", { type: "checkbox", checked: true });
@@ -46,25 +47,31 @@ export const soundChangesPanel: PanelDef = {
         "A category is a capital and its sounds (V = a e i o u). A rule is sounds > what they become / where: p t k > b d g / V_V. _ is the sound's place, # a word's edge, ( ) optional, ∅ nothing (deletion or, on the left, insertion), // after the place where the rule does not apply. Rules run in order; ; starts a comment.",
     });
 
-    const words = (): string[] => (source.value === "typed" ? wordsOf(wordsField.value) : headwords);
+    const words = (): { input: string; expected: string | null }[] => (source.value === "typed" ? pairsOf(wordsField.value) : headwords.map((input) => ({ input, expected: null })));
 
     const run = () => {
       const r = parseRules(rulesField.value);
       problems.replaceChildren(...r.problems.map((p) => h("li", { textContent: `Line ${p.line} ${p.message}.` })));
-      derivations = words().map((w) => derive(w, r.rules));
-      line.textContent = r.rules.length === 0 && r.problems.length === 0 ? "Write rules above, or start from the example rules." : resultLine(derivations, r);
-      const listed = changedBox.checked ? derivations.filter((d) => d.output !== d.input) : derivations;
+      const ws = words();
+      derivations = ws.map((w) => derive(w.input, r.rules));
+      expected = ws.map((w) => w.expected);
+      const checking = expected.some((e) => e !== null);
+      line.textContent = r.rules.length === 0 && r.problems.length === 0 ? "Write rules above, or start from the example rules." : resultLine(derivations, r) + expectedLine(derivations, expected);
+      const rows = derivations.map((d, i) => ({ d, e: expected[i] ?? null }));
+      // A word the rules leave alone still shows when it should have changed.
+      const listed = changedBox.checked ? rows.filter(({ d, e }) => d.output !== d.input || (e !== null && e !== d.output)) : rows;
       table.replaceChildren(
-        h("thead", {}, h("tr", {}, ...["Word", "Becomes", "Steps"].map((c) => h("th", { scope: "col", textContent: c })))),
+        h("thead", {}, h("tr", {}, ...["Word", "Becomes", ...(checking ? ["Expected"] : []), "Steps"].map((c) => h("th", { scope: "col", textContent: c })))),
         h(
           "tbody",
           {},
-          ...listed.slice(0, SHOWN).map((d) =>
+          ...listed.slice(0, SHOWN).map(({ d, e }) =>
             h(
               "tr",
-              { className: d.output === d.input ? "sca-same" : "" },
+              { className: e !== null && e !== d.output ? "sca-miss" : d.output === d.input ? "sca-same" : "" },
               h("td", { className: "ipa", textContent: d.input }),
               h("td", { className: "ipa sca-out", textContent: d.output === "" ? "∅" : d.output }),
+              ...(checking ? [h("td", { className: "ipa", textContent: e === null ? "" : `${e === "" ? "∅" : e} ${e === d.output ? "✓" : "✗"}` })] : []),
               h("td", { className: "ipa sca-steps", textContent: d.steps.map((s) => `${s.line}: ${s.form || "∅"}`).join(" → ") }),
             ),
           ),
@@ -99,7 +106,7 @@ export const soundChangesPanel: PanelDef = {
       run();
     };
     copy.onclick = () =>
-      void writeText(derivationsTsv(derivations)).then(
+      void writeText(derivationsTsv(derivations, expected)).then(
         () => showToast({ tone: "info", lines: [`Copied ${derivations.length} words with their outputs.`] }),
         (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
       );

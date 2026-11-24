@@ -917,6 +917,8 @@ Write the rules in the box on the left, in the notation of Zompist's Sound Chang
 
 Rules run in order, each over the words as the rule before left them, and a sound with an accent or other mark is not taken for the plain letter. The words are the lexicon's headwords, or any words you type (**Words typed here**). The table lists each word, what it becomes and the steps, rule by rule (only the words that change, unless you untick that). A line that does not read is named in red and skipped. **Keep with the project** saves the rules in the project so they sync; **Copy table** copies every word with its output and steps. Nothing in the lexicon is changed.
 
+To test the rules against the forms you know, type each word with its attested form after `>` (or `→`, or a tab): `kapa > kab`. The table then has an **Expected** column with ✓ or ✗, the rows the rules get wrong are shaded and listed even when the rules leave the word alone, and the line above says how many come out as expected. Write `∅` for a word that should disappear. **Copy table** adds the expected form and whether it matched.
+
 ### Compare your word list with related languages
 
 The **Compare word lists** panel sets the project's answers to a concept list (a Swadesh list, say, from **Elicit**) beside the words other languages have for the same concepts, to look for cognates and sound correspondences. In Tongues, press **Ctrl+K** and choose **Show Compare word lists**.
