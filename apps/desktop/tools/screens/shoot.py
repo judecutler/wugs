@@ -760,6 +760,11 @@ def main():
             run.shot("state-affixes-order", run.page.locator(".panel-affixes"))
             if order.locator("tr.af-flag").count() != 2:
                 failures.append("Affixes: the pairs met in both orders or in one slot are not marked")
+            forms = run.page.locator(".panel-affixes .af-set")
+            forms.first.scroll_into_view_if_needed()
+            run.shot("state-affixes-forms", run.page.locator(".panel-affixes"))
+            if forms.count() != 1 or "vowel harmony" not in (forms.first.text_content() or ""):
+                failures.append("Affixes: -si and -su PL were not found conditioned by the stem's vowel")
             run.front("wordorder", "Word order")
             run.page.locator(".panel-wordorder .wo-card").first.wait_for()
             run.shot("state-wordorder", run.page.locator(".panel-wordorder"))

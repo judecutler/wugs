@@ -37,7 +37,16 @@ pub struct Affix {
     pub categories: Vec<(String, usize)>,
     /// A word it is in, its breakdown and the sentence it is from.
     pub example: Example,
+    /// What it attaches to, as written: the morphs before it in the word for
+    /// an affix after the root, the morphs after it for one before the root,
+    /// with how many uses; the commonest `MAX_STEMS`. What tells allomorphs
+    /// of one gloss apart (the stem's last vowel, its last sound) is read
+    /// from these.
+    pub stems: Vec<(String, usize)>,
 }
+
+/// At most this many stems are returned per affix.
+pub const MAX_STEMS: usize = 100;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +92,7 @@ struct Tally {
     positions: BTreeMap<i32, usize>,
     categories: HashMap<String, usize>,
     example: Option<Example>,
+    stems: HashMap<String, usize>,
 }
 
 pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
@@ -119,6 +129,7 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
             };
             let mut in_word: Vec<Key> = Vec::new();
             let word = crate::concordance::joined(&morphs.iter().map(|m| (bare(&m.surface).to_string(), m.kind.clone())).collect::<Vec<_>>());
+            let plain: Vec<String> = morphs.iter().map(|m| p.proj.nfc(bare(&m.surface))).collect();
             for (i, m) in morphs.iter().enumerate() {
                 if i == root || m.kind == "root" {
                     continue;
@@ -134,6 +145,8 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
                 if let Some(c) = &category {
                     *t.categories.entry(c.clone()).or_default() += 1;
                 }
+                let stem = if i > root { plain[..i].concat() } else { plain[i + 1..].concat() };
+                *t.stems.entry(stem).or_default() += 1;
                 if t.example.is_none() {
                     t.example = Some(Example { word: word.clone(), text_id: seg.text.clone(), tier_id: seg.tier.clone(), segment_id: seg.id.clone() });
                 }
@@ -159,7 +172,10 @@ pub fn affixes(session: &mut Session) -> Result<Affixes, String> {
         positions.sort_by_key(|p| (p.0.abs(), p.0));
         let mut categories: Vec<(String, usize)> = t.categories.into_iter().collect();
         categories.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
-        keyed.push((key, Affix { surface, kind, gloss, uses: t.uses, roots: t.roots.len(), positions, slot, categories, example: t.example.unwrap_or(Example { word: String::new(), text_id: String::new(), tier_id: String::new(), segment_id: String::new() }) }));
+        let mut stems: Vec<(String, usize)> = t.stems.into_iter().collect();
+        stems.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+        stems.truncate(MAX_STEMS);
+        keyed.push((key, Affix { surface, kind, gloss, uses: t.uses, roots: t.roots.len(), positions, slot, categories, example: t.example.unwrap_or(Example { word: String::new(), text_id: String::new(), tier_id: String::new(), segment_id: String::new() }), stems }));
     }
     keyed.sort_by(|(ka, a), (kb, b)| a.slot.cmp(&b.slot).then(b.uses.cmp(&a.uses)).then(a.surface.cmp(&b.surface)).then(ka.cmp(kb)));
     let index: HashMap<&Key, usize> = keyed.iter().enumerate().map(|(i, (k, _))| (k, i)).collect();
@@ -205,6 +221,10 @@ mod tests {
         assert_eq!(count("ra", "ma"), Some(1));
         assert_eq!(count("ni", "ma"), Some(1));
         assert_eq!(count("ma", "ra"), None, "never the other way");
+        // Stems: what each affix attaches to, on the root's side.
+        assert!(find("ra").stems.contains(&("nikani".to_string(), 1)), "{:?}", find("ra").stems);
+        assert!(find("ma").stems.contains(&("nikanira".to_string(), 1)), "{:?}", find("ma").stems);
+        assert!(ni.stems.iter().any(|(s, _)| s == "kanirama"), "{:?}", ni.stems);
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

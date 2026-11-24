@@ -4,6 +4,7 @@
 // an affix opens the Concordance on it, an example opens its sentence.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, projectAffixes } from "../api";
+import { allomorphSets, allomorphsTsv, setNote, soundsLine } from "../affixes/allomorphs";
 import { affixTsv, chartTsv, elsewhere, marked, pairLine, pairNote, pairs, pairsSummary, pairsTsv, slotChart, slotLabel, summaryLine, type Affix, type Affixes } from "../affixes/logic";
 import { emptyState, h } from "../dom";
 import { glossRuns } from "../gloss/example";
@@ -30,6 +31,9 @@ export const affixesPanel: PanelDef = {
     const orderNote = h("p", { className: "note" });
     const orderTable = h("table", { className: "pg-table af-order" });
     const copyOrder = h("button", { type: "button", textContent: "Copy pairs", title: "Every two affixes met in one word, with how often each order is met" });
+    const formsNote = h("p", { className: "note" });
+    const forms = h("div", { className: "af-forms" });
+    const copyForms = h("button", { type: "button", textContent: "Copy forms", title: "Every gloss written more than one way, each form with the sounds next to it and the stem's nearest vowel" });
 
     const find = (a: Affix) => askConcordance(a.surface, "morph", null, true);
 
@@ -46,8 +50,51 @@ export const affixesPanel: PanelDef = {
         table.replaceChildren();
         orderTable.replaceChildren();
         orderNote.textContent = "";
+        forms.replaceChildren();
+        formsNote.textContent = "";
         return;
       }
+      const sets = allomorphSets(data.affixes);
+      copyForms.disabled = sets.length === 0;
+      formsNote.textContent =
+        sets.length === 0
+          ? "No gloss is written more than one way on the same side of the root."
+          : `${sets.length} ${sets.length === 1 ? "gloss is" : "glosses are"} written more than one way on the same side of the root. For each form: the sounds right next to it in the words it is in, and the stem's nearest vowel.`;
+      forms.replaceChildren(
+        ...sets.map((s) =>
+          h(
+            "div",
+            { className: s.tells.length > 0 ? "af-set af-set-told" : "af-set" },
+            h("div", { className: "af-set-head" }, gloss(s.gloss), h("span", { className: "note", textContent: ` ${s.kind}, ${s.uses} ${s.uses === 1 ? "use" : "uses"}` })),
+            h(
+              "div",
+              { className: "ag-scroll" },
+              h(
+              "table",
+              { className: "pg-table" },
+              h("thead", {}, h("tr", {}, ...["Form", "Uses", s.side === "after" ? "After" : "Before", "Nearest vowel"].map((t) => h("th", { scope: "col", textContent: t })))),
+              h(
+                "tbody",
+                {},
+                ...s.members.map((m) => {
+                  const b = h("button", { type: "button", className: "linkish", textContent: marked(m.affix), title: "Every word with it in the Concordance" });
+                  b.onclick = () => find(m.affix);
+                  return h(
+                    "tr",
+                    {},
+                    h("th", { scope: "row" }, b),
+                    h("td", { textContent: String(m.affix.uses) }),
+                    h("td", { className: s.tells.includes("next") ? "af-tells" : "", textContent: soundsLine(m.next) }),
+                    h("td", { className: s.tells.includes("vowel") ? "af-tells" : "", textContent: soundsLine(m.vowel) }),
+                  );
+                }),
+              ),
+              ),
+            ),
+            h("p", { className: "af-note", textContent: setNote(s) }),
+          ),
+        ),
+      );
       const ps = pairs(data);
       orderNote.textContent = pairsSummary(ps);
       copyOrder.disabled = ps.length === 0;
@@ -143,10 +190,12 @@ export const affixesPanel: PanelDef = {
     copyChart.onclick = () => copy("position-class chart", () => (data === null ? null : chartTsv(slotChart(data.affixes))));
     copyTable.onclick = () => copy("affix table", () => (data === null ? null : affixTsv(data.affixes)));
     copyOrder.onclick = () => copy("pairs of affixes", () => (data === null ? null : pairsTsv(pairs(data))));
+    copyForms.onclick = () => copy("forms of each gloss", () => (data === null ? null : allomorphsTsv(allomorphSets(data.affixes), marked)));
     recount.onclick = () => void load();
 
     const unprovide = provide("affixes", () => [
       { id: "affixes:chart", title: "Copy the position-class chart", group: "Affixes", words: ["slot", "template", "morphology", "affix order"], run: () => copyChart.click() },
+      { id: "affixes:forms", title: "Copy the forms of each gloss (allomorphs)", group: "Affixes", words: ["allomorph", "vowel harmony", "assimilation", "conditioning"], run: () => copyForms.click() },
     ]);
 
     const render = () => {
@@ -171,6 +220,10 @@ export const affixesPanel: PanelDef = {
         orderNote,
         h("div", { className: "pg-rows" }, orderTable),
         h("p", { className: "note", textContent: "Two affixes in one slot should never occur in one word, and two in different slots should always come in the slots' order. Rows that break either are marked." }),
+        h("h3", { textContent: "Forms of one gloss" }),
+        h("div", { className: "cc-bar" }, copyForms),
+        formsNote,
+        forms,
       );
       void load();
     };

@@ -1487,11 +1487,18 @@ body::before {
 .af-chart { display: flex; gap: 8px; overflow-x: auto; margin: 8px 0; align-items: flex-start; }
 .af-col { display: flex; flex-direction: column; gap: 4px; min-width: 96px; }
 .af-head { font-size: var(--text-sm); color: var(--muted); text-align: center; border-bottom: 1px solid var(--line); padding-bottom: 2px; }
-.af-rootbox { text-align: center; padding: 6px 4px; border: 1px dashed var(--muted); border-radius: var(--radius-sm, 6px); font-size: var(--text-sm); letter-spacing: 0.08em; color: var(--muted); }
+.af-rootbox { text-align: center; padding: 6px 4px; border: 1px dashed var(--muted); border-radius: var(--radius-md); font-size: var(--text-sm); letter-spacing: 0.08em; color: var(--muted); }
 .af-chip { text-align: left; font-family: var(--font-ipa); }
 .af-chip .af-n { color: var(--muted); font-size: var(--text-sm); }
 .af-order th[scope="row"] { font-family: var(--font-ipa); font-weight: normal; text-align: left; }
 .af-order .af-note { color: var(--warn); font-family: var(--font-ui); font-size: var(--text-sm); }
+.af-forms { display: flex; flex-direction: column; gap: 10px; }
+.af-set { border: 1px solid var(--line); border-radius: var(--radius-md); padding: 8px 10px; }
+.af-set-told { border-color: var(--accent); }
+.af-set-head { margin-bottom: 4px; }
+.af-set td { font-family: var(--font-ipa); }
+.af-set th .linkish { white-space: nowrap; }
+.af-tells { font-weight: 600; }
 .af-order tr.af-flag { background: var(--warn-soft); }
 .af-gloss .sc { font-variant-caps: all-small-caps; letter-spacing: 0.03em; }
 .af-table td, .af-table th { text-align: left; }
