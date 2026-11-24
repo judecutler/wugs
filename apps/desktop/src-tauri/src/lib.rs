@@ -32,6 +32,7 @@ pub mod align;
 pub mod trends;
 pub mod unclear;
 pub mod tei_lex;
+pub mod saymore;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -427,6 +428,63 @@ fn get_text(s: State<SessionThread>, text_id: String) -> Result<TextDetail, Stri
 #[tauri::command(async)]
 fn create_text(s: State<SessionThread>, title: String) -> Result<String, String> {
     s.run(move |s| session::create_text(s, &title))
+}
+
+/// What reading a SayMore project did.
+#[derive(serde::Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct SayMoreImport {
+    sessions: usize,
+    /// Sessions whose ELAN file was read.
+    transcribed: usize,
+    /// Texts made for sessions with no transcription yet.
+    empty: usize,
+    recordings: usize,
+    details: usize,
+    failed: Vec<(String, String)>,
+    /// The first text, to show afterwards.
+    text: Option<String>,
+}
+
+/// Every session of a SayMore project as a text (`saymore.rs`): its ELAN
+/// file read as Import a file reads one, else an empty text; its recording
+/// imported and linked when the text has none; its metadata as details.
+#[tauri::command(async)]
+fn import_saymore(s: State<SessionThread>, folder: String) -> Result<SayMoreImport, String> {
+    let found = saymore::sessions(std::path::Path::new(&folder))?;
+    if found.is_empty() {
+        return Err("No SayMore session was found there. Choose the SayMore project's folder (the one holding Sessions).".into());
+    }
+    let mut out = SayMoreImport { sessions: found.len(), ..SayMoreImport::default() };
+    for ses in found {
+        let done = (|| -> Result<(), String> {
+            let ses2 = ses.clone();
+            let placed = s.run(move |s| saymore::place(s, &ses2))?;
+            out.transcribed += usize::from(placed.transcribed);
+            out.empty += usize::from(placed.new_empty);
+            let (text, mut recording) = (placed.text, placed.recording);
+            let t = text.clone();
+            let has = s.run(move |s| Ok(session::project(s)?.text_recording(&t)?.is_some()))?;
+            if !has && recording.is_none() {
+                recording = ses.audio.clone();
+            }
+            if let (false, Some(media)) = (has, recording) {
+                let name = media.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                let row = import_recording(&s, &media, name, None)?;
+                let t = text.clone();
+                s.run(move |s| session::link_recording(s, &t, Some(&row.id)))?;
+                out.recordings += 1;
+            }
+            let (t, ses2) = (text.clone(), ses.clone());
+            out.details += s.run(move |s| saymore::write_details(s, &t, &ses2))?;
+            out.text.get_or_insert(text);
+            Ok(())
+        })();
+        if let Err(e) = done {
+            out.failed.push((ses.id.clone(), e));
+        }
+    }
+    Ok(out)
 }
 
 /// Import an ELAN, FLEx, Praat or Toolbox file into the open project.
@@ -2581,6 +2639,7 @@ pub fn run() {
             saved_searches,
             align_preview,
             unclear_passages,
+            import_saymore,
             frequency_trends,
             align_write,
             save_search,

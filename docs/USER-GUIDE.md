@@ -1169,6 +1169,10 @@ Select a text in the **Texts** panel. Under the list, **Details** shows what is 
 
 To describe many texts at once, make a table with a row for each text: one column that names the text (its title, or the name of the file it came from), and a column for each detail. Keep it as a spreadsheet (`.xlsx`, `.xls`, `.ods`) or save it as `.csv` or `.tsv`, then press **Import details…** under Import and export. wugs reports the rows that named no text. Importing the same table again changes only what is different.
 
+### Bring in a SayMore project
+
+If you kept your recordings in SayMore, press **Import a SayMore project…** under Import and export and choose the SayMore project's folder (the one that holds `Sessions`; a single session's folder works too). Each session becomes a text: its ELAN transcription when it has one, else an empty text named after the session, ready to transcribe. Its recording is brought in and linked, so the text opens with its sound, and the session's date, place, genre, participants, setting, description and other fields become the text's details. Status, access and consent stages are SayMore's own bookkeeping and stay there. Importing the same project again adds nothing twice.
+
 Details also come in with files: a TEI file's header (author, date, genre, licence, speakers, place and more), and the `# meta::` lines of a CoNLL-U file. They go back out the same way in TEI and CoNLL-U, and as attributes of `<text>` in a CWB vertical file.
 
 Use details to study part of a corpus. In **Frequencies**, **Collocates** and **Keywords**, the list that picks where to look also offers the texts with one detail, such as **Genre: news (12 texts)**. Keywords then compares those texts with all the others. A row you open shows its lines in the Concordance from the same texts. In a CQP query, see [Search with CQP queries](#search-with-cqp-queries).

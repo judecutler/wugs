@@ -70,3 +70,13 @@ test("exporting every text reports the files and the failures", async () => {
   assert.deepEqual(exportedAllLines(3, 3, "/out", [], 0), ["Saved 3 texts of 3 in /out."]);
   assert.deepEqual(exportedAllLines(1, 2, "/out", [{ title: "", error: "no timed sentences" }], 1), ["Saved 1 text of 2 in /out.", "1 export has notes; export a text alone to read them.", "«untitled»: no timed sentences"]);
 });
+
+test("a SayMore project's import is reported in words", async () => {
+  const { saymoreLines } = await import("./logic.ts");
+  assert.deepEqual(saymoreLines({ sessions: 3, transcribed: 2, empty: 1, recordings: 3, details: 12, failed: [["ETR011", "no ELAN"]], text: "t" }), [
+    "Read 3 SayMore sessions: 2 transcriptions from their ELAN files, and 1 new empty text for sessions not transcribed yet.",
+    "3 recordings were imported and linked, so the texts open with their sound.",
+    "12 details (date, place, genre, speakers…) written from the session files; see them under the text's Details.",
+    "ETR011: no ELAN",
+  ]);
+});
