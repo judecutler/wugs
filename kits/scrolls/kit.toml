@@ -28,6 +28,7 @@ enabled = [
   "frequencies",                   # how often each word, morph or gloss occurs
   "collocates",                    # which words keep company with a word
   "similar",                       # the words used in the same contexts as a word (a thesaurus from the texts); not placed
+  "collexemes",                    # the words a construction (a CQP query) attracts into one slot; not placed
   "keywords",                      # which words set a text apart from the others
   "wordsketch",                    # a lemma's subjects, objects and modifiers, from the dependency trees
   "wordorder",                     # WALS word orders counted in the parsed sentences; not placed

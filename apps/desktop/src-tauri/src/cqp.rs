@@ -575,14 +575,21 @@ pub struct QueryProblem {
     pub message: String,
 }
 
-/// Run a query over every sentence (or one text's): hits in the
-/// Concordance's shape, each with the matched span.
-pub fn run(session: &mut Session, query: &str, only_text: Option<&str>) -> Result<crate::concordance::Concordance, String> {
-    let q = parse(query).map_err(|e| e.to_string())?;
-    let p = project(session)?;
+/// One sentence a query looked through: where it is, its tokens, and the
+/// spans the query matched in it (none for a sentence it searched in vain).
+pub(crate) struct Searched<'a> {
+    pub text: &'a str,
+    pub title: &'a str,
+    pub segment: &'a str,
+    pub tier: &'a str,
+    pub toks: &'a [Tok],
+    pub matches: Vec<(usize, usize)>,
+}
+
+/// Every transcription sentence a query searches (one text's, or each text
+/// its `::` conditions keep), handed over with its matches.
+pub(crate) fn search(p: &wugs_core::Project, q: &Query, only_text: Option<&str>, mut visit: impl FnMut(Searched) -> Result<(), String>) -> Result<(), String> {
     let (_, transcription) = crate::concordance::corpus_tiers(p)?;
-    let mut hits = Vec::new();
-    let mut total = 0;
     let mut texts = p.proj.entities_of_kind("text")?;
     texts.sort();
     for text in texts {
@@ -602,27 +609,42 @@ pub fn run(session: &mut Session, query: &str, only_text: Option<&str>) -> Resul
                 continue;
             }
             let toks = tokens_of(p, &seg)?;
-            for (at, len) in q.matches(&toks) {
-                total += 1;
-                if hits.len() < LIMIT {
-                    hits.push(crate::concordance::Hit {
-                        text_id: text.clone(),
-                        text_title: title.clone(),
-                        segment_id: seg.clone(),
-                        tier_id: tier.clone(),
-                        start_ms: p.proj.field_num(&seg, "start")?,
-                        end_ms: p.proj.field_num(&seg, "end")?,
-                        words: toks.iter().map(|t| t.word.clone()).collect(),
-                        at,
-                        len,
-                        breakdown: None,
-                        glosses: None,
-                        tags: Some(toks.iter().map(|t| if t.upos.is_empty() { t.xpos.clone() } else { t.upos.clone() }).collect()),
-                    });
-                }
-            }
+            let matches = q.matches(&toks);
+            visit(Searched { text: &text, title: &title, segment: &seg, tier: &tier, toks: &toks, matches })?;
         }
     }
+    Ok(())
+}
+
+/// Run a query over every sentence (or one text's): hits in the
+/// Concordance's shape, each with the matched span.
+pub fn run(session: &mut Session, query: &str, only_text: Option<&str>) -> Result<crate::concordance::Concordance, String> {
+    let q = parse(query).map_err(|e| e.to_string())?;
+    let p = project(session)?;
+    let mut hits = Vec::new();
+    let mut total = 0;
+    search(p, &q, only_text, |s| {
+        for &(at, len) in &s.matches {
+            total += 1;
+            if hits.len() < LIMIT {
+                hits.push(crate::concordance::Hit {
+                    text_id: s.text.to_string(),
+                    text_title: s.title.to_string(),
+                    segment_id: s.segment.to_string(),
+                    tier_id: s.tier.to_string(),
+                    start_ms: p.proj.field_num(s.segment, "start")?,
+                    end_ms: p.proj.field_num(s.segment, "end")?,
+                    words: s.toks.iter().map(|t| t.word.clone()).collect(),
+                    at,
+                    len,
+                    breakdown: None,
+                    glosses: None,
+                    tags: Some(s.toks.iter().map(|t| if t.upos.is_empty() { t.xpos.clone() } else { t.upos.clone() }).collect()),
+                });
+            }
+        }
+        Ok(())
+    })?;
     Ok(crate::concordance::Concordance { hits, total })
 }
 

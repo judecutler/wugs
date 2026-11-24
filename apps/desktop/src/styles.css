@@ -1740,3 +1740,6 @@ body::before {
 .tl-shift[hidden], .tl-track-row[hidden] { display: none; }
 .tl-shift-ms { width: 7em; }
 .tl-track-row .tl-edit-name { width: 12em; }
+
+.cx-table tr.cx-drawn td:first-child { font-weight: 600; }
+.panel-collexemes .cx-query { flex: 1 1 22em; }
