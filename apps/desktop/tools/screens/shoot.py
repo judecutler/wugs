@@ -1448,6 +1448,12 @@ def main():
             run.shot("state-sounds-together", run.page.locator(".panel-sounds"))
             if together.locator("tbody tr").count() < 3 or "pairs of a vowel and the next vowel" not in run.page.locator(".panel-sounds .sd-together-note").inner_text():
                 failures.append("Sounds together drew no table of vowel pairs")
+            run.page.locator(".panel-sounds .sd-together-kind").select_option("CV")
+            run.page.wait_for_timeout(300)
+            cv = run.page.locator(".panel-sounds .sd-together")
+            if "consonant and the vowel right after it" not in run.page.locator(".panel-sounds .sd-together-note").inner_text() or cv.locator("tbody tr").count() < 2:
+                failures.append("Sounds together did not count consonants before vowels")
+            run.page.locator(".panel-sounds .sd-together-kind").select_option("V")
             run.page.locator(".panel-sounds .sd-bar button", has_text="Copy chart").click()
             run.page.wait_for_timeout(300)
             clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}
