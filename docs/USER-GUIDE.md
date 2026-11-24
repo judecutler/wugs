@@ -995,6 +995,7 @@ Bracketed passages in brown mark the places only you can write (word order, allo
 Press **Publish as a website…** to make a folder of web pages from your texts and dictionary, for the people whose language it is. It needs no server and nothing to install: open `index.html` in any browser, copy the folder to a USB stick or a phone, or put it on any web host.
 
 - The first page has a search box and lists the texts, with a link to the dictionary. The search looks through headwords, glosses, sentences and translations as the reader types, and ignores capitals and accents, so a reader without the language's keyboard still finds words. Each result links to its dictionary entry or its sentence.
+- When the project has a Glottocode (the Language row above), the first page also shows a small map of where Glottolog places the language, with its nearest languages as grey dots, and names four of them.
 - Each text shows its sentences one by one: the sentence, each glossed word's morphs and glosses under it, and the translation.
 - With **With sound clips** ticked, a ▶ beside each timed sentence plays it, cut from the text's recording.
 - The dictionary is the same page **Dictionary to print…** makes.

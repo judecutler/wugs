@@ -163,6 +163,36 @@ pub struct Place {
     pub land: &'static str,
 }
 
+/// A locator map as a standalone SVG file: 50° of longitude by 30° of land
+/// around the place, copies of the land either side of 180°, the nearest
+/// languages as grey dots and the language ringed (the grammar sketch's
+/// `locatorMap` draws the same in TypeScript).
+pub fn locator_svg(p: &Place, label: &str) -> String {
+    let r1 = |v: f64| (v * 10.0).round() / 10.0;
+    let esc = |s: &str| s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;");
+    let cx = f64::from(p.lon) + 180.0;
+    let cy = 90.0 - f64::from(p.lat);
+    let (w, h) = (50.0, 30.0);
+    let x = r1(cx - w / 2.0);
+    let y = r1((cy - h / 2.0).clamp(0.0, 180.0 - h));
+    let mut out = format!("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"{x} {y} {w} {h}\" role=\"img\" aria-label=\"{}\"><rect x=\"{x}\" y=\"{y}\" width=\"{w}\" height=\"{h}\" fill=\"#dbeef4\"/>", esc(label));
+    for dx in [-360, 0, 360] {
+        out.push_str(&format!("<path d=\"{}\" transform=\"translate({dx} 0)\" fill=\"#f2ede0\" stroke=\"#b9ad8f\" stroke-width=\"0.08\"/>", p.land.trim()));
+    }
+    for n in &p.neighbours {
+        let mut nx = f64::from(n.lon) + 180.0;
+        if nx - cx > 180.0 {
+            nx -= 360.0;
+        }
+        if cx - nx > 180.0 {
+            nx += 360.0;
+        }
+        out.push_str(&format!("<circle cx=\"{}\" cy=\"{}\" r=\"0.35\" fill=\"#777\"><title>{}</title></circle>", r1(nx), r1(90.0 - f64::from(n.lat)), esc(n.name)));
+    }
+    out.push_str(&format!("<circle cx=\"{}\" cy=\"{}\" r=\"0.7\" fill=\"#00718a\" stroke=\"#000\" stroke-width=\"0.25\"/></svg>\n", r1(cx), r1(cy)));
+    out
+}
+
 /// Where Glottolog places a languoid (a dialect without a place of its own
 /// by its language), and its `n` nearest languages; None when it has no place.
 pub fn place(code: &str, n: usize) -> Option<Place> {
@@ -235,5 +265,9 @@ mod tests {
         assert!(p.neighbours.iter().all(|n| n.glottocode != "stan1293" && n.km < 800.0), "{:?}", p.neighbours);
         assert!((km((0.0, 0.0), (0.0, 1.0)) - 111.19).abs() < 0.1);
         assert!(place("nope1234", 5).is_none());
+        let svg = locator_svg(&p, "English");
+        assert!(svg.starts_with("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"154 22 50 30\""), "{}", &svg[..120]);
+        assert_eq!(svg.matches("<path ").count(), 3);
+        assert_eq!(svg.matches("<title>").count(), 5);
     }
 }
