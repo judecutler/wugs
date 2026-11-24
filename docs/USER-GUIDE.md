@@ -915,13 +915,13 @@ All of these are in the **Texts** panel, under **Import and export**.
 ### Import files from ELAN, FLEx, Praat and other tools
 
 1. Click **Import a file…**.
-2. Choose the file, or several at once (hold Ctrl, or Cmd on a Mac, while you click): a folder of ELAN files comes in one after another, and one message says how many of each format came in and which, if any, did not.
+2. Choose the file. To bring in several, hold Ctrl (Cmd on a Mac) while you click them; one message then sums them up.
 
 Or drop the file anywhere on the wugs window.
 
 wugs reads these formats:
 
-- ELAN `.eaf`. Each tier comes in as a track of segments. When the file keeps its glossing in tiers of its own (a tier of words under the sentences, often a tier of morphs under the words and a tier of glosses on the morphs or the words, as Toolbox, FLEx and many ELAN templates lay them out), the message offers **Read as glossing**. wugs then makes those words and morphs the text's glossing, so they show in the Gloss panel, the Interlinear tab and the corpus tools, and takes the tiers away. A part-of-speech tier or a second gloss tier on the words or morphs is kept on each word or morph. An ELAN export writes the glossing back as tiers of its own (`utterance words`, `utterance morphs`, `utterance glosses`), with each kept tier under its words or morphs again by its own name. Words timed in their own tier (Time_Subdivision) keep their order but not their times, so leave the tiers as they are if you need those times on the Timeline. **Find an action** → **Read glossing from the text's ELAN tiers** offers the same for the text on screen. Importing the file again brings nothing back.
+- ELAN `.eaf`: each tier becomes a track (see [Glossing kept in ELAN tiers](#glossing-kept-in-elan-tiers)).
 - FLEx `.flextext` and LIFT `.lift`
 - Praat `.TextGrid`
 - Toolbox `.db`, `.sfm`, and `.lex`, and `.txt` files in Toolbox format. A lexicon (`\lx` records) goes to the Lexicon. An interlinear text (`\ref` records with `\tx` lines, as Toolbox's Interlinearize writes them) becomes texts:
@@ -949,6 +949,11 @@ wugs reads these formats:
 A message reports what wugs imported, and the new text is selected. The import report also counts anything the format holds that wugs does not keep. For FLEx, that includes notes, pronunciations, relations, and etymologies.
 
 An imported ELAN or Praat text is not linked to its recording. Import the audio with **Import audio…** on the Timeline and pick it there.
+
+
+### Glossing kept in ELAN tiers
+
+When the file keeps its glossing in tiers of its own (a tier of words under the sentences, often a tier of morphs under the words and a tier of glosses on the morphs or the words, as Toolbox, FLEx and many ELAN templates lay them out), the message offers **Read as glossing**. wugs then makes those words and morphs the text's glossing, so they show in the Gloss panel, the Interlinear tab and the corpus tools, and takes the tiers away. A part-of-speech tier or a second gloss tier on the words or morphs is kept on each word or morph. An ELAN export writes the glossing back as tiers of its own (`utterance words`, `utterance morphs`, `utterance glosses`), with each kept tier under its words or morphs again by its own name. Words timed in their own tier (Time_Subdivision) keep their order but not their times, so leave the tiers as they are if you need those times on the Timeline. **Find an action** → **Read glossing from the text's ELAN tiers** offers the same for the text on screen. Importing the file again brings nothing back.
 
 ### Add articles from Wikipedia
 
