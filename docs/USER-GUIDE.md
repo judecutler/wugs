@@ -351,6 +351,12 @@ Under **Notes**, at the bottom of the Gloss panel, type anything you want to rem
 
 Notes belong to the sentence's text, so they have its sharing level, and they sync with the project. Two people can add notes to the same sentence at once, and both notes stay. The **Interlinear** tab shows each note under its sentence, and **Search** finds words in notes too: the hit opens the sentence and says "note". Notes go in and out of FlexText as FLEx's Note line.
 
+### Collect examples for a grammar
+
+While glossing, file a sentence under the topics it illustrates: under **Topics** in the Gloss panel, type a topic such as *negation*, *relative clauses* or *evidentials* and press Enter. The project's topics are offered as you type, so a topic keeps one spelling. A sentence can have several topics; click × on a chip to take it off one. Topics belong to the sentence's text and sync with it, and two people filing the same sentence at once both keep theirs.
+
+The **Topics** panel (open it from Settings, Closed panels, or **Ctrl+K**) lists every topic with its number of sentences. Pick one to see its sentences, by text, with their translations; click a sentence to open it in the Gloss panel. **Copy as examples** copies them as numbered glossed examples in the format chosen for **Copy example** (Word or Google Docs, LaTeX with gb4e or ExPex, or plain text), ready to paste into a grammar chapter or a paper. **Copy table** copies the sentences and translations as a table. To rename a topic on every sentence, type the new name beside **Rename**; give the name of another topic to fold the two into one.
+
 ### See how you translated a sentence like this before
 
 Under the notes, **Sentences like this one** lists up to five sentences of the project that share most of this sentence's words, with their translations. A phrase or formula you translated before can then be translated the same way again, and you can see a word you are glossing used in other sentences. Rare words count for more than common ones, so a word every sentence has (*the*, a common particle) brings up nothing on its own. A sentence with exactly the same words comes first. Hover over one to see the words both share; click it to open it. **Hide** puts the list away on this computer, and **Show** brings it back.

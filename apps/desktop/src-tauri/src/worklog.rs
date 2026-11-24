@@ -128,7 +128,8 @@ pub fn worklog(session: &mut Session, offset_minutes: i32, days: usize) -> Resul
             ("create", "sense") => {
                 d.senses.insert(op.target.clone());
             }
-            ("create", "annotation") => {
+            // Notes only: a sentence filed under a topic is not a note.
+            ("create", "annotation") if op.value.get_str("kind") != Some("topic") => {
                 d.notes.insert(op.target.clone());
             }
             _ => {}

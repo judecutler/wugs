@@ -132,6 +132,8 @@ pub struct GlossView {
     pub alternatives: Vec<AlternativeView>,
     /// The sentence's notes (Annotations of kind `note`), oldest first.
     pub segment_notes: Vec<NoteView>,
+    /// The topics the sentence is filed under (Annotations of kind `topic`), by name.
+    pub topics: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -289,7 +291,8 @@ fn view(p: &Project, segment_id: &str) -> Result<GlossView, String> {
     }
     let reads_as = reads_as(p, segment_id, &words)?;
     let segment_notes = p.segment_notes(segment_id)?.into_iter().map(|(id, body)| NoteView { id, body }).collect();
-    Ok(GlossView { segment_id: segment_id.to_string(), words, reads_as, hidden, alternatives, segment_notes })
+    let topics = p.segment_topics(segment_id)?.into_iter().map(|(_, name)| name).collect();
+    Ok(GlossView { segment_id: segment_id.to_string(), words, reads_as, hidden, alternatives, segment_notes, topics })
 }
 
 /// The other list of an open conflict on `parent.field`, if it still names
@@ -371,6 +374,22 @@ pub fn gloss_add_note(session: &mut Session, text_id: &str, segment_id: &str, bo
     let p = project(session)?;
     require_segment(p, text_id, segment_id)?;
     p.add_segment_note(text_id, segment_id, body)?;
+    edit(p, segment_id, Vec::new())
+}
+
+/// File the sentence under a topic (one it has already writes nothing).
+pub fn gloss_add_topic(session: &mut Session, text_id: &str, segment_id: &str, name: &str) -> Result<GlossEdit, String> {
+    let p = project(session)?;
+    require_segment(p, text_id, segment_id)?;
+    p.add_segment_topic(text_id, segment_id, name)?;
+    edit(p, segment_id, Vec::new())
+}
+
+/// Take the sentence off a topic.
+pub fn gloss_remove_topic(session: &mut Session, text_id: &str, segment_id: &str, name: &str) -> Result<GlossEdit, String> {
+    let p = project(session)?;
+    require_segment(p, text_id, segment_id)?;
+    p.remove_segment_topic(text_id, segment_id, name)?;
     edit(p, segment_id, Vec::new())
 }
 

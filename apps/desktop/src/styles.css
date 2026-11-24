@@ -560,6 +560,11 @@ button.rec-start { border-color: var(--error); color: var(--error); }
 .gl-free-input { flex: 1; min-width: 0; font-size: 14px; }
 .gl-notes { border-top: 1px solid var(--line); margin-top: 4px; display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
 .gl-notes .gl-free-input { font-size: 13px; }
+.gl-topics { border-top: 1px solid var(--line); margin-top: 4px; display: flex; flex-direction: column; gap: 4px; padding-bottom: 4px; }
+.gl-topic-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.gl-topic { display: inline-flex; align-items: center; gap: 2px; padding: 1px 2px 1px 8px; border-radius: 999px; background: var(--accent-soft); font-size: var(--text-sm); }
+.gl-topic-off { border: none; background: none; padding: 0 4px; min-height: 0; color: var(--muted); }
+.gl-topic-input { font-size: 13px; }
 .gl-like { border-top: 1px solid var(--line); margin-top: 4px; display: flex; flex-direction: column; gap: 3px; padding-bottom: 4px; }
 .gl-like-head { display: flex; align-items: baseline; gap: 8px; }
 .gl-like-head h3 { margin: 4px 0 0; }
@@ -1189,6 +1194,20 @@ body::before {
 .ws-head { margin-bottom: 2px; }
 .ws-items td.num { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .panel-wordsketch .ws-lemma { flex: 1; min-width: 8em; }
+.panel-topics .gt-find { flex: 1; min-width: 10em; }
+.panel-topics .gt-body { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.panel-topics .gt-list { display: flex; flex-direction: column; gap: 2px; min-width: 10em; max-width: 16em; flex: 1 1 10em; }
+.panel-topics .gt-topic { display: flex; justify-content: space-between; gap: 8px; text-align: left; }
+.panel-topics .gt-topic[aria-selected="true"] { background: var(--accent-soft); }
+.panel-topics .gt-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.panel-topics .gt-detail { flex: 3 1 18em; min-width: 0; }
+.panel-topics .gt-detail h3 { font-family: var(--font-display); font-size: 15px; margin: 4px 0; }
+.panel-topics .gt-rename { flex: 1; min-width: 8em; }
+.panel-topics .gt-sentences { padding-left: 2em; margin: 6px 0; }
+.panel-topics .gt-sentences li { padding: 4px 0; border-bottom: 1px solid var(--line); cursor: pointer; display: flex; flex-direction: column; }
+.panel-topics .gt-text { font-size: var(--text-xs); color: var(--muted); }
+.panel-topics .gt-content { font-family: var(--font-ipa); }
+.panel-topics .gt-translation { font-style: italic; color: var(--muted); }
 .panel-notes .nt-list { overflow: auto; flex: 1; min-height: 0; }
 .panel-notes .nt-head { font-family: var(--font-display); font-size: 15px; margin: 12px 0 4px; }
 .panel-notes .nt-item { padding: 6px 0; border-bottom: 1px solid var(--line); }

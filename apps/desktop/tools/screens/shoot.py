@@ -55,6 +55,7 @@ PANELS = [
     ("affixes", "Affixes"),
     ("wordtypes", "Words to gloss"),
     ("notes", "Notes"),
+    ("topics", "Topics"),
     ("wordsketch", "Word sketch"),
     ("wordorder", "Word order"),
     ("sentences", "Elicit sentences"),
@@ -1179,6 +1180,12 @@ def main():
             clip = run.page.evaluate("window.__WUGS_CLIPBOARD__") or {}
             if not clip.get("text", "").startswith("((") or "Rano" not in clip.get("text", ""):
                 failures.append(f"Copy Newick did not copy the tree: {clip}")
+            # Topics: a grammar topic's sentences.
+            run.front("topics", "Topics")
+            run.page.locator(".panel-topics .gt-sentences li").first.wait_for()
+            run.shot("state-topics", run.page.locator(".panel-topics"))
+            if run.page.locator(".panel-topics .gt-topic").count() != 2 or run.page.locator(".panel-topics .gt-sentences li").count() != 2:
+                failures.append("Topics did not list its topics and the first one's sentences")
             # Notes: every note in one list, questions only.
             run.front("notes", "Notes")
             run.page.locator(".panel-notes .nt-item").first.wait_for()

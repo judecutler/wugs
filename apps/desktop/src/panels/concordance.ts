@@ -42,9 +42,9 @@ const EXAMPLES_MAX = 50;
 /** The sentences behind these lines (each once, in the order shown) as
  * numbered glossed examples, in the format chosen for Copy example; a
  * translation line brings the sentence it translates. */
-async function copyAsExamples(lines: readonly Hit[]): Promise<void> {
+export async function copyAsExamples(lines: readonly Pick<Hit, "textId" | "segmentId">[]): Promise<void> {
   const seen = new Set<string>();
-  const picked: Hit[] = [];
+  const picked: Pick<Hit, "textId" | "segmentId">[] = [];
   let more = 0;
   const texts = new Map<string, TextDetail>();
   const examples: Example[] = [];
