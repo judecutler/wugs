@@ -60,3 +60,27 @@ export function yFor(kind: Kind, value: number, top: number, height: number, ran
 export function frameMs(chunk: Chunk, i: number): number {
   return chunk.startMs + (i + 0.5) * chunk.stepMs;
 }
+
+/** What the analysis says at one moment: the nearest frame within one step. */
+export type Reading = { ms: number; pitch: number | null; intensity: number | null; f1: number | null; f2: number | null; f3: number | null };
+
+export function readAt(chunks: Iterable<Chunk>, ms: number): Reading | null {
+  for (const c of chunks) {
+    const n = c.pitch.length;
+    if (n === 0 || ms < c.startMs || ms >= c.startMs + n * c.stepMs) continue;
+    const i = Math.min(n - 1, Math.max(0, Math.round((ms - c.startMs) / c.stepMs - 0.5)));
+    const at = (xs: (number | null)[]) => xs[i] ?? null;
+    return { ms: frameMs(c, i), pitch: at(c.pitch), intensity: at(c.intensity), f1: at(c.f1), f2: at(c.f2), f3: at(c.f3) };
+  }
+  return null;
+}
+
+/** The reading in words, for the kinds shown: «212 Hz · 68 dB · F1 540 F2 1720 F3 2610», with the time. */
+export function readingText(r: Reading, on: ReadonlySet<Kind>): string {
+  const hz = (v: number | null) => (v === null ? "–" : String(Math.round(v)));
+  const parts = [`${(r.ms / 1000).toFixed(3)} s`];
+  if (on.has("pitch")) parts.push(r.pitch === null ? "unvoiced" : `${hz(r.pitch)} Hz`);
+  if (on.has("intensity")) parts.push(r.intensity === null ? "– dB" : `${r.intensity.toFixed(1)} dB`);
+  if (on.has("formants")) parts.push(`F1 ${hz(r.f1)} F2 ${hz(r.f2)} F3 ${hz(r.f3)}`);
+  return parts.join(" · ");
+}
