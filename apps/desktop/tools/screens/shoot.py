@@ -722,6 +722,11 @@ def main():
             run.shot("state-keywords", run.page.locator(".panel-keywords"))
             if run.page.locator(".panel-keywords .kw-table tbody tr").count() == 0:
                 failures.append("keywords showed no rows")
+            run.page.locator(".panel-keywords button", has_text="Used alike").click()
+            run.page.wait_for_timeout(200)
+            if run.page.locator(".panel-keywords .kw-table tbody tr").count() != 2 or "lockwords" not in run.page.locator(".panel-keywords .fq-count").inner_text():
+                failures.append("Keywords did not list the words used alike")
+            run.page.locator(".panel-keywords button", has_text="Used more").click()
             alike = run.page.locator(".panel-keywords .kw-alike-row")
             alike.first.scroll_into_view_if_needed()
             run.shot("state-keywords-alike", run.page.locator(".panel-keywords"))

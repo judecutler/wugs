@@ -59,7 +59,16 @@ pub struct Keywords {
     pub omitted: usize,
     /// The log-likelihood a row needs for p < 0.05 after Bonferroni over `types`.
     pub critical: f64,
+    /// Lockwords (Baker 2011): words both sides use about equally often
+    /// (log ratio within ±`LOCK_RATIO`, not significant even before
+    /// correction), each side at least the minimum, the most used first.
+    pub lockwords: Vec<KeywordRow>,
 }
+
+/// How far apart (log2 of the ratio of rates) a lockword's two rates may be: about 1.4 times.
+pub const LOCK_RATIO: f64 = 0.5;
+/// Lockwords listed at most.
+pub const LOCK_LIMIT: usize = 200;
 
 pub const LIMIT: usize = 2000;
 
@@ -168,8 +177,17 @@ pub fn keywords_against(session: &mut Session, kind: Kind, target: &Scope, again
     let types = tallies.len();
     let min = min_count.max(1);
     let (mut more, mut less): (Vec<KeywordRow>, Vec<KeywordRow>) = (Vec::new(), Vec::new());
+    let mut lockwords: Vec<KeywordRow> = Vec::new();
     for (key, t) in tallies {
         let leans_here = (t.focus as f64) * (d as f64) >= (t.reference as f64) * (c as f64);
+        if t.focus >= min && t.reference >= min {
+            let (ll, lr, pd) = scores(t.focus, t.reference, c, d);
+            if lr.abs() <= LOCK_RATIO && ll.abs() < 3.84 {
+                let sm = (t.focus as f64 * 1e6 / c.max(1) as f64 + 1.0) / (t.reference as f64 * 1e6 / d.max(1) as f64 + 1.0);
+                let item = t.spellings.iter().fold(None::<&(String, usize)>, |best, s| if best.is_none_or(|b| s.1 > b.1) { Some(s) } else { best }).map(|s| s.0.clone()).unwrap_or_else(|| key.clone());
+                lockwords.push(KeywordRow { item, focus: t.focus, reference: t.reference, log_likelihood: ll, log_ratio: lr, percent_diff: pd, simple_maths: sm });
+            }
+        }
         if (leans_here && t.focus < min) || (!leans_here && t.reference < min) {
             continue;
         }
@@ -195,7 +213,10 @@ pub fn keywords_against(session: &mut Session, kind: Kind, target: &Scope, again
     let mut rows = more;
     rows.extend(less);
     let critical = chi2_critical(0.05 / types.max(1) as f64);
-    Ok(Keywords { rows, focus_tokens: c, reference_tokens: d, types, omitted, critical })
+    let rate = |r: &KeywordRow| r.focus as f64 / c.max(1) as f64 + r.reference as f64 / d.max(1) as f64;
+    lockwords.sort_by(|a, b| rate(b).total_cmp(&rate(a)).then(a.item.cmp(&b.item)));
+    lockwords.truncate(LOCK_LIMIT);
+    Ok(Keywords { rows, focus_tokens: c, reference_tokens: d, types, omitted, critical, lockwords })
 }
 
 /// Signed log-likelihood, log ratio and %DIFF for `a` occurrences in `c`
@@ -309,6 +330,9 @@ mod tests {
         let ran = ab.rows.iter().find(|r| r.item == "ran").unwrap();
         assert_eq!((ran.focus, ran.reference), (1, 1));
         assert!(ab.rows.iter().all(|r| r.focus + r.reference > 0 && !["wʌn", "faɪv"].contains(&r.item.as_str())), "nothing from the sample");
+        // Lockwords: «the» is used about as often in both (2 of 8, 1 of 3); «ran» three times as often there.
+        assert_eq!(ab.lockwords.iter().map(|r| r.item.as_str()).collect::<Vec<_>>(), vec!["the"]);
+        assert!(ab.lockwords.iter().all(|r| r.log_ratio.abs() <= LOCK_RATIO));
         // A reference that is the target itself leaves nothing to compare with.
         assert_eq!(keywords_against(&mut session, Kind::Word, &Scope::text(&fox), &Scope::text(&fox), 1, 1).unwrap().reference_tokens, 0);
         drop(session);

@@ -1052,7 +1052,7 @@ const LEXICON = [
       };
       const all = [row("nikani", 9, 2), row("toruma", 4, 0), row("liwa", 1, 0), row("ŋai", 3, 16), row("kesi", 0, 11)];
       const rows = all.filter((r) => (r.logLikelihood >= 0 ? r.focus : r.reference) >= (minCount ?? 1));
-      return { focusTokens: c, referenceTokens: d, types: 6, omitted: 0, critical: 9.14, rows };
+      return { focusTokens: c, referenceTokens: d, types: 6, omitted: 0, critical: 9.14, rows, lockwords: [row("mopa", 3, 5), row("wuno", 2, 4)] };
     },
     similar_words: ({ word }) => ({
       word: word.toLowerCase(),

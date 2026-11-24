@@ -9,7 +9,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, keywords, textsAlike } from "../api";
 import { alikeLine, alikeTsv, barShare, nearest, SHORT, type Alike } from "../keywords/alike";
 import { emptyState, h } from "../dom";
-import { asTsv, KEYWORD_SORTS, keywordQuery, keywordRows, perThousand, significant, summary, type KeywordKind, type KeywordSide, type KeywordSort, type Keywords } from "../keywords/logic";
+import { asTsv, KEYWORD_SORTS, keywordQuery, keywordRows, lockNote, perThousand, significant, summary, type KeywordKind, type KeywordSide, type KeywordSort, type Keywords } from "../keywords/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
@@ -99,7 +99,7 @@ export const keywordsPanel: PanelDef = {
         drawChips();
         void load();
       });
-      chips(sides, [{ id: "more" as KeywordSide, label: "Used more", title: "Words this text uses more than the other texts" }, { id: "less" as KeywordSide, label: "Used less", title: "Words this text uses less than the other texts" }], () => side, (v) => {
+      chips(sides, [{ id: "more" as KeywordSide, label: "Used more", title: "Words this text uses more than the other texts" }, { id: "less" as KeywordSide, label: "Used less", title: "Words this text uses less than the other texts" }, { id: "alike" as KeywordSide, label: "Used alike", title: "Lockwords: words both sides use about as often, their common ground" }], () => side, (v) => {
         side = v;
         drawChips();
         drawRows();
@@ -130,7 +130,7 @@ export const keywordsPanel: PanelDef = {
       const words = whereWords(w);
       return words.charAt(0).toUpperCase() + words.slice(1);
     };
-    const shown = () => (data === null ? [] : keywordRows(data.rows, side, sortBy));
+    const shown = () => (data === null ? [] : keywordRows(side === "alike" ? (data.lockwords ?? []) : data.rows, side, sortBy));
 
     const drawRows = () => {
       if (data === null) {
@@ -138,7 +138,7 @@ export const keywordsPanel: PanelDef = {
         return;
       }
       const rows = shown();
-      note.textContent = summary(title(), data, within() !== null, againstLabel(), kind) + (rows.length === 0 && data.referenceTokens > 0 ? ` No word is used ${side === "more" ? "more" : "less"} here.` : "") + (rows.length > DRAWN ? ` The first ${DRAWN} are drawn.` : "");
+      note.textContent = summary(title(), data, within() !== null, againstLabel(), kind) + (side === "alike" ? (data.referenceTokens > 0 ? lockNote(data) : "") : rows.length === 0 && data.referenceTokens > 0 ? ` No word is used ${side === "more" ? "more" : "less"} here.` : "") + (rows.length > DRAWN ? ` The first ${DRAWN} are drawn.` : "");
       const head = h(
         "tr",
         {},
