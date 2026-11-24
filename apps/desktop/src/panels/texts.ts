@@ -19,7 +19,7 @@ import { localDay } from "../dates";
 import { readerDetails, readerGlossary, readerHtml, type GlossedWord, type ReaderSentence } from "../reader/booklet";
 import { emptyState, h } from "../dom";
 import { attempt, getState, reloadTexts, selectText, showToast, touchLexicon } from "../store";
-import { tableImportLines } from "../lexicon/logic";
+import { loanSources, tableImportLines } from "../lexicon/logic";
 import { sliced, type PanelDef } from "./panel";
 import { provide } from "../palette/registry";
 
@@ -412,6 +412,7 @@ async function exportSketch() {
       slots,
       allomorphs,
       entries: progress.entries,
+      loans: loanSources(entries),
       features,
       featureSource,
       texts: progress.texts.map((t) => ({ title: t.title, sentences: t.sentences, words: t.words, glossed: t.glossedWords, morphs: t.morphs })),
