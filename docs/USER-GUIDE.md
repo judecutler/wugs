@@ -296,7 +296,7 @@ The breakdown field takes these markers:
 | `<in>` | infix |
 | `∅` | zero morph |
 
-Grammatical glosses in capitals, such as `LOC` or `PL`, show in small caps.
+Grammatical glosses in capitals, such as `LOC` or `PL`, show in small caps. While you type one, a line under the cell says what each abbreviation means, from the project's own list (**Abbreviations** in the Interlinear tab) or the Leipzig Glossing Rules: `3SG.PST` shows "3 third person · SG singular · PST past", and an abbreviation with no meaning anywhere shows **?**, so a slip such as `PTS` stands out at once.
 
 The gloss cells suggest senses from the lexicon as you type. Press **Enter** on a match to link the morph to that lexicon sense.
 

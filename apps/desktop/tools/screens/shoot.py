@@ -589,6 +589,17 @@ def main():
             run.shot("state-gloss-guess", run.page.locator(".panel-gloss"))
             if run.page.locator(".panel-gloss .gl-guessed").count() == 0:
                 failures.append("a word starting ni- did not show its guess")
+            # A gloss being typed says what its abbreviations mean.
+            run.page.evaluate("async () => (await import('/src/store.ts')).selectSegment({ textId: 't-count', tierId: 'tier-utt', segmentId: 'u01' })")
+            run.page.wait_for_timeout(600)
+            cell = run.page.locator(".panel-gloss input.gl-input[placeholder='gloss']").first
+            cell.focus()
+            cell.fill("3SG.XYZ")
+            run.page.locator(".panel-gloss .gl-hint:not(:empty)").first.wait_for()
+            run.shot("state-gloss-hint", run.page.locator(".panel-gloss"))
+            if "SG singular · XYZ ?" not in run.page.locator(".panel-gloss .gl-hint:not(:empty)").first.inner_text():
+                failures.append("the gloss hint did not explain SG and flag XYZ")
+            cell.press("Escape")
             # Interlinear: only the sentences still to gloss, and Next to gloss.
             run.front("interlinear", "Interlinear")
             run.page.wait_for_timeout(600)
