@@ -968,6 +968,25 @@ def main():
             run.shot("state-sounds-where", run.page.locator(".panel-sounds"))
             if run.page.locator(".panel-sounds .sd-shape").count() < 3:
                 failures.append("Sounds did not show word shapes")
+            # Tone melodies on a track written with tone marks, then back to IPA.
+            run.page.locator(".panel-sounds select[aria-label='Track']").select_option("tier-tone")
+            tones = run.page.locator(".panel-sounds .sd-tones")
+            tones.wait_for()
+            tones.scroll_into_view_if_needed()
+            run.shot("state-sounds-tones", run.page.locator(".panel-sounds"))
+            tone_note = run.page.locator(".panel-sounds .sd-tone-note").inner_text()
+            if "never met: L.H" not in tone_note or tones.locator("tbody tr").count() < 6:
+                failures.append(f"Sounds did not read the tone melodies: {tone_note}")
+            # Tone apart: á and à count as the vowel a everywhere but the melodies.
+            run.page.locator(".panel-sounds label", has_text="Tone apart").locator("input").check()
+            run.page.wait_for_timeout(400)
+            glyphs = run.page.locator(".panel-sounds .sd-glyph").all_inner_texts()
+            if "á" in glyphs or "a" not in glyphs or run.page.locator(".panel-sounds .sd-tones").count() != 1:
+                failures.append(f"Tone apart did not read á as a: {glyphs[:12]}")
+            run.page.locator(".panel-sounds label", has_text="Tone apart").locator("input").uncheck()
+            run.page.wait_for_timeout(300)
+            run.page.locator(".panel-sounds select[aria-label='Track']").select_option("tier-ipa")
+            run.page.locator(".panel-sounds .sd-h", has_text="Word shapes").wait_for()
             run.page.locator(".panel-sounds button", has_text="Compare with PHOIBLE").click()
             run.page.locator(".panel-sounds .sd-credit").wait_for()
             run.page.locator(".panel-sounds .sd-phoible-note").scroll_into_view_if_needed()

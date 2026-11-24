@@ -793,8 +793,10 @@ const LEXICON = [
       tracks: [
         { id: "tier-utt", name: "utterance", words: 64 },
         { id: "tier-ipa", name: "IPA", words: 52 },
+        { id: "tier-tone", name: "tones", words: 40 },
       ],
-      words: (tierId === "tier-utt" ? ["kesi mopa", "tela senu"] : ["tʰaka", "ŋaːla", "t͡ʃimbo", "ᵐbeli", "kʼosu", "ɓaɾu", "ǃxoa", "ɛʔɛ", "jɔɣu", "Wiri", "łuwe", "ɲĩda", "fɪsu", "pata", "bata", "tata", "kata", "pati", "bati", "suka", "ʃuka", "smaka", "kunta", "palks", "spina"]).flatMap((w, i) => w.split(" ").map((word) => ({ word, count: (9 - (i % 7)) * (tierId === null ? 10 : 1) })))
+      // A track written with tone marks, for the Sounds panel's tone melodies.
+      words: tierId === "tier-tone" ? [["bá", 6], ["kà", 4], ["sâ", 2], ["kálá", 5], ["tálá", 2], ["sálà", 4], ["mɔ́tɔ̀", 3], ["bɛ́lɛ̀", 1], ["kɔ̀lɔ̀", 3], ["pìlì", 2], ["dǎ", 1], ["sákàlá", 2], ["bàlámá", 1]].map(([word, count]) => ({ word, count })) : (tierId === "tier-utt" ? ["kesi mopa", "tela senu"] : ["tʰaka", "ŋaːla", "t͡ʃimbo", "ᵐbeli", "kʼosu", "ɓaɾu", "ǃxoa", "ɛʔɛ", "jɔɣu", "Wiri", "łuwe", "ɲĩda", "fɪsu", "pata", "bata", "tata", "kata", "pati", "bati", "suka", "ʃuka", "smaka", "kunta", "palks", "spina"]).flatMap((w, i) => w.split(" ").map((word) => ({ word, count: (9 - (i % 7)) * (tierId === null ? 10 : 1) })))
         // Every track (the Checks panel): a slip and a variant beside common words.
         .concat(tierId === null ? [{ word: "tʰakka", count: 1 }, { word: "fisu", count: 1 }] : [])
         // Stems that share endings, for the Affixes panel's guesses.
