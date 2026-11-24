@@ -1073,6 +1073,8 @@ def main():
             run.shot("state-speakers", run.page.locator(".panel-progress .pg-speakers"))
             if "2.37 (30 of 41)" not in spk.inner_text() or "II" not in spk.inner_text():
                 failures.append(f"Progress did not give the child's MLU and stage: {spk.inner_text()}")
+            if "Spoken by" not in spk.inner_text() or "2;06" not in spk.inner_text():
+                failures.append(f"Progress did not say who speaks on the child's track: {spk.inner_text()}")
             # The work log, day by day.
             work = run.page.locator(".panel-progress .pg-work")
             work.scroll_into_view_if_needed()

@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { brownStage, isChild, mluMorphemes, mluWords, speakerCells, speakersNote, speakersTsv, type SpeakerRow } from "./speakers.ts";
+import { brownStage, hasPeople, isChild, mluMorphemes, mluWords, SPEAKER_COLUMNS, speakerCells, speakerColumns, speakersNote, speakersTsv, type SpeakerRow } from "./speakers.ts";
 
-const row = (over: Partial<SpeakerRow>): SpeakerRow => ({ tier: "t", name: "CHI", texts: 1, utterances: 4, words: 10, types: 6, longest: 4, analysed: 4, morphemes: 9, mtld: null, ...over });
+const row = (over: Partial<SpeakerRow>): SpeakerRow => ({ tier: "t", name: "CHI", texts: 1, utterances: 4, words: 10, types: 6, longest: 4, analysed: 4, morphemes: 9, mtld: null, person: "", sex: "", age: "", ...over });
 
 test("MLU in words and in morphemes", () => {
   assert.equal(mluWords(row({})), 2.5);
@@ -34,4 +34,16 @@ test("note and table", () => {
   const tsv = speakersTsv([row({})]);
   assert.equal(tsv.split("\n")[1], "CHI\t1\t4\t10\t2.50\t2.25\tII\t4\t6\t–");
   assert.equal(speakerCells(row({ mtld: 47.25 }))[9], "47.3");
+});
+
+test("a track's speaker from the People panel adds who they are", () => {
+  const rows = [row({ person: "Lena", sex: "female", age: "2;06" }), row({ name: "MOT" })];
+  assert.ok(hasPeople(rows) && !hasPeople([row({})]));
+  assert.deepEqual(speakerColumns(rows).slice(0, 5), ["Speaker", "Spoken by", "Sex", "Age", "Texts"]);
+  assert.deepEqual(speakerColumns([row({})]), SPEAKER_COLUMNS);
+  const tsv = speakersTsv(rows).split("\n");
+  assert.equal(tsv[1], "CHI\tLena\tfemale\t2;06\t1\t4\t10\t2.50\t2.25\tII\t4\t6\t–");
+  assert.ok(tsv[2]!.startsWith("MOT\t\t\t\t1\t"));
+  assert.match(speakersNote([row({})]), /double-click its name/u);
+  assert.doesNotMatch(speakersNote(rows), /double-click/u);
 });

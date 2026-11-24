@@ -1,7 +1,7 @@
 // Speakers: each transcription track's utterance lengths (src-tauri/src/mlu.rs),
 // the mean length of utterance child language research starts from. Pure.
 
-export type SpeakerRow = { tier: string; name: string; texts: number; utterances: number; words: number; types: number; longest: number; analysed: number; morphemes: number; mtld: number | null };
+export type SpeakerRow = { tier: string; name: string; texts: number; utterances: number; words: number; types: number; longest: number; analysed: number; morphemes: number; mtld: number | null; person: string; sex: string; age: string };
 
 /** Words per utterance. */
 export const mluWords = (r: SpeakerRow): number => (r.utterances === 0 ? 0 : r.words / r.utterances);
@@ -24,13 +24,22 @@ export const isChild = (name: string): boolean => /^chi\d*$/iu.test(name.trim())
 
 const fixed = (n: number) => n.toFixed(2);
 
-/** One row of the table, in words: speaker, texts, utterances, words, MLU (words), MLU (morphemes), Brown's stage, longest, different words, MTLD. */
-export function speakerCells(r: SpeakerRow): string[] {
+/** Whether any track has a speaker set in the People panel, so the table gives who they are. */
+export const hasPeople = (rows: readonly SpeakerRow[]): boolean => rows.some((r) => r.person !== "" || r.sex !== "" || r.age !== "");
+
+/** One row of the table, in words: speaker, (with `people`: spoken by, sex, age,) texts, utterances, words, MLU (words), MLU (morphemes), Brown's stage, longest, different words, MTLD. */
+export function speakerCells(r: SpeakerRow, people = false): string[] {
   const m = mluMorphemes(r);
   const part = m === null ? "–" : r.analysed < r.utterances ? `${fixed(m)} (${r.analysed} of ${r.utterances})` : fixed(m);
   const stage = m !== null && isChild(r.name) ? brownStage(m) : "";
-  return [r.name || "(no name)", String(r.texts), String(r.utterances), String(r.words), fixed(mluWords(r)), part, stage, String(r.longest), String(r.types), r.mtld === null ? "–" : r.mtld.toFixed(1)];
+  const who = people ? [r.person, r.sex, r.age] : [];
+  return [r.name || "(no name)", ...who, String(r.texts), String(r.utterances), String(r.words), fixed(mluWords(r)), part, stage, String(r.longest), String(r.types), r.mtld === null ? "–" : r.mtld.toFixed(1)];
 }
+
+const PEOPLE_COLUMNS = ["Spoken by", "Sex", "Age"];
+
+/** The table's columns, with who each speaker is when any track has one set. */
+export const speakerColumns = (rows: readonly SpeakerRow[]): string[] => (hasPeople(rows) ? [SPEAKER_COLUMNS[0]!, ...PEOPLE_COLUMNS, ...SPEAKER_COLUMNS.slice(1)] : [...SPEAKER_COLUMNS]);
 
 export const SPEAKER_COLUMNS = ["Speaker", "Texts", "Utterances", "Words", "MLU (words)", "MLU (morphemes)", "Brown's stage", "Longest", "Different words", "MTLD"];
 
@@ -45,10 +54,12 @@ export function speakersNote(rows: readonly SpeakerRow[]): string {
       : "Gloss the sentences, or import CHAT with a %mor tier, to count morphemes too.",
   );
   parts.push("MTLD measures how varied the words are without growing with how much was said, so speakers recorded for different lengths compare; it needs 100 words or more.");
+  if (!hasPeople(rows)) parts.push("Set who speaks on a track (double-click its name on the Timeline) to list their sex and age from the People panel here.");
   if (rows.some((r) => isChild(r.name) && r.analysed > 0)) parts.push("Brown's stages are for a child's track (CHI) and were set for English; read them as a rough guide in other languages.");
   return parts.join(" ");
 }
 
 export function speakersTsv(rows: readonly SpeakerRow[]): string {
-  return [SPEAKER_COLUMNS.join("\t"), ...rows.map((r) => speakerCells(r).join("\t"))].join("\n") + "\n";
+  const people = hasPeople(rows);
+  return [speakerColumns(rows).join("\t"), ...rows.map((r) => speakerCells(r, people).join("\t"))].join("\n") + "\n";
 }
