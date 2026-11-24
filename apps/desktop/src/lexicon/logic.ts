@@ -137,7 +137,7 @@ export function showLabel(rows: readonly ListRow[], s: { id: ListShow; label: st
 }
 
 /** What a lexicon table import did (`lexicon_table::import`). */
-export type TableImport = { entries: number; senses: number; unchanged: number; ambiguous: string[]; noLemma: number; columns: string[]; ignored: string[] };
+export type TableImport = { entries: number; senses: number; unchanged: number; ambiguous: string[]; noLemma: number; columns: string[]; ignored: string[]; domains: number; domainsUnmatched: string[]; examples: number };
 
 /** The toast after a lexicon table import, in words. */
 export function tableImportLines(r: TableImport): string[] {
@@ -148,6 +148,12 @@ export function tableImportLines(r: TableImport): string[] {
       : `Added ${n(r.entries, "entry", "entries")} and ${n(r.senses, "sense", "senses")}${r.unchanged > 0 ? `; ${n(r.unchanged, "row was", "rows were")} there already` : ""}.`,
     `Read ${r.columns.join(", ")}.`,
   ];
+  const extras = [r.domains > 0 ? n(r.domains, "link to a semantic domain", "links to semantic domains") : "", r.examples > 0 ? n(r.examples, "example sentence", "example sentences") : ""].filter((x) => x !== "");
+  if (extras.length > 0) lines.push(`The new senses came with ${extras.join(" and ")}.`);
+  if (r.domainsUnmatched.length > 0) {
+    const shown = r.domainsUnmatched.slice(0, 5).map((d) => `«${d}»`).join(", ");
+    lines.push(`No semantic domain is called ${shown}${r.domainsUnmatched.length > 5 ? " or the others" : ""}: write a domain's number (2.1) or its name as the Lexicon lists it.`);
+  }
   if (r.ignored.length > 0) lines.push(`Left out ${r.ignored.length === 1 ? "the column" : "the columns"} ${r.ignored.map((c) => `«${c}»`).join(", ")}.`);
   if (r.ambiguous.length > 0) {
     const shown = r.ambiguous.slice(0, 5).map((l) => `«${l}»`).join(", ");

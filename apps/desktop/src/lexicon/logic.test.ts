@@ -82,7 +82,7 @@ test("the entry list can show only the entries with work left", () => {
 });
 
 test("a lexicon table import is reported in words", () => {
-  const r = { entries: 2, senses: 3, unchanged: 1, ambiguous: ["lari"], noLemma: 1, columns: ["Headword → lemma", "English → gloss"], ignored: ["Colour"] };
+  const r = { entries: 2, senses: 3, unchanged: 1, ambiguous: ["lari"], noLemma: 1, columns: ["Headword → lemma", "English → gloss"], ignored: ["Colour"], domains: 0, domainsUnmatched: [], examples: 0 };
   assert.deepEqual(tableImportLines(r), [
     "Added 2 entries and 3 senses; 1 row was there already.",
     "Read Headword → lemma, English → gloss.",
@@ -91,6 +91,11 @@ test("a lexicon table import is reported in words", () => {
     "1 row has no word and was skipped.",
   ]);
   assert.equal(tableImportLines({ ...r, entries: 0, senses: 0, ambiguous: [], noLemma: 0, ignored: [] })[0], "Nothing new: every row is in the lexicon already.");
+  const extras = tableImportLines({ ...r, ambiguous: [], noLemma: 0, ignored: [], domains: 2, examples: 1, domainsUnmatched: ["Moonbeams"] });
+  assert.deepEqual(extras.slice(2), [
+    "The new senses came with 2 links to semantic domains and 1 example sentence.",
+    "No semantic domain is called «Moonbeams»: write a domain's number (2.1) or its name as the Lexicon lists it.",
+  ]);
 });
 
 test("entries by category", () => {
