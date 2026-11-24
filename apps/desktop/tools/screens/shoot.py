@@ -904,6 +904,15 @@ def main():
                 failures.append("Environments did not say where a minimal pair's sounds both occur")
             if run.page.locator(".panel-sounds .sd-env tbody tr").count() == 0:
                 failures.append("Environments listed no environment")
+            # Two sounds never in one environment get a rule to try.
+            run.page.locator(".panel-sounds select[aria-label='First sound']").select_option("ɾ")
+            run.page.wait_for_timeout(150)
+            run.page.locator(".panel-sounds select[aria-label='Second sound']").select_option("l")
+            run.page.wait_for_timeout(200)
+            run.page.locator(".panel-sounds .sd-rule").scroll_into_view_if_needed()
+            run.shot("state-sounds-rule", run.page.locator(".panel-sounds"))
+            if "→ [ɾ]" not in run.page.locator(".panel-sounds .sd-rule").inner_text():
+                failures.append("Environments did not suggest a rule for ɾ and l")
             clusters = run.page.locator(".panel-sounds .sd-h", has_text="Consonant clusters")
             clusters.locator("xpath=following-sibling::div[1]").scroll_into_view_if_needed()
             run.shot("state-sounds-clusters", run.page.locator(".panel-sounds"))

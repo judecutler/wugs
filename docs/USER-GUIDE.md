@@ -775,6 +775,7 @@ Click any of these sounds for a map of which of the compared languages have it i
 
 - If the two share an environment (the same sound before and after, such as `a_a`, with `#` for the edge of a word), they contrast there or vary freely, and minimal pairs tell which.
 - If they never do, they may be in complementary distribution. When one side alone tells them apart, it says so, and names what the sounds on each side have in common, such as "«s» only before a, o, u (back vowels), «ʃ» only before i, e (front vowels)". These natural classes come from where each sound sits on the IPA chart (height, backness and rounding for vowels; voicing, place and manner for consonants), so check them against your own analysis.
+- Then it offers **A rule to try**, as phonology problem sets are solved: the sound whose environment is narrower and forms a natural class is taken as the conditioned allophone, the other (found elsewhere) as the underlying sound, such as `/s/ → [ʃ] / _ front vowels`. It is a hypothesis from these words, to check against more data and against what speakers hear.
 
 The **Before** and **After** tables count each sound by what follows and what precedes it. Under them, every whole environment is listed with an example word of each sound, which opens its lines in the Concordance. Rows where both sounds occur are shaded. Counts are of running words. **Copy table** copies the environments with their counts and examples.
 
