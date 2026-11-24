@@ -9,12 +9,14 @@ import { provide } from "../palette/registry";
 import { barWidth, MINIMUMS, similarityCell, similarNote, similarTsv, WINDOWS, type Similar } from "../similar/logic";
 import { dataGeneration, getState, showToast } from "../store";
 import { askConcordance } from "./concordance";
+import { lemmaQuery } from "../collocates/logic";
 import type { PanelDef, PanelView } from "./panel";
 
-type Kind = "word" | "translation";
+type Kind = "word" | "translation" | "lemma";
 const KIND_CHIPS: { id: Kind; label: string }[] = [
   { id: "word", label: "Words" },
   { id: "translation", label: "Translations" },
+  { id: "lemma", label: "Lemmas" },
 ];
 
 export const similarPanel: PanelDef = {
@@ -102,7 +104,7 @@ export const similarPanel: PanelDef = {
               h("td", { className: "fq-num", textContent: r.freq.toLocaleString("en") }),
               h("td", { className: "sm-shared", textContent: r.shared.join(", ") }),
             );
-            const open = () => askConcordance(r.item, kind, text, true, sc.within);
+            const open = () => (kind === "lemma" ? askConcordance(lemmaQuery(r.item, sc.within), "query", text, true, null) : askConcordance(r.item, kind, text, true, sc.within));
             tr.onclick = open;
             tr.onkeydown = (e) => {
               if (e.key === "Enter") open();

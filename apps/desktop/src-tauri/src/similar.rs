@@ -76,8 +76,8 @@ impl Words {
 }
 
 pub fn similar(session: &mut Session, word: &str, kind: Kind, window: usize, min_freq: usize, scope: &Scope) -> Result<Similar, String> {
-    if !matches!(kind, Kind::Word | Kind::Translation) {
-        return Err("similar words are read among words or translation words".into());
+    if !matches!(kind, Kind::Word | Kind::Translation | Kind::Lemma) {
+        return Err("similar words are read among words, translation words or lemmas".into());
     }
     let window = window.clamp(1, MAX_WINDOW);
     let min_freq = min_freq.max(1);
@@ -86,11 +86,15 @@ pub fn similar(session: &mut Session, word: &str, kind: Kind, window: usize, min
     let mut words = Words { keys: HashMap::new(), spellings: Vec::new(), freq: Vec::new() };
     let mut segments: Vec<Vec<u32>> = Vec::new();
     each_segment(p, Read::of(kind), scope, |seg| {
-        let ids: Vec<u32> = seg
-            .words
-            .iter()
-            .filter_map(|w| {
-                let spelling = p.proj.nfc(w);
+        // Lemmas as CQP reads them, punctuation and unlemmatised words left out.
+        let spellings: Vec<String> = if kind == Kind::Lemma {
+            crate::cqp::tokens_of(p, &seg.id)?.into_iter().filter(|t| t.upos != "PUNCT").map(|t| p.proj.nfc(&t.lemma)).collect()
+        } else {
+            seg.words.iter().map(|w| p.proj.nfc(w)).collect()
+        };
+        let ids: Vec<u32> = spellings
+            .into_iter()
+            .filter_map(|spelling| {
                 let key = wugs_model::fold_key(&spelling);
                 (!key.is_empty()).then(|| words.id(key, spelling))
             })
@@ -223,6 +227,9 @@ mod tests {
         assert!(similar(&mut session, "horse", Kind::Word, 2, 3, &Scope::all()).unwrap().rows.is_empty());
         assert!(similar(&mut session, "dog", Kind::Word, 2, 100, &Scope::all()).unwrap().rows.is_empty());
         assert!(similar(&mut session, "dog", Kind::Morph, 2, 3, &Scope::all()).is_err());
+        // Lemmas: none in a plain text, so nothing to compare, but no error.
+        let l = similar(&mut session, "dog", Kind::Lemma, 2, 3, &Scope::all()).unwrap();
+        assert_eq!((l.tokens, l.rows.len()), (0, 0));
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }
