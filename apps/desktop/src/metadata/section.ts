@@ -1,7 +1,9 @@
 // The Texts panel's "Details" section: the selected text's document
 // metadata (author, date, genre…), each value saved on Enter or when focus
 // leaves it, a row to add a key, and a line showing how to search by it.
-import { errorText, importMetadata, setTextMetadata, textMetadata } from "../api";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { errorText, importMetadata, projectLanguage, setTextMetadata, textMetadata } from "../api";
+import { citation } from "./cite";
 import { h } from "../dom";
 import { showToast } from "../store";
 import { importLines, keyOf, label, queryHint, suggestions, type MetaView } from "./logic";
@@ -64,6 +66,19 @@ function valueField(text: string, key: string, value: string): HTMLInputElement 
     if (ev.key === "Enter" && !ev.isComposing) commit();
   };
   return input;
+}
+
+/** Copy how to cite the text, as a reference line or as BibTeX. */
+async function copyCitation(text: { id: string; title: string }, bibtex: boolean) {
+  try {
+    const view = shown?.text === text.id ? shown.view : await textMetadata({ textId: text.id });
+    const lang = await projectLanguage();
+    const c = citation(text.title, new Map(view.fields.map((f) => [f.key, f.value])), lang);
+    await writeText(bibtex ? c.bibtex : c.text);
+    showToast({ tone: "info", lines: [bibtex ? "Copied a BibTeX entry for this text." : `Copied: ${c.text}`, "It is built from the details above: add an archive, a handle or DOI, a speaker or a date there to make it fuller."] });
+  } catch (e) {
+    showToast({ tone: "error", lines: [errorText(e)] });
+  }
 }
 
 /** The section for one text; `draw` is called again when its data arrives. */
@@ -131,5 +146,11 @@ export function detailsSection(text: { id: string; title: string }, draw: () => 
         ? h("p", { className: "meta-note", textContent: "Who wrote or spoke it, when, what kind of text: corpus searches can then pick texts by these, as in :: match.text_genre=\"news\"." })
         : h("div", { className: "meta-rows" }, ...rows),
     h("div", { className: "meta-row meta-add" }, keyInput, valueInput, h("button", { type: "button", textContent: "Add", onclick: add }), datalist),
+    h(
+      "div",
+      { className: "meta-cite" },
+      h("button", { type: "button", textContent: "Copy citation", title: "How to cite this text in a paper (speakers, year, title, language, place, archive, handle), from its details", onclick: () => void copyCitation(text, false) }),
+      h("button", { type: "button", textContent: "Copy BibTeX", title: "The same citation as a BibTeX entry for LaTeX, Zotero or JabRef", onclick: () => void copyCitation(text, true) }),
+    ),
   );
 }

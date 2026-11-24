@@ -1173,6 +1173,8 @@ The data comes from Grambank 1.0 (cite Skirgård et al. 2023) and WALS Online (c
 
 Select a text in the **Texts** panel. Under the list, **Details** shows what is recorded about it: who wrote or spoke it, when, where, what kind of text it is. To add a detail, type a name (such as `genre`, `year` or `speaker`) and a value, then press Enter. Names you used on other texts are offered as you type. Change a value and press Enter or leave the field to save it. Press × to clear it.
 
+Under the details, **Copy citation** copies how to cite the text in a paper's list of sources, such as `Heole, Awi & Ilawi Amosa (speakers). 2010. How we catch fish. Procedural in Kanu [kanu1234], Huya. ELAR. https://hdl.handle.net/…`. **Copy BibTeX** copies the same as an entry for LaTeX, Zotero or JabRef. The citation is built from the details: the author (else the speakers), the year of the date, the genre, the place, the project, the archive and a DOI, handle or URL. Add any that are missing to make it fuller.
+
 To describe many texts at once, make a table with a row for each text: one column that names the text (its title, or the name of the file it came from), and a column for each detail. Keep it as a spreadsheet (`.xlsx`, `.xls`, `.ods`) or save it as `.csv` or `.tsv`, then press **Import details…** under Import and export. wugs reports the rows that named no text. Importing the same table again changes only what is different.
 
 ### Bring in examples from a CLDF dataset
