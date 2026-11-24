@@ -93,7 +93,16 @@ fn speaker_id(name: &str, tier: &str) -> String {
     }
 }
 
-pub fn prepare(s: &mut Session, guest: bool, include_flagged: bool) -> Result<(Vec<Job>, Summary), String> {
+/// The words of a transcription as a pronunciation dictionary keys them: split at spaces, edge punctuation off.
+pub fn words_of(transcription: &str) -> Vec<String> {
+    transcription.split_whitespace().map(|w| w.trim_matches(|c: char| !c.is_alphanumeric() && !unicode_normalization::char::is_combining_mark(c)).to_string()).filter(|w| !w.is_empty()).collect()
+}
+
+/// A pronunciation dictionary (word, phones joined by spaces) for the exported clips: each word
+/// type cut into sounds as the project's orthography profile, else letter by letter, does.
+pub type Lexicon = Vec<(String, String)>;
+
+pub fn prepare(s: &mut Session, guest: bool, include_flagged: bool) -> Result<(Vec<Job>, Summary, Lexicon), String> {
     let t = gather(s)?;
     let sum = tally(&t, guest);
     let p = session::project(s)?;
@@ -119,7 +128,19 @@ pub fn prepare(s: &mut Session, guest: bool, include_flagged: bool) -> Result<(V
         }
         jobs.push(Job { speaker: names[&clip.tier].clone(), title: titles[&clip.text].clone(), clip, wav });
     }
-    Ok((jobs, sum))
+    let (segment, _) = crate::orthography::segmenter(p)?;
+    let mut words: BTreeMap<String, String> = BTreeMap::new();
+    for job in &jobs {
+        for w in words_of(&job.clip.transcription) {
+            if !words.contains_key(&w) {
+                let phones = segment(&w).join(" ");
+                if !phones.is_empty() {
+                    words.insert(w, phones);
+                }
+            }
+        }
+    }
+    Ok((jobs, sum, words.into_iter().collect()))
 }
 
 /// Write `wugs-speech-<today>/`: `wav/<utt>.wav` (16 kHz mono PCM16),
@@ -128,7 +149,7 @@ pub fn prepare(s: &mut Session, guest: bool, include_flagged: bool) -> Result<(V
 /// transcription, as Hugging Face's audio folders read it) and a README
 /// datasheet. Utterance ids are `<speaker>-<segment id>`, so Kaldi's sorted
 /// tables stay grouped by speaker.
-pub fn write(jobs: &[Job], sum: &Summary, parent: &Path, today: &str) -> Result<Exported, String> {
+pub fn write(jobs: &[Job], sum: &Summary, lexicon: &Lexicon, parent: &Path, today: &str) -> Result<Exported, String> {
     if jobs.is_empty() {
         return Err("There are no transcribed, timed segments with a recording here to export.".into());
     }
@@ -139,6 +160,9 @@ pub fn write(jobs: &[Job], sum: &Summary, parent: &Path, today: &str) -> Result<
         n += 1;
     }
     fs::create_dir_all(folder.join("wav")).map_err(|e| format!("{}: {e}", folder.display()))?;
+    for job in jobs {
+        fs::create_dir_all(folder.join("wav").join(&job.speaker)).map_err(|e| format!("{}: {e}", folder.display()))?;
+    }
     let mut tables: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     let mut spk2utt: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut metadata = vec!["file_name,transcription,speaker,text".to_string()];
@@ -153,7 +177,9 @@ pub fn write(jobs: &[Job], sum: &Summary, parent: &Path, today: &str) -> Result<
             continue;
         }
         let utt = format!("{}-{}", job.speaker, c.segment);
-        let file = format!("wav/{utt}.wav");
+        // Each speaker's clips in a folder of their own, a `.lab` with the transcription beside each:
+        // the layout the Montreal Forced Aligner reads.
+        let file = format!("wav/{}/{utt}.wav", job.speaker);
         let cut = wugs_asr::read_span(&job.wav, c.start_ms, c.end_ms).map_err(|e| e.to_string()).and_then(|audio| write_wav(&folder.join(&file), &audio));
         if let Err(e) = cut {
             failed += 1;
@@ -164,6 +190,9 @@ pub fn write(jobs: &[Job], sum: &Summary, parent: &Path, today: &str) -> Result<
         }
         written += 1;
         let one_line = c.transcription.split_whitespace().collect::<Vec<_>>().join(" ");
+        if let Err(e) = fs::write(folder.join(format!("wav/{}/{utt}.lab", job.speaker)), format!("{one_line}\n")) {
+            problems.push(format!("{utt}.lab: {e}"));
+        }
         let dur = (c.end_ms - c.start_ms) / 1000.0;
         seconds += dur;
         let consent = if c.consent == Consent::Unrecorded && sum.partial.is_some() { "unknown" } else { c.consent.as_str() };
@@ -201,13 +230,16 @@ Exported {today}: {written} clips, {:.1} minutes, from {} speakers (tracks), eac
 Of these clips, {yes} are covered by a consent record that allows AI use, {unrecorded} by none that speaks about it, and {no} by one that does not allow it; {restricted} have a restricted or community access level.{partial}{left_out} Not in this export: {} transcribed segments with no times, {} whose text has no recording linked, {} still an unchecked machine suggestion.{}\n\n\
 ## Files\n\n\
 Kaldi-style tables, one line per clip, keyed by `<speaker>-<segment id>` and sorted:\n\n\
-- `wav/<id>.wav`: the clip, 16 kHz mono 16-bit PCM\n\
+- `wav/<speaker>/<id>.wav`: the clip, 16 kHz mono 16-bit PCM, with `<id>.lab` beside it holding its transcription\n\
+- `lexicon.txt`: every word of the transcriptions and its sounds, separated by spaces, as the project's orthography profile cuts them (else letter by letter, with marks kept on their letter)\n\
 - `wav.scp`, `text` (the transcription, on one line), `utt2spk`, `spk2utt`, `utt2dur` (seconds)\n\
 - `utt2text`: the title of the text it comes from\n\
 - `utt2consent`: what consent records say about AI use (`recorded-yes`, `not-recorded`, `recorded-no`, or `unknown`)\n\
 - `restricted`: clips whose text or recording has a restricted or community access level\n\
 - `metadata.csv`: file name, transcription, speaker and text, as Hugging Face's `audiofolder` reads it\n\n\
-A speaker is a transcription track (often one per person in ELAN files); rename tracks in wugs to name speakers. The transcriptions follow the project's own conventions (phonetic, phonemic or orthographic). Split train and test sets by speaker or by text, never by clip, or a model is tested on what it heard.\n",
+A speaker is a transcription track (often one per person in ELAN files); rename tracks in wugs to name speakers. The transcriptions follow the project's own conventions (phonetic, phonemic or orthographic). Split train and test sets by speaker or by text, never by clip, or a model is tested on what it heard.\n\n\
+## Forced alignment\n\n\
+The `wav` folder and `lexicon.txt` are laid out as the Montreal Forced Aligner reads them. To time every word and sound in the clips: `mfa train wav lexicon.txt model.zip aligned/` (or `mfa align` with a model you have), then bring the TextGrids into Praat or wugs. Check `lexicon.txt` first: it spells each word as written, which is only as good as the transcription's spelling.\n",
         seconds / 60.0,
         spk2utt.len(),
         sum.untimed,
@@ -227,6 +259,8 @@ A speaker is a transcription track (often one per person in ELAN files); rename 
         }).collect();
         fs::write(folder.join("spk2utt"), spk.join("\n") + "\n").map_err(|e| format!("spk2utt: {e}"))?;
         fs::write(folder.join("metadata.csv"), metadata.join("\n") + "\n").map_err(|e| format!("metadata.csv: {e}"))?;
+        let dict: String = lexicon.iter().map(|(w, p)| format!("{w}\t{p}\n")).collect();
+        fs::write(folder.join("lexicon.txt"), dict).map_err(|e| format!("lexicon.txt: {e}"))?;
         fs::write(folder.join("README.md"), &readme).map_err(|e| format!("README.md: {e}"))
     };
     if let Err(e) = finish() {
@@ -254,10 +288,11 @@ mod tests {
         let sum = summary(&mut s, false).unwrap();
         assert_eq!(sum.ready, 2, "the two transcribed utterances, not the empty one or translations: {sum:?}");
         assert_eq!((sum.recorded_no, sum.restricted, sum.partial.is_none()), (0, 0, true));
-        let (jobs, sum) = prepare(&mut s, false, false).unwrap();
+        let (jobs, sum, lexicon) = prepare(&mut s, false, false).unwrap();
+        assert!(lexicon.iter().any(|(w, p)| w == "θɹiː" && p == "θ ɹ iː"), "{lexicon:?}");
         let out = dir.join("out");
         fs::create_dir_all(&out).unwrap();
-        let r = write(&jobs, &sum, &out, "2026-11-24").unwrap();
+        let r = write(&jobs, &sum, &lexicon, &out, "2026-11-24").unwrap();
         assert_eq!((r.written, r.failed), (2, 0), "{r:?}");
         let folder = Path::new(&r.folder);
         assert!(r.folder.ends_with("wugs-speech-2026-11-24"));
@@ -266,6 +301,9 @@ mod tests {
         let scp = fs::read_to_string(folder.join("wav.scp")).unwrap();
         let first = scp.lines().next().unwrap().split(' ').nth(1).unwrap();
         assert_eq!(&fs::read(folder.join(first)).unwrap()[..4], b"RIFF");
+        let lab = folder.join(first).with_extension("lab");
+        assert!(["wʌn tuː θɹiː\n", "fɔɹ faɪv\n"].contains(&fs::read_to_string(&lab).unwrap().as_str()), "a .lab beside each clip");
+        assert!(fs::read_to_string(folder.join("lexicon.txt")).unwrap().contains("faɪv\tf a ɪ v\n"));
         let spk = fs::read_to_string(folder.join("spk2utt")).unwrap();
         assert_eq!(spk.lines().count(), 1, "one track: {spk}");
         assert!(fs::read_to_string(folder.join("metadata.csv")).unwrap().starts_with("file_name,transcription,speaker,text\n\"wav/"));
