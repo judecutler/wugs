@@ -805,6 +805,7 @@ export const tierGlossing = (textId: string) => invoke<import("./elan/glossing")
 export const readTierGlossing = (textId: string, index: number) => invoke<import("./elan/glossing").ReadGlossing>("read_tier_glossing", { textId, index });
 export const exportParallel = (args: { folder: string; date: string; includeRestricted: boolean }) => invoke<import("./cldf/logic").Parallel>("export_parallel", args);
 export const exportSpelling = (args: { folder: string; date: string }) => invoke<import("./cldf/logic").Spelling>("export_spelling", args);
+export const exportUnimorph = (args: { folder: string; date: string }) => invoke<import("./cldf/logic").UniMorph>("export_unimorph", args);
 export const exportFlashcards = (args: { folder: string; date: string; includeRestricted: boolean; order?: import("./cldf/logic").CardOrder }) => invoke<import("./cldf/logic").Flashcards>("export_flashcards", args);
 export const exportWebsite = (args: { folder: string; date: string; includeRestricted: boolean; audio: boolean }) => invoke<import("./cldf/logic").Site>("export_website", args);
 export const exportCldf = (args: { folder: string; date: string; includeRestricted: boolean; audio: boolean }) => invoke<import("./cldf/logic").Published>("export_cldf", args);

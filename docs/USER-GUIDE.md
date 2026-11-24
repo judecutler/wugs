@@ -1225,6 +1225,15 @@ Press **Spelling dictionary…** beside **Flashcards…** to give the community 
 
 Press **Parallel corpus…** beside it to hand your translated sentences to people building machine translation or alignment tools for the language. wugs writes a folder `wugs-parallel-<date>` with, for each translation language, three files named after the language codes (the project language's ISO 639-3 code, else its Glottocode, then the translation track's language; `und` when one is not set): a `.tsv` table (segment id, sentence, translation, text), the two sides as plain text one sentence a line, line for line, the form Moses, OPUS and most toolkits read, and a `.tmx` file for OmegaT, Trados and other translation memory tools. Sentences with no translation are left out and counted. Texts that are not open are left out unless **Include texts that are not open** is ticked. Check that the speakers' consent covers this use before you share or train on it; the README in the folder says so too.
 
+### Inflected forms for computational morphology
+
+Press **Inflected forms for UniMorph…** to share the language's inflection with people who build morphological analysers and inflection models (UniMorph, the SIGMORPHON shared tasks). wugs writes a folder `wugs-unimorph-<date>` holding a file named for the language's ISO 639-3 code. It has a line per form: the lemma, the form and its features, such as `kani	nikani	V;1;SG`. The forms come from two places:
+
+- the forms typed into the Lexicon's paradigm grids, with their row and column values as features;
+- every glossed word in the texts whose root is linked to a lexicon entry, with its affixes' grammatical glosses (`1SG`, `PL`, `PST`) as features.
+
+The entry's category comes first when it names a part of speech (noun, verb, adjective…). wugs writes a Leipzig abbreviation the way UniMorph does where they differ (PERF as PRF, INF as NFIN). Abbreviations UniMorph does not know are listed in the message and the README, so you can rename them before sharing.
+
 ### Start a grammar sketch
 
 Press **Grammar sketch…** beside **Dictionary to print…**. wugs writes one HTML file with a grammar's usual chapters, filled with what the project already knows, for you to open in Word or LibreOffice and go on writing:

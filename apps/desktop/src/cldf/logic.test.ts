@@ -109,3 +109,11 @@ test("sentence cards are reported as sentences", async () => {
   assert.equal(lines[0], "Saved 12 sentence cards in /x: anki.txt for Anki (the sentence asked, its meaning the answer) and quizlet.txt for Quizlet. The README there says how to import them.");
   assert.equal(lines[2], "3 sentences with no translation were left out.");
 });
+
+test("a UniMorph export names where its forms came from", async () => {
+  const { unimorphLines } = await import("./logic.ts");
+  assert.deepEqual(unimorphLines({ path: "/x/u", code: "tur", fromGrids: 2, fromTexts: 30, bare: 5, unknown: ["FOC"] }), [
+    "Saved 32 inflected forms in UniMorph's format in /x/u (the file tur): 2 from the paradigm grids, 30 from glossed words in the texts.",
+    "Not in UniMorph's schema, written as glossed: FOC. The README says to rename them before sharing.",
+  ]);
+});
