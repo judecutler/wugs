@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, type KeyLike, needsCommit, neighbor, renderWindow, tierSegments } from "./logic.ts";
+import { createComposition, defaultTier, emptyLabel, formatRange, insertAtCaret, keyAction, type KeyLike, needsCommit, neighbor, nextEmpty, renderWindow, tierSegments } from "./logic.ts";
 
 const seg = (id: string, startMs: number | null, endMs: number | null, tier = "t1") => ({ id, tier, startMs, endMs });
 
@@ -133,4 +133,21 @@ test("a composition restarted before the task runs stays active", () => {
   comp.start();
   queue.forEach((cb) => cb());
   assert.equal(comp.active, true);
+});
+
+test("nextEmpty goes forward to the next untranscribed segment, wrapping round", () => {
+  const rows = [
+    { id: "a", content: "" },
+    { id: "b", content: "wʌn" },
+    { id: "c", content: "  " },
+    { id: "d", content: "tuː" },
+  ];
+  assert.equal(nextEmpty(rows, "b")?.id, "c");
+  assert.equal(nextEmpty(rows, "c")?.id, "a", "wraps to the start");
+  assert.equal(nextEmpty(rows, null)?.id, "a");
+  assert.equal(nextEmpty(rows, "gone")?.id, "a");
+  assert.equal(nextEmpty([{ id: "a", content: "" }, { id: "b", content: "x" }], "a"), null, "never the segment itself");
+  assert.equal(nextEmpty([], null), null);
+  assert.equal(emptyLabel(rows), "Next empty (2)");
+  assert.equal(emptyLabel([{ content: "x" }]), "Next empty");
 });

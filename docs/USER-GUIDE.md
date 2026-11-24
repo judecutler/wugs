@@ -222,6 +222,8 @@ The **Transcribe** panel lists the segments of one track. It follows the Timelin
 3. Type what you hear.
 4. Press **Enter**. wugs saves the text, moves to the next segment, and plays it.
 
+To skip the segments you have already written, click **Next empty** in the toolbar. It shows how many segments on the track have nothing written yet. Clicking it goes to the next one after the selected segment, going back to the top after the last, and plays it.
+
 | Key | Action |
 | --- | --- |
 | **Enter** | Save, go to the next segment, and play it. |
@@ -229,6 +231,7 @@ The **Transcribe** panel lists the segments of one track. It follows the Timelin
 | **Tab** or **Ctrl+Enter** | Play the segment again. |
 | **Esc** | Undo your typing in this segment. |
 | **Shift+Tab** | Leave the field. |
+| **Ctrl+E** (**Cmd+E** on a Mac) | Save, go to the next segment with nothing written in it, and play it. |
 
 If a save fails, the segment is marked and your typing stays. Select the segment and press **Enter** to try again.
 

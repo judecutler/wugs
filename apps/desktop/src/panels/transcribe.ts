@@ -19,7 +19,7 @@ import { EXAMPLE_TABLE, keymanId, keymanSource, parseShortcuts, shortcutsLine } 
 import { loadShortcuts, rememberShortcuts, shortcutCount, shortcutTable, typeWithShortcuts } from "../typing";
 import { createFieldController, type FieldController } from "../transcribe/field";
 import { preview as xsampaPreview, xsampaToIpa, XSAMPA_KEY } from "../transcribe/xsampa";
-import { createComposition, defaultTier, formatRange, insertAtCaret, keyAction, neighbor, renderWindow, tierSegments } from "../transcribe/logic";
+import { createComposition, defaultTier, emptyLabel, formatRange, insertAtCaret, keyAction, neighbor, nextEmpty, renderWindow, tierSegments } from "../transcribe/logic";
 import type { PanelDef, PanelView } from "./panel";
 
 /** Rows drawn at once. A text tier rarely has more; beyond this the list follows the selection. */
@@ -52,7 +52,9 @@ export const transcribePanel: PanelDef = {
     };
     showLoop();
     const shortcutsToggle = h("button", { type: "button", textContent: "Shortcuts…", title: "Typing shortcuts for this project's letters, such as ;n for ŋ, the same for everyone on the project" });
-    const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, paletteToggle, xsampaToggle, shortcutsToggle, playback.rateSelect(), loopToggle, keys, hint);
+    const emptyButton = h("button", { type: "button", className: "tx-next-empty", textContent: "Next empty", title: "Go to the next segment with nothing written in it yet, and play it (Ctrl+E)" });
+    emptyButton.onclick = () => goEmpty();
+    const toolbar = h("div", { className: "tx-toolbar" }, tierSelect, emptyButton, paletteToggle, xsampaToggle, shortcutsToggle, playback.rateSelect(), loopToggle, keys, hint);
     /** The project's typing shortcuts (`src/typing.ts`), shared with the other panels. */
     const shortcutsBox = h("div", { className: "tx-shortcuts" });
     shortcutsBox.hidden = true;
@@ -385,6 +387,17 @@ export const transcribePanel: PanelDef = {
       play(next);
     }
 
+    /** Saves the field, then selects and plays the next segment on the track with nothing written in it. */
+    function goEmpty(): void {
+      const s = getState();
+      if (s.kind !== "open" || s.text === null || tierId === null) return;
+      commitField();
+      const next = nextEmpty(tierSegments(s.text.segments, tierId), ctl?.segmentId ?? null);
+      if (next === null) return;
+      choose(next);
+      play(next);
+    }
+
     /** A selection made here keeps focus in the field. */
     function choose(seg: SegmentRow): void {
       focusNext = true;
@@ -399,6 +412,11 @@ export const transcribePanel: PanelDef = {
       if (ev.key === "ArrowRight" && !ev.shiftKey && !ev.altKey && !ev.ctrlKey && !ev.metaKey && !composition.active && field.selectionStart === field.value.length && field.selectionEnd === field.value.length && offered !== null) {
         ev.preventDefault();
         takeCompletion();
+        return;
+      }
+      if (ev.key.toLowerCase() === "e" && (ev.ctrlKey || ev.metaKey) && !ev.shiftKey && !ev.altKey && !composition.active) {
+        ev.preventDefault();
+        goEmpty();
         return;
       }
       const action = keyAction(ev, composition.active);
@@ -568,6 +586,8 @@ export const transcribePanel: PanelDef = {
       // A kit without the Timeline (Scrolls) has nowhere to load one: no hint there.
       const timeline = activeKit()?.tools.includes("timeline") ?? true;
       hint.textContent = recordingForShown() !== null || !timeline ? "" : "Pick this text's recording on the Timeline to hear segments.";
+      emptyButton.textContent = emptyLabel(ordered);
+      emptyButton.disabled = nextEmpty(ordered, selId) === null;
       const selIndex = selId === null ? 0 : ordered.findIndex((x) => x.id === selId);
       const [from, to] = renderWindow(ordered.length, selIndex, WINDOW_ROWS);
       moving = true;
