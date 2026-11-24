@@ -32,6 +32,8 @@ pub struct Flashcards {
     pub used: Option<usize>,
     /// Commonest first with a limit: glossed entries past it, left out.
     pub past_limit: usize,
+    /// Sentence cards (`Order::Sentences`): `no_gloss` then counts sentences with no translation.
+    pub sentences: bool,
 }
 
 /// Which cards, in what order.
@@ -43,7 +45,13 @@ pub enum Order {
     /// The words the texts use most first, then the rest by headword; at
     /// most `limit` cards (0 = all), so a class can start with the commonest.
     Commonest { limit: usize },
+    /// A card per translated sentence of the texts (with its stretch of the
+    /// recording when timed), for learning to hear and read whole sentences.
+    Sentences,
 }
+
+/// At most this many sentence cards are written.
+pub const MAX_SENTENCE_CARDS: usize = 5000;
 
 /// How many words of the texts each entry's senses are linked to (a word
 /// counted once however many of its morphs link to the entry).
@@ -143,12 +151,90 @@ and set \"between term and definition\" to Tab. Sounds and pictures are not
 carried there.
 ";
 
+const SENTENCE_README: &str = "Sentence flashcards made with wugs
+==================================
+
+anki.txt     every translated sentence of the texts as a card: the sentence
+             (with its sound, when it is timed in a recording) and its meaning
+quizlet.txt  the same as plain sentence<TAB>meaning lines
+media/       the sounds the cards play
+
+Anki (desktop)
+1. Copy every file in media/ into Anki's media folder (Tools > Check Media >
+   View Files, or collection.media inside your Anki profile folder).
+2. Choose File > Import and pick anki.txt. The cards use the note type
+   \"Basic\": the sentence is asked, its meaning is the answer.
+Importing a newer anki.txt later updates the cards you have (each carries its
+sentence's id), so your progress is kept.
+
+Quizlet and other flashcard sites: import quizlet.txt with Tab between term and
+definition. Sounds are not carried there.
+";
+
+/// A card per translated sentence (open texts unless restricted ones are included).
+fn sentence_cards(p: &wugs_core::Project, include_restricted: bool) -> Result<(String, String, Vec<(String, String, f64, f64)>, Flashcards), String> {
+    use crate::concordance::{each_segment, Read, Scope};
+    let lang = p.project_language()?;
+    let deck = flat(&if lang.name.trim().is_empty() { "wugs sentences".to_string() } else { format!("{} sentences", lang.name) });
+    let mut anki = String::from("#separator:tab\n#html:true\n#guid column:1\n#notetype column:2\n#deck column:3\n#columns:GUID\tNotetype\tDeck\tFront\tBack\n");
+    let mut quizlet = String::new();
+    let mut sounds = Vec::new();
+    let mut out = Flashcards { path: String::new(), cards: 0, sounds: 0, pictures: 0, no_gloss: 0, used: None, past_limit: 0, sentences: true };
+    let mut open: std::collections::HashMap<String, (bool, Option<String>)> = std::collections::HashMap::new();
+    each_segment(p, Read::Words, &Scope::all(), |seg| {
+        if !open.contains_key(&seg.text) {
+            let ok = include_restricted || p.text_access(&seg.text)? == "open";
+            let blob = p.text_recording(&seg.text)?.map(|(_, b)| b).filter(|b| wugs_blob::parse_ref(b).is_some_and(|hex| p.root.join("blobs").join(hex).is_file()));
+            open.insert(seg.text.clone(), (ok, blob));
+        }
+        let (ok, blob) = open.get(&seg.text).cloned().unwrap_or((false, None));
+        if !ok {
+            return Ok(());
+        }
+        let sentence = flat(&p.proj.field_str(&seg.id, "content")?.unwrap_or_default());
+        if sentence.trim().is_empty() {
+            return Ok(());
+        }
+        let Some((_, meaning)) = crate::interchange::translations_of(p, &seg.id)?.into_iter().next() else {
+            out.no_gloss += 1;
+            return Ok(());
+        };
+        if out.cards >= MAX_SENTENCE_CARDS {
+            out.past_limit += 1;
+            return Ok(());
+        }
+        let mut front = esc(&sentence);
+        if let (Some(blob), Some(start), Some(end)) = (&blob, p.proj.field_num(&seg.id, "start")?, p.proj.field_num(&seg.id, "end")?) {
+            if end > start {
+                let file = format!("wugs-s-{}.wav", seg.id.to_ascii_lowercase().replace(|c: char| !c.is_ascii_alphanumeric() && c != '_', "-"));
+                front.push_str(&format!(" [sound:{file}]"));
+                sounds.push((file, blob.clone(), start, end));
+            }
+        }
+        let back = format!("{}<br><small>{}</small>", esc(&flat(&meaning)), esc(&flat(&seg.title)));
+        anki.push_str(&format!("wugs-s-{}\tBasic\t{deck}\t{front}\t{back}\n", seg.id));
+        quizlet.push_str(&format!("{sentence}\t{}\n", flat(&meaning)));
+        out.cards += 1;
+        Ok(())
+    })?;
+    Ok((anki, quizlet, sounds, out))
+}
+
 pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_restricted: bool, order: Order) -> Result<Flashcards, String> {
     if !folder.is_dir() {
         return Err(format!("{} is not a folder", folder.display()));
     }
     outside_project(s, folder)?;
     let p = session::project(s)?;
+    if order == Order::Sentences {
+        let (anki, quizlet, sounds, mut out) = sentence_cards(p, include_restricted)?;
+        if out.cards == 0 {
+            return Err("No sentence of the texts has a translation yet, or only texts that are not open do (tick Include texts that are not open to use them).".into());
+        }
+        out.path = write_cards(p, folder, &crate::corrections::date_or_today(date), &anki, &quizlet, SENTENCE_README, &sounds, &[])?;
+        out.sounds = sounds.len();
+        return Ok(out);
+    }
     let date = crate::corrections::date_or_today(date);
     let lang = p.project_language()?;
     let deck = if lang.name.trim().is_empty() { "wugs words".to_string() } else { format!("{} words", flat(&lang.name)) };
@@ -157,6 +243,7 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
     entries.sort_by(|a, b| wugs_model::fold_key(&p.proj.nfc(&a.lemma)).cmp(&wugs_model::fold_key(&p.proj.nfc(&b.lemma))).then(a.homograph.cmp(&b.homograph)).then(a.id.cmp(&b.id)));
     let uses = match order {
         Order::Alphabet => None,
+        Order::Sentences => unreachable!("written above"),
         Order::Commonest { .. } => {
             let uses = uses_by_entry(p)?;
             // Stable: equal counts keep the headword order.
@@ -175,7 +262,7 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
     let mut quizlet = String::new();
     let mut sounds: Vec<(String, String, f64, f64)> = Vec::new();
     let mut pictures: Vec<(String, std::path::PathBuf)> = Vec::new();
-    let mut out = Flashcards { path: String::new(), cards: 0, sounds: 0, pictures: 0, no_gloss: 0, used: uses.as_ref().map(|_| 0), past_limit: 0 };
+    let mut out = Flashcards { path: String::new(), cards: 0, sounds: 0, pictures: 0, no_gloss: 0, used: uses.as_ref().map(|_| 0), past_limit: 0, sentences: false };
     for e in &entries {
         if e.senses.iter().all(|s| s.gloss.trim().is_empty()) {
             out.no_gloss += 1;
@@ -211,6 +298,15 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
         return Err(if entries.is_empty() { "The lexicon has no entries yet.".into() } else { "No entry has a gloss yet, so no card would have a back.".into() });
     }
 
+    out.path = write_cards(p, folder, &date, &anki, &quizlet, README, &sounds, &pictures)?;
+    out.sounds = sounds.len();
+    out.pictures = pictures.len();
+    Ok(out)
+}
+
+/// The cards, their README and media into `wugs-flashcards-<date>[-n]`, whole through a scratch folder.
+#[allow(clippy::too_many_arguments)]
+fn write_cards(p: &wugs_core::Project, folder: &Path, date: &str, anki: &str, quizlet: &str, readme: &str, sounds: &[(String, String, f64, f64)], pictures: &[(String, std::path::PathBuf)]) -> Result<String, String> {
     let mut target = folder.join(format!("wugs-flashcards-{date}"));
     let mut k = 2;
     while target.symlink_metadata().is_ok() {
@@ -220,16 +316,16 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
     let scratch = folder.join(format!(".{}.partial", target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()));
     let written = (|| {
         fs::create_dir(&scratch).map_err(|e| format!("{}: {e}", scratch.display()))?;
-        fs::write(scratch.join("anki.txt"), &anki).map_err(|e| format!("anki.txt: {e}"))?;
-        fs::write(scratch.join("quizlet.txt"), &quizlet).map_err(|e| format!("quizlet.txt: {e}"))?;
-        fs::write(scratch.join("README.txt"), README).map_err(|e| format!("README.txt: {e}"))?;
+        fs::write(scratch.join("anki.txt"), anki).map_err(|e| format!("anki.txt: {e}"))?;
+        fs::write(scratch.join("quizlet.txt"), quizlet).map_err(|e| format!("quizlet.txt: {e}"))?;
+        fs::write(scratch.join("README.txt"), readme).map_err(|e| format!("README.txt: {e}"))?;
         if !sounds.is_empty() || !pictures.is_empty() {
             fs::create_dir(scratch.join("media")).map_err(|e| format!("media: {e}"))?;
         }
-        for (file, from) in &pictures {
+        for (file, from) in pictures {
             fs::copy(from, scratch.join("media").join(file)).map_err(|e| format!("{file}: {e}"))?;
         }
-        for (file, blob, start, end) in &sounds {
+        for (file, blob, start, end) in sounds {
             let hex = wugs_blob::parse_ref(blob).ok_or_else(|| format!("malformed blob ref {blob:?}"))?;
             cut_clip(&p.root.join("blobs").join(hex), *start, *end, &scratch.join("media").join(file)).map_err(|e| format!("{file}: {e}"))?;
         }
@@ -239,10 +335,7 @@ pub fn export_flashcards(s: &mut Session, folder: &Path, date: &str, include_res
         fs::remove_dir_all(&scratch).ok();
         return Err(e);
     }
-    out.sounds = sounds.len();
-    out.pictures = pictures.len();
-    out.path = target.display().to_string();
-    Ok(out)
+    Ok(target.display().to_string())
 }
 
 #[cfg(test)]
@@ -298,6 +391,14 @@ mod tests {
         let words: Vec<&str> = quizlet.lines().map(|l| l.split('\t').next().unwrap()).collect();
         let n = all.used.unwrap();
         assert!(words[..n].contains(&"wʌn") && !words[n..].contains(&"wʌn"), "{words:?}");
+        // A card per translated sentence, with its stretch of the recording.
+        // The tutorial's text shares as restricted, so it is left out unless restricted texts are included.
+        assert!(export_flashcards(&mut s, &out, "2026-11-23", false, Order::Sentences).is_err());
+        let sentences = export_flashcards(&mut s, &out, "2026-11-23", true, Order::Sentences).unwrap();
+        assert!(sentences.sentences && sentences.cards >= 1 && sentences.sounds == sentences.cards, "{sentences:?}");
+        let anki = fs::read_to_string(Path::new(&sentences.path).join("anki.txt")).unwrap();
+        assert!(anki.lines().any(|l| l.starts_with("wugs-s-") && l.contains("\tBasic\tTutorial English sentences\twʌn tuː θɹiː [sound:")), "{anki}");
+        assert!(Path::new(&sentences.path).join("README.txt").is_file());
         fs::remove_dir_all(&dir).ok();
     }
 

@@ -102,3 +102,10 @@ test("the toast after a spelling dictionary was saved", async () => {
   assert.match(lines[2]!, /^7 words met only once/);
   assert.equal(spellingLines({ path: "p", words: 1, fromLexicon: 1, once: 0, code: "kan" }).length, 1);
 });
+
+test("sentence cards are reported as sentences", async () => {
+  const { flashcardLines } = await import("./logic.ts");
+  const lines = flashcardLines({ path: "/x", cards: 12, sounds: 10, noGloss: 3, sentences: true });
+  assert.equal(lines[0], "Saved 12 sentence cards in /x: anki.txt for Anki (the sentence asked, its meaning the answer) and quizlet.txt for Quizlet. The README there says how to import them.");
+  assert.equal(lines[2], "3 sentences with no translation were left out.");
+});
