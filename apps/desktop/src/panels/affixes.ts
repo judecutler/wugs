@@ -3,7 +3,8 @@
 // and a table behind it. Words and tables in ../affixes/logic.ts. Read-only:
 // an affix opens the Concordance on it, an example opens its sentence.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, projectAffixes } from "../api";
+import { errorText, projectAffixes, soundWords } from "../api";
+import { affixLabel, guessedLine, signatures, signaturesTsv, type Side, type WordCount } from "../affixes/signatures";
 import { allomorphSets, allomorphsTsv, setNote, soundsLine } from "../affixes/allomorphs";
 import { affixTsv, chartTsv, elsewhere, marked, productivityCell, productivityLine, pairLine, pairNote, pairs, pairsSummary, pairsTsv, slotChart, slotLabel, summaryLine, type Affix, type Affixes } from "../affixes/logic";
 import { emptyState, h } from "../dom";
@@ -34,6 +35,61 @@ export const affixesPanel: PanelDef = {
     const formsNote = h("p", { className: "note" });
     const forms = h("div", { className: "af-forms" });
     const copyForms = h("button", { type: "button", textContent: "Copy forms", title: "Every gloss written more than one way, each form with the sounds next to it and the stem's nearest vowel" });
+
+    let words: WordCount[] | null = null;
+    let side: Side = "suffix";
+    const guessNote = h("p", { className: "note" });
+    const guessTable = h("table", { className: "pg-table af-guess" });
+    const copyGuess = h("button", { type: "button", textContent: "Copy table", title: "Every set of endings with its stems" });
+    const sidePick = h(
+      "select",
+      { ariaLabel: "Endings or beginnings", onchange: () => ((side = sidePick.value === "prefix" ? "prefix" : "suffix"), drawGuess()) },
+      h("option", { value: "suffix", textContent: "Endings" }),
+      h("option", { value: "prefix", textContent: "Beginnings" }),
+    );
+    const STEMS_SHOWN = 12;
+
+    function drawGuess() {
+      if (words === null) {
+        guessNote.textContent = "";
+        guessTable.replaceChildren();
+        copyGuess.disabled = true;
+        return;
+      }
+      const g = signatures(words, side);
+      guessNote.textContent = guessedLine(g, side);
+      copyGuess.disabled = g.signatures.length === 0;
+      guessTable.replaceChildren(
+        ...(g.signatures.length === 0
+          ? []
+          : [
+              h("thead", {}, h("tr", {}, ...[side === "suffix" ? "Endings" : "Beginnings", "Stems", "Words", "Stems, most used first"].map((t) => h("th", { scope: "col", textContent: t })))),
+              h(
+                "tbody",
+                {},
+                ...g.signatures.map((sig) =>
+                  h(
+                    "tr",
+                    {},
+                    h("th", { scope: "row", textContent: sig.affixes.map((a) => affixLabel(a, side)).join(" ") }),
+                    h("td", { textContent: String(sig.stems.length) }),
+                    h("td", { textContent: String(sig.tokens) }),
+                    h(
+                      "td",
+                      { className: "af-stems" },
+                      ...sig.stems.slice(0, STEMS_SHOWN).flatMap((x, i) => {
+                        const b = h("button", { type: "button", className: "linkish", textContent: x.stem, title: `Every word ${side === "suffix" ? "starting" : "ending"} with «${x.stem}» in the Concordance` });
+                        b.onclick = () => askConcordance(side === "suffix" ? `${x.stem}*` : `*${x.stem}`, "word", null, false);
+                        return i === 0 ? [b] : [", ", b];
+                      }),
+                      ...(sig.stems.length > STEMS_SHOWN ? [h("span", { className: "note", textContent: ` and ${sig.stems.length - STEMS_SHOWN} more` })] : []),
+                    ),
+                  ),
+                ),
+              ),
+            ]),
+      );
+    }
 
     const find = (a: Affix) => askConcordance(a.surface, "morph", null, true);
 
@@ -168,6 +224,20 @@ export const affixesPanel: PanelDef = {
 
     async function load() {
       const mine = ++seq;
+      // The guesses need only the words, so they show even before anything is glossed.
+      void soundWords({ tierId: null, textId: null }).then(
+        (r) => {
+          if (mine !== seq) return;
+          words = r.words;
+          drawGuess();
+        },
+        (e) => {
+          if (mine !== seq) return;
+          words = null;
+          drawGuess();
+          guessNote.textContent = `Could not read the words: ${errorText(e)}`;
+        },
+      );
       try {
         const r = await projectAffixes();
         if (mine !== seq) return;
@@ -192,6 +262,7 @@ export const affixesPanel: PanelDef = {
     copyTable.onclick = () => copy("affix table", () => (data === null ? null : affixTsv(data.affixes)));
     copyOrder.onclick = () => copy("pairs of affixes", () => (data === null ? null : pairsTsv(pairs(data))));
     copyForms.onclick = () => copy("forms of each gloss", () => (data === null ? null : allomorphsTsv(allomorphSets(data.affixes), marked)));
+    copyGuess.onclick = () => copy("sets of endings", () => (words === null ? null : signaturesTsv(signatures(words, side), side)));
     recount.onclick = () => void load();
 
     const unprovide = provide("affixes", () => [
@@ -207,6 +278,7 @@ export const affixesPanel: PanelDef = {
       if (s.kind !== "open") {
         seq += 1;
         data = null;
+        words = null;
         el.replaceChildren(emptyState("Affixes", "Open a project to see its affixes in their slots.", "The wug is sorting the pieces."));
         return;
       }
@@ -225,6 +297,11 @@ export const affixesPanel: PanelDef = {
         h("div", { className: "cc-bar" }, copyForms),
         formsNote,
         forms,
+        h("h3", { textContent: "Guessed from the words" }),
+        h("div", { className: "cc-bar" }, sidePick, copyGuess),
+        guessNote,
+        h("div", { className: "pg-rows" }, guessTable),
+        h("p", { className: "note", textContent: "Read from the transcriptions alone, nothing glossed needed: stems that take the same set of endings (∅ for none), as Goldsmith's Linguistica finds them. A guide to where to look; some sets are chance, and nothing is written." }),
       );
       void load();
     };
