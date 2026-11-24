@@ -1332,6 +1332,7 @@ const LEXICON = [
       return {
         words: 52,
         withoutRoot: 1,
+        indices: { words: 140, morphs: 241, roots: 142, prefixes: 20, suffixes: 46, infixes: 0, clitics: 7, single: 88 },
         affixes: [
           a("ni", "prefix", "1SG", -1, 14, 6, [[-1, 14]], [["verb", 14]]),
           a("ka", "prefix", "2SG", -1, 6, 4, [[-1, 6]], [["verb", 6]]),

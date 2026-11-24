@@ -1323,6 +1323,10 @@ def main():
             run.page.locator(".panel-typology .ty-alike-ask").click()
             # Affixes: the order of two affixes met in one word.
             run.front("affixes", "Affixes")
+            if "1.72 morphs a word: analytic" not in run.page.locator(".panel-affixes .af-type-note").inner_text():
+                failures.append(f"Affixes did not give Greenberg's indices: {run.page.locator('.panel-affixes .af-type-note').inner_text()}")
+            run.page.locator(".panel-affixes .af-type").scroll_into_view_if_needed()
+            run.shot("state-affixes-type", run.page.locator(".panel-affixes"))
             order = run.page.locator(".panel-affixes .af-order")
             order.locator("tbody tr").first.wait_for()
             order.scroll_into_view_if_needed()

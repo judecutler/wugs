@@ -1142,6 +1142,16 @@ At the top is a position-class chart: a column for each slot, counted from the r
 
 An affix is told apart by its spelling, type and gloss, so `-ler` PL and `-ler` 3PL are two rows. A word with no morph marked as a root is left out, and the panel says how many there are. **Copy chart** and **Copy table** copy them to paste into a document or a spreadsheet, and **Grammar sketch…** prints the chart in its morphology chapter.
 
+**Morphological type** gives Greenberg's (1960) indices over every word broken into morphs, words of a single morph included:
+
+- **Synthesis** (M/W): morphs per word.
+- **Compounding** (R/W): roots per word.
+- **Prefixing** (P/W) and **Suffixing** (S/W): prefixes and suffixes per word.
+- **Clitics** and **Infixing**, when the glosses have them.
+- **Isolation**: the share of words of one morph.
+
+The line above them places the language in Greenberg's terms (analytic below 2 morphs a word, polysynthetic from 3) and names the nearest of his samples (Vietnamese 1.06, English 1.68, Swahili 2.55, Sanskrit 2.59, West Greenlandic 3.72). It also says whether the affixes are mostly prefixes or suffixes. The figures follow how the words were broken up, so clitics count as morphs and unglossed words are left out. Point at a row for what it counts. **Copy indices** copies them for a typology table.
+
 ### Read a text against its page images
 
 The **Facsimile** panel (in front in Glyphs; in Tongues, press **Ctrl+K** and choose **Show Facsimile**) shows the pages a text was read from: photos or scans of a manuscript, an inscription, a notebook or a printed source. Press **Add pages…** and choose the images in order (PNG, JPEG, GIF or WebP; save a TIFF scan as PNG first). The numbered buttons turn the page, ◀ and ▶ move a page earlier or later, **Take this page off** (press it twice) removes it from the text, and **−**, **Fit** and **+** zoom.

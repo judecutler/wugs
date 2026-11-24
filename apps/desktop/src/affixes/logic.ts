@@ -38,7 +38,7 @@ export function productivityLine(affixes: readonly Affix[]): string {
 }
 /** Two affixes met in one word, `first` (an index into `affixes`) before `second`, in `count` words. */
 export type Order = { first: number; second: number; count: number };
-export type Affixes = { affixes: Affix[]; words: number; withoutRoot: number; orders?: Order[] };
+export type Affixes = { affixes: Affix[]; words: number; withoutRoot: number; orders?: Order[]; indices?: import("./greenberg.ts").Indices };
 
 const MARK: Record<string, [string, string]> = { prefix: ["", "-"], suffix: ["-", ""], infix: ["<", ">"], reduplication: ["", "~"] };
 
