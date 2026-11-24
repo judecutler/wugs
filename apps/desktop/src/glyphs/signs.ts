@@ -120,3 +120,36 @@ export const placeShare = (n: number, r: SignRow): string => (r.count === 0 || n
 export function signsTsv(rows: readonly SignRow[]): string {
   return ["sign\tcount\tword_types\tinitial\tmedial\tfinal\talone\texample", ...rows.map((r) => [r.sign, r.count, r.words, r.initial, r.medial, r.final, r.alone, r.example].join("\t"))].join("\n") + "\n";
 }
+
+/** Two last signs that alternate after the same beginning (Kober's
+ * "triplets"): in a syllabary the alternation of endings often keeps a
+ * sign's consonant, so these pairs are where a grid of signs starts. */
+export type Alternation = { a: string; b: string; stems: number; examples: [string, string][] };
+
+/** Words that differ only in their last sign, by the pair of last signs, most stems first. */
+export function alternations(words: readonly Word[], mode: SignMode, limit = 30): Alternation[] {
+  const byStem = new Map<string, Map<string, string>>();
+  for (const w of words) {
+    const s = signsOf(w.word, mode);
+    if (s.length < 2) continue;
+    const stem = s.slice(0, -1).join("\u0001");
+    const finals = byStem.get(stem) ?? new Map<string, string>();
+    if (!finals.has(s[s.length - 1]!)) finals.set(s[s.length - 1]!, w.word);
+    byStem.set(stem, finals);
+  }
+  const pairs = new Map<string, Alternation>();
+  for (const finals of byStem.values()) {
+    const list = [...finals.entries()].sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0));
+    for (let i = 0; i < list.length; i++)
+      for (let j = i + 1; j < list.length; j++) {
+        const [a, wa] = list[i]!;
+        const [b, wb] = list[j]!;
+        const k = `${a}\u0001${b}`;
+        const p = pairs.get(k) ?? { a, b, stems: 0, examples: [] };
+        p.stems += 1;
+        if (p.examples.length < 3) p.examples.push([wa, wb]);
+        pairs.set(k, p);
+      }
+  }
+  return [...pairs.values()].filter((p) => p.stems >= 2).sort((x, y) => y.stems - x.stems || (x.a + x.b < y.a + y.b ? -1 : 1)).slice(0, limit);
+}
