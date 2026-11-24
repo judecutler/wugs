@@ -31,3 +31,13 @@ test("a likely meaning fills the root's gloss and keeps the rest", () => {
   assert.deepEqual(withMeaning("kuri", "", "", "big dog"), { breakdown: "kuri", glosses: "big.dog" });
   assert.match(meaningTitle("kuri", { word: "dog", together: 3, of: 4, dice: 0.857 }), /3 of the 4 translated sentences with «kuri» \(Dice 0\.86\)/);
 });
+
+test("apply all takes only earlier analyses, never guesses", async () => {
+  const { applyAllLabel, appliedAllLine, earlierRows } = await import("./logic.ts");
+  const rows = [{ form: "a", suggestion: { guessed: false } }, { form: "b", suggestion: { guessed: true } }, { form: "c", suggestion: null }, { form: "d", suggestion: {} }];
+  assert.deepEqual(earlierRows(rows).map((r) => r.form), ["a", "d"]);
+  assert.equal(applyAllLabel(2, 17, false), "Use the earlier analysis for 2 word forms");
+  assert.equal(applyAllLabel(1, 1, true), "Analyse 1 use of 1 word form? Click again");
+  assert.equal(appliedAllLine(2, 17, 0), "Analysed 17 uses of 2 word forms, each as it was analysed before. Check them in the Interlinear tab.");
+  assert.match(appliedAllLine(3, 5, 1), /1 form could not be analysed/);
+});

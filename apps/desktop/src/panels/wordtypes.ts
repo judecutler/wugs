@@ -9,7 +9,7 @@ import { formatBreakdown, joinedBreakdown, type MorphType } from "../gloss/morph
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, refreshAll, showToast } from "../store";
 import { typeWithShortcuts } from "../typing";
-import { appliedLine, meaningTitle, typedAnalysis, typesLine, withMeaning } from "../wordtypes/logic";
+import { applyAllLabel, appliedAllLine, earlierRows, appliedLine, meaningTitle, typedAnalysis, typesLine, withMeaning } from "../wordtypes/logic";
 import { askConcordance } from "./concordance";
 import type { PanelDef, PanelView } from "./panel";
 
@@ -33,6 +33,9 @@ export const wordTypesPanel: PanelDef = {
     const list = h("div", { className: "wt-list", role: "list" });
     const reread = h("button", { type: "button", textContent: "Read again" });
     const breakAll = h("button", { type: "button" });
+    // Every form with an earlier analysis given it for all its uses, after a second click (FLEx's approve-all).
+    const applyAll = h("button", { type: "button", className: "wt-apply-all", title: "Give every word form listed with an earlier analysis (not a guess) that analysis for all its unanalysed uses" });
+    let allArmed = false;
 
     async function apply(row: WordTypeRow, morphs: MorphSpec[]) {
       busy = true;
@@ -141,6 +144,10 @@ export const wordTypesPanel: PanelDef = {
       breakAll.hidden = data.unbrokenSentences === 0;
       breakAll.disabled = busy;
       breakAll.textContent = `Break ${data.unbrokenSentences === 1 ? "1 sentence" : `${data.unbrokenSentences} sentences`} into words`;
+      const earlier = earlierRows(data.rows);
+      applyAll.hidden = earlier.length === 0;
+      applyAll.disabled = busy;
+      applyAll.textContent = applyAllLabel(earlier.length, earlier.reduce((n, r) => n + r.unanalysed, 0), allArmed);
       list.replaceChildren(...data.rows.slice(0, DRAWN).map(rowOf));
       if (focused !== undefined) list.querySelector<HTMLElement>(`[data-key="${CSS.escape(focused)}"]`)?.focus();
     };
@@ -160,6 +167,32 @@ export const wordTypesPanel: PanelDef = {
     }
 
     reread.onclick = () => void load();
+    applyAll.onclick = async () => {
+      if (data === null) return;
+      if (!allArmed) {
+        allArmed = true;
+        draw();
+        return;
+      }
+      allArmed = false;
+      const rows = earlierRows(data.rows);
+      busy = true;
+      draw();
+      let uses = 0;
+      let failed = 0;
+      for (const [i, row] of rows.entries()) {
+        applyAll.textContent = `Analysing ${i + 1} of ${rows.length}…`;
+        try {
+          uses += (await glossApplyType({ form: row.form, morphs: row.suggestion!.morphs })).applied;
+        } catch {
+          failed += 1;
+        }
+      }
+      showToast({ tone: failed === 0 ? "info" : "warn", lines: [appliedAllLine(rows.length - failed, uses, failed)] });
+      busy = false;
+      await refreshAll();
+      void load();
+    };
     breakAll.onclick = async () => {
       busy = true;
       draw();
@@ -191,7 +224,7 @@ export const wordTypesPanel: PanelDef = {
         return;
       }
       el.replaceChildren(
-        h("div", { className: "cc-bar" }, reread, breakAll),
+        h("div", { className: "cc-bar" }, reread, breakAll, applyAll),
         summary,
         h("p", { className: "note", textContent: "Type a word's morphs and their glosses once (ni- kani, 1SG count) and press Enter or Apply: every use not yet analysed gets it. Enter in an empty field takes the suggestion." }),
         list,

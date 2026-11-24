@@ -384,6 +384,8 @@ When sentences have translations, a line under a word offers **Maybe** ‘…’
 
 Only sentences already broken into words are listed. When some are not (a text imported from plain text, say), **Break N sentences into words** does it for all of them at once, as **Break into words** does for one in the Gloss panel.
 
+When many forms already have an earlier analysis (they were glossed in another text), **Use the earlier analysis for N word forms** gives each of them that analysis for all its uses at once (click it twice). Guesses from known morphs are never taken this way; apply those one by one. Read the result through in the Interlinear tab, since a form can mean different things in different sentences.
+
 ### Check that each morph is glossed one way
 
 Over months of glossing, the same suffix can end up as `PL` in one text and `pl.` in another. The **Checks** panel finds them. Press **Ctrl+K** and choose **Show Checks** (it is not placed in the workspace at first).
