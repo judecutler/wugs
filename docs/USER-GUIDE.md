@@ -1519,6 +1519,8 @@ Type a lemma and press **Sketch**. Each relation is a box with the words found i
 
 To compare two lemmas, as Sketch Engine's sketch difference does, type the second in **Compare with…** and press **Sketch** again. Each relation then lists the collocates of either lemma with both scores, those typical of the first lemma first (shaded blue), those used alike in the middle (within one logDice), and those typical of the second last (shaded sand). `eat` against `drink` puts *bread* and *rice* at the top of the objects and *water* and *tea* at the bottom. Clear the field to sketch one lemma again.
 
+When the lemma is used as a verb, the first box is **Argument frames**: the patterns of arguments its uses take, as a valency dictionary lists them. Examples are *subject + object*, *subject* alone, or *subject + object + oblique*, each with how often it occurs. A frame counts the subjects, objects, indirect objects, clausal complements and obliques that depend on the verb (passive subjects apart). Click a frame to open an example in the Sentence panel. **Copy frames** copies every frame with its uses and an example. In languages that drop pronouns, many uses show fewer arguments than the verb takes, and the line over the box says so.
+
 ### Find words used alike
 
 The **Similar words** panel lists the words used in the same company as a word, as Sketch Engine's Thesaurus does, but from the plain text, so it needs no tagger or parser: type `dog` and words such as `cat` come first because both are found before `sleeps` and after `the`. The words found are candidates for synonyms, antonyms and words of one class (days, colours, verbs of motion) to check in the Concordance. Open it from Settings (Closed panels) or with **Find an action**.

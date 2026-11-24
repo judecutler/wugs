@@ -6,10 +6,10 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { errorText, wordSketch } from "../api";
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
-import { dataGeneration, getState, showToast } from "../store";
-import { diffLine, diffTsv, groupTitle, leaning, pairQuery, sketchDiff, sketchLine, sketchTsv, type WordSketch } from "../wordsketch/logic";
+import { dataGeneration, getState, selectSegment, selectText, showToast } from "../store";
+import { frameWords, framesLine, framesTsv, type Frame, diffLine, diffTsv, groupTitle, leaning, pairQuery, sketchDiff, sketchLine, sketchTsv, type WordSketch } from "../wordsketch/logic";
 import { askConcordance } from "./concordance";
-import type { PanelDef, PanelView } from "./panel";
+import { SHOW_PANEL, type PanelDef, type PanelView } from "./panel";
 
 export const wordSketchPanel: PanelDef = {
   title: "Word sketch",
@@ -72,7 +72,42 @@ export const wordSketchPanel: PanelDef = {
         return;
       }
       line.textContent = sketchLine(w, asked);
+      // The verb's valency frames: which arguments its uses take.
+      const frames = w.frames ?? [];
+      const openFrame = async (f: Frame) => {
+        await selectText(f.textId);
+        selectSegment({ textId: f.textId, tierId: f.tierId, segmentId: f.segmentId });
+        window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: "sentence" }));
+      };
+      const copyFrames = h("button", { type: "button", textContent: "Copy frames", title: "Every frame with its uses and an example, for a valency dictionary or a spreadsheet" });
+      copyFrames.onclick = () =>
+        void writeText(framesTsv(w.lemma, frames)).then(
+          () => showToast({ tone: "info", lines: [`Copied ${frames.length} ${frames.length === 1 ? "frame" : "frames"} of «${w.lemma}».`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+      const frameBox =
+        frames.length === 0
+          ? []
+          : [
+              h(
+                "section",
+                { className: "ws-group ws-frames" },
+                h("h3", { className: "ws-head", textContent: "Argument frames" }, h("span", { className: "ws-total", textContent: ` ${frames.reduce((a, f) => a + f.count, 0)}` })),
+                h("p", { className: "note", textContent: framesLine(w.lemma, frames) }),
+                h(
+                  "table",
+                  { className: "ws-items" },
+                  h("tbody", {}, ...frames.map((f) => {
+                    const b = h("button", { type: "button", className: "link-button", textContent: frameWords(f.frame), title: `${f.frame || "no core arguments"}. Open an example in the Sentence panel: ${f.content}` });
+                    b.onclick = () => void openFrame(f);
+                    return h("tr", {}, h("td", {}, b), h("td", { className: "num", textContent: String(f.count) }));
+                  })),
+                ),
+                copyFrames,
+              ),
+            ];
       grid.replaceChildren(
+        ...frameBox,
         ...w.groups.map((g) =>
           h(
             "section",

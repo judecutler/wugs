@@ -41,3 +41,17 @@ test("a sketch difference sets two lemmas' collocates side by side", () => {
   assert.equal(diffLine({ ...eat, lemma: "" }, drink, d), "One lemma is not in the parsed sentences.");
   assert.equal(diffTsv(eat, drink, d).split("\n")[1], "obj\tdependent\tbread\t6\t11.00\t0\t\t11.00");
 });
+
+test("valency frames in words, the line over them and the table", async () => {
+  const { frameWords, framesLine, framesTsv } = await import("./logic.ts");
+  assert.equal(frameWords("nsubj obj obl"), "subject + object + oblique");
+  assert.equal(frameWords("nsubj:pass"), "passive subject");
+  assert.equal(frameWords(""), "no core arguments");
+  const frames = [
+    { frame: "nsubj obj", count: 3, textId: "t", segmentId: "s1", tierId: "u", content: "Dogs eat\tbones." },
+    { frame: "nsubj", count: 1, textId: "t", segmentId: "s2", tierId: "u", content: "Dogs eat." },
+  ];
+  assert.match(framesLine("eat", frames), /^«eat» as a verb: 4 uses in 2 frames, most often subject \+ object \(75%\)\./);
+  assert.equal(framesLine("eat", []), "");
+  assert.equal(framesTsv("eat", frames).split("\n")[1], "eat\tnsubj obj\tsubject + object\t3\tDogs eat bones.");
+});
