@@ -2,20 +2,20 @@
 // the texts a detail picks ("Genre: news"). Details' values are fetched in
 // the background and cached briefly; a picker fills from the cache at once
 // and again when fresh values arrive.
-import { corpusTracks, metadataValues } from "../api";
+import { corpusTracks, metadataValues, speakerValues } from "../api";
 import { h } from "../dom";
 import { getState } from "../store";
-import { parseScope, trackValue, whereOptions, type MetaValues, type Scope } from "./logic";
+import { parseScope, speakerOptions, trackValue, whereOptions, type MetaValues, type Scope } from "./logic";
 
-let cache: { project: string; at: number; values: MetaValues[]; tracks: { id: string; name: string }[] } | null = null;
+let cache: { project: string; at: number; values: MetaValues[]; tracks: { id: string; name: string }[]; speakers: [string, [string, number][]][] } | null = null;
 let asking: Promise<void> | null = null;
 const waiting = new Set<() => void>();
 
 function refresh(project: string) {
   if (asking !== null) return;
-  asking = Promise.all([metadataValues().catch(() => [] as MetaValues[]), corpusTracks().catch(() => [])])
-    .then(([values, tracks]) => {
-      cache = { project, at: Date.now(), values, tracks };
+  asking = Promise.all([metadataValues().catch(() => [] as MetaValues[]), corpusTracks().catch(() => []), speakerValues().catch(() => [] as [string, [string, number][]][])])
+    .then(([values, tracks, speakers]) => {
+      cache = { project, at: Date.now(), values, tracks, speakers };
     })
     .finally(() => {
       asking = null;
@@ -49,6 +49,9 @@ export function fillScopes(select: HTMLSelectElement, value: string, again: () =
   // One speaker's track, when the project has more than one (a CHAT file brings one per speaker).
   const tracks = cache?.project === project ? cache.tracks : [];
   if (tracks.length > 1) options.push(h("optgroup", { label: "One track" }, ...tracks.map((t) => h("option", { value: trackValue(t.id, t.name), textContent: t.name || t.id }))));
+  // The tracks whose speaker (People panel) has a detail: sex, age group, village…
+  const speakers = speakerOptions(cache?.project === project ? cache.speakers : []);
+  if (speakers.length > 0) options.push(h("optgroup", { label: "Speakers by detail" }, ...speakers.map((o) => h("option", { value: o.value, textContent: o.label }))));
   select.replaceChildren(...options);
   const offered = [...select.querySelectorAll("option")].some((o) => o.value === value);
   select.value = offered ? value : "";

@@ -232,6 +232,6 @@ export type SavedSearch = { name: string; kind: string; query: string; textId: s
 /** What a saved search looks for, in words, for its title in the list. */
 export function savedLine(s: SavedSearch): string {
   const what = s.kind === "query" ? `the CQP query ${s.query}` : `${s.kind === "word" ? "words" : s.kind === "morph" ? "morphs" : s.kind === "gloss" ? "glosses" : "translation words"} matching «${s.query}»${s.exact ? " exactly" : ""}`;
-  const where = s.textTitle ? ` in «${s.textTitle}»` : s.within ? (s.within.tier ? " on one track" : ` in texts whose ${s.within.key} is «${s.within.value}»`) : "";
+  const where = s.textTitle ? ` in «${s.textTitle}»` : s.within ? (s.within.tier ? " on one track" : s.within.speaker ? ` for speakers whose ${s.within.key} is «${s.within.value}»` : ` in texts whose ${s.within.key} is «${s.within.value}»`) : "";
   return `${what}${where}`;
 }

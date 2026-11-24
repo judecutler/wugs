@@ -606,6 +606,12 @@ async fn wikipedia_import(s: State<'_, SessionThread>, wiki: String, titles: Vec
     s.run(move |s| wikipedia::import(s, &wiki, &articles, &missing, &date))
 }
 
+/// The speakers' details (People panel) over the transcription tracks, for "Speakers by detail".
+#[tauri::command(async)]
+fn speaker_values(s: State<SessionThread>) -> Result<Vec<(String, Vec<(String, usize)>)>, String> {
+    s.run(concordance::speaker_values)
+}
+
 #[tauri::command(async)]
 fn corpus_tracks(s: State<SessionThread>) -> Result<Vec<concordance::Track>, String> {
     s.run(concordance::tracks)
@@ -2764,6 +2770,7 @@ pub fn run() {
         vocabulary_growth,
         speaker_lengths,
         corpus_tracks,
+        speaker_values,
         export_typology,
         wikipedia_import,
         word_sketch,
