@@ -40,6 +40,8 @@ pub struct SpeakerRow {
     pub morphemes: usize,
     /// MTLD over the speaker's running words, from `MTLD_MIN` words up.
     pub mtld: Option<f64>,
+    /// vocd's D (CLAN's measure of lexical diversity), from 50 running words up.
+    pub vocd: Option<f64>,
     /// The track's speaker in the People panel, with their sex and age
     /// details as written there (empty when none is set).
     pub person: String,
@@ -103,6 +105,72 @@ pub fn mtld(words: &[u32]) -> Option<f64> {
     Some((mtld_pass(words.iter().copied())? + mtld_pass(words.iter().rev().copied())?) / 2.0)
 }
 
+/// vocd's sample sizes and samples per size (McKee, Malvern and Richards 2000, as CLAN runs it).
+const VOCD_SIZES: std::ops::RangeInclusive<usize> = 35..=50;
+const VOCD_SAMPLES: usize = 100;
+const VOCD_TRIALS: usize = 3;
+
+/// The type/token ratio vocd's model expects for `n` tokens at diversity `d`.
+fn vocd_model(n: f64, d: f64) -> f64 {
+    (d / n) * ((1.0 + 2.0 * n / d).sqrt() - 1.0)
+}
+
+/// The D whose curve fits the mean ratios best (least squares), searched on a log scale between 1 and 1000.
+fn fit_d(points: &[(f64, f64)]) -> f64 {
+    let err = |ld: f64| points.iter().map(|&(n, t)| (t - vocd_model(n, ld.exp())).powi(2)).sum::<f64>();
+    let (mut a, mut b) = (0.0f64, 1000f64.ln());
+    for _ in 0..200 {
+        let m1 = a + (b - a) / 3.0;
+        let m2 = b - (b - a) / 3.0;
+        if err(m1) <= err(m2) {
+            b = m2;
+        } else {
+            a = m1;
+        }
+    }
+    ((a + b) / 2.0).exp()
+}
+
+/// vocd's D: for each sample size from 35 to 50 tokens, the mean type/token
+/// ratio of 100 random samples drawn without replacement, the model's D
+/// fitted to those means, averaged over three runs. Needs 50 running words;
+/// the random draws are seeded, so the same words give the same D.
+pub fn vocd(words: &[u32]) -> Option<f64> {
+    if words.len() < *VOCD_SIZES.end() {
+        return None;
+    }
+    let mut state: u64 = 0x9E37_79B9_7F4A_7C15 ^ words.len() as u64;
+    let mut next = move || {
+        state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = state;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    };
+    let mut pool: Vec<u32> = words.to_vec();
+    let mut seen: HashSet<u32> = HashSet::new();
+    let mut total = 0.0;
+    for _ in 0..VOCD_TRIALS {
+        let mut points = Vec::new();
+        for n in VOCD_SIZES {
+            let mut sum = 0.0;
+            for _ in 0..VOCD_SAMPLES {
+                // A partial Fisher–Yates shuffle: the first n of the pool are the sample.
+                seen.clear();
+                for i in 0..n {
+                    let j = i + (next() % (pool.len() - i) as u64) as usize;
+                    pool.swap(i, j);
+                    seen.insert(pool[i]);
+                }
+                sum += seen.len() as f64 / n as f64;
+            }
+            points.push((n as f64, sum / VOCD_SAMPLES as f64));
+        }
+        total += fit_d(&points);
+    }
+    Some(total / VOCD_TRIALS as f64)
+}
+
 /// Morphemes in a CHAT `%mor` tier, as CLAN's MLU counts them.
 pub fn mor_morphemes(mor: &str) -> usize {
     let mut n = 0;
@@ -154,7 +222,7 @@ pub fn speakers(session: &mut Session) -> Result<Vec<SpeakerRow>, String> {
             None => {
                 let name = p.proj.field_str(&seg.tier, "name")?.unwrap_or_default();
                 let (person, sex, age, born) = person_of(p, &seg.tier)?;
-                rows.push(SpeakerRow { tier: seg.tier.clone(), name, texts: 0, utterances: 0, words: 0, types: 0, longest: 0, analysed: 0, morphemes: 0, mtld: None, person, sex, age, born, by_text: Vec::new() });
+                rows.push(SpeakerRow { tier: seg.tier.clone(), name, texts: 0, utterances: 0, words: 0, types: 0, longest: 0, analysed: 0, morphemes: 0, mtld: None, vocd: None, person, sex, age, born, by_text: Vec::new() });
                 rows.len() - 1
             }
         };
@@ -206,6 +274,7 @@ pub fn speakers(session: &mut Session) -> Result<Vec<SpeakerRow>, String> {
         r.texts = texts.get(&r.tier).map_or(0, HashSet::len);
         r.types = types.get(&r.tier).map_or(0, HashSet::len);
         r.mtld = runs.get(&r.tier).filter(|run| run.len() >= MTLD_MIN).and_then(|run| mtld(run));
+        r.vocd = runs.get(&r.tier).and_then(|run| vocd(run));
         let age_key = wugs_core::metadata::key_of(&format!("age {}", r.name));
         for t in &mut r.by_text {
             t.title = p.proj.field_str(&t.text, "title")?.unwrap_or_default();
@@ -247,6 +316,23 @@ mod tests {
         assert!((p - 13.0 / ((1.0 - 10.0 / 13.0) / 0.28)).abs() < 1e-9, "{p}");
         // One word more and the ratio is 10/14, 0.714: a whole factor.
         assert_eq!(mtld_pass([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3].into_iter()), Some(14.0));
+    }
+
+    #[test]
+    fn vocd_fits_its_own_curve_and_grows_with_variety() {
+        // The fit gives back the D a set of ratios was made from.
+        let points: Vec<(f64, f64)> = (35..=50).map(|n| (n as f64, vocd_model(n as f64, 50.0))).collect();
+        assert!((fit_d(&points) - 50.0).abs() < 0.01, "{}", fit_d(&points));
+        // Too few words: no D.
+        assert_eq!(vocd(&(0..49).collect::<Vec<u32>>()), None);
+        // A speaker cycling through 60 words is more varied than one cycling through 20.
+        let narrow: Vec<u32> = (0..600).map(|i| i % 20).collect();
+        let wide: Vec<u32> = (0..600).map(|i| i % 60).collect();
+        let (n, w) = (vocd(&narrow).unwrap(), vocd(&wide).unwrap());
+        assert!(n < w, "{n} {w}");
+        assert!(n > 5.0 && w < 200.0, "{n} {w}");
+        // Seeded: the same words, the same D.
+        assert_eq!(vocd(&wide), vocd(&wide));
     }
 
     #[test]
