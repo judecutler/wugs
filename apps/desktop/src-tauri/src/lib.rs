@@ -4,6 +4,7 @@ pub mod capability;
 pub mod clips;
 pub mod capture;
 pub mod chat;
+pub mod exmaralda;
 pub mod mlu;
 pub mod wikipedia;
 pub mod characters;

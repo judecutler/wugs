@@ -7934,6 +7934,7 @@ dependencies = [
  "wugs-tei",
  "wugs-text",
  "wugs-unicode",
+ "wugs-xml",
  "zeroize",
 ]
 

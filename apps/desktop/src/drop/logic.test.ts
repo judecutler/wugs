@@ -9,6 +9,7 @@ test("each file takes the import its type needs", () => {
   assert.equal(classify("corpus.CSV"), "file");
   assert.equal(classify("captions.vtt"), "file");
   assert.equal(classify("lunch.cha"), "file");
+  assert.equal(classify("stall.exb"), "file");
   assert.equal(classify("Frog story.eaf"), "file");
   assert.equal(classify("en_ewt-ud-test.conllu"), "file");
   assert.equal(classify("words.TextGrid"), "file");

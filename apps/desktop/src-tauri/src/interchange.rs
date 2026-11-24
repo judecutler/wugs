@@ -47,6 +47,8 @@ pub enum Format {
     Audacity,
     /// CHAT (`.cha`), CLAN's format and the TalkBank corpora's (`chat`).
     Chat,
+    /// An EXMARaLDA basic transcription (`.exb`; `exmaralda`).
+    Exmaralda,
 }
 
 impl Format {
@@ -68,6 +70,7 @@ impl Format {
             "vtt" => Format::Subtitles { vtt: true },
             "audacity" => Format::Audacity,
             "chat" => Format::Chat,
+            "exmaralda" => Format::Exmaralda,
             other => return Err(format!("unknown format {other}")),
         })
     }
@@ -88,6 +91,7 @@ impl Format {
             Format::Subtitles { vtt: false } => "srt",
             Format::Subtitles { vtt: true } => "vtt",
             Format::Chat => "cha",
+            Format::Exmaralda => "exb",
         }
     }
 
@@ -110,6 +114,7 @@ impl Format {
             Format::Subtitles { vtt: false } => "SubRip subtitles",
             Format::Subtitles { vtt: true } => "WebVTT subtitles",
             Format::Chat => "CHAT transcript",
+            Format::Exmaralda => "EXMARaLDA transcription",
         }
     }
 }
@@ -143,6 +148,7 @@ pub fn detect(path: &Path, bytes: &[u8]) -> Option<Format> {
         "srt" => return Some(Format::Subtitles { vtt: false }),
         "vtt" => return Some(Format::Subtitles { vtt: true }),
         "cha" => return Some(Format::Chat),
+        "exb" => return Some(Format::Exmaralda),
         _ => {}
     }
     let head = sniff(&bytes[..bytes.len().min(4096)]);
@@ -357,12 +363,12 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
     let bytes = fs::read(path).map_err(|e| format!("{file_name}: {e}"))?;
     let named = Path::new(file_name);
     let format = detect(named, &bytes).ok_or_else(|| {
-        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, CHAT .cha, a .csv/.tsv/.xlsx/.ods table of sentences, .srt or .vtt subtitles, or a plain .txt)")
+        format!("{file_name} is not a file wugs can import (ELAN .eaf, FLEx .flextext or .lift, Praat .TextGrid, Toolbox .db/.sfm, CoNLL-U .conllu, TEI .xml, CHAT .cha, EXMARaLDA .exb, a .csv/.tsv/.xlsx/.ods table of sentences, .srt or .vtt subtitles, or a plain .txt)")
     })?;
     let stem = named.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "Imported".into());
     let input = match format {
         // Plain text is read as strictly as XML: a damaged file is refused, never garbled.
-        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } | Format::Audacity | Format::Chat => decode_xml(&bytes, file_name)?,
+        Format::Elan | Format::FlexText | Format::Lift | Format::PlainText | Format::GlossedExamples | Format::Conllu | Format::Tei | Format::Subtitles { .. } | Format::Audacity | Format::Chat | Format::Exmaralda => decode_xml(&bytes, file_name)?,
         Format::Vertical | Format::AntConc => return Err(format!("{} is written by wugs, not read", format.name())),
         // Praat and Toolbox write Latin-1 as well as UTF-8 and UTF-16, and so
         // does Excel's ordinary "CSV" (Windows-1252, read as Latin-1).
@@ -537,6 +543,11 @@ pub fn import_file_named(s: &mut Session, path: &str, file_name: &str) -> Result
         }
         Format::Chat => {
             let (text, mut report) = crate::chat::import(p, input, &stem).map_err(|e| format!("{file_name}: {e}"))?;
+            lines.append(&mut report);
+            (text, false)
+        }
+        Format::Exmaralda => {
+            let (text, mut report) = crate::exmaralda::import(p, input, &stem).map_err(|e| format!("{file_name}: {e}"))?;
             lines.append(&mut report);
             (text, false)
         }
@@ -922,6 +933,11 @@ pub fn export_text(s: &mut Session, text_id: &str, format: Format, folder: &Path
         }
         Format::Chat => {
             let (out, mut more) = crate::chat::export(p, text_id)?;
+            notes.append(&mut more);
+            out
+        }
+        Format::Exmaralda => {
+            let (out, mut more) = crate::exmaralda::export(p, text_id)?;
             notes.append(&mut more);
             out
         }
