@@ -11,5 +11,5 @@ pub mod glossing;
 pub mod import;
 pub use wugs_xml as xml;
 
-pub use export::export_eaf;
+pub use export::{export_eaf, export_eaf_with_media, Media};
 pub use import::{import_eaf, ImportError, ImportReport};
