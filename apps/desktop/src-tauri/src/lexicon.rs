@@ -38,6 +38,8 @@ pub struct EntryRow {
     pub heard: bool,
     /// Every sense has an example sentence (false with no senses).
     pub examples: bool,
+    /// Every sense is in a semantic domain (false with no senses).
+    pub domains: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -315,19 +317,22 @@ pub fn lexicon_list(session: &mut Session, query: &str) -> Result<Vec<EntryRow>,
         let mut glosses = Vec::new();
         let mut used = false;
         let mut examples = true;
+        let mut domains = true;
         let sense_ids = senses(p, &id)?;
         for s in &sense_ids {
             glosses.push(str_field(p, s, "gloss")?);
             used = used || linked_in_a_text(p, s)?;
             examples = examples && !p.examples(s)?.is_empty();
+            domains = domains && !p.sense_domains(s)?.is_empty();
         }
         let examples = examples && !sense_ids.is_empty();
+        let domains = domains && !sense_ids.is_empty();
         let hit = q.is_empty()
             || fold_key(&p.proj.nfc(&lemma)).contains(&q)
             || glosses.iter().any(|g| fold_key(&p.proj.nfc(g)).contains(&q));
         if hit {
             let heard = p.pronunciations(&id)?.iter().filter_map(|pr| pr.audio.as_ref()).any(|a| p.proj.is_tombstoned(&a.source).map(|dead| !dead).unwrap_or(false));
-            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, borrowed_from: str_field(p, &id, "borrowed-from")?, id, lemma, glosses, used, heard, examples });
+            rows.push(EntryRow { homograph: homograph(p, &id)?, pos_of_speech: str_field(p, &id, "pos-of-speech")?, borrowed_from: str_field(p, &id, "borrowed-from")?, id, lemma, glosses, used, heard, examples, domains });
         }
     }
     rows.sort_by_cached_key(|r| (fold_key(&r.lemma), r.homograph, r.id.clone()));
@@ -1057,6 +1062,15 @@ mod tests {
         super::lexicon_add_pronunciation(&mut s, &wan, "", Some(&seg)).unwrap();
         assert!(super::lexicon_list(&mut s, "wʌn").unwrap()[0].heard, "a pronunciation heard in the recording counts");
         assert_eq!(super::examples_from_texts(&mut s).unwrap(), 0);
+        // In a semantic domain once its one sense is.
+        assert!(!super::lexicon_list(&mut s, "wʌn").unwrap()[0].domains);
+        let dom = {
+            let p = crate::session::project(&mut s).unwrap();
+            super::sil_domains_if_none(p).unwrap();
+            p.proj.entities_of_kind("domain").unwrap().remove(0)
+        };
+        super::lexicon_assign_domain(&mut s, &e.senses[0].id, &dom).unwrap();
+        assert!(super::lexicon_list(&mut s, "wʌn").unwrap()[0].domains);
         std::fs::remove_dir_all(&dir).ok();
     }
 

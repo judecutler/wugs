@@ -269,7 +269,7 @@ const LEXICON = [
     ["lx-lima", "lima", null, "n", ["hand"]],
     // A loanword.
     ["lx-buku", "buku", null, "n", ["book"]],
-  ].map(([id, lemma, homograph, posOfSpeech, glosses]) => ({ id, lemma, homograph, posOfSpeech, glosses, used: !["lx-wiripa", "lx-toruma", "lx-tela2", "lx-lima", "lx-buku"].includes(id), borrowedFrom: id === "lx-buku" ? "Malay" : "", heard: id === "lx-ev", examples: id === "lx-ev" }));
+  ].map(([id, lemma, homograph, posOfSpeech, glosses]) => ({ id, lemma, homograph, posOfSpeech, glosses, used: !["lx-wiripa", "lx-toruma", "lx-tela2", "lx-lima", "lx-buku"].includes(id), borrowedFrom: id === "lx-buku" ? "Malay" : "", heard: id === "lx-ev", examples: id === "lx-ev", domains: ["lx-ev", "lx-kani"].includes(id) }));
 
   const DOMAINS = [
     { id: "dom-8", code: "8", label: "States", description: "Use this domain for general words referring to states and conditions.", depth: 0 },
