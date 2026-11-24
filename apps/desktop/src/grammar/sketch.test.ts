@@ -210,3 +210,10 @@ test("examples filed under topics come out glossed and numbered through", () => 
   assert.ok(html.includes("(1)") && html.includes("(2)") && html.includes("(3)"), "numbered through");
   assert.ok(html.indexOf("<h4>Numerals</h4>") < html.indexOf("(3)"));
 });
+
+test("the lexicon's pronouns make a person and number table", () => {
+  const html = grammarSketch({ ...base, pronouns: [{ lemma: "na", category: "pro", gloss: "1SG" }, { lemma: "ira", category: "pro", gloss: "3PL" }, { lemma: "kesi", category: "n", gloss: "dog" }] });
+  assert.match(html, /<h3>4\.\d+ Personal pronouns<\/h3>/u);
+  assert.ok(html.includes("<tr><th>1</th><td class=\"ipa\">na</td><td class=\"ipa\"></td></tr>"));
+  assert.doesNotMatch(grammarSketch(base), /Personal pronouns/u);
+});

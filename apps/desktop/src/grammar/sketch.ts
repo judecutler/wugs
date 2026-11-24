@@ -16,6 +16,7 @@ import { possibleAllophones } from "../sounds/allophones.ts";
 import { countsLine, total, verdict, type WordOrder } from "../wordorder/logic.ts";
 import type { Grid } from "../orthography/logic.ts";
 import type { Answer, Ours } from "../typology/logic.ts";
+import { pronounTable, type PronounEntry } from "./pronouns.ts";
 import { asHtml, type Example } from "../gloss/example.ts";
 
 export type Morpheme = { form: string; kind: "prefix" | "suffix" | "infix" | "proclitic" | "enclitic"; glosses: string[]; category: string };
@@ -62,6 +63,8 @@ export type SketchInput = {
   loans?: { language: string; count: number }[];
   /** Sentences filed under grammar topics (src-tauri/src/topics.rs), as glossed examples, each topic's in order. */
   topics?: { name: string; examples: Example[] }[];
+  /** The lexicon's entries with their part of speech and first gloss, for the pronoun table (`src/grammar/pronouns.ts`). */
+  pronouns?: PronounEntry[];
   /** The person's own date for the title page, `YYYY-MM-DD`. */
   date: string;
   generator: string;
@@ -317,6 +320,23 @@ export function grammarSketch(d: SketchInput): string {
         .map((g) => `<tr><td class="ipa">${esc(g.affixes.map((a) => affixLabel(a, "suffix")).join(" "))}</td><td>${g.stems.length}</td><td class="ipa">${esc(g.stems.slice(0, 6).map((x) => x.stem).join(", "))}</td></tr>`)
         .join("")}</table>`,
       todo("Which of these are inflection, which derivation, and which chance"),
+    );
+  }
+  const pron = pronounTable(d.pronouns ?? []);
+  if (pron !== null) {
+    const n = byKind.length + (slots.some((s) => s.affixes.length > 0) ? 1 : 0) + (sets.length > 0 ? 1 : 0) + (guessed.length > 0 ? 1 : 0) + 1;
+    const table =
+      pron.rows.length === 0
+        ? ""
+        : `<table><tr><th>Person</th>${pron.columns.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>${pron.rows
+            .map((r, i) => `<tr><th>${esc(r)}</th>${pron.cells[i]!.map((c) => `<td class="ipa">${c.length === 0 ? "" : esc(c.join(", "))}</td>`).join("")}</tr>`)
+            .join("")}</table>`;
+    parts.push(
+      `<h3>4.${n} Personal pronouns</h3>`,
+      `<p>The lexicon's pronouns, placed by the person and number their glosses give (1SG, 3PL, 1PL.INCL, or an English pronoun).</p>`,
+      table,
+      pron.unplaced.length === 0 ? "" : `<p>Pronouns whose gloss names no person: ${esc(pron.unplaced.join(", "))}.</p>`,
+      todo("Case forms, possessive pronouns, and the gaps in the table"),
     );
   }
   parts.push(todo("Word classes, inflection and derivation"));
