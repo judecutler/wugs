@@ -9,6 +9,7 @@ import { errorText, frequencies, lexiconAdd } from "../api";
 import { FREQ_KINDS, type FreqKind } from "../concordance/logic";
 import { emptyState, h } from "../dom";
 import { spreadReading } from "../concordance/plot";
+import { decades, zipfFit, zipfLine, zipfPoints } from "../frequencies/zipf";
 import { asTsv, dpCell, hasSpread, spreadNote, cqpFor, unlabelledNote, filterRows, lexiconCell, lexiconNote, notInLexicon, FREQ_SORTS, perThousand, ranked, richness, sortRows, summary, type FreqSort, type Frequencies, type RankedRow } from "../frequencies/logic";
 import { provide } from "../palette/registry";
 import { dataGeneration, getState, showToast, touchLexicon } from "../store";
@@ -65,6 +66,50 @@ export const frequenciesPanel: PanelDef = {
     const missingOnly = h("input", { type: "checkbox" });
     const missingBox = h("label", { className: "fq-missing", title: "List only the words no lexicon entry or form is spelled as" }, missingOnly, " Only words not in the lexicon");
     const table = h("table", { className: "fq-table" });
+    // Zipf's law: frequency against rank on log scales, drawn when opened.
+    const zipf = h("details", { className: "fq-zipf" }, h("summary", { textContent: "Zipf plot" }));
+    const zipfBody = h("div", {});
+    zipf.append(zipfBody);
+    const drawZipf = () => {
+      if (!zipf.open || data === null) {
+        zipfBody.replaceChildren();
+        return;
+      }
+      const points = zipfPoints(data.rows.map((r) => r.count));
+      const fit = zipfFit(points);
+      const W = 420;
+      const H = 260;
+      const box = { left: 46, top: 10, right: 12, bottom: 36 };
+      const maxRank = Math.max(1, ...points.map((p) => p.rank));
+      const maxCount = Math.max(1, ...points.map((p) => p.count));
+      const xd = decades(maxRank);
+      const yd = decades(maxCount);
+      const lx = (r: number) => box.left + (Math.log10(r) / Math.log10(xd.at(-1)!)) * (W - box.left - box.right || 1);
+      const ly = (c: number) => H - box.bottom - (Math.log10(c) / Math.log10(Math.max(10, yd.at(-1)!))) * (H - box.top - box.bottom);
+      const NS = "http://www.w3.org/2000/svg";
+      const svg = (tag: string, attrs: Record<string, string | number>, text?: string) => {
+        const e = document.createElementNS(NS, tag);
+        for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+        if (text !== undefined) e.textContent = text;
+        return e;
+      };
+      const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "vw-plot fq-zipf-plot", role: "img", "aria-label": "Frequency against rank on log scales" });
+      for (const d of xd) root.append(svg("line", { x1: lx(d), x2: lx(d), y1: box.top, y2: H - box.bottom, class: "vw-grid" }), svg("text", { x: lx(d), y: H - box.bottom + 14, class: "vw-tick", "text-anchor": "middle" }, d.toLocaleString("en")));
+      for (const d of yd) if (ly(d) >= box.top - 1) root.append(svg("line", { x1: box.left, x2: W - box.right, y1: ly(d), y2: ly(d), class: "vw-grid" }), svg("text", { x: box.left - 5, y: ly(d) + 4, class: "vw-tick", "text-anchor": "end" }, d.toLocaleString("en")));
+      root.append(svg("text", { x: (box.left + W - box.right) / 2, y: H - 4, class: "vw-axis", "text-anchor": "middle" }, "Rank"), svg("text", { x: 12, y: (box.top + H - box.bottom) / 2, class: "vw-axis", "text-anchor": "middle", transform: `rotate(-90 12 ${(box.top + H - box.bottom) / 2})` }, "Count"));
+      if (fit !== null) {
+        const at = (r: number) => 10 ** (fit.intercept - fit.alpha * Math.log10(r));
+        root.append(svg("line", { x1: lx(1), y1: ly(Math.max(1, at(1))), x2: lx(maxRank), y2: ly(Math.max(1, at(maxRank))), class: "fq-zipf-fit" }));
+      }
+      const byRank = rankedRows;
+      for (const p of points) {
+        const dot = svg("circle", { cx: lx(p.rank), cy: ly(p.count), r: 2.4, class: "fq-zipf-dot" });
+        dot.append(svg("title", {}, `#${p.rank} ${byRank[p.rank - 1]?.item ?? ""}: ${p.count}`));
+        root.append(dot);
+      }
+      zipfBody.replaceChildren(root, h("p", { className: "note", textContent: zipfLine(fit, data.rows.length, data.rows.length < data.types) }));
+    };
+    zipf.addEventListener("toggle", drawZipf);
 
     const drawChips = () =>
       chips.replaceChildren(
@@ -124,6 +169,7 @@ export const frequenciesPanel: PanelDef = {
       const cut = rows.length > DRAWN ? ` The first ${DRAWN} are drawn; filter to find the others (Copy table has them all).` : "";
       // Richness is a property of a whole word list, not of n-grams, morphs or tags.
       const rich = !ngrams() && (kind === "word" || kind === "translation") ? richness(data) : "";
+      drawZipf();
       count.textContent = summary(data, noun()) + rich + perWord + spreadNote(rankedRows) + lexiconNote(rankedRows) + (filter.value.trim() !== "" ? ` ${rows.length} match the filter.` : "") + cut + ` Counted at ${countedAt}.`;
       const withLexicon = marked();
       missingBox.hidden = !withLexicon;
@@ -262,7 +308,7 @@ export const frequenciesPanel: PanelDef = {
       drawChips();
       drawScopes();
       drawSizer();
-      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, missingBox), count, h("div", { className: "fq-rows" }, table));
+      el.replaceChildren(h("div", { className: "cc-bar" }, scopePicker, sizer, sorter, recount, copy), chips, h("div", { className: "cc-bar" }, filter, missingBox), count, zipf, h("div", { className: "fq-rows" }, table));
       void load();
     };
     return { element: el, render, dispose: unprovide };

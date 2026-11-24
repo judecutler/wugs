@@ -1536,3 +1536,10 @@ body::before {
 .tt-near { fill: var(--line); fill-opacity: 0.45; }
 .tt-zero { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 .tt-median { stroke: var(--ink); stroke-width: 2; }
+
+/* Zipf plot in Frequencies */
+.fq-zipf { margin: 4px 0 8px; }
+.fq-zipf summary { cursor: pointer; font-size: var(--text-sm); }
+.fq-zipf-plot { max-width: 460px; }
+.fq-zipf-dot { fill: var(--accent-bright); stroke: var(--accent); stroke-width: 0.5; }
+.fq-zipf-fit { stroke: var(--ink); stroke-width: 1.4; stroke-dasharray: 5 3; }

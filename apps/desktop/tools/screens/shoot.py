@@ -431,6 +431,13 @@ def main():
             run.shot("state-frequencies", run.page.locator(".panel-frequencies"))
             if run.page.locator(".panel-frequencies .fq-table tbody tr").count() == 0:
                 failures.append("the frequency list showed no rows")
+            # The Zipf plot, opened.
+            run.page.locator(".panel-frequencies .fq-zipf summary").click()
+            run.page.locator(".panel-frequencies .fq-zipf-plot").wait_for()
+            run.shot("state-frequencies-zipf", run.page.locator(".panel-frequencies"))
+            if run.page.locator(".panel-frequencies .fq-zipf-dot").count() < 3 or "Zipf's exponent" not in run.page.locator(".panel-frequencies .fq-zipf").inner_text():
+                failures.append("the Zipf plot drew no points or no exponent")
+            run.page.locator(".panel-frequencies .fq-zipf summary").click()
             # A reverse list lines words up at their ends.
             run.page.locator(".panel-frequencies .fq-sort").select_option("ending")
             run.page.wait_for_timeout(200)
