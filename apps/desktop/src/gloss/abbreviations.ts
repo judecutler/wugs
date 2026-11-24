@@ -150,3 +150,19 @@ export function unexplainedNote(list: readonly Abbreviation[]): string | null {
   const names = missing.length > 3 ? `${missing.slice(0, 3).join(", ")} and ${missing.length - 3} more` : missing.join(", ");
   return `${names} ${missing.length === 1 ? "is" : "are"} not in the Leipzig list: write ${missing.length === 1 ? "its meaning" : "their meanings"} below, or check for a typing slip.`;
 }
+
+/** What the grammatical abbreviations of a gloss being typed mean, for a hint
+ * under the cell: `3SG.PST` gives "3 third person · SG singular · PST past".
+ * The project's own meanings win; one with no meaning is marked "?" so a slip
+ * shows at once. Empty when the gloss has no abbreviation. */
+export function glossHint(gloss: string, own: ReadonlyMap<string, string | null>): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const a of abbreviationsIn(gloss)) {
+    if (seen.has(a)) continue;
+    seen.add(a);
+    const meaning = own.get(a)?.trim() || leipzigMeaning(a);
+    parts.push(meaning ? `${a} ${meaning}` : `${a} ?`);
+  }
+  return parts.join(" · ");
+}

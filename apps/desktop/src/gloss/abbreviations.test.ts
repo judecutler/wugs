@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { abbreviationList, abbreviationsIn, abbreviationsOf, leipzigMeaning, sortAbbreviations, unexplainedNote } from "./abbreviations.ts";
+import { abbreviationList, abbreviationsIn, abbreviationsOf, glossHint, leipzigMeaning, sortAbbreviations, unexplainedNote } from "./abbreviations.ts";
 import type { Example } from "./example.ts";
 
 test("a gloss's grammatical parts are its abbreviations, person digits apart", () => {
@@ -47,4 +47,12 @@ test("the project's own meaning wins; an unknown one is said once", () => {
   ]);
   assert.match(unexplainedNote(list) ?? "", /^PLU is not in the Leipzig list: write its meaning/u);
   assert.equal(unexplainedNote(list.slice(0, 3)), null);
+});
+
+test("a hint says what a gloss's abbreviations mean as it is typed", () => {
+  assert.equal(glossHint("3SG.PST", new Map()), "3 third person · SG singular · PST past");
+  assert.equal(glossHint("dog-PL", new Map()), "PL plural");
+  assert.equal(glossHint("EVID.XYZ", new Map([["EVID", "evidential (reported)"]])), "EVID evidential (reported) · XYZ ?");
+  assert.equal(glossHint("dog", new Map()), "");
+  assert.equal(glossHint("PL.PL", new Map()), "PL plural");
 });

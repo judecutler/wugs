@@ -3,7 +3,7 @@
 // translation line up under the transcription. The project's earlier analyses
 // are one keypress away: Enter on an empty word accepts the ghost suggestion.
 import {
-  addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize,
+  abbreviationMeanings, addSegment, addTier, addTranslation, editSegmentContent, errorText, glossAddLexeme, glossAddNote, glossApply, glossApplyAll, glossChooseList, glossGet, glossLexicon, glossPickSense, glossRestore, glossRetokenize, glossSet, glossSetNote, glossTokenize,
   type Alternative, type GlossView, type HiddenEdit, type LexiconMatch, type MorphView, type WordView,
 } from "../api";
 import { analysisOf, breakdownEffect, mergeAnalysis } from "../gloss/analysis";
@@ -11,6 +11,7 @@ import { alternativeNote, hiddenNote } from "../gloss/hidden";
 import { breakdownKey, breakdownCell, glossCell, glossKey, langCell, nextCell, nextWordCell } from "../gloss/keys";
 import { normalizeLangTag } from "../gloss/lang";
 import { glossParts } from "../gloss/leipzig";
+import { abbreviationsIn, glossHint } from "../gloss/abbreviations";
 import { matchLabel, offerText, shouldOfferLexeme } from "../gloss/lexicon";
 import { breakdownChanged, formatBreakdown, marked, parseBreakdown, type MorphType } from "../gloss/morphs";
 import { tokenState } from "../gloss/state";
@@ -274,6 +275,29 @@ export const glossPanel: PanelDef = {
       return h("div", { className: "gl-notice" }, h("span", { textContent: alternativeNote(alt, on) }), b);
     }
 
+    // ---------------------------------------------------------------- abbreviation hints
+
+    /** The project's own meanings of abbreviations asked so far (null: none), per project. */
+    let meanings = new Map<string, string | null>();
+    let meaningsFor = "";
+
+    async function showHint(input: HTMLInputElement, hint: HTMLElement): Promise<void> {
+      const s = getState();
+      const project = s.kind === "open" ? s.info.projectId : "";
+      if (project !== meaningsFor) {
+        meanings = new Map();
+        meaningsFor = project;
+      }
+      const missing = [...new Set(abbreviationsIn(input.value))].filter((a) => !meanings.has(a));
+      if (missing.length > 0) {
+        const got = await abbreviationMeanings(missing).catch(() => missing.map(() => null));
+        if (meaningsFor !== project) return;
+        missing.forEach((a, i) => meanings.set(a, got[i] ?? null));
+      }
+      if (document.activeElement !== input) return;
+      hint.textContent = glossHint(input.value, meanings);
+    }
+
     // ---------------------------------------------------------------- lexicon autocomplete
 
     function closeMenu(): void {
@@ -330,7 +354,8 @@ export const glossPanel: PanelDef = {
         input.focus();
       };
       const host = h("div", { className: "gl-menu" });
-      const wrap = h("div", { className: "gl-cell" }, paint, input, language === null ? host : null);
+      const hint = h("div", { className: "gl-hint", ariaLive: "polite" });
+      const wrap = h("div", { className: "gl-cell" }, paint, input, language === null ? host : null, language === null ? hint : null);
       if (language === null && m.sense !== null) {
         wrap.classList.add("linked");
         paint.title = `Linked to ${m.senseLabel ?? "a lexicon sense"}`;
@@ -339,12 +364,19 @@ export const glossPanel: PanelDef = {
       input.oninput = () => {
         drafts.set(id, input.value);
         repaint(input.value);
-        if (language === null) void openMenu(m, input, host);
+        if (language === null) {
+          void openMenu(m, input, host);
+          void showHint(input, hint);
+        }
       };
       input.onfocus = () => {
-        if (language === null) void openMenu(m, input, host);
+        if (language === null) {
+          void openMenu(m, input, host);
+          void showHint(input, hint);
+        }
       };
       input.onblur = () => {
+        hint.textContent = "";
         closeMenu();
         void commitGloss(m, language);
       };
