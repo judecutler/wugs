@@ -106,3 +106,13 @@ export const projectClosedReason = "the project it was dropped into is no longer
 
 export const unsupportedReason =
   "wugs imports recordings (WAV, M4A, MP3, FLAC, Ogg, AIFF), ELAN, FLEx, Praat, Toolbox, CoNLL-U and TEI files (.eaf, .flextext, .lift, .TextGrid, .db, .sfm, .lex, .conllu, .xml), tables of sentences (.csv, .tsv, .xlsx, .ods) and plain text (.txt).";
+
+/** What exporting every text did, for the toast: how many files, and the texts that failed with why. */
+export function exportedAllLines(saved: number, total: number, folder: string, failed: readonly { title: string; error: string }[], notes: number): string[] {
+  const n = (x: number, one: string, many: string) => `${x} ${x === 1 ? one : many}`;
+  const lines = [saved === 0 ? "No text was exported." : `Saved ${n(saved, "text", "texts")} of ${total} in ${folder}.`];
+  if (notes > 0) lines.push(`${n(notes, "export has", "exports have")} notes; export a text alone to read them.`);
+  for (const f of failed.slice(0, 5)) lines.push(`«${f.title || "untitled"}»: ${f.error}`);
+  if (failed.length > 5) lines.push(`and ${failed.length - 5} more could not be exported.`);
+  return lines;
+}

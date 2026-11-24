@@ -1330,6 +1330,10 @@ const LEXICON = [
       ],
       falling: [{ item: "ŋai", total: 40, rates: [19.5, 14.1, null, 6.6, 3.2], tau: -1 }],
     }),
+    export_text: ({ textId }) => {
+      (window.__WUGS_EXPORTED__ ??= []).push(textId);
+      return { path: `/tmp/out/${textId}.eaf`, notes: [] };
+    },
     lexicon_add_words: ({ words }) => {
       window.__WUGS_ADDED_WORDS__ = words.length;
       return words.length;

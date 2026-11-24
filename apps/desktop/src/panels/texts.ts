@@ -20,7 +20,7 @@ import { readerDetails, readerGlossary, readerHtml, type GlossedWord, type Reade
 import { emptyState, h } from "../dom";
 import { attempt, getState, refreshAll, reloadTexts, selectText, showToast, touchLexicon } from "../store";
 import { readGlossingLines, tierGlossingLines, type TierGlossing } from "../elan/glossing";
-import { batchLines, type BatchResult } from "../drop/logic";
+import { batchLines, exportedAllLines, type BatchResult } from "../drop/logic";
 import { alignLine, pairNote, toWrite, writtenLine, type Alignment } from "../align/logic";
 import { alignPreview, alignWrite } from "../api";
 import { loanSources, tableImportLines } from "../lexicon/logic";
@@ -230,6 +230,28 @@ async function exportOne(textId: string) {
   await work("text", async () => {
     const r = await exportText({ textId, format: textFormat, folder });
     showToast({ tone: r.notes.length > 0 ? "warn" : "info", lines: [`Saved ${r.path}.`, ...r.notes] });
+  });
+}
+
+/** Every text in the chosen format, one file each, into one folder (each export as Export… writes it). */
+async function exportAll(texts: { id: string; title: string }[]) {
+  const folder = await chooseFolder("Choose where the exported texts go");
+  if (folder === null) return;
+  await work("all", async () => {
+    let saved = 0;
+    let notes = 0;
+    const failed: { title: string; error: string }[] = [];
+    for (const [i, t] of texts.entries()) {
+      showToast({ tone: "info", lines: [`Exporting ${i + 1} of ${texts.length}: «${t.title || "untitled"}»…`] });
+      try {
+        const r = await exportText({ textId: t.id, format: textFormat, folder });
+        saved += 1;
+        if (r.notes.length > 0) notes += 1;
+      } catch (e) {
+        failed.push({ title: t.title, error: errorText(e) });
+      }
+    }
+    showToast({ tone: failed.length > 0 ? "warn" : "info", lines: exportedAllLines(saved, texts.length, folder, failed, notes) });
   });
 }
 
@@ -872,6 +894,15 @@ export const textsPanel: PanelDef = {
                 textContent: busy === "text" ? "Exporting…" : "Export…",
                 disabled: busy !== null,
                 onclick: () => void exportOne(text.id),
+              }),
+          text === null || s.texts.length < 2
+            ? null
+            : h("button", {
+                type: "button",
+                textContent: busy === "all" ? "Exporting…" : `Every text…`,
+                title: `Export all ${s.texts.length} texts in this format, a file each, into one folder: for a deposit or to move a project into another tool`,
+                disabled: busy !== null,
+                onclick: () => void exportAll(s.texts),
               }),
           text === null
             ? null
