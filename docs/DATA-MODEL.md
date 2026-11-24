@@ -102,7 +102,8 @@ Field types: `str`, `int`, `real`, `bool`, `ms` (milliseconds), `ref:<kind>`, `e
 | --- | --- |
 | **Person** `prs` | names `json` · roles `json` · default-access `enum` · details as `meta:<key>` `str` fields (born, languages, from…; keys as a text's metadata) |
 | **Consent** `cns` | person `ref` · covers `ref:src|prj` · terms `json` (archive-ok, web-ok, community-only, AI-ok…) · date · evidence `blob?` |
-| **Session** `ses` | date, place `str` · method `str` · participants via link entities · notes `text` |
+| **Session** `ses` (kind `session`, people scope) | date `str` (`YYYY-MM-DD` or empty) · place `str` · method `str` · notes `text` · participants (older form, from `start_session`: `json` list of person ids or `{person, role}`; read, and rewritten when one is taken off) — a fieldwork sitting, the log the Sessions panel keeps; ops made under one carry its id as provenance |
+| **SessionPerson** `spn` (kind `session-person`, people scope) | session `ref:ses` · person `ref:prs` — who took part; one live link per pair, two devices adding the same person keep one; taking someone off tombstones every live link of the pair |
 
 ### Systems & relations
 | Entity | Fields |

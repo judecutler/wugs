@@ -35,6 +35,7 @@ import { orthographyPanel } from "./orthography";
 import { vowelsPanel } from "./vowels";
 import { contoursPanel } from "./contours";
 import { durationsPanel } from "./durations";
+import { sessionsPanel } from "./sessions";
 
 /** Every panel a layout may name. The key is both the dockview component
  * name and the panel id: each panel exists at most once. */
@@ -57,6 +58,7 @@ export const PANELS = {
   vowels: vowelsPanel,
   contours: contoursPanel,
   durations: durationsPanel,
+  sessions: sessionsPanel,
   sounds: soundsPanel,
   typology: typologyPanel,
   progress: progressPanel,

@@ -617,6 +617,19 @@ Click **Add another record** for a second record. To delete a person or a record
 
 An attached form is stored in the project, so a sealed package contains it. Treat sealed packages as personal data.
 
+### Keep a fieldwork log
+
+The **Sessions** panel is the project's field notebook: one entry per sitting, with when and where it was, how you worked (elicitation, recording, transcription with a speaker, checking…), who took part, and notes on what you covered and what to ask next time. Open it from Settings (Closed panels) or with **Find an action**.
+
+1. Click **New session**. It is dated today and its notes are ready to type in.
+2. Change the **Date**, **Place** or **Method** if you need to. Each saves when you leave the field.
+3. Under the fields, choose people from **+ Person…** (people come from the People panel). Click × beside a name to take them off.
+4. Type the notes. They save when you click elsewhere.
+
+**Texts that day** lists the texts dated on the session's date, by their own date detail or their recording's, so a log entry leads to what was recorded. **Find in the log** looks through dates, places, methods, people, texts and notes; **Everyone** narrows the log to one person's sessions, and the line above says who you have worked with and how often. **Copy table** copies the log for a spreadsheet, and **Print the log…** saves it as one page, oldest first, to print or to keep with the recordings. To delete a session, click **Delete**, then click again.
+
+Sessions are kept with the people records, the most restricted part of a project, because a log speaks of the people in it. Two people adding the same person to a session at once keep one; notes typed on two devices merge.
+
 ## Work with Praat
 
 wugs works with your own installed copy of Praat, version 6 or newer. It finds Praat on the system path, in the usual install places, and in `Praat` folders in Desktop, Downloads, or Documents. If wugs cannot find it, the Timeline toolbar shows **Praat…**. Click it and choose the Praat program.

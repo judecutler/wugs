@@ -442,6 +442,22 @@ const LEXICON = [
     { id: "src-fox", kind: "recording", label: "Fox story (phone memo)" },
     { id: "t-count", kind: "text", label: "Counting to ten" },
   ];
+  const sessionsLog = {
+    people: [["p-ama", "Ama Torvesi"], ["p-demo", "D. Mo"], ["p-kelo", "Kelo Marandi"]],
+    sessions: [
+      {
+        id: "ses-2",
+        date: "2026-11-20",
+        place: "Kelani village, Ama's house",
+        method: "recording",
+        notes: "Recorded the fox story twice; the second telling is cleaner.\nAsk Ama next time: is «toɾu» also 'well' for a spring?",
+        people: [["p-ama", "Ama Torvesi"], ["p-demo", "D. Mo"]],
+        texts: [["t-fox", "The fox and the well"]],
+      },
+      { id: "ses-1", date: "2026-11-18", place: "Kelani school", method: "elicitation", notes: "Numbers one to ten, then body parts.", people: [["p-kelo", "Kelo Marandi"], ["p-demo", "D. Mo"]], texts: [["t-count", "Counting to ten"]] },
+    ],
+  };
+
   const peopleView = {
     coverable,
     people: [
@@ -1138,6 +1154,26 @@ const LEXICON = [
     },
     conflicts_list: () => conflicts,
     people_view: () => peopleView,
+    field_sessions_view: () => sessionsLog,
+    field_session_add: ({ date }) => {
+      sessionsLog.sessions.unshift({ id: `ses-${sessionsLog.sessions.length + 1}`, date, place: "", method: "", notes: "", people: [], texts: [] });
+      return sessionsLog;
+    },
+    field_session_set: ({ session, field, value }) => {
+      const s = sessionsLog.sessions.find((x) => x.id === session);
+      s[field] = String(value).trim();
+      return sessionsLog;
+    },
+    field_session_person: ({ session, person, add }) => {
+      const s = sessionsLog.sessions.find((x) => x.id === session);
+      const who = sessionsLog.people.find(([id]) => id === person);
+      s.people = add ? [...s.people, who] : s.people.filter(([id]) => id !== person);
+      return sessionsLog;
+    },
+    field_session_delete: ({ session }) => {
+      sessionsLog.sessions = sessionsLog.sessions.filter((x) => x.id !== session);
+      return sessionsLog;
+    },
     person_set_detail: ({ person, key, value }) => {
       const p = peopleView.people.find((x) => x.id === person);
       p.details = [...p.details.filter(([k]) => k !== key), ...(value ? [[key, value]] : [])].sort();
