@@ -23,7 +23,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { normalizeLangTag } from "../gloss/lang";
 import { loansLine, categoriesOf, filterDomains, glossLine, headword, LIST_SHOWS, showLabel, shows, type ListShow, nextHomograph, parseHomograph, RELATIONS, relatedName, relationLabel, sameLemmaNote, usageLabel } from "../lexicon/logic";
 import { attestedForms, attestedLine, axesOf, cellFeatures, cellKey, cellLabel, coverageLine, draftOf, isOwn, layout, otherFormLine, paradigmClipboard, paradigmSheet, TEMPLATES, templateById, templateFromDraft, type Features, type Template, type TemplateDraft } from "../lexicon/paradigms";
-import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry } from "../store";
+import { dataGeneration, getSelection, getState, lexiconRevision, selectSegment, selectText, showToast, takeWantedEntry, takeWantedList } from "../store";
 import { hear, hearSpan, playButton } from "../hear/hear";
 import { checklistSheet } from "../lexicon/checklist";
 import { matchLine, pairUp, spokenInOrder } from "../lexicon/match";
@@ -1441,6 +1441,11 @@ export const lexiconPanel: PanelDef = {
         if (wanted !== null) {
           search.value = "";
           show = "all";
+        }
+        const wantedList = takeWantedList();
+        if (wantedList !== null && LIST_SHOWS.some((x) => x.id === wantedList)) {
+          search.value = "";
+          show = wantedList as ListShow;
         }
         void loadList().then(() => loadEntry(wanted ?? selected, wanted === null));
       },

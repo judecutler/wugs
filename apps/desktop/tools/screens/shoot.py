@@ -971,6 +971,9 @@ def main():
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
             # Progress: the vocabulary growth curve under the table.
             run.front("progress", "Progress")
+            run.page.locator(".panel-progress .pg-steps li").first.wait_for()
+            if run.page.locator(".panel-progress .pg-steps li").count() < 5:
+                failures.append("Progress did not list what to do next")
             makeup = run.page.locator(".panel-progress .pg-makeup")
             makeup.wait_for()
             makeup.scroll_into_view_if_needed()

@@ -2,8 +2,11 @@
 // report, a deposit form or a supervisor (src-tauri/src/progress.rs). Words
 // and sums in ../progress/logic.ts. Read-only; a row opens its text.
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog, worldLand } from "../api";
+import { consentGaps, lexiconList, errorText, projectProgress, speakerLengths, vocabularyGrowth, workLog, worldLand } from "../api";
 import { placesNote, textPlaces } from "../progress/places";
+import { nextSteps, stepsLine, type LexiconGaps } from "../progress/next";
+import { shows } from "../lexicon/logic";
+import { SHOW_PANEL } from "./panel";
 import { mapView } from "../typology/map";
 import { dayLabel, workColumns, worklogLine, worklogTsv, type Day } from "../progress/worklog";
 import { localDay } from "../dates";
@@ -13,7 +16,7 @@ import { composition, compositionNote, compositionTsv, detailKeys, keyLabel, wor
 import { emptyState, h } from "../dom";
 import { provide } from "../palette/registry";
 import { COLUMNS, progressTsv, rowCells, summaryLines, totals, type Progress } from "../progress/logic";
-import { dataGeneration, getState, selectText, showToast } from "../store";
+import { dataGeneration, getState, openLexiconList, selectText, showToast } from "../store";
 import type { PanelDef, PanelView } from "./panel";
 
 export const progressPanel: PanelDef = {
@@ -34,6 +37,45 @@ export const progressPanel: PanelDef = {
     let work: Day[] = [];
     const speakersBox = h("div", { className: "pg-speakers" });
     const placesBox = h("div", { className: "pg-places" });
+    // What to do next, read after the counts with the lexicon's lists and the consent records.
+    const nextBox = h("div", { className: "pg-next" });
+    let lexiconGaps: LexiconGaps = {};
+    let uncovered: number | null = null;
+    const drawNext = () => {
+      if (data === null) {
+        nextBox.replaceChildren();
+        return;
+      }
+      const steps = nextSteps(data, lexiconGaps, uncovered);
+      nextBox.replaceChildren(
+        h("h3", { className: "pg-head", textContent: "What to do next" }),
+        h("p", { className: "note", textContent: stepsLine(steps) }),
+        ...(steps.length === 0
+          ? []
+          : [
+              h(
+                "ul",
+                { className: "pg-steps" },
+                ...steps.map((st) =>
+                  h(
+                    "li",
+                    {},
+                    h("span", { textContent: st.text }),
+                    h("button", {
+                      type: "button",
+                      className: "link-button",
+                      textContent: `Open ${st.button}`,
+                      onclick: () => {
+                        if (st.list !== undefined) openLexiconList(st.list);
+                        window.dispatchEvent(new CustomEvent(SHOW_PANEL, { detail: st.panel }));
+                      },
+                    }),
+                  ),
+                ),
+              ),
+            ]),
+      );
+    };
     let land: string | null = null;
     let speakers: SpeakerRow[] = [];
     const copy = h("button", { type: "button", textContent: "Copy table", title: "Copy every text's figures and the totals, to paste into a spreadsheet or a report" });
@@ -46,6 +88,7 @@ export const progressPanel: PanelDef = {
         return;
       }
       summary.replaceChildren(...summaryLines(data).map((line) => h("li", { textContent: line })));
+      drawNext();
       const row = (cells: string[], id: string | null) => {
         const tr = h("tr", {}, ...cells.map((c, i) => h(i === 0 ? "th" : "td", i === 0 ? { scope: "row", textContent: c } : { textContent: c })));
         if (id !== null) {
@@ -275,6 +318,15 @@ export const progressPanel: PanelDef = {
           drawGrowth();
         },
       );
+      Promise.all([lexiconList({ query: "" }), consentGaps()]).then(
+        ([rows, gaps]) => {
+          if (mine !== seq) return;
+          lexiconGaps = { gloss: rows.filter((r) => shows(r, "gloss")).length, category: rows.filter((r) => shows(r, "category")).length, example: rows.filter((r) => shows(r, "example")).length, sound: rows.filter((r) => shows(r, "sound")).length };
+          uncovered = gaps.records === 0 && gaps.total === 0 ? null : gaps.texts.filter((t) => t.records === 0).length;
+          drawNext();
+        },
+        () => undefined,
+      );
       try {
         const r = await projectProgress();
         if (mine !== seq) return;
@@ -313,7 +365,7 @@ export const progressPanel: PanelDef = {
         el.replaceChildren(emptyState("Progress", "Open a project to see how far it has come.", "The wug is keeping score."));
         return;
       }
-      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, h("div", { className: "pg-rows" }, table), note, makeUp, placesBox, speakersBox, growthBox, workBox);
+      el.replaceChildren(h("div", { className: "cc-bar" }, recount, copy), summary, nextBox, h("div", { className: "pg-rows" }, table), note, makeUp, placesBox, speakersBox, growthBox, workBox);
       void load();
     };
     return { element: el, render, dispose: unprovide };
