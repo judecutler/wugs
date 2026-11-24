@@ -613,6 +613,11 @@ fn speaker_values(s: State<SessionThread>) -> Result<Vec<(String, Vec<(String, u
 }
 
 #[tauri::command(async)]
+fn track_speakers(s: State<SessionThread>) -> Result<Vec<(String, Vec<(String, String)>)>, String> {
+    s.run(concordance::track_speakers)
+}
+
+#[tauri::command(async)]
 fn corpus_tracks(s: State<SessionThread>) -> Result<Vec<concordance::Track>, String> {
     s.run(concordance::tracks)
 }
@@ -2771,6 +2776,7 @@ pub fn run() {
         speaker_lengths,
         corpus_tracks,
         speaker_values,
+        track_speakers,
         export_typology,
         wikipedia_import,
         word_sketch,
