@@ -50,3 +50,12 @@ export type Granularity = "utterance" | "word";
 export function parseGranularity(stored: string | null): Granularity {
   return stored === "word" ? "word" : "utterance";
 }
+
+/** What a rough timing did (`rough_time`), in words. */
+export function roughLines(r: { tierName: string; sentences: number; spans: number }): string[] {
+  const s = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  return [
+    `Placed ${s(r.sentences, "sentence", "sentences")} of «${r.tierName}» over ${s(r.spans, "stretch", "stretches")} of speech, by their length.`,
+    "These are first guesses: play each sentence and drag its edges where they belong. Undo takes the times away again.",
+  ];
+}

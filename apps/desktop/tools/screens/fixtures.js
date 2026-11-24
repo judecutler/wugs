@@ -1330,6 +1330,8 @@ const LEXICON = [
       ],
       falling: [{ item: "ŋai", total: 40, rates: [19.5, 14.1, null, 6.6, 3.2], tau: -1 }],
     }),
+    rough_time: () => ({ tier: "tier-utt", tierName: "utterance", sentences: 3, spans: 3, states: [] }),
+    rough_untime: () => null,
     import_saymore: () => ({ sessions: 3, transcribed: 2, empty: 1, recordings: 3, details: 12, failed: [], text: null }),
     export_text: ({ textId }) => {
       (window.__WUGS_EXPORTED__ ??= []).push(textId);

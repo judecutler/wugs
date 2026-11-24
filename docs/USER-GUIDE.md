@@ -163,6 +163,12 @@ These settings belong to one text on this computer. They are not shared with oth
 
 To segment a recording while you listen, as ELAN's segmentation mode does: click the timeline, press **Space** to play, and press **Enter** where a stretch of speech starts. Then press **Enter** at the end of each stretch as it plays: every press makes a segment from the last press to that moment, so pressing in rhythm cuts the recording into consecutive segments. Edges snap to where speech starts and stops within a quarter of a second, which makes up for the delay of a key press. Segments go on the selected segment's track, else the utterance track. **Escape** forgets the last press, so the next press starts afresh; each segment can be undone like one you drew.
 
+### Time a transcription you typed first
+
+Perhaps you typed or imported the sentences before timing them: from a notebook, a plain-text file, or the speaker's own written version. Load the recording in the Timeline, select a segment on that track (or none, for the utterance track), and press **Time typed sentences**. wugs finds the stretches of speech in the recording and places the sentences over them in order. Each sentence takes as much speech as its length suggests. A long sentence may cover several stretches, two short ones may share one, and a cough may be left out.
+
+The result is a first guess, not a careful alignment. Play each sentence, then drag its edges to where it really starts and ends. **Undo** takes all the times away again, as long as you have not moved them since. The button works only on a track whose segments have no times yet.
+
 ### Split, merge, and nudge
 
 Select a segment first. Then use the toolbar buttons or these keys while the timeline has focus:
@@ -185,7 +191,7 @@ To split, first click the waveform inside the selected segment to put the playhe
 
 Click **Undo** or **Redo** in the Timeline toolbar. You can also press **Ctrl+Z** to undo, and **Ctrl+Shift+Z** or **Ctrl+Y** to redo, while the timeline has focus. On a Mac, use **Cmd** in place of **Ctrl**.
 
-Undo covers the timeline's own edits: drawing, dragging, nudging, typing on the timeline, deleting, splitting, merging, and Auto-segment. It does not cover edits made in other panels, or changes brought back from Praat.
+Undo covers the timeline's own edits: drawing, dragging, nudging, typing on the timeline, deleting, splitting, merging, Auto-segment, and Time typed sentences. It does not cover edits made in other panels, or changes brought back from Praat.
 
 Undo never overwrites later work. If the segment changed since the edit, on this computer or another, wugs refuses the undo and tells you why. Undoing an Auto-segment takes back only the segments nobody edited since, and says how many it kept.
 

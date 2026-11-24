@@ -33,6 +33,7 @@ pub mod trends;
 pub mod unclear;
 pub mod tei_lex;
 pub mod saymore;
+pub mod rough_align;
 pub mod conflicts;
 pub mod consistency;
 pub mod convert;
@@ -1931,6 +1932,22 @@ async fn auto_segment(s: State<'_, SessionThread>, dir: State<'_, AppData>, text
     s.run(move |s| segmentation::commit(s, &text_id, tier_id.as_deref(), &spans))
 }
 
+/// Time a typed transcription roughly: the track's sentences (it has no
+/// times yet) laid over the recording's stretches of speech by their length.
+#[tauri::command]
+async fn rough_time(s: State<'_, SessionThread>, dir: State<'_, AppData>, text_id: String, source: String, tier_id: Option<String>) -> Result<rough_align::Timed, String> {
+    let (t, tier) = (text_id.clone(), tier_id.clone());
+    // Checked before the recording is read, so a track with times is refused at once.
+    let found = s.run(move |s| rough_align::sentences(s, &t, tier.as_deref()))?;
+    let spans = segmentation_spans(&s, &dir, source, "utterance").await?;
+    s.run(move |s| rough_align::write(s, &text_id, &found.tier, &spans))
+}
+
+#[tauri::command(async)]
+fn rough_untime(s: State<SessionThread>, text_id: String, expect: Vec<session::SegmentCheckView>) -> Result<(), String> {
+    s.run(move |s| rough_align::untime(s, &text_id, &expect))
+}
+
 #[tauri::command(async)]
 fn restore_segments(s: State<SessionThread>, text_id: String, segment_ids: Vec<String>) -> Result<session::SegmentsEdit, String> {
     s.run(move |s| session::restore_segments(s, &text_id, &segment_ids))
@@ -2725,6 +2742,8 @@ pub fn run() {
             unmerge_segments,
             speech_spans,
             auto_segment,
+            rough_time,
+            rough_untime,
             add_tier,
             gloss_get,
             gloss_tokenize,

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { editRules, nextTimed, parseGranularity } from "./edit-rules.ts";
+import { roughLines, editRules, nextTimed, parseGranularity } from "./edit-rules.ts";
 
 const lane = [
   { id: "c", startMs: 3000, endMs: 4000 },
@@ -33,4 +33,8 @@ test("Auto-segment's remembered choice defaults to utterances", () => {
   assert.equal(parseGranularity(null), "utterance");
   assert.equal(parseGranularity("word"), "word");
   assert.equal(parseGranularity("junk"), "utterance");
+});
+
+test("a rough timing is reported as first guesses", () => {
+  assert.deepEqual(roughLines({ tierName: "utterance", sentences: 12, spans: 1 })[0], "Placed 12 sentences of «utterance» over 1 stretch of speech, by their length.");
 });

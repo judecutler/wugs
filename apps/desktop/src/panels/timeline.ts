@@ -80,13 +80,16 @@ export const timelinePanel: PanelDef = {
     );
     byPicker.value = parseGranularity(localStorage.getItem(GRANULARITY_KEY));
     byPicker.onchange = () => localStorage.setItem(GRANULARITY_KEY, byPicker.value);
+    const ROUGH_TITLE =
+      "For a transcription typed before it was timed: place the sentences of the selected segment's track (else the utterance track) over the stretches of speech in this recording, by their length. A first guess to correct by ear; Undo takes the times away.";
+    const roughButton = h("button", { textContent: "Time typed sentences", title: ROUGH_TITLE });
     const SPLIT_TITLE = "Cut the selected segment at the playhead (S). Its text stays on the first part.";
     const MERGE_TITLE = "Join the selected segment with the next one on its track (M).";
     const splitButton = h("button", { textContent: "Split", title: SPLIT_TITLE });
     const mergeButton = h("button", { textContent: "Merge with next", title: MERGE_TITLE });
     const undoButton = h("button", { textContent: "Undo", title: "Undo (Ctrl+Z)" });
     const redoButton = h("button", { textContent: "Redo", title: "Redo (Ctrl+Shift+Z or Ctrl+Y)" });
-    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, splitButton, mergeButton, undoButton, redoButton);
+    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, roughButton, splitButton, mergeButton, undoButton, redoButton);
     const spectroButton = h("button", { textContent: "Spectrogram", title: "Show the recording's spectrogram under the waveform (0–5000 Hz, darker where louder), made by wugs itself, a minute of view at a time" });
     spectroButton.setAttribute("aria-pressed", "false");
     const bandPicker = h(
@@ -122,6 +125,8 @@ export const timelinePanel: PanelDef = {
         selectedSource === null ? `${CLIPS_TITLE}. Load a recording first.` : track === null ? `${CLIPS_TITLE}. No track has timed segments yet.` : `${CLIPS_TITLE}. Now: «${track.name}».`;
       syncSpectro();
       byPicker.disabled = autoButton.disabled;
+      roughButton.disabled = roughButton.dataset.busy === "1" || view === null || selectedSource === null;
+      roughButton.title = selectedSource === null ? `${ROUGH_TITLE} Load a recording first.` : ROUGH_TITLE;
       // The same rule as the S and M keys; the title says why when disabled.
       const rules = view?.editRules() ?? { split: "Open a text first.", merge: "Open a text first.", next: null };
       splitButton.disabled = rules.split !== null;
@@ -143,6 +148,18 @@ export const timelinePanel: PanelDef = {
       void view.autoSegment(source, parseGranularity(byPicker.value)).finally(() => {
         autoButton.dataset.busy = "";
         autoButton.textContent = "Auto-segment";
+        updateEditButtons();
+      });
+    };
+    roughButton.onclick = () => {
+      const source = selectedSource;
+      if (view === null || source === null) return;
+      roughButton.dataset.busy = "1";
+      roughButton.textContent = "Placing sentences…";
+      updateEditButtons();
+      void view.roughTime(source).finally(() => {
+        roughButton.dataset.busy = "";
+        roughButton.textContent = "Time typed sentences";
         updateEditButtons();
       });
     };
@@ -278,6 +295,7 @@ export const timelinePanel: PanelDef = {
       { id: "timeline:start", title: "Go to the start", group: "Timeline", keys: "Home", disabled: needsRecording, run: () => view?.seekTo(0) },
       { id: "timeline:split", title: "Split at the playhead", group: "Timeline", keys: "S", words: ["cut"], disabled: () => needsView() ?? view?.editRules().split ?? null, run: () => void view?.splitAtPlayhead() },
       { id: "timeline:merge", title: "Merge with the next segment", group: "Timeline", keys: "M", words: ["join", "combine"], disabled: () => needsView() ?? view?.editRules().merge ?? null, run: () => void view?.mergeWithNext() },
+      { id: "timeline:rough", title: "Time typed sentences against the recording", group: "Timeline", words: ["align", "untimed", "transcript", "rough", "sentences"], disabled: () => needsRecording() ?? asButton(roughButton)(), run: () => roughButton.click() },
       { id: "timeline:auto", title: "Auto-segment the recording", group: "Timeline", words: ["detect", "speech", "segments", "automatic"], disabled: () => needsRecording() ?? asButton(autoButton)(), run: () => autoButton.click() },
       { id: "timeline:undo", title: "Undo a timeline edit", group: "Timeline", keys: "Ctrl+Z", disabled: () => needsView() ?? (undoButton.disabled ? "Nothing to undo" : null), run: () => void view?.undo() },
       { id: "timeline:redo", title: "Redo a timeline edit", group: "Timeline", keys: "Ctrl+Shift+Z", disabled: () => needsView() ?? (redoButton.disabled ? "Nothing to redo" : null), run: () => void view?.redo() },
