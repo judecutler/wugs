@@ -1006,9 +1006,9 @@ const LEXICON = [
       dp: 0.31,
       dpNorm: 0.36,
       texts: [
-        { textId: "t-count", title: "Counting to ten", words: 64, hits: 5, positions: [0, 9, 18, 40, 61], meta: [["genre", "procedural"], ["date", "1962"]] },
-        { textId: "t-fox", title: "The fox and the well", words: 812, hits: 8, positions: [12, 40, 41, 200, 333, 520, 700, 790], meta: [["genre", "narrative"], ["date", "1968-07-01"]] },
-        { textId: "t-greet", title: "Greetings at the market", words: 364, hits: 1, positions: [180], meta: [["genre", "conversation"], ["date", "2019"]] },
+        { textId: "t-count", title: "Counting to ten", words: 64, hits: 5, positions: [0, 9, 18, 40, 61], meta: [["genre", "procedural"], ["date", "1962"], ["coordinates", "-8.65, 115.22"]] },
+        { textId: "t-fox", title: "The fox and the well", words: 812, hits: 8, positions: [12, 40, 41, 200, 333, 520, 700, 790], meta: [["genre", "narrative"], ["date", "1968-07-01"], ["coordinates", "-8.11, 115.09"]] },
+        { textId: "t-greet", title: "Greetings at the market", words: 364, hits: 1, positions: [180], meta: [["genre", "conversation"], ["date", "2019"], ["coordinates", "-8.34, 115.51"]] },
         { textId: "t-empty", title: "Untranscribed session", words: 0, hits: 0, positions: [], meta: [] },
       ],
     }),

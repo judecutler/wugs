@@ -776,6 +776,11 @@ def main():
             decades = run.page.locator(".panel-concordance .cc-plot-title").all_text_contents()
             if decades[:2] != ["1960s", "1970s"] or decades[-1] != "2010s":
                 failures.append("the plot over time did not list the decades in order: " + str(decades))
+            run.page.select_option(".panel-concordance .cc-plot-by", "map")
+            run.page.locator(".panel-concordance svg.cc-map").wait_for()
+            run.shot("state-concordance-plot-map", run.page.locator(".panel-concordance"))
+            if run.page.locator(".panel-concordance svg.cc-map circle").count() != 3:
+                failures.append("the plot on a map did not draw a dot per site")
             run.page.select_option(".panel-concordance .cc-plot-by", "")
             if run.page.locator(".panel-concordance .cc-plot-row").count() != 3:
                 failures.append("the concordance plot did not show one row per text with words")

@@ -1,6 +1,8 @@
 // The Concordance's Plot view (AntConc's Plot): where in each text an item
 // occurs, and how evenly it is spread over the texts. Pure: no DOM.
 
+import { COORDINATE_KEYS } from "../progress/places.ts";
+
 export type TextPlot = { textId: string; title: string; words: number; hits: number; positions: number[]; meta?: [string, string][] };
 export type Dispersion = { texts: TextPlot[]; words: number; hits: number; dp: number | null; dpNorm: number | null };
 
@@ -54,10 +56,10 @@ export function plotTsv(d: Dispersion): string {
   return ["Text\tWords\tMatches\tPer 1000\tWord positions", ...rows].join("\n") + "\n";
 }
 
-/** The details the plotted texts carry, by how many texts have each, most first. */
+/** The details the plotted texts carry, by how many texts have each, most first; coordinates are for the map. */
 export function plotDetails(texts: readonly TextPlot[]): string[] {
   const n = new Map<string, number>();
-  for (const t of texts) for (const [k] of t.meta ?? []) n.set(k, (n.get(k) ?? 0) + 1);
+  for (const t of texts) for (const [k] of t.meta ?? []) if (!COORDINATE_KEYS.includes(k)) n.set(k, (n.get(k) ?? 0) + 1);
   return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
 }
 

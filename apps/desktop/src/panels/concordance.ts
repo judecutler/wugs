@@ -2,7 +2,7 @@
 // translation word, one row per hit with the keyword in the middle, sortable
 // by the words either side; a row opens its segment, ▶ plays it.
 import { whereWords, type Where } from "../metadata/logic";
-import { deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
+import { deleteSavedSearch, saveSearch, savedSearches, fileUnderTopic, topicsOverview, concordance, concordanceQuery, corpusTracks, dispersion, worldLand, errorText, getText, glossGet, hitCategories, saveHitClips, setHitCategories, setHitCategory, textMetadata, type TextDetail } from "../api";
 import { categoriesLine, lineKey, parseCategories, type Sorted } from "../concordance/categories";
 import { open as pickFile } from "@tauri-apps/plugin-dialog";
 import { hitClipsLines } from "../measure/logic";
@@ -10,6 +10,8 @@ import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
 import { byDetail, byPeriod, detailTsv, marks, NOT_GIVEN, per1000, periodTsv, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, timeKeys, type Dispersion, type PlotSort } from "../concordance/plot";
+import { bySite, dotShare, hasSites, siteTitle, sitesLine, sitesTsv } from "../concordance/sites";
+import { mapView } from "../typology/map";
 import { nearHits, nearLine, NEAR_SIDES, NEAR_WINDOWS, type NearSide } from "../concordance/near";
 import { savedLine, type SavedSearch, asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { linesUnder } from "../concordance/under";
@@ -38,6 +40,8 @@ export function askConcordance(query: string, kind: PanelKind, text: { id: strin
 
 /** At most this many sentences are copied as examples at once. */
 const EXAMPLES_MAX = 50;
+/** Natural Earth's land, read once for the plot's map. */
+let land: string | null = null;
 
 /** The sentences behind these lines (each once, in the order shown) as
  * numbered glossed examples, in the format chosen for Copy example; a
@@ -424,6 +428,41 @@ export const concordancePanel: PanelDef = {
         }),
       );
 
+    /** The plot on a map: a dot per recording site sized by its rate, as a dialect atlas shows a word. */
+    const drawSites = (d: Dispersion) => {
+      const found = bySite(d.texts);
+      count.textContent = `${spreadWords(d)} ${sitesLine(found)}`;
+      if (land === null) {
+        rows.replaceChildren(h("p", { className: "note", textContent: "Drawing the map…" }));
+        void worldLand().then((l) => {
+          land = l;
+          if (plotOn && plotBy === "map") drawPlot();
+        }, (e) => showToast({ tone: "error", lines: [`Could not draw the map: ${errorText(e)}`] }));
+        return;
+      }
+      const view = mapView(found.sites, { x: 8, y: 5 });
+      const { x, y, w, h: hh } = view.box;
+      const r = Math.max(w, hh) / 70;
+      const NS = "http://www.w3.org/2000/svg";
+      const node = <K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>, text?: string) => {
+        const e = document.createElementNS(NS, tag);
+        for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v));
+        if (text !== undefined) e.textContent = text;
+        return e;
+      };
+      const map = node("svg", { viewBox: `${x} ${y} ${w} ${hh}`, class: "tm-map cc-map", role: "img", "aria-label": `Where «${asked}» was found` });
+      map.append(node("rect", { x, y, width: w, height: hh, class: "tm-sea" }));
+      for (const dx of [0, 360]) map.append(node("path", { d: land, transform: `translate(${dx} 0)`, class: "tm-land", "stroke-width": r / 4 }));
+      // Smaller dots drawn last, so a big one never hides a small one.
+      for (const p of [...view.placed].sort((a, b) => dotShare(b, found.sites) - dotShare(a, found.sites))) {
+        const share = dotShare(p, found.sites);
+        const dot = node("circle", { cx: p.x, cy: p.y, r: share === 0 ? r * 0.8 : r * (0.8 + 2.2 * share), class: share === 0 ? "tm-dot cc-site-none" : "tm-dot cc-site", "stroke-width": r / 4 });
+        dot.append(node("title", {}, siteTitle(p)));
+        map.append(dot);
+      }
+      rows.replaceChildren(map);
+    };
+
     /** Columns of a plot bar; matches closer than one column share a mark. */
     const COLUMNS = 240;
     const drawPlot = () => {
@@ -440,15 +479,21 @@ export const concordancePanel: PanelDef = {
       const d = plot;
       const keys = plotDetails(d.texts);
       const times = timeKeys(d.texts);
-      if (!keys.includes(plotBy) && !times.some((k) => `time:${k}` === plotBy)) plotBy = "";
+      const mappable = hasSites(d.texts);
+      if (!keys.includes(plotBy) && !times.some((k) => `time:${k}` === plotBy) && !(plotBy === "map" && mappable)) plotBy = "";
       plotByPicker.replaceChildren(
         h("option", { value: "", textContent: "Each text", selected: plotBy === "" }),
         ...keys.map((k) => h("option", { value: k, textContent: `By ${k.replace(/_/g, " ")}`, selected: k === plotBy })),
         ...times.map((k) => h("option", { value: `time:${k}`, textContent: `Over time, by ${k.replace(/_/g, " ")}`, selected: `time:${k}` === plotBy })),
+        ...(mappable ? [h("option", { value: "map", textContent: "On a map, by where recorded", selected: plotBy === "map" })] : []),
       );
-      plotByPicker.disabled = keys.length === 0;
+      plotByPicker.disabled = keys.length === 0 && !mappable;
       plotSorter.hidden = plotBy !== "";
       count.textContent = spreadWords(d);
+      if (plotBy === "map") {
+        drawSites(d);
+        return;
+      }
       if (plotBy.startsWith("time:")) {
         const key = plotBy.slice(5);
         const p = byPeriod(d.texts, key);
@@ -865,6 +910,13 @@ export const concordancePanel: PanelDef = {
       if (clustersOn && asked !== "") {
         void writeText(clustersTsv(shownClusters)).then(
           () => showToast({ tone: "info", lines: [`Copied ${shownClusters.length} clusters. Paste them into a spreadsheet.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+        return;
+      }
+      if (plotOn && plot !== null && plotBy === "map") {
+        void writeText(sitesTsv(bySite(plot.texts).sites)).then(
+          () => showToast({ tone: "info", lines: ["Copied the matches by site. Paste them into a spreadsheet or a GIS."] }),
           (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
         );
         return;
