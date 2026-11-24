@@ -100,3 +100,26 @@ test("Watt–Fabricius: over the centroid of i, a and u' at i's F1", () => {
   assert.deepEqual([found.i, found.a], ["I", "A"]);
   assert.equal(wattCentroid([pt("i", 300, 2400)] as (Point & { f1: number; f2: number })[]), null);
 });
+
+test("vowel space area: the hull of the means and its area", async () => {
+  const { hull, polygonArea, vowelArea, areaLine } = await import("./logic.ts");
+  const square = [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 2 }, { x: 0, y: 2 }, { x: 1, y: 1 }, { x: 1, y: 0 }];
+  assert.equal(hull(square).length, 4);
+  assert.equal(polygonArea(hull(square)), 4);
+  assert.deepEqual(hull([{ x: 0, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 2 }]), []);
+  const g = (label: string, x: number, y: number) => ({ label, count: 3, x, y, ellipse: null });
+  // A triangle /i a u/ in Hz: F2 2200–800, F1 300–750; /e/ inside it.
+  // A diphthong and unlabelled segments are never corners.
+  const gs = [g("i", 2200, 300), g("a", 1300, 750), g("u", 800, 320), g("e", 1800, 450), g("(no label)", 3000, 900), g("ai", 2600, 800)];
+  const a = vowelArea(gs, "hz")!;
+  assert.deepEqual([...a.corners].sort(), ["a", "i", "u"]);
+  // Half of |(1300-2200)(320-300) - (750-300)(800-2200)| = 0.306 kHz².
+  assert.ok(Math.abs(a.area - 0.306) < 1e-9);
+  assert.equal(a.unit, "kHz²");
+  assert.equal(vowelArea(gs, "lobanov")!.unit, "z²");
+  assert.equal(vowelArea(gs.slice(0, 2), "hz"), null);
+  assert.match(areaLine({ track: "A", area: a }), /^A's vowel space covers 0\.31 kHz² \(the hull of \/.\/, \/.\/, \/.\/\)\.$/);
+  const b = { ...a, area: a.area * 1.5 };
+  assert.match(areaLine({ track: "A", area: a }, { track: "B", area: b }), /B's vowel space covers 0\.46 kHz² .*, 1\.50 times as large\.$/);
+  assert.match(areaLine({ track: "A", area: null }), /needs at least three/);
+});

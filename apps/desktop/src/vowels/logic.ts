@@ -2,6 +2,8 @@
 // one group per label with its mean and a one-standard-deviation ellipse,
 // and the axes (F2 right to left, F1 top to bottom, as phoneticians draw it).
 
+import { sounds } from "../sounds/ipa.ts";
+
 export type Point = {
   segment: string;
   label: string;
@@ -244,4 +246,58 @@ export function plotNote(points: readonly Point[], shown: number, untimed: numbe
   if (missing > 0) parts.push(`${missing} had no F1 or F2 (silence or noise).`);
   if (untimed > 0) parts.push(`${untimed} without times left out.`);
   return parts.join(" ");
+}
+
+/** The convex hull of points, counter-clockwise from the leftmost (Andrew's monotone chain); fewer than three apart, none. */
+export function hull<P extends { x: number; y: number }>(points: readonly P[]): P[] {
+  const ps = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (ps.length < 3) return [];
+  const cross = (o: P, a: P, b: P) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: P[] = [];
+  for (const p of ps) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper: P[] = [];
+  for (const p of [...ps].reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  const out = [...lower.slice(0, -1), ...upper.slice(0, -1)];
+  return out.length < 3 ? [] : out;
+}
+
+/** A polygon's area by the shoelace formula. */
+export function polygonArea(ps: readonly { x: number; y: number }[]): number {
+  let twice = 0;
+  for (let i = 0; i < ps.length; i++) {
+    const a = ps[i]!;
+    const b = ps[(i + 1) % ps.length]!;
+    twice += a.x * b.y - b.x * a.y;
+  }
+  return Math.abs(twice) / 2;
+}
+
+/** A label that can be a corner of the vowel space: one sound (so not a diphthong written `ai`), and labelled. */
+export const spansTheSpace = (g: Group): boolean => g.label !== "(no label)" && sounds(g.label).length === 1;
+
+/** Vowel space area: the hull of the labels' means (Hz shown in kHz²), with the labels at its corners. */
+export type VowelArea = { area: number; unit: string; corners: string[] };
+
+export function vowelArea(gs: readonly Group[], method: Method): VowelArea | null {
+  const corners = hull(gs.filter(spansTheSpace));
+  if (corners.length < 3) return null;
+  const unit = METHODS.find((m) => m.id === method)?.unit ?? "";
+  return method === "hz" ? { area: polygonArea(corners) / 1e6, unit: "kHz²", corners: corners.map((g) => g.label) } : { area: polygonArea(corners), unit: `${unit}²`, corners: corners.map((g) => g.label) };
+}
+
+const areaNumber = (a: number): string => (a >= 100 ? a.toFixed(0) : a >= 1 ? a.toFixed(2) : a.toPrecision(2));
+
+/** The area in words, and against a second speaker's when there is one. */
+export function areaLine(first: { track: string; area: VowelArea | null }, second?: { track: string; area: VowelArea | null }): string {
+  const one = (t: string, a: VowelArea) => `${t}'s vowel space covers ${areaNumber(a.area)} ${a.unit} (the hull of /${a.corners.join("/, /")}/)`;
+  if (first.area === null) return "The vowel space area needs at least three labelled vowels apart.";
+  if (second === undefined || second.area === null) return `${one(first.track, first.area)}.`;
+  const ratio = second.area.area / first.area.area;
+  return `${one(first.track, first.area)}; ${one(second.track, second.area)}, ${ratio.toFixed(2)} times as large.${first.area.corners.join() !== second.area.corners.join() ? " Their corners differ, so compare with care." : ""}`;
 }
