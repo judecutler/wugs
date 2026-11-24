@@ -93,3 +93,12 @@ test("segment timing in words", async () => {
   assert.match(timingLine({ timed: 3, overlaps: 0, short: 0, long: 0, issues: [] }), /^All 3 timed segments are fine/);
   assert.equal(timingLine({ timed: 0, overlaps: 0, short: 0, long: 0, issues: [] }), "No segment has times yet.");
 });
+
+test("archive readiness in words", async () => {
+  const { readinessLine, readinessNote } = await import("./logic.ts");
+  const t = { textId: "t", title: "Fox", missing: ["date", "speakers", "recording", "consent", "transcription", "translation"], sentences: 10, transcribed: 7, translated: 4 };
+  assert.equal(readinessNote(t), "Missing: date, speakers, recording and consent record; 3 of 10 sentences still to transcribe; 3 transcribed sentences without a translation.");
+  assert.equal(readinessNote({ ...t, missing: ["transcription"], sentences: 0, transcribed: 0 }), "Nothing transcribed yet.");
+  assert.match(readinessLine({ total: 3, ready: 1, texts: [t], language: ["glottocode", "iso639_3"] }), /^1 of 3 texts have what .* no Glottocode or ISO 639-3 code yet/u);
+  assert.match(readinessLine({ total: 2, ready: 2, texts: [], language: [] }), /^Every text has/u);
+});

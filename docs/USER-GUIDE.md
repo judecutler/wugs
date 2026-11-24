@@ -407,6 +407,8 @@ Each card shows a sentence that uses the character, and **Every word with it** o
 
 Under **Consent records**, the Checks panel lists the texts that no consent record covers (no record for the text, its recording or the whole project), then the texts covered by a record that limits them: a no to publishing online, depositing or speech tools, or sharing within the community only. Click a text to open it, or **Open People** to add or edit records. Records inform what you share; nothing in wugs waits on them.
 
+Under **Ready for the archive**, the Checks panel lists each text that still lacks something an archive's item form asks for: a date, place, speakers, genre or description (in the text's details, or its recording's in the Media panel), a recording, a consent record, sentences still to transcribe, and transcribed sentences without a translation. It also says when the project's language has no name, Glottocode or ISO 639-3 code. These are the questions **Catalogue sheet…** answers in its columns, asked before you write it. Nothing here stops a deposit.
+
 ### Check the dependency trees
 
 After tagging and parsing, or importing CoNLL-U or TEI, some trees may be broken: two words both marked as the root, a word whose head is itself through a loop, or a head pointing to a word that is gone. Under **Dependency trees**, the Checks panel lists every parsed sentence with such a problem and says what it is. Click a sentence to open it in the **Sentence** panel and correct its heads there. When every tree is well formed, the section says so.

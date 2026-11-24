@@ -97,6 +97,92 @@ pub fn export_sheet(s: &mut Session, folder: &Path) -> Result<Sheet, String> {
     Ok(sheet)
 }
 
+/// What an archive's item form asks of a text that it does not have yet.
+#[derive(Debug, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TextReadiness {
+    pub text_id: String,
+    pub title: String,
+    /// Each of `date`, `place`, `speakers`, `genre`, `description` (from the
+    /// text's details, else its recording's), `recording` (none linked),
+    /// `consent` (no record covers it), `transcription` (sentences left to
+    /// transcribe, or none at all) and `translation` (transcribed sentences
+    /// with no translation) that applies, in that order.
+    pub missing: Vec<String>,
+    pub sentences: usize,
+    pub transcribed: usize,
+    pub translated: usize,
+}
+
+#[derive(Debug, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct Readiness {
+    pub total: usize,
+    /// Texts with nothing missing.
+    pub ready: usize,
+    /// Texts with something missing, those missing most first.
+    pub texts: Vec<TextReadiness>,
+    /// What the project's language lacks: `name`, `glottocode`, `iso639_3`.
+    pub language: Vec<String>,
+}
+
+/// The details an item form asks of every text, as the catalogue sheet reads them.
+const ASKED: &[&str] = &["date", "place", "speakers", "genre", "description"];
+
+/// Which texts are ready for an archive deposit, and what each still lacks:
+/// the catalogue sheet's questions asked before it is written. Information
+/// only (records and details never block anything).
+pub fn readiness(s: &mut Session) -> Result<Readiness, String> {
+    let progress = crate::progress::progress(s)?;
+    let consent = crate::people::consent_gaps(s)?;
+    let texts = session::list_texts(s)?;
+    let p = session::project(s)?;
+    let lang = p.project_language()?;
+    let mut out = Readiness { total: texts.len(), ..Readiness::default() };
+    for (field, value) in [("name", &lang.name), ("glottocode", &lang.glottocode), ("iso639_3", &lang.iso)] {
+        if value.trim().is_empty() {
+            out.language.push(field.into());
+        }
+    }
+    for t in &texts {
+        let meta = p.text_metadata(&t.id)?;
+        let recording = p.text_recording(&t.id)?;
+        let recorded = match &recording {
+            Some((source, _)) => p.source_details(source)?,
+            None => Vec::new(),
+        };
+        let has = |keys: &[&str]| keys.iter().any(|k| meta.iter().chain(&recorded).any(|(mk, v)| mk == k && !v.trim().is_empty()));
+        let mut missing: Vec<String> = Vec::new();
+        for name in ASKED {
+            let keys = NAMED.iter().find(|(n, _)| n == name).map(|(_, k)| *k).unwrap_or(&[]);
+            if !has(keys) {
+                missing.push((*name).into());
+            }
+        }
+        if recording.is_none() {
+            missing.push("recording".into());
+        }
+        if consent.texts.iter().any(|c| c.text_id == t.id && c.records == 0) {
+            missing.push("consent".into());
+        }
+        let stats = progress.texts.iter().find(|x| x.id == t.id);
+        let (sentences, transcribed, translated) = stats.map_or((0, 0, 0), |x| (x.sentences, x.transcribed, x.translated));
+        if sentences == 0 || transcribed < sentences {
+            missing.push("transcription".into());
+        }
+        if translated < transcribed {
+            missing.push("translation".into());
+        }
+        if missing.is_empty() {
+            out.ready += 1;
+        } else {
+            out.texts.push(TextReadiness { text_id: t.id.clone(), title: t.title.clone(), missing, sentences, transcribed, translated });
+        }
+    }
+    out.texts.sort_by_cached_key(|t| (std::cmp::Reverse(t.missing.len()), wugs_model::fold_key(&t.title), t.text_id.clone()));
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +215,39 @@ mod tests {
         let row = lines.next().unwrap();
         assert!(row.starts_with("Counting to six (tutorial),2026-11-03,Home,J. C.,,,,Tutorial English,eng,stan1293,open,"), "{row}");
         assert!(row.ends_with(",S1"), "{row}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn readiness_says_what_each_text_lacks() {
+        let dir = std::env::temp_dir().join(format!("wugs-archive-ready-{}", wugs_model::ulid()));
+        let mut s: Session = None;
+        crate::sample::open_sample(&mut s, &dir.join("sample"), "prs_Ana").unwrap();
+        let text = session::list_texts(&mut s).unwrap()[0].id.clone();
+        let r = readiness(&mut s).unwrap();
+        assert_eq!((r.total, r.ready), (1, 0));
+        assert_eq!(r.language, ["name", "glottocode", "iso639_3"]);
+        // The tutorial has its recording; «sɪks» is left to transcribe.
+        let t = &r.texts[0];
+        assert!(!t.missing.contains(&"recording".to_string()), "{t:?}");
+        assert_eq!(&t.missing[..5], ["date", "place", "speakers", "genre", "description"]);
+        assert!(t.missing.contains(&"consent".to_string()));
+        assert!(t.missing.contains(&"transcription".to_string()), "{t:?}");
+        // Details from the text or its recording, and a consent record, fill them in.
+        let p = session::project(&mut s).unwrap();
+        p.set_project_language("Tutorial English", "stan1293", "eng").unwrap();
+        for (k, v) in [("speakers", "J. C."), ("genre", "counting"), ("description", "Counting to six.")] {
+            p.set_text_metadata(&text, k, v).unwrap();
+        }
+        let (source, _) = p.text_recording(&text).unwrap().unwrap();
+        p.set_source_detail(&source, "date", "2026-11-03").unwrap();
+        p.set_source_detail(&source, "location", "Home").unwrap();
+        let person = crate::people::add_person(&mut s, "J. C.", "speaker").unwrap().people[0].id.clone();
+        crate::people::add_consent(&mut s, &person, &text, "2026-11-03").unwrap();
+        let r = readiness(&mut s).unwrap();
+        assert!(r.language.is_empty());
+        let t = &r.texts[0];
+        assert!(!t.missing.iter().any(|m| ["date", "place", "speakers", "genre", "description", "consent"].contains(&m.as_str())), "{t:?}");
         std::fs::remove_dir_all(&dir).ok();
     }
 }

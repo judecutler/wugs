@@ -4,10 +4,10 @@
 // button that makes one gloss the only one. Then glossed roots the lexicon
 // lacks, rare words a letter away from common ones (../checks/spelling.ts),
 // and the characters the project uses.
-import { characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
+import { archiveReadiness, characterInventory, consentGaps, errorText, glossAddMissing, glossConsistency, glossMissing, glossSenseDrift, glossSettleDrift, glossUnify, lexiconExampleGaps, lexiconList, lexiconMerge, segmentTiming, lexiconExamplesFromTexts, soundWords, treeProblems, type TreeProblem } from "../api";
 import { duplicateNote, duplicatesLine, likelyDuplicates, type LikelyPair } from "../checks/entries";
 import { nearSpellings, pairNote, spellingSummary, type NearPair } from "../checks/spelling";
-import { timingLine, timingNote, type Timing, type TimingIssue } from "../checks/logic";
+import { readinessLine, readinessNote, timingLine, timingNote, type Readiness, type Timing, type TimingIssue } from "../checks/logic";
 import { addedLine, addLabel, consentLine, consentNote, type ConsentGaps, driftSummary, settledLine, type Drift, exampleGapsLine, examplesAddedLine, treesLine, cardNote, findable, glyph, inventoryNote, missingSummary, summary, unifiedLine, useLabel, type CharRow, type Inconsistent, type Inventory, type Missing } from "../checks/logic";
 import { askConcordance } from "./concordance";
 import { headwordOf } from "../notes/logic";
@@ -32,6 +32,7 @@ export const checksPanel: PanelDef = {
     let missing: Missing[] = [];
     let drift: Drift[] = [];
     let consent: ConsentGaps | null = null;
+    let ready: Readiness | null = null;
     let chars: Inventory | null = null;
     let near: { pairs: NearPair[]; read: number } | null = null;
     let doubles: { pairs: LikelyPair[]; entries: number } | null = null;
@@ -49,9 +50,10 @@ export const checksPanel: PanelDef = {
       const s = getState();
       if (s.kind !== "open") return;
       const mine = ++seq;
-      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null)]).then(
-        ([r, m, c, w, g, t, d, k, l, tm]) => {
+      Promise.all([glossConsistency(), glossMissing(), characterInventory(), soundWords({ tierId: null, textId: null }), lexiconExampleGaps(), treeProblems(), glossSenseDrift(), consentGaps().catch(() => null), lexiconList({ query: "" }), segmentTiming().catch(() => null), archiveReadiness().catch(() => null)]).then(
+        ([r, m, c, w, g, t, d, k, l, tm, ar]) => {
           if (mine !== seq) return;
+          ready = ar;
           timing = tm;
           doubles = { pairs: likelyDuplicates(l), entries: l.length };
           consent = k;
@@ -116,6 +118,23 @@ export const checksPanel: PanelDef = {
       armed = null;
       await refreshAll();
       load();
+    };
+
+    const readinessSection = (): HTMLElement[] => {
+      if (ready === null || ready.total === 0) return [];
+      return [
+        h("h3", { className: "ck-title", textContent: "Ready for the archive" }),
+        h("p", { className: "note", textContent: readinessLine(ready) }),
+        h(
+          "ul",
+          { className: "ck-list" },
+          ...ready.texts.slice(0, 200).map((t) => {
+            const open = h("button", { type: "button", className: "link-button", textContent: t.title || "(untitled)", title: "Open this text; its details are in the Texts panel, under Details" });
+            open.onclick = () => void selectText(t.textId);
+            return h("li", { className: "ck-card" }, h("div", { className: "ck-head" }, open, h("span", { className: "note", textContent: ` · ${t.missing.length} to do` })), h("p", { className: "note", textContent: readinessNote(t) }));
+          }),
+        ),
+      ];
     };
 
     const consentSection = (): HTMLElement[] => {
@@ -464,6 +483,7 @@ export const checksPanel: PanelDef = {
         ...examplesSection(),
         ...treesSection(),
         ...consentSection(),
+        ...readinessSection(),
         ...spellingSection(),
         ...charSection(),
       );

@@ -175,3 +175,36 @@ export function timingNote(i: TimingIssue): string {
   if (i.kind === "short") return `Only ${secs(i.endMs - i.startMs)} long (${span})`;
   return `${secs(i.endMs - i.startMs)} long (${span}): split it for speech tools`;
 }
+
+/** Archive readiness (src-tauri/src/archive_sheet.rs `readiness`). */
+export type TextReadiness = { textId: string; title: string; missing: string[]; sentences: number; transcribed: number; translated: number };
+export type Readiness = { total: number; ready: number; texts: TextReadiness[]; language: string[] };
+
+const LACKS: Record<string, string> = {
+  date: "date",
+  place: "place",
+  speakers: "speakers",
+  genre: "genre",
+  description: "description",
+  recording: "recording",
+  consent: "consent record",
+};
+
+/** The line over the list. */
+export function readinessLine(r: Readiness): string {
+  if (r.total === 0) return "";
+  const head = r.ready === r.total ? `Every text has what an archive's item form asks.` : `${r.ready} of ${n(r.total, "text has", "texts have")} what an archive's item form asks.`;
+  const language = r.language.length === 0 ? "" : ` The project's language has no ${r.language.map((x) => (x === "iso639_3" ? "ISO 639-3 code" : x === "glottocode" ? "Glottocode" : "name")).join(" or ")} yet (Texts panel, Language).`;
+  return `${head}${language} Nothing here stops a deposit; it is what ELAR, PARADISEC and AILLA will ask for.`;
+}
+
+/** What one text lacks, in words: details first, then the work left. */
+export function readinessNote(t: TextReadiness): string {
+  const lacks = t.missing.filter((m) => m in LACKS).map((m) => LACKS[m]!);
+  const parts: string[] = [];
+  if (lacks.length > 0) parts.push(`missing: ${lacks.length === 1 ? lacks[0] : `${lacks.slice(0, -1).join(", ")} and ${lacks[lacks.length - 1]}`}`);
+  if (t.missing.includes("transcription")) parts.push(t.sentences === 0 ? "nothing transcribed yet" : `${t.sentences - t.transcribed} of ${n(t.sentences, "sentence", "sentences")} still to transcribe`);
+  if (t.missing.includes("translation")) parts.push(`${t.transcribed - t.translated} transcribed ${t.transcribed - t.translated === 1 ? "sentence" : "sentences"} without a translation`);
+  const out = parts.join("; ");
+  return out === "" ? "" : `${out.charAt(0).toUpperCase()}${out.slice(1)}.`;
+}

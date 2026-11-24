@@ -782,6 +782,15 @@ const LEXICON = [
         { relation: "obl:tmod", direction: "dependent", total: 7, items: [["morning", 4, 8.8, 4], ["night", 3, 8.3, 3]].map(([l, c, d, a]) => ({ lemma: l, count: c, logDice: d, after: a })) },
       ],
     }),
+    archive_readiness: () => ({
+      total: 3,
+      ready: 1,
+      language: ["iso639_3"],
+      texts: [
+        { textId: "t-market", title: "Greetings at the market", missing: ["date", "place", "speakers", "recording", "consent", "translation"], sentences: 7, transcribed: 7, translated: 2 },
+        { textId: "t-fox", title: "The fox and the well", missing: ["genre", "transcription"], sentences: 24, transcribed: 20, translated: 20 },
+      ],
+    }),
     consent_gaps: () => ({
       texts: [
         { textId: "t-market", title: "Greetings at the market", records: 0, no: [], communityOnly: false },

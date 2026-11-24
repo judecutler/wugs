@@ -601,6 +601,11 @@ def main():
             run.shot("state-checks-consent", run.page.locator(".panel-checks"))
             if "no to «Publish online»" not in run.page.locator(".panel-checks").inner_text():
                 failures.append("Checks did not say what a consent record limits")
+            archive = run.page.locator(".panel-checks .ck-title", has_text="Ready for the archive")
+            archive.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
+            run.shot("state-checks-archive", run.page.locator(".panel-checks"))
+            if "Missing: date, place, speakers, recording and consent record" not in run.page.locator(".panel-checks").inner_text():
+                failures.append("Checks did not say what a text lacks for the archive")
             trees = run.page.locator(".panel-checks .ck-title", has_text="Dependency trees")
             trees.locator("xpath=following-sibling::ul[1]").scroll_into_view_if_needed()
             run.shot("state-checks-trees", run.page.locator(".panel-checks"))
