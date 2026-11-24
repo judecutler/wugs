@@ -10,6 +10,7 @@ import { emptyState, h } from "../dom";
 import { praatControls } from "../praat/control";
 import { attempt, dataGeneration, getSelection, getState, mediaSource, refreshText, reloadTexts, showToast, takeWantedMedia } from "../store";
 import { parseGranularity } from "../timeline/edit-rules";
+import { gapsLabel } from "../timeline/gaps";
 import { RULER_H, TimelineView, WAVE_H, TIER_H, timelineHistory } from "../timeline/view";
 import { clock } from "../timeline/tracks";
 import { CARD_TYPE, cardDrag, isCardDrag } from "../media/logic";
@@ -83,6 +84,8 @@ export const timelinePanel: PanelDef = {
     const ROUGH_TITLE =
       "For a transcription typed before it was timed: place the sentences of the selected segment's track (else the utterance track) over the stretches of speech in this recording, by their length. A first guess to correct by ear; Undo takes the times away.";
     const roughButton = h("button", { textContent: "Time typed sentences", title: ROUGH_TITLE });
+    const gapButton = h("button", { className: "tl-gap", textContent: "No gaps", title: "Gaps are stretches of speech in the recording that the track (the selected segment's, else the utterance track) has no segment over. This shows and plays the next one, so nothing said is left out: draw a segment over it, or press Enter while it plays." });
+    gapButton.onclick = () => view?.goToNextGap();
     const shiftButton = h("button", { textContent: "Shift times…", title: "Move every timed segment of a track earlier or later by the same amount: for a recording trimmed or re-exported with an offset" });
     const shiftInput = h("input", { type: "number", step: "10", value: "0", className: "tl-shift-ms", ariaLabel: "Milliseconds to move by (negative is earlier)" });
     const shiftWhat = h("span", { className: "tl-shift-what" });
@@ -117,7 +120,7 @@ export const timelinePanel: PanelDef = {
     const mergeButton = h("button", { textContent: "Merge with next", title: MERGE_TITLE });
     const undoButton = h("button", { textContent: "Undo", title: "Undo (Ctrl+Z)" });
     const redoButton = h("button", { textContent: "Redo", title: "Redo (Ctrl+Shift+Z or Ctrl+Y)" });
-    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, roughButton, shiftButton, splitButton, mergeButton, undoButton, redoButton);
+    const editTools = h("span", { className: "tl-edit-tools", title: "Drawn and dragged edges snap to where speech starts and ends; hold Alt to place them freely. [ ] nudge the start, Shift+[ ] the end." }, autoButton, byPicker, roughButton, shiftButton, gapButton, splitButton, mergeButton, undoButton, redoButton);
     const spectroButton = h("button", { textContent: "Spectrogram", title: "Show the recording's spectrogram under the waveform (0–5000 Hz, darker where louder), made by wugs itself, a minute of view at a time" });
     spectroButton.setAttribute("aria-pressed", "false");
     const bandPicker = h(
@@ -153,6 +156,9 @@ export const timelinePanel: PanelDef = {
         selectedSource === null ? `${CLIPS_TITLE}. Load a recording first.` : track === null ? `${CLIPS_TITLE}. No track has timed segments yet.` : `${CLIPS_TITLE}. Now: «${track.name}».`;
       syncSpectro();
       byPicker.disabled = autoButton.disabled;
+      const gaps = view?.speechGaps() ?? [];
+      gapButton.textContent = gapsLabel(gaps);
+      gapButton.disabled = gaps.length === 0;
       roughButton.disabled = roughButton.dataset.busy === "1" || view === null || selectedSource === null;
       roughButton.title = selectedSource === null ? `${ROUGH_TITLE} Load a recording first.` : ROUGH_TITLE;
       // The same rule as the S and M keys; the title says why when disabled.
@@ -324,6 +330,7 @@ export const timelinePanel: PanelDef = {
       { id: "timeline:split", title: "Split at the playhead", group: "Timeline", keys: "S", words: ["cut"], disabled: () => needsView() ?? view?.editRules().split ?? null, run: () => void view?.splitAtPlayhead() },
       { id: "timeline:merge", title: "Merge with the next segment", group: "Timeline", keys: "M", words: ["join", "combine"], disabled: () => needsView() ?? view?.editRules().merge ?? null, run: () => void view?.mergeWithNext() },
       { id: "timeline:track", title: "Rename a track or set its language", group: "Timeline", words: ["track name", "tier", "language code", "speaker"], disabled: () => (view === null || view.editTrack() === null ? "Open a text first." : null), run: () => { const t = view?.editTrack(); if (t) editTrack(t.id); } },
+      { id: "timeline:gap", title: "Go to the next speech with no segment", group: "Timeline", words: ["gap", "untranscribed", "missed", "skipped"], disabled: () => ((view?.speechGaps().length ?? 0) === 0 ? "No speech is left without a segment on this track." : null), run: () => view?.goToNextGap() },
       { id: "timeline:shift", title: "Shift a track's times earlier or later", group: "Timeline", words: ["offset", "move all", "sync", "delay"], disabled: () => (view === null || view.editTrack() === null ? "Open a text first." : null), run: () => openShift() },
       { id: "timeline:rough", title: "Time typed sentences against the recording", group: "Timeline", words: ["align", "untimed", "transcript", "rough", "sentences"], disabled: () => needsRecording() ?? asButton(roughButton)(), run: () => roughButton.click() },
       { id: "timeline:auto", title: "Auto-segment the recording", group: "Timeline", words: ["detect", "speech", "segments", "automatic"], disabled: () => needsRecording() ?? asButton(autoButton)(), run: () => autoButton.click() },
