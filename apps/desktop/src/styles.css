@@ -1737,3 +1737,4 @@ body::before {
 .tl-shift { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: var(--text-sm); flex-wrap: wrap; }
 .tl-shift[hidden] { display: none; }
 .tl-shift-ms { width: 7em; }
+.tl-track-row .tl-edit-name { width: 12em; }

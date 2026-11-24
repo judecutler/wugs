@@ -151,6 +151,10 @@ Click the ruler or the waveform to move the playhead there. While the timeline h
 | **+** and **-** | Zoom in or out. |
 | **Shift+Z** | Fit the whole recording on screen. |
 
+### Rename a track and say what language it is in
+
+Double-click a track's name at the left of the timeline (or use **Rename a track or set its language** in **Find an action**). A row opens with the track's name and the language its text is in. Write the language as a code such as `en`, `es` or `tpi` (BCP 47), or as a Glottocode. Exports use it to label the track's text: a TEI file's `xml:lang`, CoNLL-U's `# text_en` lines, the parallel corpus's file names and CLDF's translation language. A track's name is also the speaker's name in CHAT and speech dataset exports. Press **Save** or Enter; leave the language empty to clear it.
+
 ### Lock, hide, and mute tracks
 
 Each track has a header at the left of the timeline, as in a video editor:

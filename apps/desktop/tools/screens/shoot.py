@@ -360,6 +360,13 @@ def main():
                 (run.out / "state-timeline-picture.png").write_bytes(_b64.b64decode(saved["contents"].split(",", 1)[1]))
             run.page.evaluate("async () => (await import('/src/store.ts')).showToast(null)")
 
+            # A track's name and language, edited from its header.
+            run.page.locator(".panel-timeline .tl-gutter-tier .tl-track-name").first.dblclick()
+            run.page.locator(".panel-timeline .tl-track-row .tl-edit-name").wait_for()
+            run.page.locator(".panel-timeline .tl-edit-lang").fill("tpi")
+            run.shot("state-timeline-track-edit", run.page.locator(".panel-timeline .tl-track-row"))
+            run.page.locator(".panel-timeline .tl-track-row button", has_text="Cancel").click()
+
             # Shift times: the row names the track and moves it by the milliseconds typed.
             run.page.locator(".panel-timeline .tl-toolbar button", has_text="Shift times").click()
             run.page.locator(".panel-timeline .tl-shift-ms").fill("-200")
