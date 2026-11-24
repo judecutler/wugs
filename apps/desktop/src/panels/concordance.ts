@@ -9,7 +9,7 @@ import { hitClipsLines } from "../measure/logic";
 import { clipboardForAll, EXAMPLE_FORMATS, FORMAT_KEY, parseFormat, type Example } from "../gloss/example";
 import { translationLines } from "../gloss/translation";
 import { CLUSTER_SIDES, CLUSTER_SIZES, clusterLine, clusters, clustersTsv, type Cluster, type ClusterSide } from "../concordance/clusters";
-import { byDetail, detailTsv, marks, NOT_GIVEN, per1000, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, type Dispersion, type PlotSort } from "../concordance/plot";
+import { byDetail, byPeriod, detailTsv, marks, NOT_GIVEN, per1000, periodTsv, plotDetails, PLOT_SORTS, plotTsv, sortPlots, spreadWords, timeKeys, type Dispersion, type PlotSort } from "../concordance/plot";
 import { nearHits, nearLine, NEAR_SIDES, NEAR_WINDOWS, type NearSide } from "../concordance/near";
 import { asTsv, clip, countLine, kwicHtml, hasTags, isRtl, keyword, left, markWord, sortedWord, speakerOf, withTags, PANEL_KINDS, QUERY_HELP, right, SORTS, sortHits, thin, thinLine, THIN_SIZES, type ConcordanceKind, type Hit, type PanelKind, type SortBy } from "../concordance/logic";
 import { linesUnder } from "../concordance/under";
@@ -354,11 +354,37 @@ export const concordancePanel: PanelDef = {
       }
       const d = plot;
       const keys = plotDetails(d.texts);
-      if (!keys.includes(plotBy)) plotBy = "";
-      plotByPicker.replaceChildren(h("option", { value: "", textContent: "Each text", selected: plotBy === "" }), ...keys.map((k) => h("option", { value: k, textContent: `By ${k.replace(/_/g, " ")}`, selected: k === plotBy })));
+      const times = timeKeys(d.texts);
+      if (!keys.includes(plotBy) && !times.some((k) => `time:${k}` === plotBy)) plotBy = "";
+      plotByPicker.replaceChildren(
+        h("option", { value: "", textContent: "Each text", selected: plotBy === "" }),
+        ...keys.map((k) => h("option", { value: k, textContent: `By ${k.replace(/_/g, " ")}`, selected: k === plotBy })),
+        ...times.map((k) => h("option", { value: `time:${k}`, textContent: `Over time, by ${k.replace(/_/g, " ")}`, selected: `time:${k}` === plotBy })),
+      );
       plotByPicker.disabled = keys.length === 0;
       plotSorter.hidden = plotBy !== "";
       count.textContent = spreadWords(d);
+      if (plotBy.startsWith("time:")) {
+        const key = plotBy.slice(5);
+        const p = byPeriod(d.texts, key);
+        const top = Math.max(0, ...p.rows.map((g) => (g.words === 0 ? 0 : g.hits / g.words)));
+        const unit = p.width === 1 ? "year" : p.width === 10 ? "decade" : "century";
+        count.textContent = `${spreadWords(d)} Over time, by the year in each text's ${key.replace(/_/g, " ")}: matches per 1000 words in each ${unit}, oldest first.${p.undated > 0 ? ` ${p.undated === 1 ? "1 text gives" : `${p.undated} texts give`} no year and ${p.undated === 1 ? "is" : "are"} left out.` : ""}`;
+        rows.replaceChildren(
+          ...p.rows.map((g) => {
+            const fill = h("span", { className: "cc-detail-fill" });
+            fill.style.width = `${top === 0 || g.words === 0 ? 0 : Math.round((100 * (g.hits / g.words)) / top)}%`;
+            return h(
+              "div",
+              { className: `cc-plot-row${g.hits === 0 ? " cc-plot-none" : ""}`, role: "listitem" },
+              h("span", { className: "cc-plot-title", textContent: g.label }),
+              h("span", { className: "cc-plot-count", textContent: g.texts === 0 ? "no texts" : `${g.hits} · ${per1000(g.hits, g.words)} per 1000 · ${g.texts === 1 ? "1 text" : `${g.texts} texts`}` }),
+              h("div", { className: "cc-plot-bar" }, fill),
+            );
+          }),
+        );
+        return;
+      }
       if (plotBy !== "") {
         const groups = byDetail(d.texts, plotBy);
         const top = Math.max(0, ...groups.map((g) => (g.words === 0 ? 0 : g.hits / g.words)));
@@ -720,6 +746,13 @@ export const concordancePanel: PanelDef = {
       if (clustersOn && asked !== "") {
         void writeText(clustersTsv(shownClusters)).then(
           () => showToast({ tone: "info", lines: [`Copied ${shownClusters.length} clusters. Paste them into a spreadsheet.`] }),
+          (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
+        );
+        return;
+      }
+      if (plotOn && plot !== null && plotBy.startsWith("time:")) {
+        void writeText(periodTsv(byPeriod(plot.texts, plotBy.slice(5)), plotBy.slice(5))).then(
+          () => showToast({ tone: "info", lines: ["Copied the matches over time. Paste them into a spreadsheet."] }),
           (e) => showToast({ tone: "error", lines: [`Could not copy: ${errorText(e)}`] }),
         );
         return;

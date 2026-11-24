@@ -87,3 +87,61 @@ export function byDetail(texts: readonly TextPlot[], key: string): DetailRow[] {
 export function detailTsv(rows: readonly DetailRow[], key: string): string {
   return [[key, "texts", "words", "matches", "per 1000 words"].join("\t"), ...rows.map((r) => [r.value, r.texts, r.words, r.hits, per1000(r.hits, r.words)].join("\t"))].join("\n") + "\n";
 }
+
+/** The year a detail's value names: its first number of 3 or 4 digits
+ * (`1953`, `1953-04-02`, `c. 850`), negative with BC or BCE after it; null
+ * when it names none. */
+export function yearOf(value: string): number | null {
+  const m = /(?<![\d.])(\d{3,4})(?![\d.])(\s*(?:BCE|BC|B\.C\.E?\.?))?/iu.exec(value);
+  if (m === null) return null;
+  const y = Number(m[1]);
+  return m[2] === undefined ? y : -y;
+}
+
+/** The details at least two texts give a year in, for a plot over time. */
+export function timeKeys(texts: readonly TextPlot[]): string[] {
+  const n = new Map<string, number>();
+  for (const t of texts) for (const [k, v] of t.meta ?? []) if (yearOf(v) !== null) n.set(k, (n.get(k) ?? 0) + 1);
+  return [...n].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([k]) => k);
+}
+
+export type PeriodRow = { start: number; end: number; label: string; texts: number; words: number; hits: number };
+export type Periods = { width: number; rows: PeriodRow[]; undated: number };
+
+const yearLabel = (y: number) => (y < 0 ? `${-y} BCE` : String(y));
+
+/** The matches summed per period of the years a detail gives, oldest first,
+ * every period between the first and the last listed (empty ones too, so
+ * gaps show): a year each over 30 years or less, a decade each up to 300,
+ * else a century. */
+export function byPeriod(texts: readonly TextPlot[], key: string): Periods {
+  const dated: { year: number; t: TextPlot }[] = [];
+  let undated = 0;
+  for (const t of texts) {
+    const v = (t.meta ?? []).find(([k]) => k === key)?.[1];
+    const year = v === undefined ? null : yearOf(v);
+    if (year === null) undated += 1;
+    else dated.push({ year, t });
+  }
+  if (dated.length === 0) return { width: 1, rows: [], undated };
+  const lo = Math.min(...dated.map((d) => d.year));
+  const hi = Math.max(...dated.map((d) => d.year));
+  const width = hi - lo <= 30 ? 1 : hi - lo <= 300 ? 10 : 100;
+  const first = Math.floor(lo / width) * width;
+  const rows: PeriodRow[] = [];
+  for (let s = first; s <= hi; s += width) {
+    const e = s + width - 1;
+    rows.push({ start: s, end: e, label: width === 1 ? yearLabel(s) : width === 10 && s >= 0 ? `${s}s` : `${yearLabel(s)}–${yearLabel(e)}`, texts: 0, words: 0, hits: 0 });
+  }
+  for (const d of dated) {
+    const r = rows[Math.floor((d.year - first) / width)]!;
+    r.texts += 1;
+    r.words += d.t.words;
+    r.hits += d.t.hits;
+  }
+  return { width, rows, undated };
+}
+
+export function periodTsv(p: Periods, key: string): string {
+  return [[`period (${key})`, "from", "to", "texts", "words", "matches", "per 1000 words"].join("\t"), ...p.rows.map((r) => [r.label, r.start, r.end, r.texts, r.words, r.hits, r.words === 0 ? "" : per1000(r.hits, r.words)].join("\t"))].join("\n") + "\n";
+}

@@ -1257,6 +1257,7 @@ The line above the bars says how evenly it is spread, as Gries's DP: 0 means it 
 - Click a text to see its lines in the Concordance.
 - **Copy rows** copies the plot as a table: each text, its words, its matches, the rate and the word positions.
 - When texts have details (genre, speaker, place…), the menu beside **Plot** can sum them **By genre** or by any other detail: a bar per value with its matches, its rate per 1000 words and how many texts have it, texts without the detail last. It shows how the item varies across the corpus's parts, such as a word common in narratives and rare in conversation. **Copy rows** then copies that table.
+- When texts have a date (or any detail with a year in it, such as `1953-04-02`, `c. 850` or `450 BCE`), the same menu offers **Over time, by date**: the matches per 1000 words in each year, decade or century (whichever suits the span), oldest first, with empty periods shown so gaps stand out. It shows a word coming into use or dropping out, as Sketch Engine's Trends does. Texts with no year are left out and counted. **Copy rows** copies the periods.
 
 The plot works for words, morphs, glosses and translation words, not CQP queries.
 
