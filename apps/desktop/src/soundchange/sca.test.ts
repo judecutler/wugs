@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { derivationsTsv, derive, EXAMPLE_RULES, expectedLine, pairsOf, parseRules, resultLine, wordsOf } from "./sca.ts";
+import { derivationsTsv, derive, EXAMPLE_RULES, expectedLine, lineThrough, pairsOf, parseRules, resultLine, targetName, wordsOf } from "./sca.ts";
 
 const run = (rules: string, word: string) => derive(word, parseRules(rules).rules).output;
 
@@ -57,4 +57,11 @@ test("typed pairs give each word its attested reflex", () => {
   assert.equal(expectedLine(d, [null, null, null]), "");
   assert.equal(derivationsTsv(d, e).split("\n")[2], "patu\tpadu\tpatu\tno\t2: padu");
   assert.equal(derivationsTsv(d).split("\n")[0], "input\toutput\tsteps");
+});
+
+test("a line of a transcription goes through the rules word by word", () => {
+  const r = parseRules("V = a e i o u\np t k > b d g / V_V\nu > ∅ / _#").rules;
+  assert.equal(lineThrough("  kapa   satu  ", r), "kaba sad", "the rules run in order");
+  assert.equal(lineThrough("", r), "");
+  assert.equal(targetName("utterance"), "utterance after the sound changes");
 });

@@ -656,6 +656,18 @@ fn orthography_pronounce(s: State<SessionThread>, profile: String, column: Strin
     s.run(move |s| orthography::pronounce(s, &profile, &column, ignore_case, write))
 }
 
+/// A track's segments with their transcriptions, for a tool that converts them itself.
+#[tauri::command]
+fn track_sources(s: State<SessionThread>, tier_id: String, text_id: Option<String>) -> Result<Vec<orthography::TrackLine>, String> {
+    s.run(move |s| orthography::track_sources(s, &tier_id, text_id))
+}
+
+/// Rows another tool converted from a track, written onto a transcription track.
+#[tauri::command(async)]
+fn write_converted_track(s: State<SessionThread>, tier_id: String, target: String, rows: Vec<orthography::TrackLine>, by: String) -> Result<orthography::Converted, String> {
+    s.run(move |s| orthography::write_rows(s, &tier_id, &target, rows, &by))
+}
+
 /// Convert a track with a profile onto a transcription track.
 #[tauri::command(async)]
 fn orthography_convert(s: State<SessionThread>, profile: String, tier_id: String, text_id: Option<String>, column: String, ignore_case: bool, target: String) -> Result<orthography::Converted, String> {
@@ -2442,6 +2454,8 @@ pub fn run() {
             orthography_draft,
             orthography_preview,
             orthography_convert,
+            track_sources,
+            write_converted_track,
             orthography_pronounce,
             export_wordlist,
             set_typology_answer,

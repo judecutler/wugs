@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use unicode_normalization::char::is_combining_mark;
 use unicode_normalization::UnicodeNormalization;
 
@@ -466,6 +466,27 @@ pub fn convert(session: &mut Session, profile: &str, tier: &str, text: Option<St
     let parsed = Profile::parse(profile);
     let col = parsed.column(column)?;
     let p = session::project(session)?;
+    let rows = sources(p, tier, text.as_deref())?;
+    let mut unknown = HashMap::new();
+    let mut converted = Vec::new();
+    for (t, seg, content) in rows {
+        let (after, found) = parsed.convert(&content, col, ignore_case);
+        tally(&mut unknown, found, &content);
+        converted.push((t, seg, after));
+    }
+    let mut out = write_track(p, tier, target, converted, &format!("orthography profile: {column}"))?;
+    out.unknown = unknown_list(unknown);
+    Ok(out)
+}
+
+/// Write converted rows `(text, source segment, content)`, in text order,
+/// onto the transcription track named `target` (made when there is none,
+/// refused when it is the source or holds segments not converted from it).
+fn write_track(p: &mut wugs_core::Project, tier: &str, target: &str, rows: Vec<(String, String, String)>, by: &str) -> Result<Converted, String> {
+    let target = target.trim();
+    if target.is_empty() {
+        return Err("Name the track to write, such as IPA.".into());
+    }
     let source_name = p.proj.field_str(tier, "name")?.unwrap_or_default();
     if source_name.trim().eq_ignore_ascii_case(target) {
         return Err(format!("«{target}» is the track being converted; name another."));
@@ -491,22 +512,17 @@ pub fn convert(session: &mut Session, profile: &str, tier: &str, text: Option<St
         }
         None => p.add_tier(target, "time-aligned", Some("transcription"), None)?.0,
     };
-    let rows = sources(p, tier, text.as_deref())?;
-    let mut unknown = HashMap::new();
     let mut per_text: Vec<(String, Vec<(String, String)>)> = Vec::new();
-    for (t, seg, content) in rows {
-        let (after, found) = parsed.convert(&content, col, ignore_case);
-        tally(&mut unknown, found, &content);
+    for (t, seg, after) in rows {
         match per_text.last_mut() {
             Some((last, list)) if *last == t => list.push((seg, after)),
             _ => per_text.push((t, vec![(seg, after)])),
         }
     }
     let mut total = ConvertReport::default();
-    let by = format!("orthography profile: {column}");
     for (t, list) in &per_text {
         let rows: Vec<ConvertedRow> = list.iter().map(|(s, c)| ConvertedRow { source: s, content: c }).collect();
-        let (r, _) = p.write_converted(t, &track, &rows, &by)?;
+        let (r, _) = p.write_converted(t, &track, &rows, by)?;
         total.created += r.created;
         total.updated += r.updated;
         total.unchanged += r.unchanged;
@@ -522,8 +538,39 @@ pub fn convert(session: &mut Session, profile: &str, tier: &str, text: Option<St
         unchanged: total.unchanged,
         kept: total.kept,
         empty: total.empty,
-        unknown: unknown_list(unknown),
+        unknown: Vec::new(),
     })
+}
+
+/// A segment of a track as another tool converts it.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TrackLine {
+    pub segment: String,
+    pub content: String,
+}
+
+/// Every segment of `tier` (one text or all) with its transcription, in
+/// text and time order, for a tool that converts it itself (Sound changes).
+pub fn track_sources(session: &mut Session, tier: &str, text: Option<String>) -> Result<Vec<TrackLine>, String> {
+    let p = session::project(session)?;
+    Ok(sources(p, tier, text.as_deref())?.into_iter().map(|(_, segment, content)| TrackLine { segment, content }).collect())
+}
+
+/// Write rows another tool converted from `tier` onto the track `target`,
+/// as Write the track does, each kept with `by` (what made it).
+pub fn write_rows(session: &mut Session, tier: &str, target: &str, rows: Vec<TrackLine>, by: &str) -> Result<Converted, String> {
+    let p = session::project(session)?;
+    let mut out = Vec::new();
+    for r in rows {
+        if p.proj.field_str(&r.segment, "tier")?.as_deref() != Some(tier) {
+            return Err("A row is not a segment of the track being converted.".into());
+        }
+        let text = p.proj.field_str(&r.segment, "text")?.unwrap_or_default();
+        out.push((text, r.segment, p.proj.nfc(r.content.split_whitespace().collect::<Vec<_>>().join(" ").as_str())));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    write_track(p, tier, target, out, by)
 }
 
 /// The lexicon's headwords through the profile, as written pronunciations.
@@ -699,6 +746,16 @@ mod tests {
         session::project(&mut session).unwrap().add_segment(&text, &hand.id, 0, Some(0.0), Some(500.0), "wan").unwrap();
         let refused = convert(&mut session, &profile, &source, None, "IPA", true, "phonemic").unwrap_err();
         assert!(refused.contains("not converted from this track"), "{refused}");
+        // Another tool's conversion (Sound changes) goes onto a track the same way.
+        let lines = track_sources(&mut session, &source, None).unwrap();
+        assert!(lines.iter().any(|l| l.content == "wʌn tuː θɹiː"), "{lines:?}");
+        let changed: Vec<TrackLine> = lines.iter().map(|l| TrackLine { segment: l.segment.clone(), content: l.content.replace('θ', "t") }).collect();
+        let written = write_rows(&mut session, &source, "After rules", changed, "sound changes").unwrap();
+        assert!(written.created >= 2, "{written:?}");
+        let words = crate::sounds::sound_words(&mut session, Some(&written.track), None).unwrap();
+        assert!(words.words.iter().any(|w| w.word == "tɹiː"), "{:?}", words.words);
+        let stray = vec![TrackLine { segment: lines[0].segment.clone(), content: "x".into() }];
+        assert!(write_rows(&mut session, &written.track, "Other", stray, "sound changes").unwrap_err().contains("not a segment of the track"));
         drop(session);
         let _ = std::fs::remove_dir_all(&dir);
     }

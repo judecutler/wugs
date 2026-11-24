@@ -1048,6 +1048,8 @@ Rules run in order, each over the words as the rule before left them, and a soun
 
 To test the rules against the forms you know, type each word with its attested form after `>` (or `→`, or a tab): `kapa > kab`. The table then has an **Expected** column with ✓ or ✗, the rows the rules get wrong are shaded and listed even when the rules leave the word alone, and the line above says how many come out as expected. Write `∅` for a word that should disappear. **Copy table** adds the expected form and whether it matched.
 
+**Over a track**, under the table, runs the rules over every line of a transcription track and writes the result as a track of its own, beside the original: a normalized spelling of a historical text, a modern form of an old one, or the surface forms your phonological rules derive from underlying ones. Choose the track, name the new one, press **Preview** to see the lines that change, then **Write the track**. Writing again later rewrites the lines the rules made and keeps any line you edited by hand on the new track. The new track is an ordinary transcription track, so the Concordance, Frequencies and the Sounds panel read it.
+
 ### Compare your word list with related languages
 
 The **Compare word lists** panel sets the project's answers to a concept list (a Swadesh list, say, from **Elicit**) beside the words other languages have for the same concepts, to look for cognates and sound correspondences. In Tongues, press **Ctrl+K** and choose **Show Compare word lists**.
