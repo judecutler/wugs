@@ -9,6 +9,7 @@
 import { chart, gridOf, inventory, MANNER_NAMES, PLACE_NAMES, type Sound } from "../sounds/ipa.ts";
 import { gapsNote, positions, shapes, share } from "../sounds/shapes.ts";
 import { syllableNote, syllableTypes } from "../sounds/syllables.ts";
+import { countsLine, total, verdict, type WordOrder } from "../wordorder/logic.ts";
 import type { Grid } from "../orthography/logic.ts";
 import type { Answer, Ours } from "../typology/logic.ts";
 
@@ -34,6 +35,8 @@ export type SketchInput = {
   /** The position-class chart read from the glossed words: each slot's
    * label and its affixes as written with their glosses (`ni- 1SG`). */
   slots?: { label: string; affixes: string[] }[];
+  /** Word orders counted in the parsed sentences (src-tauri/src/word_order.rs). */
+  order?: WordOrder;
   /** The person's own date for the title page, `YYYY-MM-DD`. */
   date: string;
   generator: string;
@@ -196,7 +199,18 @@ export function grammarSketch(d: SketchInput): string {
   }
   parts.push(todo("Word classes, inflection and derivation"));
 
-  parts.push(`<h2>5. Syntax</h2>`, todo("Word order, the noun phrase, the clause, questions, negation, complex sentences"));
+  parts.push(`<h2>5. Syntax</h2>`);
+  const counted = d.order?.patterns.filter((p) => total(p) > 0) ?? [];
+  if (d.order !== undefined && counted.length > 0) {
+    parts.push(
+      `<h3>5.1 Word order</h3><p>Counted in ${d.order.parsed} parsed sentences; the suggested order is one at least twice as common as any other, as WALS reads it.</p><table><tr><th>Construction</th><th>Counts</th><th>Suggested</th></tr>${counted
+        .map((p) => `<tr><td>${esc(p.title)} (WALS ${esc(p.id)})</td><td>${esc(countsLine(p))}</td><td>${esc(verdict(p).label)}</td></tr>`)
+        .join("")}</table>`,
+      todo("Check these against the examples, then the noun phrase, the clause, questions, negation, complex sentences"),
+    );
+  } else {
+    parts.push(todo("Word order, the noun phrase, the clause, questions, negation, complex sentences"));
+  }
   if (d.features.length > 0) {
     parts.push(`<h2>6. Typological profile</h2>`, `<p>The project's own answers to ${esc(d.featureSource)}'s questions.</p>`);
     parts.push(
